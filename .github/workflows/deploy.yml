@@ -1,9 +1,4 @@
-name: Deploy to production
-
-# Every push to main ships. The runner checks out the repo, packages the
-# tracked files (vendor/ and the built assets are committed), sends them over
-# SSH to the cPanel server, and runs scripts/deploy.sh there (migrations +
-# smoke tests). No Composer or Node is needed on the server.
+name: Deploy to production (SFTP)
 
 on:
   push:
@@ -17,41 +12,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Package, ship, and run deploy.sh
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          SSH_HOST:        ${{ secrets.DEPLOY_SSH_HOST }}
-          SSH_USER:        ${{ secrets.DEPLOY_SSH_USER }}
-          SSH_PORT:        ${{ secrets.DEPLOY_SSH_PORT }}
-          SSH_PASSPHRASE:  ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
-          TARGET_DIR:      ${{ secrets.DEPLOY_TARGET_DIR }}
+      - name: Stage a clean upload set
         run: |
-          set -e
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          mkdir -p _dist
+          rsync -a \
+            --exclude='.git' --exclude='.github' --exclude='node_modules' \
+            --exclude='_to_delete' --exclude='_dist' --exclude='*.tar.gz' \
+            --exclude='.env' \
+            ./ _dist/
+          echo "Files staged: $(find _dist -type f | wc -l)"
 
-          # cPanel-generated keys often carry a passphrase; unlock once into the agent.
-          eval "$(ssh-agent -s)"
-          ASKPASS_SCRIPT="$(mktemp)"
-          printf '#!/bin/sh\necho "$SSH_PASSPHRASE"\n' > "$ASKPASS_SCRIPT"
-          chmod +x "$ASKPASS_SCRIPT"
-          SSH_ASKPASS="$ASKPASS_SCRIPT" SSH_ASKPASS_REQUIRE=force ssh-add ~/.ssh/deploy_key < /dev/null
-          rm -f "$ASKPASS_SCRIPT"
+      - name: Upload over SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server:      ${{ secrets.SFTP_HOST }}
+          port:        ${{ secrets.SFTP_PORT }}
+          username:    ${{ secrets.SFTP_USER }}
+          password:    ${{ secrets.SFTP_PASSWORD }}
+          local_path:  './_dist/*'
+          remote_path: ${{ secrets.SFTP_REMOTE_PATH }}
+          sftp_only:   true
+          delete_remote_files: false
 
-          # tar + scp needs nothing beyond ssh on the server (no rsync on shared cPanel).
-          tar czf /tmp/deploy.tar.gz --exclude='.git' --exclude='.github' --exclude='node_modules' .
-
-          scp -P "$SSH_PORT" -o StrictHostKeyChecking=yes \
-            /tmp/deploy.tar.gz "$SSH_USER@$SSH_HOST:~/okv_deploy_incoming.tar.gz"
-
-          ssh -p "$SSH_PORT" -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "
-            set -e
-            TARGET=\"\${TARGET_DIR:-~/public_html}\"
-            mkdir -p \"\$TARGET\"
-            tar xzf ~/okv_deploy_incoming.tar.gz -C \"\$TARGET\"
-            rm ~/okv_deploy_incoming.tar.gz
-            cd \"\$TARGET\"
-            bash scripts/deploy.sh
-          "
+      - name: Apply migrations on the server
+        run: |
+          echo "Calling the migration runner..."
+          curl -fsS --retry 2 --max-time 120 \
+            -H "X-Migrate-Token: ${{ secrets.MIGRATE_TOKEN }}" \
+            "${{ secrets.APP_BASE_URL }}/public/migrate.php" | tee /tmp/migrate.out
+          grep -q "MIGRATE OK" /tmp/migrate.out || { echo "Migrations did not report success"; exit 1; }
+          echo "Deploy complete."
