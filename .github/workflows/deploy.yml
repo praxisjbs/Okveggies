@@ -1,0 +1,57 @@
+name: Deploy to production
+
+# Every push to main ships. The runner checks out the repo, packages the
+# tracked files (vendor/ and the built assets are committed), sends them over
+# SSH to the cPanel server, and runs scripts/deploy.sh there (migrations +
+# smoke tests). No Composer or Node is needed on the server.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package, ship, and run deploy.sh
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_HOST:        ${{ secrets.DEPLOY_SSH_HOST }}
+          SSH_USER:        ${{ secrets.DEPLOY_SSH_USER }}
+          SSH_PORT:        ${{ secrets.DEPLOY_SSH_PORT }}
+          SSH_PASSPHRASE:  ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
+          TARGET_DIR:      ${{ secrets.DEPLOY_TARGET_DIR }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+          # cPanel-generated keys often carry a passphrase; unlock once into the agent.
+          eval "$(ssh-agent -s)"
+          ASKPASS_SCRIPT="$(mktemp)"
+          printf '#!/bin/sh\necho "$SSH_PASSPHRASE"\n' > "$ASKPASS_SCRIPT"
+          chmod +x "$ASKPASS_SCRIPT"
+          SSH_ASKPASS="$ASKPASS_SCRIPT" SSH_ASKPASS_REQUIRE=force ssh-add ~/.ssh/deploy_key < /dev/null
+          rm -f "$ASKPASS_SCRIPT"
+
+          # tar + scp needs nothing beyond ssh on the server (no rsync on shared cPanel).
+          tar czf /tmp/deploy.tar.gz --exclude='.git' --exclude='.github' --exclude='node_modules' .
+
+          scp -P "$SSH_PORT" -o StrictHostKeyChecking=yes \
+            /tmp/deploy.tar.gz "$SSH_USER@$SSH_HOST:~/okv_deploy_incoming.tar.gz"
+
+          ssh -p "$SSH_PORT" -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "
+            set -e
+            TARGET=\"\${TARGET_DIR:-~/public_html}\"
+            mkdir -p \"\$TARGET\"
+            tar xzf ~/okv_deploy_incoming.tar.gz -C \"\$TARGET\"
+            rm ~/okv_deploy_incoming.tar.gz
+            cd \"\$TARGET\"
+            bash scripts/deploy.sh
+          "

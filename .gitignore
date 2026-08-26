@@ -1,0 +1,22 @@
+# Secrets. Never commit.
+.env
+
+# Node tooling (dev only).
+node_modules/
+
+# Real uploads (keep the folders and their .htaccess, ignore the content).
+uploads/*/*
+!uploads/*/.gitkeep
+
+# Logs and OS cruft.
+*.log
+error_log
+.DS_Store
+Thumbs.db
+
+# Build and transfer artifacts.
+*.tar.gz
+_to_delete/
+
+# NOTE: vendor/ is committed on purpose. The cPanel server has no Composer.
+# NOTE: assets/css/tailwind.css and assets/js/*.min.js are committed (built here).

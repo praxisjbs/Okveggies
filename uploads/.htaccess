@@ -1,0 +1,6 @@
+# OK Veggies uploads. Serve files, never execute them.
+php_flag engine off
+<FilesMatch "\.(php|phar|phtml|pl|py|cgi|sh)$">
+    Require all denied
+</FilesMatch>
+Options -Indexes -ExecCGI

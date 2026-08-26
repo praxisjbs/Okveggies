@@ -1,0 +1,95 @@
+/**
+ * assets/css/src/input.css
+ * OK Veggies base, components and utilities. Built to assets/css/tailwind.css
+ * by `npm run build:css`. Design tokens live in tailwind.config.js.
+ *
+ * Fonts are self-hosted (no CDN, per the brand). Drop the woff2 files into
+ * assets/fonts/ and enable the @font-face blocks below. Until then the app
+ * renders in the fallback stack, which is fine for development.
+ */
+
+/*
+@font-face {
+  font-family: 'Hanken Grotesk';
+  src: url('/assets/fonts/HankenGrotesk-Variable.woff2') format('woff2');
+  font-weight: 400 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/assets/fonts/PlusJakartaSans-Variable.woff2') format('woff2');
+  font-weight: 400 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/assets/fonts/JetBrainsMono-Variable.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+*/
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-white text-ink font-sans antialiased;
+  }
+  /* The focus ring is a brand non-negotiable: a visible gold outline, never suppressed. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2.5px solid theme('colors.gold.DEFAULT');
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  h1, h2, h3, h4 { @apply font-display; text-wrap: balance; }
+}
+
+@layer components {
+  /* Buttons. Three variants, touch-safe height. Gold is never a fill. */
+  .okv-btn {
+    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-6 rounded-md
+           bg-forest text-white font-medium
+           transition duration-botanical ease-botanical
+           hover:bg-forest-hover active:bg-forest-active
+           disabled:bg-mist disabled:text-ink-40 disabled:cursor-not-allowed;
+  }
+  .okv-btn-outline {
+    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-6 rounded-md
+           border border-forest text-forest font-medium bg-white
+           transition duration-botanical ease-botanical
+           hover:bg-forest-tint disabled:opacity-50;
+  }
+  .okv-btn-text {
+    @apply inline-flex items-center gap-1 min-h-[44px] text-forest font-medium
+           transition-colors hover:text-gold;
+  }
+
+  /* Inputs. 48px tall, label always visible above the field (set in markup). */
+  .okv-label { @apply block text-sm font-medium text-ink-60 mb-1.5; }
+  .okv-input {
+    @apply w-full min-h-[48px] px-4 rounded-md border border-mist bg-white text-ink
+           placeholder:text-ink-40
+           focus:border-forest focus:ring-0;
+  }
+
+  /* Product and content cards. */
+  .okv-card {
+    @apply bg-white rounded-lg shadow-okv-1 p-4
+           transition duration-botanical ease-botanical hover:-translate-y-1 hover:shadow-okv-2;
+  }
+
+  /* Chips and badges. */
+  .okv-badge { @apply inline-flex items-center gap-1 text-xs font-medium rounded-full px-2.5 py-1; }
+  .okv-badge-available { @apply bg-foliage-tint text-forest; }
+  .okv-badge-out { @apply bg-tomato-tint text-tomato; }
+
+  /* Page container width. */
+  .okv-container { @apply max-w-content mx-auto px-4 md:px-8; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

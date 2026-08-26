@@ -1,0 +1,40 @@
+# =============================================================================
+# OK Veggies .htaccess (Apache / cPanel shared hosting)
+# HTTPS, security headers, and deny access to everything that is not meant to be
+# reached over the web (secrets, source, migrations, docs, tooling).
+# =============================================================================
+
+Options -Indexes
+
+# --- Force HTTPS -------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# --- Security headers (bootstrap.php also sets these from PHP) ----------------
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+</IfModule>
+
+# --- Deny dotfiles (including .env) ------------------------------------------
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# --- Deny source and data by extension ---------------------------------------
+<FilesMatch "\.(sql|md|sh|mjs|json|lock|ini|log|dist)$">
+    Require all denied
+</FilesMatch>
+# index.php and the app still work; those are served, not matched above.
+
+# --- Deny server-only directories --------------------------------------------
+RedirectMatch 403 ^/(includes|migrations|scripts|docs|vendor|node_modules)(/|$)
+
+# --- Let the uploads folder serve files but never execute PHP ----------------
+# (uploads/.htaccess enforces the no-execution rule.)

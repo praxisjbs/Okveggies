@@ -1,0 +1,28 @@
+{
+    "name": "okveggies/store",
+    "type": "project",
+    "description": "OK Veggies. Storefront, Pro Portal and admin for a Lagos fresh-provisions business.",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3",
+        "ext-pdo": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-curl": "*",
+        "dompdf/dompdf": "^3.0",
+        "phpoffice/phpspreadsheet": "^2.3",
+        "phpmailer/phpmailer": "^6.9"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.0"
+        }
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "@php -r \"echo 'vendor/ populated. Commit it before deploying, the cPanel server has no Composer.' . PHP_EOL;\""
+        ]
+    }
+}
