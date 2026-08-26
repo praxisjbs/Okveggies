@@ -1,18 +1,21 @@
--- =============================================================================
--- 002_rbac_seed.sql
--- OK Veggies. Permission catalogue and the two launch roles.
--- Two staff roles: Owner (everything) and Manager (runs the business day to day,
--- no user management, no role editing, no destructive settings, no credit
--- approvals, no refunds). Idempotent.
--- =============================================================================
+-- Stable access roles. Run after the schema migration.
 
+
+SET NAMES utf8mb4;
+SET @OLD_FOREIGN_KEY_CHECKS = @@FOREIGN_KEY_CHECKS;
+SET FOREIGN_KEY_CHECKS = 0;
 START TRANSACTION;
 
--- Roles ----------------------------------------------------------------------
-INSERT INTO roles (name, description) VALUES
-  ('owner',   'Business owner. Full access to everything.'),
-  ('manager', 'Runs sales, operations and delivery day to day.')
+
+
+INSERT INTO `roles`(`id`, `name`, `description`) VALUES
+  (1, 'super_admin', 'Full access to all administrative functions.'),
+  (2, 'catalogue_manager', 'Manages products, categories, prices, and availability.'),
+  (3, 'order_manager', 'Manages orders, delivery schedules, and cancellations.'),
+  (4, 'finance_manager', 'Manages payments, refunds, credit, and reconciliation.'),
+  (5, 'support_agent', 'Views customers and assists with order enquiries.')
 ON DUPLICATE KEY UPDATE description = VALUES(description);
+
 
 -- Permission catalogue (module.entity.action) --------------------------------
 INSERT INTO permissions (`key`, `module`, `description`) VALUES

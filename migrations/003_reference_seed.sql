@@ -1,3 +1,4 @@
+-- MySQL DAYOFWEEK convention used here: 1=Sunday ... 7=Saturday.
 -- =============================================================================
 -- 003_reference_seed.sql
 -- OK Veggies. Reference data: categories, units, delivery days, Lagos zones,

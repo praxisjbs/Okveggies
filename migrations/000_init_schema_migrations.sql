@@ -1,9 +1,12 @@
--- =============================================================================
+=========================================================================
 -- 000_init_schema_migrations.sql
--- OK Veggies. Bootstrap the migration tracking table.
+-- -----------------------------------------------------------------------------
+-- Ok Veggies ERP — bootstrap the migration tracking table.
 --
--- This is the FIRST migration. Every other migration in this folder runs once,
--- tracked by its filename (minus extension) in schema_migrations.
+-- This is the FIRST migration. Every other migration in this folder is only
+-- executed once, based on presence of its filename (minus extension) in
+-- schema_migrations.
+--
 -- Idempotent. Safe to re-run.
 -- =============================================================================
 
