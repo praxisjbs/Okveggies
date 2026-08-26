@@ -12,7 +12,20 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M1, Authentication and RBAC.** M0 (foundation) is complete and verified: the schema migrates cleanly against MariaDB, the core classes are unit-tested, and the storefront home renders live data. Next is sign in (phone or email plus password), OTP activation, and the Owner and Manager roles.
+**Milestone M1, Authentication and RBAC** (right after the first go-live). M0 (foundation) is complete and verified, and the deployment pipeline is built (see Deployment below). The first production deploy of M0 is in progress: the code is on GitHub `main`, the GitHub Actions secrets are set, and what remains are the one-time cPanel steps (create the database, place the server `.env`, clear the old landing page from `public_html`, confirm PHP 8.3). After that, M1 is sign in (phone or email plus password), OTP activation, and the Owner and Manager roles.
+
+---
+
+## Deployment (how this project ships)
+
+The host is a Truehost shared cPanel account with **SFTP only, no SSH shell**, so migrations cannot be run from a server terminal. The pipeline works around that:
+
+- A push to `main` triggers `.github/workflows/deploy.yml`, which uploads the files over SFTP, then calls the token-guarded web runner `public/migrate.php` to apply migrations on the server. No shell needed.
+- `Migrator` (`includes/classes/Migrator.php`) is the shared migration engine used by both `scripts/migrate.php` (CLI, for local work) and `public/migrate.php` (web, on the server).
+- `vendor/` and the built `assets/css/tailwind.css` and `assets/js/*.min.js` are committed, because the server has no Composer or Node. (`vendor/` was built in the cloud and shipped, because the dev machine's Composer is blocked by a broken `http_proxy` env var.)
+- Docroot is `/home/ibbbnlso/public_html`. PHP is 8.3 (MultiPHP Manager). The error log lives under `/home/ibbbnlso/logs/`.
+- Secrets live only in GitHub Actions and the server `.env`, never in the repo. The `MIGRATE_TOKEN` in the server `.env` must match the GitHub secret of the same name. Full setup, the secret list, and a manual FileZilla fallback are in `docs/DEPLOYMENT.md`.
+- The deploy never deletes remote files, so the server `.env` and everything under `uploads/` survive every deploy.
 
 ---
 
@@ -107,8 +120,8 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 - [ ] Full role smoke suite green
 - [ ] Accessibility pass (WCAG 2.1 AA checklist)
 - [ ] Performance pass (mobile first paint, image optimisation)
-- [ ] `.github/workflows/deploy.yml`, backup-before-deploy, first production deploy
-- [ ] Repository set to private
+- [~] Deploy pipeline built and verified: SFTP upload workflow + token-guarded web migration runner (`public/migrate.php`). First production go-live in progress (see Deployment and the session log)
+- [ ] Repository set to private (on completion)
 
 ---
 
@@ -122,6 +135,12 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 ---
 
 ## Session log (newest first)
+
+### 26 Aug 2026, deployment pipeline and first push
+- Pushed M0 to GitHub `main` (`praxisjbs/Okveggies`).
+- The host turned out to be SFTP-only with no shell, so built a shell-less deploy path: a shared `Migrator` engine, a token-guarded web migration runner (`public/migrate.php`), and an SFTP GitHub Actions workflow that uploads then calls the runner. Verified end to end against MariaDB (404 without the token, applies migrations with it); the refactor kept the unit tests at 28/28. Added `docs/DEPLOYMENT.md`.
+- Shipped `vendor/` (built in the cloud and transferred, because the dev machine's Composer is blocked by a broken `http_proxy` env var). Provided the PowerShell fixes for the proxy and for generating `MIGRATE_TOKEN` and `APP_ENCRYPTION_KEY`.
+- Set the 7 GitHub Actions secrets (`SFTP_HOST`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PASSWORD`, `SFTP_REMOTE_PATH` = `/home/ibbbnlso/public_html`, `APP_BASE_URL`, `MIGRATE_TOKEN`). First go-live pending the cPanel steps: create the database, place the server `.env` with a matching `MIGRATE_TOKEN`, clear the old Olitt/Next landing page out of `public_html`, and confirm PHP 8.3.
 
 ### 26 Aug 2026, M0 foundation built
 - Scaffolded the full repository: storefront at root, /admin, /pro, api/v1 controllers, includes (config, 11 classes, functions, components), 7 migrations, scripts and tests.

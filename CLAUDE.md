@@ -61,7 +61,7 @@ If any step fails, the task is not done. Do not mark it done.
 ## Conventions (match the reference project)
 
 - **Controllers** live in `api/v1/*.php`, dispatch on `$_POST['action']` or `$_GET['action']`, return JSON `{status, ...}`, and gate each action with RBAC.
-- **Pages** live in `modules/shop`, `modules/pro`, `modules/admin`. Each opens with the bootstrap include and, for pro and admin, an RBAC permission check.
+- **Pages** live at the web root (storefront: `index.php`, `shop.php`, `product.php`, ...), in `admin/` (the admin panel) and `pro/` (the Pro Portal). Each opens with the bootstrap include and, for admin and pro, an RBAC permission check.
 - **Shared logic** is a class in `includes/classes/` or a function file in `includes/functions/`, not copy-pasted. One concern per file. Split a page over 800 lines.
 - **JavaScript** is vanilla with Fetch, one file per module in `assets/js/`, no inline scripts beyond a few lines of glue, and it renders user data with `textContent` or an escaping helper, never raw `innerHTML +=`.
 - **Order numbers** come from the `OrderNumber` helper (`OKV` + two-digit year + padded sequence). Never build one by hand.
