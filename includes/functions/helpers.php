@@ -90,3 +90,40 @@ if (!function_exists('okv_money')) {
         return Money::format($subunit, $withKobo);
     }
 }
+
+if (!function_exists('okv_send_account_code')) {
+    /**
+     * Issue a one-time code and email it from a notification template, in one
+     * place so registration, the resend button and password reset stay in step.
+     * Returns true only when the message was handed to SMTP. A missing template
+     * or a mail failure returns false, so the caller can show the "we could not
+     * send the code" state instead of a silent success.
+     *
+     * $urlVar is the template token for the link, for example activate_url or
+     * reset_url; $urlPath is the path it points at under APP_URL.
+     */
+    function okv_send_account_code(
+        string $email,
+        string $name,
+        string $purpose,
+        string $templateKey,
+        string $urlVar,
+        string $urlPath,
+        ?int $userId = null
+    ): bool {
+        $code = Otp::issue($email, 'email', $purpose, $userId);
+        $vars = [
+            'customer_name' => $name !== '' ? $name : 'there',
+            'code'          => $code,
+            'minutes'       => (string) (int) round(Otp::TTL_SECONDS / 60),
+            $urlVar         => rtrim((string) APP_URL, '/') . $urlPath,
+        ];
+        $tpl = Mail::renderTemplate($templateKey, $vars);
+        if ($tpl === null) {
+            error_log('okv_send_account_code: template missing: ' . $templateKey);
+            return false;
+        }
+        [$subject, $body] = $tpl;
+        return Mail::send($email, $subject, $body);
+    }
+}
