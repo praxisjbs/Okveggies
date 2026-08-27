@@ -88,6 +88,18 @@
 
   /* Page container width. */
   .okv-container { @apply max-w-content mx-auto px-4 md:px-8; }
+
+  /* Slide-up sheets on mobile that become a centred dialog on wider screens. */
+  .okv-sheet-backdrop { @apply fixed inset-0 z-50 bg-ink/50 flex items-end sm:items-center justify-center p-0 sm:p-4; }
+  /* The display:flex above would beat the plain hidden attribute, so make hidden win. */
+  .okv-sheet-backdrop[hidden] { display: none; }
+  .okv-sheet {
+    @apply bg-white w-full sm:max-w-md rounded-t-lg sm:rounded-lg shadow-okv-3 p-6
+           max-h-[92vh] overflow-y-auto animate-okv-rise;
+  }
+
+  /* Skeleton shimmer for content that is loading. */
+  .okv-skeleton { @apply bg-mist rounded-md animate-pulse; }
 }
 
 @media (prefers-reduced-motion: reduce) {
