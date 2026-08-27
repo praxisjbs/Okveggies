@@ -44,10 +44,11 @@ The host is a Truehost shared cPanel account with **SFTP only, no SSH shell**, s
 - [x] Tests: Money and OrderNumber unit tests pass (28 assertions); full-stack integration verified; storefront home renders live data
 
 ### M1. Authentication and RBAC
-- [ ] Login by phone or email plus password; hardened sessions
-- [ ] OTP activation (email now), required before pay-on-delivery
-- [ ] Owner and Manager roles seeded; permission checks on admin and pro
-- [ ] Smoke tests for guest, household, business, Manager, Owner
+Delivered in two parts. Part 1 is staff sign in and RBAC (done below). Part 2 is customer accounts (household and business), OTP activation and guest-cart merge.
+- [x] Login by phone or email plus password; hardened sessions. Staff, Part 1. Customer login reuses the same endpoint in Part 2
+- [ ] OTP activation (email now), required before pay-on-delivery. Part 2, with customer accounts
+- [x] Owner and Manager roles seeded; permission checks on admin. Part 1. The Pro Portal reuses the same RBAC engine when it is built (M8)
+- [~] Smoke tests for guest, household, business, Manager, Owner. Guest, Manager and Owner staff paths done in Part 1; household and business arrive with customer accounts in Part 2
 
 ### M2. Catalogue and pricing
 - [ ] Categories (5) and units seeded; products seeded (Garlic unit corrected to kg)
@@ -135,6 +136,14 @@ The host is a Truehost shared cPanel account with **SFTP only, no SSH shell**, s
 ---
 
 ## Session log (newest first)
+
+### 27 Aug 2026, M1 Part 1: staff authentication and RBAC
+- Built staff sign in (`api/v1/auth.php`: login, logout, change_password). Login validates CSRF, rate limits by IP and by identifier (5 per identifier, 20 per IP over 15 minutes, all tunable in `.env`), treats the identifier as email when it contains "@" else phone, verifies with `password_verify` against `users.password_hash`, checks the account is active, regenerates the session id, sets `$_SESSION['user_id']`, loads the RBAC set, records `last_login_at`, and returns a JSON redirect to `/admin` for staff. A plain form post still works with no JavaScript (the server sends a real redirect), and an unknown identifier costs the same time as a real one. Wired `admin/login.php` with `assets/js/auth.js`.
+- Added a `Password` helper (`includes/classes/Password.php`): bcrypt at `BCRYPT_COST`, verify, needs-rehash, and the shared policy (at least 10 characters, not a common password, not the person's own email or phone). Customers reuse it in Part 2.
+- First Owner on a shell-less host: `public/setup.php`, a token-guarded one-time endpoint with the same fail-closed 404 shape as `public/migrate.php`. It creates the first Owner from name, email, phone and password only when no staff user exists, and refuses once one does. Added `SETUP_TOKEN` to `.env.example`. Remove `SETUP_TOKEN` from the server `.env` once the Owner is made.
+- Staff management: `api/v1/users.php` (list, create, set or reset password, switch on or off, set role) gated by `users.*`, and `api/v1/rbac.php` (`list_roles`) gated by `rbac.roles.view`. Built `admin/users.php` (Owner only, this is how the Owner creates the Manager), `admin/account.php` (a staff member changes their own password), the shared admin shell (`header.php`, `footer.php`), and the permission-gated sidebar (`sidebar.php` renders `nav.php`, hides what the user cannot reach, and carries a CSRF sign out). Staff records carry `user_type = 'staff'` plus a role.
+- Tests: `scripts/tests/PasswordTest.php` (unit, under the runner), `scripts/tests/auth_db_test.php` (password verify, rate-limit lockout, RBAC gating against a scratch database) and `scripts/smoke_roles.sh` (the setup endpoint, a guest at `/admin/` redirected to sign in, the Owner reaching the dashboard and Users and Roles, the Manager refused Users and not seeing it in the nav, the password change, and the login lockout). All green: 42 unit assertions, 26 database assertions, 26 smoke checks. `php -l` clean on every touched file. No em dash, no banned words. Rebuilt `assets/css/tailwind.css` and the minified JS in the cloud, as before.
+- No schema change (the `users`, `roles` and `user_roles` tables were already in place from M0) and no change to the deployment pipeline. Built and verified against MariaDB 10.11 on branch `m1-staff-auth`. Not for customer accounts, which are Part 2.
 
 ### 26 Aug 2026, deployment pipeline and first push
 - Pushed M0 to GitHub `main` (`praxisjbs/Okveggies`).

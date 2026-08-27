@@ -3,8 +3,9 @@
  * admin/login.php
  * OK Veggies staff sign in. The Owner and Manager enter here. The credential is
  * the phone number or the email address, plus a password. The form posts to
- * api/v1/auth.php (built in milestone M1). This page renders now so the flow and
- * the design are in place.
+ * api/v1/auth.php. With JavaScript it posts by fetch and shows any error in
+ * place; without JavaScript the server sends a plain redirect back here with a
+ * short marker. Either way the person only ever sees a plain message.
  */
 require_once __DIR__ . '/../includes/bootstrap.php';
 
@@ -12,7 +13,21 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 if (Rbac::isLoggedIn() && Rbac::isStaff()) {
     okv_redirect('/admin/');
 }
-$error = $_GET['error'] ?? '';
+
+// The no-JS redirect path lands back here with ?error=<code>. Map each code to a
+// plain message. Anything unexpected falls back to the general one.
+$errorMessages = [
+    'invalid_credentials' => 'We could not sign you in. Check your details and try again.',
+    'inactive'            => 'This account is not active. Ask the owner to switch it back on.',
+    'rate_limited'        => 'Too many tries. Wait a few minutes and try again.',
+    'missing_fields'      => 'Enter your phone or email and your password.',
+    'csrf_expired'        => 'Your session expired. Reload the page and try again.',
+    'expired'             => 'Your session expired. Reload the page and try again.',
+];
+$errorCode = (string) ($_GET['error'] ?? '');
+$errorText = $errorCode !== ''
+    ? ($errorMessages[$errorCode] ?? 'We could not sign you in. Check your details and try again.')
+    : '';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -26,15 +41,13 @@ $error = $_GET['error'] ?? '';
     <p class="text-center uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
     <h1 class="text-center font-display font-extrabold text-2xl text-ink mt-1">Staff sign in</h1>
 
-    <?php if ($error): ?>
-      <div role="alert" class="mt-5 rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3">
-        We could not sign you in. Check your details and try again.
-      </div>
-    <?php endif; ?>
-
-    <form action="/api/v1/auth.php" method="POST" class="mt-6 space-y-4" autocomplete="on">
+    <form action="/api/v1/auth.php" method="POST" class="mt-6 space-y-4" autocomplete="on" data-okv-auth id="okv-login-form">
       <?= Csrf::field() ?>
       <input type="hidden" name="action" value="login">
+
+      <div data-okv-error role="alert" aria-live="polite"
+           class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3"<?= $errorText === '' ? ' hidden' : '' ?>><?= okv_e($errorText) ?></div>
+
       <div>
         <label for="identifier" class="okv-label">Phone number or email</label>
         <input id="identifier" name="identifier" type="text" required autofocus autocomplete="username"
@@ -50,5 +63,6 @@ $error = $_GET['error'] ?? '';
 
     <p class="mt-6 text-center text-xs text-ink-40">Forgot your password? Ask the owner to set a new one for you.</p>
   </div>
+  <script src="<?= okv_e(okv_asset('/assets/js/auth.js')) ?>" defer></script>
 </body>
 </html>
