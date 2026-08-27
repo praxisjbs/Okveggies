@@ -53,6 +53,25 @@ final class RateLimiter
         Database::run('DELETE FROM rate_limits WHERE bucket = :b', [':b' => $bucket]);
     }
 
+    /** True if the bucket has reached its limit for the current window. */
+    public static function isLocked(string $bucket, int $maxHits): bool
+    {
+        return self::count($bucket) >= $maxHits;
+    }
+
+    /** Seconds until the current window expires, for a Retry-After header. */
+    public static function retryAfter(string $bucket): int
+    {
+        $row = Database::one(
+            'SELECT expires_at FROM rate_limits WHERE bucket = :b AND expires_at >= :now',
+            [':b' => $bucket, ':now' => date('Y-m-d H:i:s')]
+        );
+        if (!$row) {
+            return 0;
+        }
+        return max(0, strtotime($row['expires_at']) - time());
+    }
+
     /** Housekeeping: drop expired windows. Call from a cron. */
     public static function gc(): int
     {

@@ -65,6 +65,7 @@ unset($__okv_autoload);
 require_once __DIR__ . '/classes/Money.php';
 require_once __DIR__ . '/classes/OrderNumber.php';
 require_once __DIR__ . '/classes/Settings.php';
+require_once __DIR__ . '/classes/Password.php';
 require_once __DIR__ . '/classes/Rbac.php';
 require_once __DIR__ . '/classes/Otp.php';
 require_once __DIR__ . '/classes/Mail.php';

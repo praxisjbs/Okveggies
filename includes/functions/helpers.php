@@ -66,6 +66,14 @@ if (!function_exists('okv_action')) {
     }
 }
 
+if (!function_exists('okv_role_label')) {
+    /** A staff role name shown to people: "owner" becomes "Owner". */
+    function okv_role_label(string $roleName): string
+    {
+        return $roleName === '' ? 'No role' : ucfirst($roleName);
+    }
+}
+
 if (!function_exists('okv_slug')) {
     function okv_slug(string $text): string
     {
