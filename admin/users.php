@@ -1,23 +1,151 @@
 <?php
 /**
  * admin/users.php
- * OK Veggies. Staff accounts.
- * Status: scaffold placeholder. Build in milestone M1. See docs/PRD.md Section 17.
- * Before writing logic here: read the PRD section, then ask at least five
- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
+ * OK Veggies. Staff accounts and roles, Owner only. This is where the Owner adds
+ * the Manager, resets a password, switches an account on or off, and sets a
+ * person's role. Every change posts to api/v1/users.php, which re-checks the
+ * users.* and rbac.* permissions on the server. See docs/PRD.md Section 17.
  */
 require_once __DIR__ . '/../includes/bootstrap.php';
 Rbac::requirePermission('users.view');
+
+$meId  = (int) Rbac::userId();
+$roles = Database::all('SELECT id, name, description FROM roles ORDER BY name');
+
+$staff = Database::all(
+    "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.status, u.last_login_at,
+            GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR ',') AS roles
+       FROM users u
+       LEFT JOIN user_roles ur ON ur.user_id = u.id
+       LEFT JOIN roles r ON r.id = ur.role_id
+      WHERE u.user_type = 'staff'
+      GROUP BY u.id
+      ORDER BY u.created_at ASC"
+);
+
+$okv_admin_title = 'Users and Roles';
+require __DIR__ . '/../includes/components/admin/header.php';
 ?>
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Users and Roles . OK Veggies</title>
-<link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
-<body class="bg-forest-tint min-h-screen">
-<div class="okv-container py-16">
-  <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
-  <h1 class="font-display font-extrabold text-3xl text-ink mt-2">Users and Roles</h1>
-  <p class="text-ink-60 mt-3 max-w-xl">This screen is scaffolded and waiting to be built in milestone M1. The plan for it is in docs/PRD.md Section 17.</p>
-  <a href="/" class="okv-btn mt-6">Back to the shop</a>
-</div>
-</body></html>
+  <div class="grid gap-6 lg:grid-cols-3">
+
+    <!-- Add a staff member -->
+    <section class="lg:col-span-1">
+      <div class="okv-card" data-perm="users.create">
+        <h2 class="font-display font-extrabold text-xl text-ink">Add a staff member</h2>
+        <p class="text-sm text-ink-60 mt-1">They can change their own password after they sign in.</p>
+
+        <form action="/api/v1/users.php" method="POST" class="mt-4 space-y-4" data-okv-json autocomplete="off">
+          <?= Csrf::field() ?>
+          <input type="hidden" name="action" value="create">
+
+          <div data-okv-error role="alert" aria-live="polite" class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" hidden></div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div><label for="first_name" class="okv-label">First name</label>
+              <input id="first_name" name="first_name" type="text" required class="okv-input"></div>
+            <div><label for="last_name" class="okv-label">Last name</label>
+              <input id="last_name" name="last_name" type="text" required class="okv-input"></div>
+          </div>
+          <div><label for="email" class="okv-label">Email</label>
+            <input id="email" name="email" type="email" required class="okv-input"></div>
+          <div><label for="phone" class="okv-label">Phone number</label>
+            <input id="phone" name="phone" type="text" required class="okv-input"></div>
+          <div><label for="role" class="okv-label">Role</label>
+            <select id="role" name="role" required class="okv-input">
+              <?php foreach ($roles as $r): ?>
+                <option value="<?= okv_e($r['name']) ?>"><?= okv_e(okv_role_label($r['name'])) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div><label for="password" class="okv-label">Starting password</label>
+            <input id="password" name="password" type="text" required autocomplete="off" class="okv-input">
+            <p class="text-xs text-ink-40 mt-1">At least <?= (int) Password::minLength() ?> characters. Give it to them to change later.</p>
+          </div>
+          <button type="submit" class="okv-btn w-full">Add staff member</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- The staff list -->
+    <section class="lg:col-span-2 space-y-4">
+      <h2 class="font-display font-extrabold text-xl text-ink">Staff</h2>
+
+      <?php if (!$staff): ?>
+        <div class="okv-card"><p class="text-ink-60">No staff yet. Add the first person on the left.</p></div>
+      <?php endif; ?>
+
+      <?php foreach ($staff as $s):
+          $id       = (int) $s['id'];
+          $name     = trim(((string) $s['first_name']) . ' ' . ((string) $s['last_name']));
+          $roleName = (string) ($s['roles'] ?? '');
+          $isSelf   = $id === $meId;
+          $isActive = $s['status'] === 'active';
+      ?>
+        <div class="okv-card">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-display font-bold text-ink"><?= okv_e($name) ?><?php if ($isSelf): ?> <span class="text-xs text-ink-40 font-sans">(you)</span><?php endif; ?></p>
+              <p class="text-sm text-ink-60 break-all"><?= okv_e($s['email']) ?></p>
+              <p class="text-sm text-ink-60 font-mono"><?= okv_e($s['phone']) ?></p>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="okv-badge <?= $isActive ? 'okv-badge-available' : 'okv-badge-out' ?>"><?= $isActive ? 'Active' : 'Switched off' ?></span>
+              <p class="text-xs text-ink-60 mt-2"><?= okv_e(okv_role_label($roleName)) ?></p>
+              <p class="text-xs text-ink-40 mt-1"><?= $s['last_login_at'] ? 'Last in ' . okv_e((string) $s['last_login_at']) : 'Not signed in yet' ?></p>
+            </div>
+          </div>
+
+          <?php if ($isSelf): ?>
+            <p class="text-sm text-ink-60 mt-4">This is your own account. <a href="/admin/account.php" class="text-forest underline underline-offset-2">Change your password</a>.</p>
+          <?php else: ?>
+            <details class="mt-4 group">
+              <summary class="okv-btn-text text-sm cursor-pointer select-none">Manage</summary>
+              <div class="mt-4 grid gap-4 sm:grid-cols-2">
+
+                <!-- Reset password -->
+                <form action="/api/v1/users.php" method="POST" class="space-y-2" data-okv-json autocomplete="off">
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="set_password">
+                  <input type="hidden" name="user_id" value="<?= $id ?>">
+                  <div data-okv-error role="alert" aria-live="polite" class="rounded-md bg-tomato-tint text-tomato text-xs px-3 py-2" hidden></div>
+                  <label class="okv-label" for="pw-<?= $id ?>">New password</label>
+                  <input id="pw-<?= $id ?>" name="new_password" type="text" required class="okv-input" placeholder="At least <?= (int) Password::minLength() ?> characters">
+                  <button type="submit" class="okv-btn-outline w-full">Set password</button>
+                </form>
+
+                <div class="space-y-4">
+                  <!-- Change role -->
+                  <form action="/api/v1/users.php" method="POST" class="space-y-2" data-okv-json>
+                    <?= Csrf::field() ?>
+                    <input type="hidden" name="action" value="set_role">
+                    <input type="hidden" name="user_id" value="<?= $id ?>">
+                    <label class="okv-label" for="role-<?= $id ?>">Role</label>
+                    <select id="role-<?= $id ?>" name="role" class="okv-input">
+                      <?php foreach ($roles as $r): $sel = ($r['name'] === $roleName) ? ' selected' : ''; ?>
+                        <option value="<?= okv_e($r['name']) ?>"<?= $sel ?>><?= okv_e(okv_role_label($r['name'])) ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="okv-btn-outline w-full">Update role</button>
+                  </form>
+
+                  <!-- Switch on/off -->
+                  <form action="/api/v1/users.php" method="POST" data-okv-json>
+                    <?= Csrf::field() ?>
+                    <input type="hidden" name="action" value="set_status">
+                    <input type="hidden" name="user_id" value="<?= $id ?>">
+                    <input type="hidden" name="status" value="<?= $isActive ? 'disabled' : 'active' ?>">
+                    <button type="submit" class="okv-btn-outline w-full"><?= $isActive ? 'Switch off this account' : 'Switch this account on' ?></button>
+                  </form>
+                </div>
+
+              </div>
+            </details>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; ?>
+    </section>
+
+  </div>
+<?php
+$okv_admin_script = '/assets/js/admin-users.js';
+require __DIR__ . '/../includes/components/admin/footer.php';

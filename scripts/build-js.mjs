@@ -6,7 +6,12 @@
 import { build } from 'esbuild';
 import { existsSync } from 'node:fs';
 
-const sources = ['assets/js/okv.js', 'assets/js/okv-rbac.js'].filter(existsSync);
+const sources = [
+  'assets/js/okv.js',
+  'assets/js/okv-rbac.js',
+  'assets/js/auth.js',
+  'assets/js/admin-users.js',
+].filter(existsSync);
 
 if (sources.length === 0) {
   console.log('[build-js] no source files yet, nothing to do.');

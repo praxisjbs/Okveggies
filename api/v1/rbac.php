@@ -1,16 +1,32 @@
 <?php
 /**
  * api/v1/rbac.php
- * OK Veggies. Roles and permissions.
- * Status: scaffold placeholder. Build in milestone M1. See docs/PRD.md Section 17.
- * Before writing logic here: read the PRD section, then ask at least five
- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
+ * -----------------------------------------------------------------------------
+ * OK Veggies. Roles and permissions, Owner only (rbac.*). For milestone M1 this
+ * serves the role list that the Users screen needs. Editing the role to
+ * permission map at runtime is a later milestone; the permission catalogue and
+ * the two launch roles are seeded in migration 002.
+ * See docs/PRD.md Section 17.
+ * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/../../includes/bootstrap.php';
-header('Content-Type: application/json; charset=utf-8');
 
-// Owner only (rbac.*).
-// $action = okv_action();
-// switch ($action) { ... }  gate each action with Rbac::requirePermission or a customer auth check
+$action = okv_action();
 
-okv_json(['status' => 'error', 'code' => 'not_implemented', 'message' => 'This endpoint is scaffolded and not built yet.'], 501);
+switch ($action) {
+
+    case 'list_roles': {
+        Rbac::requirePermission('rbac.roles.view');
+        $roles = Database::all('SELECT id, name, description FROM roles ORDER BY name');
+        $out = array_map(static fn($r) => [
+            'id'          => (int) $r['id'],
+            'name'        => $r['name'],
+            'description' => $r['description'],
+        ], $roles);
+        okv_json(['status' => 'ok', 'roles' => $out]);
+        break;
+    }
+
+    default:
+        okv_error('This action is not available.', 400, 'unknown_action');
+}
