@@ -38,6 +38,8 @@ function okv_test_eq($expected, $actual, string $label): void
 $appRoot = dirname(__DIR__, 2);
 require_once $appRoot . '/includes/classes/Money.php';
 require_once $appRoot . '/includes/classes/OrderNumber.php';
+require_once $appRoot . '/includes/classes/Catalogue.php';
+require_once $appRoot . '/includes/functions/helpers.php';
 
 foreach (glob(__DIR__ . '/*Test.php') as $file) {
     fwrite(STDOUT, "[test] " . basename($file) . "\n");

@@ -12,7 +12,7 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M1, Authentication and RBAC** (right after the first go-live). M0 (foundation) is complete and verified, and the deployment pipeline is built (see Deployment below). The first production deploy of M0 is in progress: the code is on GitHub `main`, the GitHub Actions secrets are set, and what remains are the one-time cPanel steps (create the database, place the server `.env`, clear the old landing page from `public_html`, confirm PHP 8.3). After that, M1 is sign in (phone or email plus password), OTP activation, and the Owner and Manager roles.
+**Milestone M2, Catalogue and pricing.** M0 and M1 are complete. The catalogue reference data and storefront shop and product pages are implemented and verified against PHP 8.3 and MariaDB 10.11 at mobile and desktop widths. Admin products and pricing come next.
 
 ---
 
@@ -51,8 +51,8 @@ Delivered in two parts. Part 1 is staff sign in and RBAC. Part 2 is customer acc
 - [x] Smoke tests for guest, household, business, Manager, Owner. Guest, Manager and Owner in Part 1; household and business in Part 2 (registration, login routing, activation and reset over HTTP)
 
 ### M2. Catalogue and pricing
-- [ ] Categories (5) and units seeded; products seeded (Garlic unit corrected to kg)
-- [ ] Storefront: shop grid, search, filter by category, product page with "Goes well with"
+- [x] Categories (5) and units seeded; products seeded (Garlic unit corrected to kg)
+- [x] Storefront: shop grid, search, filter by category, product page with "Goes well with"
 - [ ] Admin: products list, create/edit, availability toggle
 - [ ] Admin: pricing table with inline edit, bulk apply, auto price history
 - [ ] CSV / Excel import and export (PhpSpreadsheet)
@@ -136,6 +136,15 @@ Delivered in two parts. Part 1 is staff sign in and RBAC. Part 2 is customer acc
 ---
 
 ## Session log (newest first)
+
+### 28 Aug 2026, M2 storefront catalogue
+- Reconciled the stale M2 seed checkbox with the shipped migrations. `003_reference_seed.sql` contains 5 categories and 4 units. `004_product_seed.sql` contains 24 products, and Garlic uses unit 1, kg. Added automated seed assertions so the counts and Garlic correction cannot drift unnoticed.
+- Built the database-backed shop grid with URL-driven search and category filtering. It works without JavaScript. JavaScript adds the mobile category sheet and faster add-to-basket feedback. Desktop has a sticky category rail and a dense 4-column grid. Mobile has a 2-column grid, quick category links and the bottom tab bar.
+- Built the product page with a data-driven gallery, unit, price, full description, availability, restock date, minimum and increment, the shared `source_regions` setting, breadcrumbs, a branded 404, and up to 4 "Goes well with" products. Admin pairings come first, then same-category products fill any open places.
+- Added shared catalogue queries and public catalogue endpoints. Product cards keep unavailable and restocking items visible, label their state in text, and disable their add control.
+- Added the narrow M2 basket seam requested for functional add controls. It writes a guest or signed-in customer basket with CSRF protection, prepared statements, the product's current price, and its configured minimum or increment. Full basket editing and guest merge remain in M4.
+- Added catalogue input, availability and seed tests. The CSS and minified JavaScript build passes. Native PHP 8.3 verification is green: `php -l` passes across all 104 PHP files, the unit runner passes 78 assertions, the staff and RBAC database suite passes 26, the customer database suite passes 28, and the end-to-end customer HTTP suite passes 31. All 9 migrations apply cleanly to MariaDB 10.11.
+- Responsive Chrome checks pass at 390px and 1440px. They cover the mobile filter sheet and open state, 2-column mobile and 4-column desktop grids, the desktop category rail, search plus category filtering, restocking visibility and disabled add control, curated and fallback suggestions, page-level horizontal overflow, a proper product 404, the no-JavaScript basket redirect, and JavaScript basket-count updates. The first JavaScript run caught an endpoint bug caused by the hidden `action` field shadowing the form URL property. The catalogue script now reads the form's action attribute explicitly, the minified asset is rebuilt, and the full browser suite passes after the fix.
 
 ### 27 Aug 2026, M1 Part 2: customer accounts and OTP activation
 - Built customer registration and the account area on branch `m1-customer-auth`, reusing the Part 1 auth controller. New `Phone` helper normalises Nigerian numbers to E.164 (`+234...`) on registration and on login lookup, retrofitted into the Part 1 login so staff and customers match. New `Auth` helper holds the shared sign-in logic (find by phone or email, landing path, session start) so it is testable outside the HTTP handler, and `Customer` holds the signed-in customer session (household or business, activation flag).
