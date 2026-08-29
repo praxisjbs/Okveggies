@@ -1,16 +1,26 @@
 <?php
-/**
- * api/v1/catalog.php
- * OK Veggies. Product and category reads for the storefront.
- * Status: scaffold placeholder. Build in milestone M2. See docs/PRD.md Section 5.
- * Before writing logic here: read the PRD section, then ask at least five
- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
- */
+/** Public catalogue reads for progressive storefront enhancement. */
 require_once __DIR__ . '/../../includes/bootstrap.php';
-header('Content-Type: application/json; charset=utf-8');
 
-// Public reads.
-// $action = okv_action();
-// switch ($action) { ... }  gate each action with Rbac::requirePermission or a customer auth check
+$action = okv_action();
 
-okv_json(['status' => 'error', 'code' => 'not_implemented', 'message' => 'This endpoint is scaffolded and not built yet.'], 501);
+switch ($action) {
+    case 'categories':
+        okv_json(['status' => 'ok', 'categories' => Catalogue::categories()]);
+
+    case 'products':
+        $products = Catalogue::products((string) okv_input('search', ''), (string) okv_input('category', ''));
+        okv_json(['status' => 'ok', 'products' => $products, 'count' => count($products)]);
+
+    case 'product':
+        $product = Catalogue::productBySlug((string) okv_input('slug', ''));
+        if (!$product) {
+            okv_error('That product was not found.', 404, 'not_found');
+        }
+        $product['images'] = Catalogue::images((int) $product['id']);
+        $product['goes_well_with'] = Catalogue::suggestions((int) $product['id'], (int) $product['category_id']);
+        okv_json(['status' => 'ok', 'product' => $product]);
+
+    default:
+        okv_error('This action is not available.', 400, 'unknown_action');
+}

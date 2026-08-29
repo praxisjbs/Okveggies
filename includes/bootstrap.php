@@ -70,6 +70,8 @@ require_once __DIR__ . '/classes/Rbac.php';
 require_once __DIR__ . '/classes/Phone.php';
 require_once __DIR__ . '/classes/Auth.php';
 require_once __DIR__ . '/classes/Customer.php';
+require_once __DIR__ . '/classes/Catalogue.php';
+require_once __DIR__ . '/classes/Basket.php';
 require_once __DIR__ . '/classes/Otp.php';
 require_once __DIR__ . '/classes/Mail.php';
 require_once __DIR__ . '/classes/Paystack.php';

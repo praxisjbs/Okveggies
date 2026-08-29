@@ -91,6 +91,44 @@ if (!function_exists('okv_money')) {
     }
 }
 
+if (!function_exists('okv_image_url')) {
+    /** Encode each segment while retaining URL path separators. */
+    function okv_image_url(string $path): string
+    {
+        $path = '/' . ltrim($path, '/');
+        return implode('/', array_map('rawurlencode', explode('/', $path)));
+    }
+}
+
+if (!function_exists('okv_quantity')) {
+    /** Display a stored decimal quantity without trailing zeroes. */
+    function okv_quantity($quantity): string
+    {
+        return rtrim(rtrim(number_format((float) $quantity, 3, '.', ''), '0'), '.');
+    }
+}
+
+if (!function_exists('okv_availability')) {
+    /** Customer-facing availability text and presentation key. */
+    function okv_availability(string $status, ?string $restockDate = null): array
+    {
+        if ($status === 'restocking') {
+            $label = 'Restocking';
+            if ($restockDate) {
+                $timestamp = strtotime($restockDate);
+                if ($timestamp !== false) {
+                    $label .= ' for ' . date('D j M', $timestamp);
+                }
+            }
+            return ['key' => 'restocking', 'label' => $label, 'can_add' => false];
+        }
+        if ($status === 'out_of_stock') {
+            return ['key' => 'out', 'label' => 'Out of stock', 'can_add' => false];
+        }
+        return ['key' => 'available', 'label' => 'Available', 'can_add' => true];
+    }
+}
+
 if (!function_exists('okv_send_account_code')) {
     /**
      * Issue a one-time code and email it from a notification template, in one
