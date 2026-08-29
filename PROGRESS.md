@@ -12,7 +12,7 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M2, Catalogue and pricing. Roughly a third delivered, audited and corrected.** M0 and M1 are complete. Two of the six M2 acceptance criteria are done: the reference seed is verified, and the storefront shop and product pages are built and working against MariaDB 10.11. The four criteria that carry the milestone's name are still open: admin products, the pricing table with price history, CSV and Excel import and export, and the pricing tests. The storefront slice went through a line-by-line audit on 29 Aug and the defects it found are fixed (see the session log). M2 is not done until the admin and pricing half is built.
+**Milestone M2, Catalogue and pricing. Complete.** M0 and M1 are complete. All six M2 acceptance criteria are met: the reference seed is verified, the storefront shop and product pages are built and audited, the admin catalogue is built, the pricing table writes history on every change, and the spreadsheet round trip works out and back in. The storefront half was audited on 29 Aug and its defects fixed; the admin half was built the same day with the money logic unit tested before it was wired to anything. Next is M3, Combos.
 
 ---
 
@@ -51,14 +51,14 @@ Delivered in two parts. Part 1 is staff sign in and RBAC. Part 2 is customer acc
 - [x] Smoke tests for guest, household, business, Manager, Owner. Guest, Manager and Owner in Part 1; household and business in Part 2 (registration, login routing, activation and reset over HTTP)
 
 ### M2. Catalogue and pricing
-Two of six delivered. The storefront half is built and audited. The admin and pricing half, which is the part the business actually runs on every week, has not started.
+Delivered in two parts. The storefront half arrived first and was audited and corrected. The admin and pricing half, which is what the business runs on every week, was built after it.
 - [x] Categories (5) and units seeded; products seeded (Garlic unit corrected to kg). Verified against a live MariaDB 10.11: 5 categories, 4 units, 24 products, 24 images, 24 availability rows, 20 pairings, Garlic on unit 1, kg
 - [x] Storefront: shop grid, search, filter by category, product page with "Goes well with". Audited and corrected on 29 Aug
-- [ ] Admin: products list, create/edit, availability toggle
-- [ ] Admin: pricing table with inline edit, bulk apply, auto price history
-- [ ] CSV / Excel import and export (PhpSpreadsheet)
-- [ ] Tests: price change writes history; import/export round-trips
-- [ ] Carried forward from the audit: paginate the shop grid before the catalogue outgrows one page; give products a real source region instead of the one site-wide setting; replace the regex-over-SQL seed assertions with assertions against a migrated database; Fruits and Grains & Cereals are seeded with no products, so decide whether to hide an empty category or label it as still being sourced
+- [x] Admin: products list, create/edit, availability toggle. Search, category and on-shop filters; photos with a main one, reordering and removal; a product held by an order, a combo, a pairing or its price history is switched off rather than deleted
+- [x] Admin: pricing table with inline edit, bulk apply, auto price history. Every change goes through `Pricing::change()`, which closes the open history row and opens a new one in the same transaction. Bulk moves take a percentage or a flat amount, preview before they write, and are all or nothing
+- [x] CSV / Excel import and export (PhpSpreadsheet). Export is `.xlsx`, import accepts `.xlsx` and `.csv`. An import previews first and writes nothing until confirmed, then applies in one transaction. An unknown SKU is reported, never created; an empty price cell means leave that product alone
+- [x] Tests: price change writes history; import/export round-trips. 47 pricing assertions in the unit runner and 76 against a live database, including the round trip
+- [ ] Carried forward from the audit, not M2 acceptance criteria: paginate the shop grid before the catalogue outgrows one query; give products a real source region instead of the one site-wide setting; replace the regex-over-SQL seed assertions with assertions against a migrated database; decide whether an empty category is hidden or labelled as still being sourced
 
 ### M3. Combos
 - [ ] Combo builder with product picker and live component total
@@ -138,6 +138,27 @@ Two of six delivered. The storefront half is built and audited. The admin and pr
 ---
 
 ## Session log (newest first)
+
+### 29 Aug 2026, M2 part 2: admin catalogue, pricing and the spreadsheet round trip
+
+Built the half of M2 that had not been started: admin products, the pricing table, and import and export. Seven clarifying questions were answered before any code was written (bulk apply takes both a percentage and a flat amount; an import previews then applies all or nothing; a reason is optional inline and required on a bulk move; export is `.xlsx` and import takes both; a referenced product is switched off rather than deleted; full photo management; effective-now prices only, no scheduling).
+
+Money logic first, tested before it was wired to anything.
+
+- `Pricing` is the only place a price may change. It closes the open history row, writes a new one (old price, new price, reason, who, when) and updates the product, all in one transaction. Nothing else in the codebase writes `current_price_subunit`, so the history cannot be bypassed. Setting the price a product already has is not an error and writes nothing, so re-importing last week's sheet adds no noise.
+- `Products` holds the admin catalogue: validation that answers with every problem at once, create, edit, availability, photos, and the removal rule. A product held by an order, a basket, a combo, a pairing or its own price history is switched off; only one that never carried a price can be removed outright, so no history row is ever deleted.
+- `PriceSheet` is the spreadsheet round trip on PhpSpreadsheet. The uploaded file is read from the temp path and never stored under the web root.
+- `admin/pricing.php` and `admin/products.php` with `api/v1/pricing.php` and `api/v1/products.php`. Every action re-checks its `pricing.*` or `products.*` permission on the server, every write needs POST and a valid CSRF token, and no exception reaches the client.
+
+Three real defects were found by testing rather than by reading, which is the point of writing the tests first:
+
+- A bulk category move was blocked entirely by any product with no price. A draft has nothing to adjust, so it is skipped and reported rather than treated as a failure. One unpriced product must not stop the weekly reprice.
+- Exporting a product with no price wrote `0`, which came back as an invalid price and made an untouched export fail to re-import. An empty price cell now means "leave this one alone", which also lets the Manager clear the rows they do not want to touch.
+- The price history panel used Tailwind's `flex`, whose explicit display beats the `hidden` attribute, so an invisible overlay sat over the whole pricing screen and swallowed every click. `.okv-sheet-backdrop` already carried a targeted fix for this; it is now a base rule, `[hidden] { display: none !important; }`, so no future panel repeats it.
+
+Two smaller ones, both mine, both caught in the browser: the inline price form disabled its input before reading the form, so the price never reached the server (a disabled field is left out of `FormData`); and `Products::referenceCount()` reused a named placeholder twice in one statement, which PDO refuses without emulated prepares.
+
+Verified: 110 PHP files `php -l` clean, 124 unit assertions (47 of them pricing), 76 pricing assertions against a live MariaDB 10.11, 26 staff and RBAC plus 28 customer database assertions still green, 36 storefront and 26 admin browser assertions at 390px and 1440px. The full round trip was driven over real HTTP: export the `.xlsx`, edit two prices in it with PhpSpreadsheet, preview (nothing written), apply, and both products carry the new price with the history stamped "Imported from prices-edited.xlsx". Gates checked from the outside: every write refuses a missing CSRF token with 419, `set_price` over GET is 405, and a Manager is refused `products.delete` on the server, not just in the interface. No new migration was needed; the M0 schema already carried everything.
 
 ### 29 Aug 2026, M2 audit and corrections
 

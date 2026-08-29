@@ -45,6 +45,13 @@
     border-radius: 3px;
   }
   h1, h2, h3, h4 { @apply font-display; text-wrap: balance; }
+  /*
+   * The hidden attribute has to win. A utility like flex or grid sets an
+   * explicit display, which otherwise beats the browser's own display:none for
+   * [hidden], leaving an invisible panel sitting over the page and swallowing
+   * every click. Panels toggled with el.hidden rely on this.
+   */
+  [hidden] { display: none !important; }
 }
 
 @layer components {
