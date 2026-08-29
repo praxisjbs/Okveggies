@@ -9,6 +9,7 @@ if (!function_exists('okv_shop_header')) {
             'home' => ['/', 'Home'],
             'shop' => ['/shop.php', 'Shop'],
             'combos' => ['/combos.php', 'Combos'],
+            'kitchen-runs' => ['/kitchen-runs.php', 'Kitchen Runs'],
             'basket' => ['/cart.php', 'Basket'],
             'account' => ['/account.php', $accountLabel],
         ];
@@ -18,7 +19,7 @@ if (!function_exists('okv_shop_header')) {
             <a href="/" class="font-display text-xl font-extrabold tracking-tight text-forest">OK Veggies</a>
             <nav class="hidden items-center gap-6 text-sm font-semibold text-ink md:flex" aria-label="Main navigation">
               <?php foreach ($links as $key => [$url, $label]): ?>
-                <?php if ($key === 'home' || $key === 'basket' || $key === 'account'): continue; endif; ?>
+                <?php if ($key === 'home' || $key === 'kitchen-runs' || $key === 'basket' || $key === 'account'): continue; endif; ?>
                 <a href="<?= okv_e($url) ?>" class="inline-flex min-h-[44px] items-center <?= $active === $key ? 'text-forest underline decoration-gold decoration-2 underline-offset-8' : 'hover:text-forest' ?>">
                   <?= okv_e($label) ?>
                 </a>
@@ -33,9 +34,9 @@ if (!function_exists('okv_shop_header')) {
             </div>
           </div>
         </header>
-        <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-mist bg-white px-1 pb-2 md:hidden" aria-label="Mobile navigation">
+        <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-mist bg-white px-1 pb-2 md:hidden" aria-label="Mobile navigation">
           <?php foreach ($links as $key => [$url, $label]): ?>
-            <a href="<?= okv_e($url) ?>" class="flex min-h-[56px] flex-col items-center justify-center px-1 text-xs font-semibold <?= $active === $key ? 'text-forest' : 'text-ink-60' ?>" <?= $active === $key ? 'aria-current="page"' : '' ?> <?= $key === 'basket' ? 'aria-label="Basket, ' . $basketCount . ' items"' : '' ?>>
+            <a href="<?= okv_e($url) ?>" class="flex min-h-[56px] flex-col items-center justify-center px-1 text-center text-xs font-semibold leading-tight <?= $active === $key ? 'text-forest' : 'text-ink-60' ?>" <?= $active === $key ? 'aria-current="page"' : '' ?> <?= $key === 'basket' ? 'aria-label="Basket, ' . $basketCount . ' items"' : '' ?>>
               <span><?= okv_e($label) ?></span>
               <?php if ($key === 'basket'): ?><span class="okv-basket-count text-xs" aria-live="polite"><?= $basketCount ?></span><?php endif; ?>
             </a>

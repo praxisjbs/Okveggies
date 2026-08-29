@@ -14,18 +14,18 @@ if (!function_exists('okv_shop_footer')) {
             </div>
             <div class="text-sm">
               <p class="mb-3 font-semibold text-white">Company</p>
-              <ul class="space-y-2">
-                <li><a href="/page.php?slug=about" class="hover:text-gold">Our Story</a></li>
-                <li><a href="/page.php?slug=how-it-works" class="hover:text-gold">How It Works</a></li>
-                <li><a href="/page.php?slug=faq" class="hover:text-gold">Questions</a></li>
+              <ul>
+                <li><a href="/page.php?slug=about" class="inline-flex min-h-[44px] items-center hover:text-gold">Our Story</a></li>
+                <li><a href="/page.php?slug=how-it-works" class="inline-flex min-h-[44px] items-center hover:text-gold">How It Works</a></li>
+                <li><a href="/page.php?slug=faq" class="inline-flex min-h-[44px] items-center hover:text-gold">Questions</a></li>
               </ul>
             </div>
             <div class="text-sm">
               <p class="mb-3 font-semibold text-white">Legal</p>
-              <ul class="space-y-2">
-                <li><a href="/page.php?slug=terms" class="hover:text-gold">Terms</a></li>
-                <li><a href="/page.php?slug=privacy" class="hover:text-gold">Privacy</a></li>
-                <li><a href="/page.php?slug=delivery-policy" class="hover:text-gold">Delivery Policy</a></li>
+              <ul>
+                <li><a href="/page.php?slug=terms" class="inline-flex min-h-[44px] items-center hover:text-gold">Terms</a></li>
+                <li><a href="/page.php?slug=privacy" class="inline-flex min-h-[44px] items-center hover:text-gold">Privacy</a></li>
+                <li><a href="/page.php?slug=delivery-policy" class="inline-flex min-h-[44px] items-center hover:text-gold">Delivery Policy</a></li>
               </ul>
             </div>
           </div>

@@ -18,12 +18,15 @@ if (!function_exists('okv_product_card')) {
               <?php endif; ?>
             </div>
             <div class="mt-3 flex items-start justify-between gap-2">
-              <div>
+              <div class="min-w-0">
                 <h3 class="font-display font-bold leading-tight text-ink group-hover:text-forest"><?= okv_e($product['name']) ?></h3>
                 <p class="mt-1 text-sm text-ink-60">per <?= okv_e($unit) ?></p>
               </div>
-              <span class="okv-badge shrink-0 <?= $availability['key'] === 'available' ? 'okv-badge-available' : 'okv-badge-out' ?>"><?= okv_e($availability['label']) ?></span>
+              <span class="okv-badge <?= $availability['key'] === 'available' ? 'okv-badge-available' : 'okv-badge-out' ?>"><?= okv_e($availability['short_label']) ?></span>
             </div>
+            <?php if ($availability['note'] !== ''): ?>
+              <p class="mt-2 text-sm text-ink-60"><?= okv_e($availability['note']) ?></p>
+            <?php endif; ?>
           </a>
           <?php if (!empty($product['short_description'])): ?>
             <p class="mt-2 line-clamp-2 text-sm text-ink-60"><?= okv_e($product['short_description']) ?></p>

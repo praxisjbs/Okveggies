@@ -82,7 +82,9 @@
   }
 
   /* Chips and badges. */
-  .okv-badge { @apply inline-flex items-center gap-1 text-xs font-medium rounded-full px-2.5 py-1; }
+  /* max-w-full and whitespace-normal keep a badge from setting the width of its
+     row. On a two-up mobile grid a long label used to push the page sideways. */
+  .okv-badge { @apply inline-flex max-w-full items-center gap-1 whitespace-normal rounded-full px-2.5 py-1 text-center text-xs font-medium; }
   .okv-badge-available { @apply bg-foliage-tint text-forest; }
   .okv-badge-out { @apply bg-tomato-tint text-tomato; }
 

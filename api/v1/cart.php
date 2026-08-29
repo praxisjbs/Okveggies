@@ -11,17 +11,18 @@ function cart_is_fetch(): bool
 
 function cart_return_to(): string
 {
-    $returnTo = (string) okv_input('return_to', '/shop.php');
-    if ($returnTo === '' || $returnTo[0] !== '/' || str_starts_with($returnTo, '//') || preg_match('/[\r\n]/', $returnTo)) {
-        return '/shop.php';
-    }
-    return $returnTo;
+    return okv_safe_path((string) okv_input('return_to', '/shop.php'), '/shop.php');
 }
 
 function cart_redirect_with_notice(string $notice): void
 {
-    $returnTo = cart_return_to();
-    okv_redirect($returnTo . (str_contains($returnTo, '?') ? '&' : '?') . 'basket=' . rawurlencode($notice), 303);
+    // Strip any basket notice already on the target so a repeated add does not
+    // stack "?basket=added&basket=added" onto the URL.
+    [$path, $query] = array_pad(explode('?', cart_return_to(), 2), 2, '');
+    parse_str($query, $params);
+    unset($params['basket']);
+    $params['basket'] = $notice;
+    okv_redirect($path . '?' . http_build_query($params), 303);
 }
 
 if ($action !== 'add_product') {
@@ -45,13 +46,14 @@ if ($productId < 1) {
 try {
     $result = Basket::addProduct($productId);
 } catch (DomainException $e) {
-    $message = $e->getMessage() === 'unavailable'
+    $unavailable = $e->getMessage() === 'unavailable';
+    $message = $unavailable
         ? 'That item is not available yet. Check its restock status and try again later.'
         : 'That product was not found.';
     if (!cart_is_fetch()) {
-        cart_redirect_with_notice('unavailable');
+        cart_redirect_with_notice($unavailable ? 'unavailable' : 'missing');
     }
-    okv_error($message, $e->getMessage() === 'unavailable' ? 409 : 404, $e->getMessage());
+    okv_error($message, $unavailable ? 409 : 404, $e->getMessage());
 } catch (Throwable $e) {
     error_log('cart.add_product failed: ' . $e->getMessage());
     if (!cart_is_fetch()) {

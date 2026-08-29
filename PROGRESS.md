@@ -12,7 +12,7 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M2, Catalogue and pricing.** M0 and M1 are complete. The catalogue reference data and storefront shop and product pages are implemented and verified against PHP 8.3 and MariaDB 10.11 at mobile and desktop widths. Admin products and pricing come next.
+**Milestone M2, Catalogue and pricing. Roughly a third delivered, audited and corrected.** M0 and M1 are complete. Two of the six M2 acceptance criteria are done: the reference seed is verified, and the storefront shop and product pages are built and working against MariaDB 10.11. The four criteria that carry the milestone's name are still open: admin products, the pricing table with price history, CSV and Excel import and export, and the pricing tests. The storefront slice went through a line-by-line audit on 29 Aug and the defects it found are fixed (see the session log). M2 is not done until the admin and pricing half is built.
 
 ---
 
@@ -51,12 +51,14 @@ Delivered in two parts. Part 1 is staff sign in and RBAC. Part 2 is customer acc
 - [x] Smoke tests for guest, household, business, Manager, Owner. Guest, Manager and Owner in Part 1; household and business in Part 2 (registration, login routing, activation and reset over HTTP)
 
 ### M2. Catalogue and pricing
-- [x] Categories (5) and units seeded; products seeded (Garlic unit corrected to kg)
-- [x] Storefront: shop grid, search, filter by category, product page with "Goes well with"
+Two of six delivered. The storefront half is built and audited. The admin and pricing half, which is the part the business actually runs on every week, has not started.
+- [x] Categories (5) and units seeded; products seeded (Garlic unit corrected to kg). Verified against a live MariaDB 10.11: 5 categories, 4 units, 24 products, 24 images, 24 availability rows, 20 pairings, Garlic on unit 1, kg
+- [x] Storefront: shop grid, search, filter by category, product page with "Goes well with". Audited and corrected on 29 Aug
 - [ ] Admin: products list, create/edit, availability toggle
 - [ ] Admin: pricing table with inline edit, bulk apply, auto price history
 - [ ] CSV / Excel import and export (PhpSpreadsheet)
 - [ ] Tests: price change writes history; import/export round-trips
+- [ ] Carried forward from the audit: paginate the shop grid before the catalogue outgrows one page; give products a real source region instead of the one site-wide setting; replace the regex-over-SQL seed assertions with assertions against a migrated database; Fruits and Grains & Cereals are seeded with no products, so decide whether to hide an empty category or label it as still being sourced
 
 ### M3. Combos
 - [ ] Combo builder with product picker and live component total
@@ -136,6 +138,28 @@ Delivered in two parts. Part 1 is staff sign in and RBAC. Part 2 is customer acc
 ---
 
 ## Session log (newest first)
+
+### 29 Aug 2026, M2 audit and corrections
+
+Audit of the M2 storefront slice on branch `catalogue_pricing`, run against a live MariaDB 10.11 and a real browser at 390px and 1440px, not by reading alone. All 9 migrations apply clean, `php -l` passes on all 104 PHP files, and the unit runner is at 97 assertions, up from 78.
+
+Scope first. M2 has six acceptance criteria. Two were delivered. The four that carry the milestone's name, admin products, the pricing table with automatic price history, CSV and Excel import and export, and the pricing tests, were not started. The `PROGRESS.md` entry and the milestone header have been corrected to say so.
+
+Fixed in this pass:
+
+- **Open redirect in the basket controller.** `return_to` was checked with a blacklist that let `/\evil.example` through. A browser folds the backslash into a slash, so the customer was bounced to another host by a form on any site. Replaced with a shared `okv_safe_path()` in `includes/functions/helpers.php` that refuses a second leading slash in either slash form, control characters raw or percent-encoded, a fragment, and anything that is not a path on this site. Eleven assertions cover it.
+- **The basket badge counted kilogrammes, not items.** `Basket::count()` summed `quantity` and rounded up, so 1.5kg of tomatoes read as "2 items" in the badge and in its screen-reader label. It now counts lines. (The replacement query first used `lines` as its column alias, which is a reserved word in MySQL; caught before commit, the alias is `line_count`.)
+- **Search treated a customer's words as a LIKE pattern.** Searching `%` returned the whole catalogue and `t%o` returned 21 of 24 products. Added `Catalogue::escapeLike()`.
+- **The shop page scrolled sideways on a phone.** A restocking product's badge carried its date, and `shrink-0` on a two-up 390px grid pushed the page 38px wider than the viewport. The badge now takes a short label, the restock date moved to a line under the card in full words ("Back on Thursday 3rd September"), and `.okv-badge` no longer sets the width of its row.
+- **The empty state told the customer something untrue.** Browsing an empty category with no search term said "Nothing matched that search". The two cases are now separate.
+- **The mobile bottom tab bar had no route to Kitchen Runs.** PRD 4.1 asks for it as a clear button. On a phone the page was unreachable from anywhere in the storefront. Added as a sixth tab.
+- **The floating support widget was on the home page only.** PRD 4.1 says every page. Promoted the hardcoded home-page markup into the `support_widget.php` component and wired it into home, shop and product, the 404 branch included.
+- **The home page was not on the shared shell.** `okv_shop_header()` and `okv_shop_footer()` were built but only used by shop and product, so the home page had no bottom tab bar, no live basket count, a duplicate copy of the image-path encoder, and the unminified `okv.js`. It now uses the shared components and `okv_image_url()`.
+- **Gold as a button fill on the home page hero.** A house law and a stated merge blocker. Predates M2. The CTA now takes white on forest and keeps the gold focus ring.
+- **The filter sheet claimed `aria-modal` without trapping Tab.** Keyboard focus walked out behind the open sheet. Added a focus trap.
+- **Smaller ones.** An array-valued query parameter (`?search[]=a`) raised a PHP warning on every request; `okv_input()` and `okv_action()` now refuse a non-scalar. A missing product and an unavailable product gave the same notice. A repeated add stacked `basket=added` on the URL. `Catalogue::suggestions()` hardcoded `LIMIT 4` beside its own constant. `cleanCategory()` was doing duty as the product-slug validator, so `cleanSlug()` is now the name. Footer links were 20px tall against a 44px house rule. Product descriptions lost their paragraph breaks. Canonical and Open Graph tags were missing (PRD 21), and the 404 branch was indexable.
+
+Verified after the fixes: 97 unit assertions, 26 staff and RBAC database assertions, 28 customer database assertions, `php -l` clean across the repo, no em dash anywhere outside `docs/`, and a browser pass at 390px and 1440px covering zero horizontal overflow on all three pages, the 2-up and 4-up grids, the tab bar, the focus trap and Escape, the corrected basket count over four adds, the honest empty state, alt text on every image, and the support widget. The M1 end-to-end HTTP suite could not run on the audit machine: it blocks on `mail.okveggies.com.ng:465`, which the sandbox cannot reach. The two M1 database suites cover the same logic and pass.
 
 ### 28 Aug 2026, M2 storefront catalogue
 - Reconciled the stale M2 seed checkbox with the shipped migrations. `003_reference_seed.sql` contains 5 categories and 4 units. `004_product_seed.sql` contains 24 products, and Garlic uses unit 1, kg. Added automated seed assertions so the counts and Garlic correction cannot drift unnoticed.

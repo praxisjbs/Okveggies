@@ -11,10 +11,26 @@ final class Catalogue
         return mb_substr(trim(preg_replace('/\s+/', ' ', $search) ?? ''), 0, 80);
     }
 
+    /** A slug is lowercase letters, digits and hyphens, or it is not a slug. */
+    public static function cleanSlug(string $slug): string
+    {
+        $slug = strtolower(trim($slug));
+        return preg_match('/^[a-z0-9-]{1,140}$/', $slug) ? $slug : '';
+    }
+
     public static function cleanCategory(string $category): string
     {
-        $category = strtolower(trim($category));
-        return preg_match('/^[a-z0-9-]{1,140}$/', $category) ? $category : '';
+        return self::cleanSlug($category);
+    }
+
+    /**
+     * Make a search term safe to drop inside a LIKE pattern. Without this a
+     * customer searching for "%" matches every product and "t%o" matches most
+     * of them, because LIKE reads those as wildcards.
+     */
+    public static function escapeLike(string $term): string
+    {
+        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term);
     }
 
     public static function categories(): array
@@ -32,7 +48,7 @@ final class Catalogue
     {
         $search = self::cleanSearch($search);
         $category = self::cleanCategory($category);
-        $like = '%' . $search . '%';
+        $like = '%' . self::escapeLike($search) . '%';
 
         return Database::all(
             'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.current_price_subunit,
@@ -65,7 +81,7 @@ final class Catalogue
 
     public static function productBySlug(string $slug): ?array
     {
-        $slug = self::cleanCategory($slug);
+        $slug = self::cleanSlug($slug);
         if ($slug === '') {
             return null;
         }
@@ -114,7 +130,7 @@ final class Catalogue
                LEFT JOIN product_availability pa ON pa.product_id = p.id
               WHERE pp.product_id = :product_id
               ORDER BY pp.sort_order, pp.id
-              LIMIT 4',
+              LIMIT ' . self::SUGGESTION_LIMIT,
             [':product_id' => $productId]
         );
 
@@ -135,7 +151,7 @@ final class Catalogue
                LEFT JOIN product_availability pa ON pa.product_id = p.id
               WHERE p.category_id = :category_id AND p.id <> :product_id AND p.is_active = 1
               ORDER BY p.is_featured DESC, p.name
-              LIMIT 4',
+              LIMIT ' . self::SUGGESTION_LIMIT,
             [':category_id' => $categoryId, ':product_id' => $productId]
         );
 

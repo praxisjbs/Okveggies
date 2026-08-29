@@ -2,6 +2,34 @@
 (function () {
   'use strict';
 
+  var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  function focusable(root) {
+    return Array.prototype.filter.call(root.querySelectorAll(FOCUSABLE), function (el) {
+      return el.offsetWidth > 0 || el.offsetHeight > 0;
+    });
+  }
+
+  /** Keep Tab inside the sheet while it is open. It claims aria-modal, so it
+      has to behave like one for a keyboard and a screen reader. */
+  function trapTab(sheet, event) {
+    if (event.key !== 'Tab') { return; }
+    var items = focusable(sheet);
+    if (items.length === 0) { return; }
+    var first = items[0];
+    var last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    } else if (!sheet.contains(document.activeElement)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   function setSheet(open) {
     var sheet = document.querySelector('[data-filter-sheet]');
     var opener = document.querySelector('[data-filter-open]');
@@ -71,7 +99,9 @@
         if (event.target === sheet) { setSheet(false); }
       });
       document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape' && !sheet.hidden) { setSheet(false); }
+        if (sheet.hidden) { return; }
+        if (event.key === 'Escape') { setSheet(false); return; }
+        trapTab(sheet, event);
       });
     }
     document.querySelectorAll('[data-add-form]').forEach(enhanceAddForm);

@@ -7,6 +7,11 @@ final class Basket
 {
     private const SESSION_TOKEN_KEY = 'okv_basket_token';
 
+    /**
+     * How many lines are in the basket, which is what the badge and its label
+     * say. Never the sum of the quantities: those are kilogrammes, bunches and
+     * heads, so adding them together counts 2kg of tomatoes as two items.
+     */
     public static function count(): int
     {
         $cartId = self::findActiveCartId();
@@ -14,10 +19,10 @@ final class Basket
             return 0;
         }
         $row = Database::one(
-            'SELECT COALESCE(SUM(quantity), 0) AS quantity FROM cart_items WHERE cart_id = :cart_id',
+            'SELECT COUNT(*) AS line_count FROM cart_items WHERE cart_id = :cart_id',
             [':cart_id' => $cartId]
         );
-        return (int) ceil((float) ($row['quantity'] ?? 0));
+        return (int) ($row['line_count'] ?? 0);
     }
 
     public static function addProduct(int $productId): array

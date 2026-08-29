@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/components/shop/activation_banner.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/product_card.php';
+require_once __DIR__ . '/includes/components/shop/support_widget.php';
 
 $search = Catalogue::cleanSearch((string) okv_input('search', ''));
 $category = Catalogue::cleanCategory((string) okv_input('category', ''));
@@ -27,11 +28,17 @@ function shop_url(string $search, string $category = ''): string
     return '/shop.php' . ($query ? '?' . http_build_query($query) : '');
 }
 
+$pageTitle = $activeCategory
+    ? $activeCategory['name'] . ', fresh this week. OK Veggies'
+    : 'Shop fresh produce. OK Veggies';
+$canonical = rtrim((string) APP_URL, '/') . ($category !== '' ? '/shop.php?category=' . rawurlencode($category) : '/shop.php');
+
 $basketNotice = (string) okv_input('basket', '');
 $noticeMessages = [
     'added' => 'Added to your basket.',
     'unavailable' => 'That item is not available yet. Its restock status is shown on the card.',
     'expired' => 'Your session expired. Please try adding the item again.',
+    'missing' => 'We could not find that item. It may have left the catalogue.',
     'error' => 'We could not add that item. Please try again.',
 ];
 ?><!doctype html>
@@ -39,8 +46,14 @@ $noticeMessages = [
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Shop fresh produce . OK Veggies</title>
+  <title><?= okv_e($pageTitle) ?></title>
   <meta name="description" content="Search fresh vegetables, herbs, spices, tubers, roots, fruits and grains by category, unit, price and availability.">
+  <link rel="canonical" href="<?= okv_e($canonical) ?>">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="OK Veggies">
+  <meta property="og:title" content="<?= okv_e($pageTitle) ?>">
+  <meta property="og:description" content="Search the week's produce, check the unit and price, then add what you need.">
+  <meta property="og:url" content="<?= okv_e($canonical) ?>">
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen bg-forest-tint">
@@ -122,8 +135,13 @@ $noticeMessages = [
           </div>
         <?php else: ?>
           <div class="rounded-lg bg-white px-6 py-16 text-center shadow-okv-1">
-            <h2 class="font-display text-2xl font-bold text-ink">Nothing matched that search</h2>
-            <p class="mx-auto mt-3 max-w-md text-ink-60">Try another produce name, or clear the category to see everything available this week.</p>
+            <?php if ($search !== ''): ?>
+              <h2 class="font-display text-2xl font-bold text-ink">Nothing matched that search</h2>
+              <p class="mx-auto mt-3 max-w-md text-ink-60">Try another produce name<?= $category !== '' ? ', or clear the category to search everything available this week' : '' ?>.</p>
+            <?php else: ?>
+              <h2 class="font-display text-2xl font-bold text-ink">Nothing in <?= okv_e($activeCategory['name'] ?? 'this category') ?> this week</h2>
+              <p class="mx-auto mt-3 max-w-md text-ink-60">We are still sourcing for this one. The rest of the week's produce is ready now.</p>
+            <?php endif; ?>
             <a href="/shop.php" class="okv-btn mt-6">See all produce</a>
           </div>
         <?php endif; ?>
@@ -153,6 +171,7 @@ $noticeMessages = [
 </div>
 
 <?php okv_shop_footer(); ?>
+<?php okv_support_widget(); ?>
 <script>window.OKV = window.OKV || {}; window.OKV.csrf = <?= json_encode(Csrf::token()) ?>;</script>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>"></script>
 <script src="<?= okv_e(okv_asset('/assets/js/catalogue.min.js')) ?>"></script>

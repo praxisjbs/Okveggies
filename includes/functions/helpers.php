@@ -43,6 +43,43 @@ if (!function_exists('okv_redirect')) {
     }
 }
 
+if (!function_exists('okv_safe_path')) {
+    /**
+     * Validate a redirect target that came from the request. Only a path on
+     * this site is allowed, so a crafted return_to cannot bounce a customer off
+     * to another host. Anything else falls back.
+     *
+     * A browser normalises a backslash to a forward slash before it resolves a
+     * URL, so "/\evil.example" is protocol-relative and has to be refused
+     * alongside "//evil.example". Percent-encoded control characters are
+     * refused for the same reason: they are only ever there to slip past a
+     * check like this one. An encoded space is left alone, because a search
+     * term legitimately carries one.
+     */
+    function okv_safe_path(string $path, string $fallback = '/'): string
+    {
+        if ($path === '' || $path[0] !== '/') {
+            return $fallback;
+        }
+        // Control characters, space, DEL and the backslash, raw or encoded.
+        if (preg_match('#[\x00-\x20\x7f\x5c]#', $path)) {
+            return $fallback;
+        }
+        if (preg_match('#%(?:0[0-9a-f]|1[0-9a-f]|5c|7f)#i', $path)) {
+            return $fallback;
+        }
+        // A second leading slash makes the value protocol-relative: another host.
+        if (isset($path[1]) && $path[1] === '/') {
+            return $fallback;
+        }
+        // A fragment has no business in a server-side redirect target.
+        if (str_contains($path, '#')) {
+            return $fallback;
+        }
+        return $path;
+    }
+}
+
 if (!function_exists('okv_is_post')) {
     function okv_is_post(): bool
     {
@@ -51,10 +88,15 @@ if (!function_exists('okv_is_post')) {
 }
 
 if (!function_exists('okv_input')) {
-    /** Read a request value (POST then GET) with a default. Not escaped. */
+    /**
+     * Read a request value (POST then GET) with a default. Not escaped.
+     * An array or object value (for example ?search[]=a) is refused and the
+     * default is returned, so a caller casting to string never trips a warning.
+     */
     function okv_input(string $key, $default = null)
     {
-        return $_POST[$key] ?? $_GET[$key] ?? $default;
+        $value = $_POST[$key] ?? $_GET[$key] ?? $default;
+        return is_scalar($value) || $value === null ? $value : $default;
     }
 }
 
@@ -62,7 +104,8 @@ if (!function_exists('okv_action')) {
     /** The action a controller dispatches on. */
     function okv_action(): string
     {
-        return (string) ($_POST['action'] ?? $_GET['action'] ?? '');
+        $action = $_POST['action'] ?? $_GET['action'] ?? '';
+        return is_scalar($action) ? (string) $action : '';
     }
 }
 
@@ -109,23 +152,32 @@ if (!function_exists('okv_quantity')) {
 }
 
 if (!function_exists('okv_availability')) {
-    /** Customer-facing availability text and presentation key. */
+    /**
+     * Customer-facing availability text and presentation key.
+     *
+     * Two labels, not one. "label" is the full sentence for the product page.
+     * "short_label" is the badge on a product card, where a two-up mobile grid
+     * has no room for a date and a long badge pushes the whole page sideways.
+     * The date still reaches the customer, as a line under the card.
+     */
     function okv_availability(string $status, ?string $restockDate = null): array
     {
         if ($status === 'restocking') {
             $label = 'Restocking';
+            $note = '';
             if ($restockDate) {
                 $timestamp = strtotime($restockDate);
                 if ($timestamp !== false) {
-                    $label .= ' for ' . date('D j M', $timestamp);
+                    $note = 'Back on ' . date('l jS F', $timestamp);
+                    $label .= ', back on ' . date('l jS F', $timestamp);
                 }
             }
-            return ['key' => 'restocking', 'label' => $label, 'can_add' => false];
+            return ['key' => 'restocking', 'label' => $label, 'short_label' => 'Restocking', 'note' => $note, 'can_add' => false];
         }
         if ($status === 'out_of_stock') {
-            return ['key' => 'out', 'label' => 'Out of stock', 'can_add' => false];
+            return ['key' => 'out', 'label' => 'Out of stock', 'short_label' => 'Out of stock', 'note' => '', 'can_add' => false];
         }
-        return ['key' => 'available', 'label' => 'Available', 'can_add' => true];
+        return ['key' => 'available', 'label' => 'Available', 'short_label' => 'Available', 'note' => '', 'can_add' => true];
     }
 }
 
