@@ -45,6 +45,13 @@
     border-radius: 3px;
   }
   h1, h2, h3, h4 { @apply font-display; text-wrap: balance; }
+  /*
+   * The hidden attribute has to win. A utility like flex or grid sets an
+   * explicit display, which otherwise beats the browser's own display:none for
+   * [hidden], leaving an invisible panel sitting over the page and swallowing
+   * every click. Panels toggled with el.hidden rely on this.
+   */
+  [hidden] { display: none !important; }
 }
 
 @layer components {
@@ -82,9 +89,20 @@
   }
 
   /* Chips and badges. */
-  .okv-badge { @apply inline-flex items-center gap-1 text-xs font-medium rounded-full px-2.5 py-1; }
+  /* max-w-full and whitespace-normal keep a badge from setting the width of its
+     row. On a two-up mobile grid a long label used to push the page sideways. */
+  .okv-badge { @apply inline-flex max-w-full items-center gap-1 whitespace-normal rounded-full px-2.5 py-1 text-center text-xs font-medium; }
   .okv-badge-available { @apply bg-foliage-tint text-forest; }
   .okv-badge-out { @apply bg-tomato-tint text-tomato; }
+
+  .okv-filter-chip {
+    @apply inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-mist bg-white px-4 text-sm font-medium text-ink-60;
+  }
+  .okv-filter-chip-active { @apply border-forest bg-forest text-white; }
+  .okv-category-link {
+    @apply flex min-h-[44px] items-center justify-between gap-2 rounded-md px-3 text-sm font-medium text-ink-60 transition duration-botanical ease-botanical hover:bg-forest-tint hover:text-forest;
+  }
+  .okv-category-link-active { @apply bg-forest text-white hover:bg-forest-hover hover:text-white; }
 
   /* Page container width. */
   .okv-container { @apply max-w-content mx-auto px-4 md:px-8; }
