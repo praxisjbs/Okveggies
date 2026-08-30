@@ -169,4 +169,92 @@ final class Catalogue
         }
         return $result;
     }
+
+    // --- Combos (read only, for the storefront) ------------------------------
+
+    /**
+     * Combos on the shop today. Active plus inside the availability window,
+     * ordered featured first then by name. Component availability is not
+     * checked (M3 decision Q2): a combo with an out-of-stock component is
+     * still shown, and the packing team handles a substitution or a Make It
+     * Right if it comes up.
+     */
+    public static function combos(): array
+    {
+        $today = date('Y-m-d');
+        return Database::all(
+            'SELECT c.id, c.name, c.slug, c.sku, c.description, c.price_subunit,
+                    c.image_url, c.is_featured,
+                    c.available_from, c.available_until,
+                    (SELECT COUNT(*) FROM combo_package_items ci WHERE ci.combo_package_id = c.id) AS component_count
+               FROM combo_packages c
+              WHERE c.is_active = 1
+                AND (c.available_from IS NULL OR c.available_from <= :today_from)
+                AND (c.available_until IS NULL OR c.available_until >= :today_until)
+              ORDER BY c.is_featured DESC, c.name',
+            [':today_from' => $today, ':today_until' => $today]
+        );
+    }
+
+    /**
+     * Featured combos, for the home page. A small list, buyable now, featured
+     * first, ordered by name after that. Falls back to unfeatured combos when
+     * there are not enough featured ones to fill $limit.
+     */
+    public static function featuredCombos(int $limit = 3): array
+    {
+        $limit = max(1, min(24, $limit));
+        return array_slice(self::combos(), 0, $limit);
+    }
+
+    /**
+     * One combo by slug, along with the count of its components. Returns null
+     * when the slug is not a live combo, so the caller can render a 404 rather
+     * than a page with no name.
+     */
+    public static function comboBySlug(string $slug): ?array
+    {
+        $slug = self::cleanSlug($slug);
+        if ($slug === '') {
+            return null;
+        }
+        $today = date('Y-m-d');
+        return Database::one(
+            'SELECT c.id, c.name, c.slug, c.sku, c.description, c.price_subunit,
+                    c.image_url, c.is_featured, c.is_active,
+                    c.available_from, c.available_until,
+                    (SELECT COUNT(*) FROM combo_package_items ci WHERE ci.combo_package_id = c.id) AS component_count
+               FROM combo_packages c
+              WHERE c.slug = :slug
+                AND c.is_active = 1
+                AND (c.available_from IS NULL OR c.available_from <= :today_from)
+                AND (c.available_until IS NULL OR c.available_until >= :today_until)
+              LIMIT 1',
+            [':slug' => $slug, ':today_from' => $today, ':today_until' => $today]
+        );
+    }
+
+    /**
+     * The components inside one combo, with the product name, slug and unit
+     * ready for the detail page's contents list. Read only; the admin builder
+     * uses Combos::components() for the same shape plus the current price.
+     */
+    public static function comboComponents(int $comboId): array
+    {
+        return Database::all(
+            'SELECT ci.id, ci.quantity,
+                    p.id AS product_id, p.name AS product_name, p.slug AS product_slug,
+                    p.short_description, p.current_price_subunit,
+                    u.symbol AS unit, u.name AS unit_name,
+                    (SELECT pi.image_url FROM product_images pi
+                      WHERE pi.product_id = p.id
+                      ORDER BY pi.is_primary DESC, pi.sort_order, pi.id LIMIT 1) AS image
+               FROM combo_package_items ci
+               JOIN products p ON p.id = ci.product_id
+               JOIN units_of_measurement u ON u.id = ci.unit_id
+              WHERE ci.combo_package_id = :combo_id
+              ORDER BY ci.id',
+            [':combo_id' => $comboId]
+        );
+    }
 }
