@@ -3,6 +3,7 @@
 
 # Node tooling (dev only).
 node_modules/
+package-lock.json
 
 # Real uploads (keep the folders and their .htaccess, ignore the content).
 uploads/*/*
