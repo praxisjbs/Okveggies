@@ -12,7 +12,13 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M2, Catalogue and pricing. Complete.** M0 and M1 are complete. All six M2 acceptance criteria are met: the reference seed is verified, the storefront shop and product pages are built and audited, the admin catalogue is built, the pricing table writes history on every change, and the spreadsheet round trip works out and back in. The storefront half was audited on 29 Aug and its defects fixed; the admin half was built the same day with the money logic unit tested before it was wired to anything. Next is M3, Combos.
+**Milestone M3, Combos. In progress, split into three PRs.** M0 through M2 are complete. M3 is being built in three PRs so the domain, the admin builder and the storefront can proceed in parallel without stepping on each other.
+
+- **PR1 (this branch, `m3-pr1-combos-domain`).** The domain foundation. `Combos` class with the full CRUD, the sell-price history writer that mirrors `Pricing::change` in one transaction, publish and unpublish with the "no components, no price" gate, the component-total maths, `isLossMaking()` and `customerSaving()` for the builder's admin-only flag, `isBuyableNow()` for the availability window, and the same referenceCount / delete rule as products. Storefront read helpers on `Catalogue`: `combos()`, `featuredCombos()`, `comboBySlug()`, `comboComponents()`, all filtered on active and inside the window. Unit tests. No schema change (M0 carries `combo_packages`, `combo_package_items`, `combo_price_history`, `cart_items.combo_package_id` and `order_items.combo_package_id` already). No UI yet.
+- **PR2 (next).** Admin combo builder: `admin/combos.php`, `api/v1/combos.php`, `assets/js/admin-combos.js`. Product picker, live component total, sell price, publish toggle, availability window, photo. Consumes PR1 only.
+- **PR3 (next).** Storefront combos page and combo detail: `combos.php`, `combo.php`, one-tap add-to-basket via a new `Basket::addCombo()` + `api/v1/cart.php` `add_combo` action, `combo_card.php` component, featured combos on the home page. Consumes PR1 only.
+
+Seven clarifying questions were answered before any code was written (loss-making combos are flagged in red to the Manager only, never to the customer; buyability checks the active flag and availability window only, not component availability; a draft is `is_active = 0`, no new column; combo internals respect the unit's decimal rule but not the product's customer-facing minimum or increment; a combo in the basket is one line, fanning out into `order_item_components` at order-snapshot time in M4/M5; the existing `combo_packages.image_url` column carries the hero photo and falls back to the first component's primary photo; combo price history mirrors products exactly, opening row null with reason "Opening price", later changes take an optional reason).
 
 ---
 
@@ -61,10 +67,10 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [ ] Carried forward from the audit, not M2 acceptance criteria: paginate the shop grid before the catalogue outgrows one query; give products a real source region instead of the one site-wide setting; replace the regex-over-SQL seed assertions with assertions against a migrated database; decide whether an empty category is hidden or labelled as still being sourced
 
 ### M3. Combos
-- [ ] Combo builder with product picker and live component total
-- [ ] Publish / unpublish; The Stew Combo seeded
-- [ ] Storefront combos page and combo detail with one-tap add
-- [ ] Tests: component total maths
+- [~] Combo builder with product picker and live component total (PR1: domain and maths done, admin UI in PR2)
+- [~] Publish / unpublish; The Stew Combo seeded (PR1: publish and unpublish done and gated on components + price; The Stew Combo was seeded in M0 migration 005)
+- [ ] Storefront combos page and combo detail with one-tap add (PR3)
+- [~] Tests: component total maths (PR1: 39 unit assertions in CombosTest.php; database-side history assertions arrive with the admin controller in PR2)
 
 ### M4. Basket and checkout
 - [ ] Guest basket with session token, merges on login
@@ -138,6 +144,22 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 ---
 
 ## Session log (newest first)
+
+### 30 Aug 2026, M3 PR1: combos domain, sell-price history and the component-total maths
+
+Split M3 into three PRs (PR1 domain, PR2 admin builder, PR3 storefront) so two other chats can pick up PR2 and PR3 in parallel without stepping on each other. This PR is the foundation both of them consume, and the seven clarifying questions were answered before a line of code was written.
+
+Also tightened the build contract in `CLAUDE.md`: every clarifying question now has to offer three concrete answer options (A, B, C) and end with the recommendation, not an open-ended "what do you want?". This is how the discovery loop actually runs in practice and it makes an answer a one-tap pick rather than a paragraph.
+
+Money logic first, tested before it was wired to anything.
+
+- `Combos` (`includes/classes/Combos.php`) is the one place a combo is created, edited, priced, published or composed. `create` inserts and, when the combo arrives with a price, opens its history with a null old price and reason "Opening price". `update` never touches the sell price directly: a price bundled with an edit still flows through `changePrice`, which mirrors `Pricing::change` exactly (close the open history row, open a new one, update `combo_packages.price_subunit`, all in one transaction, no history row if the price did not actually move). `publish` refuses when the combo has no components or no sell price, so a half-built combo cannot leak onto the shop. `delete` refuses when an order, a basket or the combo's own history holds it, mirroring the product rule so no history is ever destroyed. A combo the Manager needs to retire is switched off, not deleted, and it leaves the shop straight away.
+- `sumComponents`, `isLossMaking` and `customerSaving` are pure and integer-only. The builder in PR2 uses `componentTotalDetailed` for the live per-line breakdown and `isLossMaking` for the admin-only red flag when the sell price falls below the components. The customer never sees the component total; when the sell price is above the components, `customerSaving` powers the "You save ₦X" line on the combo card (never a negative number).
+- `isBuyableNow` is the shared truth for the availability window (active plus today inside `available_from` and `available_until`, both nullable and inclusive). Storefront reads on `Catalogue::combos()`, `Catalogue::featuredCombos()` and `Catalogue::comboBySlug()` apply the same window filter in one SQL round-trip, so the home page, the combos grid and the detail page cannot disagree about what is on the shop. Component availability is deliberately not gated (M3 decision Q2): the shop shows the combo, the packing team handles a substitution or a Make It Right at fulfilment time.
+- `cleanComponentQuantity` respects only the unit's `allows_decimal` rule, so 0.25 kg ginger keeps its shape and 1.5 bunch rounds up to 2. The product's customer-facing `minimum_quantity` and `quantity_increment` do not apply to Manager-composed internals, which is why the seed sits below the customer minimum on purpose.
+- No new migration was needed. The M0 schema already carries `combo_packages`, `combo_package_items`, `combo_price_history`, `cart_items.combo_package_id` and `order_items.combo_package_id`.
+
+Verified: 163 unit assertions across the repo pass (up from 124; the 39 new ones are the combos maths, quantity rules and availability window, all driven by the seeded Stew Combo prices so a change to the seed cannot silently drift the maths). `php -l` clean across every non-vendor PHP file, no em dash anywhere in the shipped copy, no banned jargon in `Combos.php`. Database-side history assertions (create writes a history row, changePrice opens and closes rows, publish gates on components + price, delete refuses when anything holds the combo) arrive with the admin controller in PR2 so a live database is not needed to run PR1's tests.
 
 ### 29 Aug 2026, M2 part 2: admin catalogue, pricing and the spreadsheet round trip
 

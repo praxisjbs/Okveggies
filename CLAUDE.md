@@ -9,7 +9,7 @@ The reference architecture is `bureau.lpc.cm`. When a convention is not written 
 ## The build loop (every task, in order)
 
 1. **Read the PRD.** Open `docs/PRD.md` and read the section for the feature you are about to build. If the PRD does not cover it, the feature is not specified. Stop and ask.
-2. **Ask at least five clarifying questions before writing code.** Not fewer. Real questions about behaviour, edge cases, data, copy and states, each with a short recommendation. Wait for answers. Guessing is how we ship the wrong thing.
+2. **Ask at least five clarifying questions before writing code.** Not fewer. Real questions about behaviour, edge cases, data, copy and states. **Every question must offer three concrete answer options (A, B, C) and end with your recommendation.** Never open-ended, never one option, never "what do you want?". The three options must be genuinely different paths the build could take, not variations of the same one. Your recommendation names the option (A, B or C) and gives one sentence of reasoning. Wait for answers. Guessing is how we ship the wrong thing.
 3. **Check `PROGRESS.md`.** Confirm the task, its acceptance criteria, and that nobody else is on it.
 4. **Build it,** following the conventions and non-negotiables below.
 5. **Write tests, then run them.** Unit tests for any money, pricing, deposit, credit, order-number, delivery-eligibility or webhook logic. Run them. They pass before you continue.

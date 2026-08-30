@@ -74,6 +74,7 @@ require_once __DIR__ . '/classes/Catalogue.php';
 require_once __DIR__ . '/classes/Basket.php';
 require_once __DIR__ . '/classes/Pricing.php';
 require_once __DIR__ . '/classes/Products.php';
+require_once __DIR__ . '/classes/Combos.php';
 require_once __DIR__ . '/classes/PriceSheet.php';
 require_once __DIR__ . '/classes/Otp.php';
 require_once __DIR__ . '/classes/Mail.php';
