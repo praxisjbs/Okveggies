@@ -178,6 +178,14 @@ final class Catalogue
      * checked (M3 decision Q2): a combo with an out-of-stock component is
      * still shown, and the packing team handles a substitution or a Make It
      * Right if it comes up.
+     *
+     * The row also carries `component_total_subunit` (the sum of every
+     * component's price * quantity, rounded per line to match
+     * Combos::sumComponents) and `fallback_image` (the primary photo of the
+     * first component in combo_package_items id order, so "first" is the row
+     * the Manager added first in the builder). This turns what used to be one
+     * extra query per card in the grid into one round-trip for the whole
+     * page, matching the N+1 pattern the M2 audit called out for products.
      */
     public static function combos(): array
     {
@@ -186,7 +194,19 @@ final class Catalogue
             'SELECT c.id, c.name, c.slug, c.sku, c.description, c.price_subunit,
                     c.image_url, c.is_featured,
                     c.available_from, c.available_until,
-                    (SELECT COUNT(*) FROM combo_package_items ci WHERE ci.combo_package_id = c.id) AS component_count
+                    (SELECT COUNT(*) FROM combo_package_items ci WHERE ci.combo_package_id = c.id) AS component_count,
+                    (SELECT COALESCE(SUM(ROUND(ci2.quantity * p2.current_price_subunit)), 0)
+                       FROM combo_package_items ci2
+                       JOIN products p2 ON p2.id = ci2.product_id
+                      WHERE ci2.combo_package_id = c.id
+                        AND ci2.quantity > 0
+                        AND p2.current_price_subunit > 0) AS component_total_subunit,
+                    (SELECT pi.image_url
+                       FROM combo_package_items ci3
+                       JOIN product_images pi ON pi.product_id = ci3.product_id
+                      WHERE ci3.combo_package_id = c.id
+                      ORDER BY ci3.id ASC, pi.is_primary DESC, pi.sort_order ASC, pi.id ASC
+                      LIMIT 1) AS fallback_image
                FROM combo_packages c
               WHERE c.is_active = 1
                 AND (c.available_from IS NULL OR c.available_from <= :today_from)
@@ -223,7 +243,19 @@ final class Catalogue
             'SELECT c.id, c.name, c.slug, c.sku, c.description, c.price_subunit,
                     c.image_url, c.is_featured, c.is_active,
                     c.available_from, c.available_until,
-                    (SELECT COUNT(*) FROM combo_package_items ci WHERE ci.combo_package_id = c.id) AS component_count
+                    (SELECT COUNT(*) FROM combo_package_items ci WHERE ci.combo_package_id = c.id) AS component_count,
+                    (SELECT COALESCE(SUM(ROUND(ci2.quantity * p2.current_price_subunit)), 0)
+                       FROM combo_package_items ci2
+                       JOIN products p2 ON p2.id = ci2.product_id
+                      WHERE ci2.combo_package_id = c.id
+                        AND ci2.quantity > 0
+                        AND p2.current_price_subunit > 0) AS component_total_subunit,
+                    (SELECT pi.image_url
+                       FROM combo_package_items ci3
+                       JOIN product_images pi ON pi.product_id = ci3.product_id
+                      WHERE ci3.combo_package_id = c.id
+                      ORDER BY ci3.id ASC, pi.is_primary DESC, pi.sort_order ASC, pi.id ASC
+                      LIMIT 1) AS fallback_image
                FROM combo_packages c
               WHERE c.slug = :slug
                 AND c.is_active = 1

@@ -219,11 +219,18 @@ final class Combos
     /**
      * Add a combo. When it arrives with a price, that price opens its history
      * with a null old price, which is what the history's first row means.
+     *
+     * A caller that already holds a transaction (for instance the create action
+     * that atomically writes the combo, its first component and its publish
+     * gate) passes $ownTransaction = false, so the whole thing rolls back
+     * together if any step fails.
      */
-    public static function create(array $clean, ?int $userId): int
+    public static function create(array $clean, ?int $userId, bool $ownTransaction = true): int
     {
         $pdo = Database::getInstance()->getConnection();
-        $pdo->beginTransaction();
+        if ($ownTransaction) {
+            $pdo->beginTransaction();
+        }
         try {
             Database::run(
                 'INSERT INTO combo_packages
@@ -251,10 +258,12 @@ final class Combos
                 self::writeHistory($id, null, (int) $clean['price_subunit'], 'Opening price', $userId);
             }
 
-            $pdo->commit();
+            if ($ownTransaction) {
+                $pdo->commit();
+            }
             return $id;
         } catch (Throwable $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             throw $e;

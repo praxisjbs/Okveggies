@@ -59,9 +59,18 @@ $tagline  = Settings::str('business_tagline', 'Sourced right. Priced right. Deli
     </div>
     <div class="hidden md:block">
       <?php if ($featuredCombo): ?>
+      <?php
+        // Use the same image-fallback helper as okv_combo_card so the hero
+        // never renders a blank card for a combo whose Manager has not yet
+        // uploaded a hero photo. Catalogue::featuredCombos precomputes the
+        // fallback in one round-trip.
+        $heroImage = okv_combo_card_image($featuredCombo, [
+          ['image' => (string) ($featuredCombo['fallback_image'] ?? '')],
+        ]);
+      ?>
       <a href="/combos.php" class="block okv-card bg-white text-ink">
-        <?php if (!empty($featuredCombo['image_url'])): ?>
-          <img src="<?= okv_e(okv_image_url($featuredCombo['image_url'])) ?>" alt="<?= okv_e($featuredCombo['name']) ?>" class="w-full h-56 object-cover rounded-md mb-4">
+        <?php if ($heroImage !== ''): ?>
+          <img src="<?= okv_e(okv_image_url($heroImage)) ?>" alt="<?= okv_e($featuredCombo['name']) ?>" class="w-full h-56 object-cover rounded-md mb-4">
         <?php endif; ?>
         <span class="okv-badge okv-badge-available">This week</span>
         <h3 class="font-display font-bold text-2xl mt-2"><?= okv_e($featuredCombo['name']) ?></h3>
