@@ -15,6 +15,7 @@ const sources = [
   'assets/js/catalogue.js',
   'assets/js/admin-products.js',
   'assets/js/admin-pricing.js',
+  'assets/js/admin-combos.js',
 ].filter(existsSync);
 
 if (sources.length === 0) {
