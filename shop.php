@@ -36,6 +36,7 @@ $canonical = rtrim((string) APP_URL, '/') . ($category !== '' ? '/shop.php?categ
 $basketNotice = (string) okv_input('basket', '');
 $noticeMessages = [
     'added' => 'Added to your basket.',
+    'repriced' => 'The latest amount was added at its new price. Your earlier amount keeps its price.',
     'unavailable' => 'That item is not available yet. Its restock status is shown on the card.',
     'expired' => 'Your session expired. Please try adding the item again.',
     'missing' => 'We could not find that item. It may have left the catalogue.',

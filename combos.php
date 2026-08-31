@@ -22,6 +22,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/combos.php';
 $basketNotice = (string) okv_input('basket', '');
 $noticeMessages = [
     'added' => 'Added to your basket.',
+    'repriced' => 'The latest basket was added at its new price. Your earlier basket keeps its price.',
     'unavailable' => 'That combo is no longer on the shop.',
     'expired' => 'Your session expired. Please try adding the combo again.',
     'missing' => 'We could not find that combo. It may have left the shop.',

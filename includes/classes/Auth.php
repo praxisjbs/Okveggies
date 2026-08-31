@@ -88,6 +88,11 @@ final class Auth
         $_SESSION['email_verified'] = !empty($user['email_verified_at']);
         $_SESSION['first_name']     = (string) ($user['first_name'] ?? '');
         Rbac::loadFromDb((int) $user['id']);
+        try {
+            Basket::mergeGuestIntoAccount((int) $user['id']);
+        } catch (Throwable $e) {
+            error_log('basket merge on sign-in failed: ' . $e->getMessage());
+        }
     }
 
     /** Tear a session down completely: data cleared, cookie expired, session destroyed. */

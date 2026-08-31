@@ -73,8 +73,8 @@ $description = trim((string) ($combo['description'] ?? ''));
       <span aria-current="page"><?= okv_e($combo['name']) ?></span>
     </nav>
 
-    <?php if ($basketNotice === 'added'): ?>
-      <p class="mb-6 rounded-md border border-foliage bg-foliage-tint px-4 py-3 text-sm text-forest" role="status">Added to your basket.</p>
+    <?php if ($basketNotice === 'added' || $basketNotice === 'repriced'): ?>
+      <p class="mb-6 rounded-md border border-foliage bg-foliage-tint px-4 py-3 text-sm text-forest" role="status"><?= $basketNotice === 'repriced' ? 'The latest basket was added at its new price. Your earlier basket keeps its price.' : 'Added to your basket.' ?></p>
     <?php elseif ($basketNotice === 'unavailable'): ?>
       <p class="mb-6 rounded-md border border-tomato bg-tomato-tint px-4 py-3 text-sm text-tomato" role="status">That combo is no longer on the shop.</p>
     <?php elseif ($basketNotice !== ''): ?>

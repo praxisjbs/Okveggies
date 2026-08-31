@@ -66,8 +66,8 @@ $basketNotice = (string) okv_input('basket', '');
       <span aria-current="page"><?= okv_e($product['name']) ?></span>
     </nav>
 
-    <?php if ($basketNotice === 'added'): ?>
-      <p class="mb-6 rounded-md border border-foliage bg-foliage-tint px-4 py-3 text-sm text-forest" role="status">Added to your basket.</p>
+    <?php if ($basketNotice === 'added' || $basketNotice === 'repriced'): ?>
+      <p class="mb-6 rounded-md border border-foliage bg-foliage-tint px-4 py-3 text-sm text-forest" role="status"><?= $basketNotice === 'repriced' ? 'The latest amount was added at its new price. Your earlier amount keeps its price.' : 'Added to your basket.' ?></p>
     <?php elseif ($basketNotice !== ''): ?>
       <p class="mb-6 rounded-md border border-tomato bg-tomato-tint px-4 py-3 text-sm text-tomato" role="status">We could not add that item. Please check its availability and try again.</p>
     <?php endif; ?>
