@@ -220,31 +220,56 @@ switch ($action) {
         $wantsPublish = !empty($clean['is_active']);
         $clean['is_active'] = 0;
 
+        // The standalone `publish` action is gated on combos.publish. The
+        // create form's "put it on the shop" checkbox must not be a way past
+        // that: a role with only combos.create should never publish a combo.
+        // Refuse the request rather than silently downgrading to a draft, so
+        // a caller who thought they were publishing knows they were not.
+        if ($wantsPublish && !Rbac::can('combos.publish')) {
+            okv_error('You do not have permission to publish a combo.', 403, 'permission_denied');
+        }
+
+        // One outer transaction wraps the combo insert, its first component,
+        // and the publish gate, so a failure at any step rolls everything back
+        // rather than leaving a priced combo with no components in the table.
+        $pdo = Database::getInstance()->getConnection();
+        $pdo->beginTransaction();
         $id = null;
+        $publishSkippedReason = null;
         try {
-            $id = Combos::create($clean, Rbac::userId());
+            $id = Combos::create($clean, Rbac::userId(), false);
             Combos::addComponent($id, $productId, $quantity, $unitId);
 
             if ($wantsPublish) {
-                // The gate re-checks components and price. On the way in from
-                // the form the combo has one component; if there is no price
-                // we come back with no_price and the combo stays a draft.
                 try {
                     Combos::publish($id);
                 } catch (DomainException $publishError) {
-                    okv_json([
-                        'status'    => 'ok',
-                        'message'   => $publishError->getMessage() === 'no_price'
-                            ? 'Combo saved as a draft. Set a sell price and publish it when you are ready.'
-                            : 'Combo saved as a draft.',
-                        'combo_id'  => $id,
-                        'published' => false,
-                        'reason'    => $publishError->getMessage(),
-                    ]);
+                    // A no_price on the way in from the form means the combo
+                    // is fine and just wants a price. Commit the draft and
+                    // report the skipped publish, don't roll the combo back.
+                    $publishSkippedReason = $publishError->getMessage();
+                    $wantsPublish = false;
                 }
             }
+
+            $pdo->commit();
         } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             combos_fail($e, 'create');
+        }
+
+        if ($publishSkippedReason !== null) {
+            okv_json([
+                'status'    => 'ok',
+                'message'   => $publishSkippedReason === 'no_price'
+                    ? 'Combo saved as a draft. Set a sell price and publish it when you are ready.'
+                    : 'Combo saved as a draft.',
+                'combo_id'  => $id,
+                'published' => false,
+                'reason'    => $publishSkippedReason,
+            ]);
         }
 
         okv_json([

@@ -17,9 +17,23 @@ if (!function_exists('okv_combo_card')) {
         $description = trim((string) ($combo['description'] ?? ''));
         $price = (int) ($combo['price_subunit'] ?? 0);
         $componentCount = (int) ($combo['component_count'] ?? 0);
-        $components = Catalogue::comboComponents($comboId);
-        $image = okv_combo_card_image($combo, $components);
-        $componentTotal = Combos::sumComponents($components);
+
+        // Prefer the values Catalogue::combos and comboBySlug precompute in
+        // one SQL round-trip. Fall back to a per-card lookup only when the
+        // caller passed a row without them, so the card stays usable from a
+        // caller that has not been updated yet.
+        $hasTotal = array_key_exists('component_total_subunit', $combo);
+        $hasFallback = array_key_exists('fallback_image', $combo);
+        if ($hasTotal && $hasFallback) {
+            $componentTotal = (int) $combo['component_total_subunit'];
+            $image = okv_combo_card_image($combo, [
+                ['image' => (string) ($combo['fallback_image'] ?? '')],
+            ]);
+        } else {
+            $components = Catalogue::comboComponents($comboId);
+            $image = okv_combo_card_image($combo, $components);
+            $componentTotal = Combos::sumComponents($components);
+        }
         $saving = Combos::customerSaving($price, $componentTotal);
         $detailUrl = '/combo.php?slug=' . rawurlencode($slug);
         ?>
