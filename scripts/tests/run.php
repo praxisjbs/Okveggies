@@ -41,6 +41,8 @@ require_once $appRoot . '/includes/classes/OrderNumber.php';
 require_once $appRoot . '/includes/classes/Catalogue.php';
 require_once $appRoot . '/includes/classes/Pricing.php';
 require_once $appRoot . '/includes/classes/Combos.php';
+require_once $appRoot . '/includes/classes/BasketError.php';
+require_once $appRoot . '/includes/classes/Basket.php';
 require_once $appRoot . '/includes/functions/helpers.php';
 
 foreach (glob(__DIR__ . '/*Test.php') as $file) {

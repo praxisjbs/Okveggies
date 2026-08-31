@@ -8,6 +8,7 @@
  */
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/activation_banner.php';
+require_once __DIR__ . '/includes/components/shop/basket_notice.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
@@ -43,6 +44,10 @@ $tagline  = Settings::str('business_tagline', 'Sourced right. Priced right. Deli
 <body class="min-h-screen">
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header('home'); ?>
+
+<?php if (okv_basket_notice_message((string) okv_input('basket', '')) !== null): ?>
+  <div class="okv-container pt-6"><?php okv_basket_notice(null, ''); ?></div>
+<?php endif; ?>
 
 <!-- Hero -->
 <section class="bg-forest text-white">

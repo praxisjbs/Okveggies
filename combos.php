@@ -8,6 +8,7 @@
  */
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/activation_banner.php';
+require_once __DIR__ . '/includes/components/shop/basket_notice.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
@@ -20,13 +21,6 @@ $pageTitle = 'Combos, ready baskets for this week. OK Veggies';
 $canonical = rtrim((string) APP_URL, '/') . '/combos.php';
 
 $basketNotice = (string) okv_input('basket', '');
-$noticeMessages = [
-    'added' => 'Added to your basket.',
-    'unavailable' => 'That combo is no longer on the shop.',
-    'expired' => 'Your session expired. Please try adding the combo again.',
-    'missing' => 'We could not find that combo. It may have left the shop.',
-    'error' => 'We could not add that combo. Please try again.',
-];
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -58,10 +52,8 @@ $noticeMessages = [
     </div>
   </section>
 
-  <?php if (isset($noticeMessages[$basketNotice])): ?>
-    <div class="okv-container pt-6">
-      <p class="rounded-md border <?= $basketNotice === 'added' ? 'border-foliage bg-foliage-tint text-forest' : 'border-tomato bg-tomato-tint text-tomato' ?> px-4 py-3 text-sm" role="status"><?= okv_e($noticeMessages[$basketNotice]) ?></p>
-    </div>
+  <?php if (okv_basket_notice_message($basketNotice) !== null): ?>
+    <div class="okv-container pt-6"><?php okv_basket_notice($basketNotice, ''); ?></div>
   <?php endif; ?>
 
   <section class="okv-container py-8 md:py-12">

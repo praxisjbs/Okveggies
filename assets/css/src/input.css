@@ -116,6 +116,19 @@
            max-h-[92vh] overflow-y-auto animate-okv-rise;
   }
 
+  /*
+   * The mini-cart. A slide-up sheet on a phone, a slide-over drawer pinned to
+   * the right on a laptop. Same markup, same component, one behaviour to
+   * explain. It is always reachable from the header, on every page.
+   */
+  .okv-drawer-backdrop { @apply fixed inset-0 z-50 flex items-end justify-center bg-ink/50 sm:items-stretch sm:justify-end; }
+  .okv-drawer-backdrop[hidden] { display: none; }
+  .okv-drawer {
+    @apply flex max-h-[92vh] w-full flex-col rounded-t-lg bg-white shadow-okv-3
+           animate-okv-rise
+           sm:max-h-none sm:w-[380px] sm:rounded-none sm:rounded-l-lg sm:animate-okv-slide-in;
+  }
+
   /* Skeleton shimmer for content that is loading. */
   .okv-skeleton { @apply bg-mist rounded-md animate-pulse; }
 }

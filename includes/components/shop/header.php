@@ -1,9 +1,15 @@
 <?php
-/** Shared storefront navigation for desktop and mobile. */
+/** Shared storefront navigation for desktop and mobile, with the mini-cart. */
+require_once __DIR__ . '/mini_cart.php';
+
 if (!function_exists('okv_shop_header')) {
     function okv_shop_header(string $active = ''): void
     {
-        $basketCount = Basket::count();
+        // One read of the basket serves the badge, the screen-reader label and
+        // the mini-cart panel, so a page never asks for the same rows twice.
+        $basket = Basket::state();
+        $basketCount = (int) $basket['line_count'];
+        $basketLabel = 'Basket, ' . $basketCount . ' ' . ($basketCount === 1 ? 'line' : 'lines') . ', ' . $basket['subtotal_display'];
         $accountLabel = Customer::isLoggedIn() && Customer::firstName() !== '' ? Customer::firstName() : 'Account';
         $links = [
             'home' => ['/', 'Home'],
@@ -28,20 +34,25 @@ if (!function_exists('okv_shop_header')) {
             </nav>
             <div class="flex items-center gap-2">
               <a href="/account.php" class="okv-btn-text hidden sm:inline-flex"><?= okv_e($accountLabel) ?></a>
-              <a href="/cart.php" class="okv-btn px-4" aria-label="Basket, <?= $basketCount ?> items">
-                Basket <span class="okv-basket-count rounded-full bg-white px-2 py-0.5 text-xs text-forest" aria-live="polite"><?= $basketCount ?></span>
+              <!-- With JavaScript on, this opens the mini-cart. With it off, it is
+                   an ordinary link to the full basket page. -->
+              <a href="/cart.php" class="okv-btn px-4" aria-label="<?= okv_e($basketLabel) ?>"
+                 data-mini-cart-open aria-controls="okv-mini-cart" aria-expanded="false">
+                Basket <span class="okv-basket-count rounded-full bg-white px-2 py-0.5 text-xs text-forest" aria-hidden="true"><?= $basketCount ?></span>
               </a>
             </div>
           </div>
         </header>
         <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-mist bg-white px-1 pb-2 md:hidden" aria-label="Mobile navigation">
           <?php foreach ($links as $key => [$url, $label]): ?>
-            <a href="<?= okv_e($url) ?>" class="flex min-h-[56px] flex-col items-center justify-center px-1 text-center text-xs font-semibold leading-tight <?= $active === $key ? 'text-forest' : 'text-ink-60' ?>" <?= $active === $key ? 'aria-current="page"' : '' ?> <?= $key === 'basket' ? 'aria-label="Basket, ' . $basketCount . ' items"' : '' ?>>
+            <a href="<?= okv_e($url) ?>" class="flex min-h-[56px] flex-col items-center justify-center px-1 text-center text-xs font-semibold leading-tight <?= $active === $key ? 'text-forest' : 'text-ink-60' ?>" <?= $active === $key ? 'aria-current="page"' : '' ?> <?= $key === 'basket' ? 'aria-label="' . okv_e($basketLabel) . '"' : '' ?>>
               <span><?= okv_e($label) ?></span>
-              <?php if ($key === 'basket'): ?><span class="okv-basket-count text-xs" aria-live="polite"><?= $basketCount ?></span><?php endif; ?>
+              <?php if ($key === 'basket'): ?><span class="okv-basket-count text-xs" aria-hidden="true"><?= $basketCount ?></span><?php endif; ?>
             </a>
           <?php endforeach; ?>
         </nav>
+        <p class="sr-only" aria-live="polite" data-basket-live><?= okv_e($basketLabel) ?></p>
+        <?php okv_mini_cart($basket); ?>
         <?php
     }
 }

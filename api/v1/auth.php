@@ -142,6 +142,17 @@ switch ($action) {
         RateLimiter::reset($idBucket);
         Auth::startSession($user);
 
+        // Whatever they put in the basket as a guest comes with them. Lines the
+        // account already holds at the same price add up; a line at a different
+        // price keeps its own row, so a price they were given is never lost.
+        // A merge that fails must never block a sign-in, so it is logged and
+        // the customer carries on.
+        try {
+            Basket::mergeGuestCart((int) $user['id']);
+        } catch (Throwable $e) {
+            error_log('login: basket merge failed: ' . $e->getMessage());
+        }
+
         try {
             Database::run('UPDATE users SET last_login_at = NOW() WHERE id = :id', [':id' => (int) $user['id']]);
             // Transparently upgrade an older hash to the current cost.
@@ -234,6 +245,13 @@ switch ($action) {
         // pay-on-delivery order later, never sign in or browsing.
         $userRow = Database::one('SELECT id, user_type, email_verified_at, first_name FROM users WHERE id = :id', [':id' => $newId]);
         Auth::startSession($userRow);
+
+        // A guest who filled a basket and then registered keeps that basket.
+        try {
+            Basket::mergeGuestCart($newId);
+        } catch (Throwable $e) {
+            error_log('register: basket merge failed: ' . $e->getMessage());
+        }
 
         // Issue and send the activation code. If it cannot be sent we say so
         // plainly rather than pretend it went out.

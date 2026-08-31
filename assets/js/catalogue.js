@@ -65,12 +65,16 @@
           if (!response.ok || data.status === 'error') {
             throw new Error(data.message || 'We could not add that item. Please try again.');
           }
-          document.querySelectorAll('.okv-basket-count').forEach(function (count) {
-            count.textContent = data.basket_count;
-          });
-          document.querySelectorAll('a[href="/cart.php"]').forEach(function (link) {
-            link.setAttribute('aria-label', 'Basket, ' + data.basket_count + ' items');
-          });
+          // basket.js owns the badge, the mini-cart and the screen-reader
+          // label once it has the full basket. Without it (a page that does
+          // not carry the mini-cart) the count is still updated here.
+          if (data.basket) {
+            document.dispatchEvent(new CustomEvent('okv:basket-changed', { detail: data.basket }));
+          } else {
+            document.querySelectorAll('.okv-basket-count').forEach(function (count) {
+              count.textContent = data.basket_count;
+            });
+          }
           button.textContent = 'Added';
           button.classList.add('animate-okv-pop');
           if (window.OKV && OKV.toast) { OKV.toast(data.message, 'ok'); }

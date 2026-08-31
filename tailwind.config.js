@@ -88,10 +88,17 @@ module.exports = {
           '60%':  { transform: 'scale(1.06)' },
           '100%': { transform: 'scale(1)' },
         },
+        // The mini-cart. It slides in from the right on a laptop; on a phone
+        // the sheet rise above carries it instead.
+        'okv-slide-in': {
+          '0%':   { opacity: '0', transform: 'translateX(16px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
       },
       animation: {
         'okv-rise': 'okv-rise 240ms cubic-bezier(0.4,0,0.2,1)',
         'okv-pop':  'okv-pop 320ms cubic-bezier(0.34,1.56,0.64,1)',
+        'okv-slide-in': 'okv-slide-in 240ms cubic-bezier(0.4,0,0.2,1)',
       },
     },
   },

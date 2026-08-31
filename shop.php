@@ -2,6 +2,7 @@
 /** Browse active produce by search term and category. */
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/activation_banner.php';
+require_once __DIR__ . '/includes/components/shop/basket_notice.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/product_card.php';
@@ -34,13 +35,6 @@ $pageTitle = $activeCategory
 $canonical = rtrim((string) APP_URL, '/') . ($category !== '' ? '/shop.php?category=' . rawurlencode($category) : '/shop.php');
 
 $basketNotice = (string) okv_input('basket', '');
-$noticeMessages = [
-    'added' => 'Added to your basket.',
-    'unavailable' => 'That item is not available yet. Its restock status is shown on the card.',
-    'expired' => 'Your session expired. Please try adding the item again.',
-    'missing' => 'We could not find that item. It may have left the catalogue.',
-    'error' => 'We could not add that item. Please try again.',
-];
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -82,10 +76,8 @@ $noticeMessages = [
     </div>
   </section>
 
-  <?php if (isset($noticeMessages[$basketNotice])): ?>
-    <div class="okv-container pt-6">
-      <p class="rounded-md border <?= $basketNotice === 'added' ? 'border-foliage bg-foliage-tint text-forest' : 'border-tomato bg-tomato-tint text-tomato' ?> px-4 py-3 text-sm" role="status"><?= okv_e($noticeMessages[$basketNotice]) ?></p>
-    </div>
+  <?php if (okv_basket_notice_message($basketNotice) !== null): ?>
+    <div class="okv-container pt-6"><?php okv_basket_notice($basketNotice, ''); ?></div>
   <?php endif; ?>
 
   <section class="okv-container py-8 md:py-12">

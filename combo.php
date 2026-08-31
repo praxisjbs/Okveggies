@@ -7,6 +7,7 @@
  */
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/activation_banner.php';
+require_once __DIR__ . '/includes/components/shop/basket_notice.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
@@ -73,13 +74,7 @@ $description = trim((string) ($combo['description'] ?? ''));
       <span aria-current="page"><?= okv_e($combo['name']) ?></span>
     </nav>
 
-    <?php if ($basketNotice === 'added'): ?>
-      <p class="mb-6 rounded-md border border-foliage bg-foliage-tint px-4 py-3 text-sm text-forest" role="status">Added to your basket.</p>
-    <?php elseif ($basketNotice === 'unavailable'): ?>
-      <p class="mb-6 rounded-md border border-tomato bg-tomato-tint px-4 py-3 text-sm text-tomato" role="status">That combo is no longer on the shop.</p>
-    <?php elseif ($basketNotice !== ''): ?>
-      <p class="mb-6 rounded-md border border-tomato bg-tomato-tint px-4 py-3 text-sm text-tomato" role="status">We could not add that basket. Please try again.</p>
-    <?php endif; ?>
+    <?php okv_basket_notice($basketNotice, 'mb-6'); ?>
 
     <div class="grid gap-8 lg:grid-cols-12 lg:gap-12">
       <section class="lg:col-span-7" aria-label="Combo photo">
