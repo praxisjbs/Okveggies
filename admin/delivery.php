@@ -1,23 +1,8 @@
 <?php
-/**
- * admin/delivery.php
- * OK Veggies. Days, zones and the packing manifest.
- * Status: scaffold placeholder. Build in milestone M6. See docs/PRD.md Section 13.
- * Before writing logic here: read the PRD section, then ask at least five
- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
- */
 require_once __DIR__ . '/../includes/bootstrap.php';
 Rbac::requirePermission('delivery.view');
-?>
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Delivery . OK Veggies</title>
-<link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
-<body class="bg-forest-tint min-h-screen">
-<div class="okv-container py-16">
-  <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
-  <h1 class="font-display font-extrabold text-3xl text-ink mt-2">Delivery</h1>
-  <p class="text-ink-60 mt-3 max-w-xl">This screen is scaffolded and waiting to be built in milestone M6. The plan for it is in docs/PRD.md Section 13.</p>
-  <a href="/" class="okv-btn mt-6">Back to the shop</a>
-</div>
-</body></html>
+$days=Database::all('SELECT * FROM allowed_delivery_days ORDER BY customer_type,day_of_week');
+$zones=Database::all('SELECT * FROM delivery_zones ORDER BY sort_order,name');
+$exceptions=Database::all('SELECT * FROM delivery_date_exceptions ORDER BY exception_date DESC LIMIT 20');
+$okv_admin_title='Delivery settings'; require __DIR__ . '/../includes/components/admin/header.php';
+?><div class="space-y-8"><section class="okv-card"><h2 class="font-display text-xl font-bold text-ink">Delivery days</h2><div class="mt-4 space-y-3"><?php foreach($days as $d): ?><form method="post" action="/api/v1/delivery.php" class="grid gap-3 border-t border-mist pt-3 sm:grid-cols-6"><?=Csrf::field()?><input type="hidden" name="action" value="set_day"><input type="hidden" name="customer_type" value="<?=okv_e($d['customer_type'])?>"><input type="hidden" name="day_of_week" value="<?= (int)$d['day_of_week']?>"><span><?=okv_e($d['customer_type'])?>, <?=okv_e(date('l',strtotime('Sunday +'.$d['day_of_week'].' days')))?></span><label>On <input type="checkbox" name="is_active" value="1" <?= $d['is_active']?'checked':''?>></label><input class="okv-input" name="cutoff_time" value="<?=okv_e(substr($d['cutoff_time'],0,5))?>"><input class="okv-input" name="minimum_lead_days" value="<?= (int)$d['minimum_lead_days']?>"><button class="okv-btn-outline px-3">Save</button></form><?php endforeach;?></div></section><section class="okv-card"><h2 class="font-display text-xl font-bold text-ink">Exceptions</h2><form method="post" action="/api/v1/delivery.php" class="mt-4 grid gap-3 sm:grid-cols-5"><?=Csrf::field()?><input type="hidden" name="action" value="save_exception"><input class="okv-input" type="date" name="exception_date" required><label>Open slot <input type="checkbox" name="is_available" value="1"></label><input class="okv-input" name="reason" placeholder="Reason"><input class="okv-input" type="date" name="replacement_date"><button class="okv-btn">Save date</button></form><?php foreach($exceptions as $e): ?><p class="mt-2 text-sm"><?=okv_e($e['exception_date'])?>: <?= $e['is_available']?'Open':'Blocked' ?><?= $e['reason']?' . '.okv_e($e['reason']):''?></p><?php endforeach;?></section><section class="okv-card"><h2 class="font-display text-xl font-bold text-ink">Lagos zones</h2><div class="mt-4 grid gap-3 sm:grid-cols-2"><?php foreach($zones as $z): ?><form method="post" action="/api/v1/delivery.php" class="flex items-center justify-between gap-3"><?=Csrf::field()?><input type="hidden" name="action" value="set_zone_active"><input type="hidden" name="zone_id" value="<?= (int)$z['id']?>"><span><?=okv_e($z['name'])?></span><label>Active <input type="checkbox" name="is_active" value="1" <?= $z['is_active']?'checked':''?>></label><button class="okv-btn-outline px-3">Save</button></form><?php endforeach;?></div></section></div><?php require __DIR__ . '/../includes/components/admin/footer.php';

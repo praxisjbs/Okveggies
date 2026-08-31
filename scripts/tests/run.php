@@ -37,10 +37,12 @@ function okv_test_eq($expected, $actual, string $label): void
 
 $appRoot = dirname(__DIR__, 2);
 require_once $appRoot . '/includes/classes/Money.php';
+require_once $appRoot . '/includes/classes/Settings.php';
 require_once $appRoot . '/includes/classes/OrderNumber.php';
 require_once $appRoot . '/includes/classes/Catalogue.php';
 require_once $appRoot . '/includes/classes/Pricing.php';
 require_once $appRoot . '/includes/classes/Combos.php';
+require_once $appRoot . '/includes/classes/Delivery.php';
 require_once $appRoot . '/includes/classes/Basket.php';
 require_once $appRoot . '/includes/functions/helpers.php';
 
