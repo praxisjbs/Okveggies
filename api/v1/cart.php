@@ -25,7 +25,7 @@ function cart_redirect_with_notice(string $notice): void
     okv_redirect($path . '?' . http_build_query($params), 303);
 }
 
-if ($action !== 'add_product') {
+if ($action !== 'add_product' && $action !== 'add_combo') {
     okv_error('This action is not available.', 400, 'unknown_action');
 }
 if (!okv_is_post()) {
@@ -38,28 +38,58 @@ if (!Csrf::validate()) {
     okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
 }
 
-$productId = (int) okv_input('product_id', 0);
-if ($productId < 1) {
-    okv_error('Choose a product to add.', 422, 'missing_product');
-}
+if ($action === 'add_product') {
+    $productId = (int) okv_input('product_id', 0);
+    if ($productId < 1) {
+        okv_error('Choose a product to add.', 422, 'missing_product');
+    }
 
-try {
-    $result = Basket::addProduct($productId);
-} catch (DomainException $e) {
-    $unavailable = $e->getMessage() === 'unavailable';
-    $message = $unavailable
-        ? 'That item is not available yet. Check its restock status and try again later.'
-        : 'That product was not found.';
-    if (!cart_is_fetch()) {
-        cart_redirect_with_notice($unavailable ? 'unavailable' : 'missing');
+    try {
+        $result = Basket::addProduct($productId);
+    } catch (DomainException $e) {
+        $unavailable = $e->getMessage() === 'unavailable';
+        $message = $unavailable
+            ? 'That item is not available yet. Check its restock status and try again later.'
+            : 'That product was not found.';
+        if (!cart_is_fetch()) {
+            cart_redirect_with_notice($unavailable ? 'unavailable' : 'missing');
+        }
+        okv_error($message, $unavailable ? 409 : 404, $e->getMessage());
+    } catch (Throwable $e) {
+        error_log('cart.add_product failed: ' . $e->getMessage());
+        if (!cart_is_fetch()) {
+            cart_redirect_with_notice('error');
+        }
+        okv_error('We could not add that item. Please try again.', 500, 'add_failed');
     }
-    okv_error($message, $unavailable ? 409 : 404, $e->getMessage());
-} catch (Throwable $e) {
-    error_log('cart.add_product failed: ' . $e->getMessage());
-    if (!cart_is_fetch()) {
-        cart_redirect_with_notice('error');
+} else {
+    $comboId = (int) okv_input('combo_id', 0);
+    if ($comboId < 1) {
+        okv_error('Choose a combo to add.', 422, 'missing_combo');
     }
-    okv_error('We could not add that item. Please try again.', 500, 'add_failed');
+
+    try {
+        $result = Basket::addCombo($comboId);
+    } catch (DomainException $e) {
+        // Both a not-found combo and one that fell off the shop between the page
+        // render and the click land here. The customer gets the same plain
+        // message either way: the row they clicked is no longer buyable.
+        $reason = $e->getMessage();
+        $unavailable = $reason === 'unavailable';
+        $message = $unavailable
+            ? 'That combo is no longer on the shop.'
+            : 'That combo was not found.';
+        if (!cart_is_fetch()) {
+            cart_redirect_with_notice($unavailable ? 'unavailable' : 'missing');
+        }
+        okv_error($message, $unavailable ? 409 : 404, $reason);
+    } catch (Throwable $e) {
+        error_log('cart.add_combo failed: ' . $e->getMessage());
+        if (!cart_is_fetch()) {
+            cart_redirect_with_notice('error');
+        }
+        okv_error('We could not add that combo. Please try again.', 500, 'add_failed');
+    }
 }
 
 if (!cart_is_fetch()) {

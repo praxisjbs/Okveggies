@@ -11,6 +11,7 @@ require_once __DIR__ . '/includes/components/shop/activation_banner.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
+require_once __DIR__ . '/includes/components/shop/combo_card.php';
 
 // If a staff member is signed in, send them to the admin panel.
 if (Rbac::isLoggedIn() && Rbac::isStaff()) {
@@ -19,9 +20,8 @@ if (Rbac::isLoggedIn() && Rbac::isStaff()) {
 
 $categories = Database::all('SELECT name, slug FROM product_categories WHERE is_active = 1 ORDER BY sort_order');
 
-$featuredCombo = Database::one(
-    'SELECT id, name, slug, description, price_subunit, image_url FROM combo_packages WHERE is_active = 1 AND is_featured = 1 ORDER BY id LIMIT 1'
-);
+$featuredCombos = Catalogue::featuredCombos(3);
+$featuredCombo = $featuredCombos[0] ?? null;
 
 $featured = Database::all(
     'SELECT p.name, p.slug, p.short_description, p.current_price_subunit, u.symbol AS unit,
@@ -72,6 +72,24 @@ $tagline  = Settings::str('business_tagline', 'Sourced right. Priced right. Deli
     </div>
   </div>
 </section>
+
+<!-- Featured combos strip -->
+<?php if ($featuredCombos): ?>
+<section class="okv-container pt-14">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Cooked together, priced together</p>
+      <h2 class="font-display font-bold text-2xl text-ink mt-2">This week's combos</h2>
+    </div>
+    <a href="/combos.php" class="okv-btn-text">See all combos</a>
+  </div>
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <?php foreach ($featuredCombos as $combo): ?>
+      <?php okv_combo_card($combo, '/'); ?>
+    <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
 
 <!-- Categories -->
 <section class="okv-container py-14">
