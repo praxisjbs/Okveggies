@@ -184,7 +184,12 @@ final class Catalogue
         $today = date('Y-m-d');
         return Database::all(
             'SELECT c.id, c.name, c.slug, c.sku, c.description, c.price_subunit,
-                    c.image_url, c.is_featured,
+                    COALESCE(c.image_url, (SELECT pi.image_url
+                      FROM combo_package_items ci
+                      JOIN product_images pi ON pi.product_id = ci.product_id
+                     WHERE ci.combo_package_id = c.id
+                     ORDER BY ci.id, pi.is_primary DESC, pi.sort_order, pi.id LIMIT 1)) AS image_url,
+                    c.is_featured,
                     c.available_from, c.available_until,
                     (SELECT COUNT(*) FROM combo_package_items ci WHERE ci.combo_package_id = c.id) AS component_count
                FROM combo_packages c
@@ -221,7 +226,12 @@ final class Catalogue
         $today = date('Y-m-d');
         return Database::one(
             'SELECT c.id, c.name, c.slug, c.sku, c.description, c.price_subunit,
-                    c.image_url, c.is_featured, c.is_active,
+                    COALESCE(c.image_url, (SELECT pi.image_url
+                      FROM combo_package_items ci
+                      JOIN product_images pi ON pi.product_id = ci.product_id
+                     WHERE ci.combo_package_id = c.id
+                     ORDER BY ci.id, pi.is_primary DESC, pi.sort_order, pi.id LIMIT 1)) AS image_url,
+                    c.is_featured, c.is_active,
                     c.available_from, c.available_until,
                     (SELECT COUNT(*) FROM combo_package_items ci WHERE ci.combo_package_id = c.id) AS component_count
                FROM combo_packages c

@@ -46,7 +46,8 @@ okv_test_eq(200000, Combos::sumComponents([
 ]), 'the 0.25 kg ginger line comes out to ₦2,000');
 
 // A component whose product has no price yet contributes zero. The Manager can
-// still open the builder while one product is a draft, without a warning.
+// still open the builder while one product is a draft. The admin screen flags
+// it before a publish attempt.
 okv_test_eq(540000, Combos::sumComponents([
     ['quantity' => 2.000, 'current_price_subunit' => 270000],
     ['quantity' => 1.000, 'current_price_subunit' => 0],

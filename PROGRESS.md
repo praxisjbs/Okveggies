@@ -145,6 +145,17 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 
 ## Session log (newest first)
 
+### 31 Aug 2026, M3 PR2 and PR3: combo builder and storefront implementation, viewport check pending
+
+Built the remaining M3 implementation on the `combo` branch. The admin builder at `admin/combos.php` saves a complete product picker in one transaction with the combo details, fixed sell price and publish state. It shows the live component total, calls out a loss-making sell price in red for staff, lets the Manager use optional availability dates, and supports a dedicated combo photo with a preview. A selected product with no current price can stay in a draft, but cannot be published. A referenced combo is switched off when the Owner chooses Remove, so history and basket lines keep their links.
+
+Built the storefront at `combos.php` and `combo.php`, plus the shared `combo_card.php`. Both use the active availability-window catalogue reads, include breadcrumbs and real back routes, use the fallback first-component photo where there is no combo photo, and add a combo as 1 basket line. Home now shows featured combos through the same component. `Basket::addCombo()` checks the active window and snapshots the fixed current combo price. Adding the same combo again increments that one line.
+
+Tightened an opening-price defect discovered in the database test: pricing a draft combo now writes a null old price, rather than a misleading ₦0, in `combo_price_history`.
+
+Verified: Tailwind and JavaScript assets rebuild cleanly; JavaScript syntax checks clean; PHP 8.3 lint clean across all PHP files; 163 unit assertions pass; a fresh MariaDB 10.11 migration passes; `combos_db_test.php` passes 19 assertions for component totals, opening and later sell-price history, publish gates, and 1-line basket increments. HTTP smoke checks pass for the combos page, detail page, guest admin redirect, protected Owner builder, authenticated seeded-combo save, and add-combo API.
+
+
 ### 30 Aug 2026, M3 PR1: combos domain, sell-price history and the component-total maths
 
 Split M3 into three PRs (PR1 domain, PR2 admin builder, PR3 storefront) so two other chats can pick up PR2 and PR3 in parallel without stepping on each other. This PR is the foundation both of them consume, and the seven clarifying questions were answered before a line of code was written.

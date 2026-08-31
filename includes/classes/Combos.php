@@ -167,8 +167,16 @@ final class Combos
             $errors['price'] = 'That price is outside the range we allow. Leave it empty to save a draft.';
         }
 
-        $from = self::cleanDate($input['available_from'] ?? '');
-        $until = self::cleanDate($input['available_until'] ?? '');
+        $fromRaw = $input['available_from'] ?? '';
+        $untilRaw = $input['available_until'] ?? '';
+        $from = self::cleanDate($fromRaw);
+        $until = self::cleanDate($untilRaw);
+        if (trim((string) $fromRaw) !== '' && $from === null) {
+            $errors['available_from'] = 'Enter a valid start date.';
+        }
+        if (trim((string) $untilRaw) !== '' && $until === null) {
+            $errors['available_until'] = 'Enter a valid end date.';
+        }
         if ($from !== null && $until !== null && $from > $until) {
             $errors['available_until'] = 'The end date is before the start date.';
         }
@@ -194,8 +202,12 @@ final class Combos
         if ($raw === '') {
             return null;
         }
-        $timestamp = strtotime($raw);
-        return $timestamp === false ? null : date('Y-m-d', $timestamp);
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $raw);
+        $errors = DateTimeImmutable::getLastErrors();
+        if (!$date || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) || $date->format('Y-m-d') !== $raw) {
+            return null;
+        }
+        return $date->format('Y-m-d');
     }
 
     /**
@@ -223,7 +235,10 @@ final class Combos
     public static function create(array $clean, ?int $userId): int
     {
         $pdo = Database::getInstance()->getConnection();
-        $pdo->beginTransaction();
+        $ownTransaction = !$pdo->inTransaction();
+        if ($ownTransaction) {
+            $pdo->beginTransaction();
+        }
         try {
             Database::run(
                 'INSERT INTO combo_packages
@@ -251,10 +266,12 @@ final class Combos
                 self::writeHistory($id, null, (int) $clean['price_subunit'], 'Opening price', $userId);
             }
 
-            $pdo->commit();
+            if ($ownTransaction) {
+                $pdo->commit();
+            }
             return $id;
         } catch (Throwable $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             throw $e;
@@ -268,7 +285,10 @@ final class Combos
     public static function update(int $id, array $clean, ?int $userId): void
     {
         $pdo = Database::getInstance()->getConnection();
-        $pdo->beginTransaction();
+        $ownTransaction = !$pdo->inTransaction();
+        if ($ownTransaction) {
+            $pdo->beginTransaction();
+        }
         try {
             $existing = Database::one(
                 'SELECT id, name, slug FROM combo_packages WHERE id = :id FOR UPDATE',
@@ -312,9 +332,11 @@ final class Combos
                 self::changePrice($id, $newPrice, 'Changed while editing the combo', $userId, false);
             }
 
-            $pdo->commit();
+            if ($ownTransaction) {
+                $pdo->commit();
+            }
         } catch (Throwable $e) {
-            if ($pdo->inTransaction()) {
+            if ($ownTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             throw $e;
@@ -330,7 +352,7 @@ final class Combos
      * checks pass.
      *
      * Throws DomainException('not_found'), DomainException('no_components'),
-     * DomainException('no_price').
+     * DomainException('no_price'), DomainException('component_without_price').
      */
     public static function publish(int $id): void
     {
@@ -344,6 +366,16 @@ final class Combos
         $count = self::componentCount($id);
         if ($count < 1) {
             throw new DomainException('no_components');
+        }
+        $unpriced = Database::one(
+            'SELECT COUNT(*) AS c
+               FROM combo_package_items ci
+               JOIN products p ON p.id = ci.product_id
+              WHERE ci.combo_package_id = :combo_id AND p.current_price_subunit < :minimum_price',
+            [':combo_id' => $id, ':minimum_price' => Pricing::MIN_PRICE_SUBUNIT]
+        );
+        if ((int) ($unpriced['c'] ?? 0) > 0) {
+            throw new DomainException('component_without_price');
         }
         self::setActive($id, true);
     }
@@ -497,6 +529,63 @@ final class Combos
         }
     }
 
+    /**
+     * Replace the complete component list during one builder save. The caller
+     * owns the surrounding transaction, so details, price, components and the
+     * publish state either all land together or none of them do.
+     *
+     * Each row must carry product_id, unit_id and a cleaned quantity. Products
+     * keep their catalogue unit inside a combo, which prevents a kilogramme
+     * price from being paired with a bunch quantity by a crafted request.
+     */
+    public static function replaceComponents(int $comboId, array $components): void
+    {
+        if (!Database::one('SELECT id FROM combo_packages WHERE id = :id', [':id' => $comboId])) {
+            throw new DomainException('not_found');
+        }
+
+        $seen = [];
+        foreach ($components as $component) {
+            $productId = (int) ($component['product_id'] ?? 0);
+            $unitId = (int) ($component['unit_id'] ?? 0);
+            $quantity = (float) ($component['quantity'] ?? 0);
+            if ($quantity < self::MIN_COMPONENT_QUANTITY) {
+                throw new DomainException('bad_quantity');
+            }
+            $product = Database::one(
+                'SELECT id, unit_id FROM products WHERE id = :id',
+                [':id' => $productId]
+            );
+            if (!$product) {
+                throw new DomainException('bad_product');
+            }
+            if ((int) $product['unit_id'] !== $unitId) {
+                throw new DomainException('bad_unit');
+            }
+            if (isset($seen[$productId])) {
+                throw new DomainException('already_in_combo');
+            }
+            $seen[$productId] = true;
+        }
+
+        Database::run(
+            'DELETE FROM combo_package_items WHERE combo_package_id = :combo_id',
+            [':combo_id' => $comboId]
+        );
+        foreach ($components as $component) {
+            Database::run(
+                'INSERT INTO combo_package_items (combo_package_id, product_id, quantity, unit_id)
+                 VALUES (:combo_id, :product_id, :quantity, :unit_id)',
+                [
+                    ':combo_id' => $comboId,
+                    ':product_id' => (int) $component['product_id'],
+                    ':quantity' => (float) $component['quantity'],
+                    ':unit_id' => (int) $component['unit_id'],
+                ]
+            );
+        }
+    }
+
     // --- Component-total maths (pure, testable) -----------------------------
 
     /**
@@ -619,7 +708,10 @@ final class Combos
                 return ['changed' => false, 'old' => $old, 'new' => $old];
             }
 
-            self::writeHistory($comboId, $old, $newPriceSubunit, $reason, $userId);
+            // A draft has a stored zero only as its unpriced sentinel. Its
+            // first real sell price is an opening price, so history records no
+            // previous amount rather than a misleading ₦0.
+            self::writeHistory($comboId, $old > 0 ? $old : null, $newPriceSubunit, $reason, $userId);
 
             Database::run(
                 'UPDATE combo_packages SET price_subunit = :price WHERE id = :id',

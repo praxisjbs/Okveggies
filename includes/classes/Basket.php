@@ -84,6 +84,64 @@ final class Basket
         }
     }
 
+    /** Add one ready-made combo as one basket line. */
+    public static function addCombo(int $comboId): array
+    {
+        $pdo = Database::getInstance()->getConnection();
+        try {
+            $pdo->beginTransaction();
+            $today = date('Y-m-d');
+            $combo = Database::one(
+                'SELECT id, price_subunit
+                   FROM combo_packages
+                  WHERE id = :combo_id AND is_active = 1
+                    AND price_subunit >= :minimum_price
+                    AND (available_from IS NULL OR available_from <= :today_from)
+                    AND (available_until IS NULL OR available_until >= :today_until)
+                  FOR UPDATE',
+                [
+                    ':combo_id' => $comboId,
+                    ':minimum_price' => Pricing::MIN_PRICE_SUBUNIT,
+                    ':today_from' => $today,
+                    ':today_until' => $today,
+                ]
+            );
+            if (!$combo) {
+                throw new DomainException('unavailable');
+            }
+
+            $cartId = self::activeCartId();
+            $item = Database::one(
+                'SELECT id, quantity FROM cart_items
+                  WHERE cart_id = :cart_id AND item_type = \'combo\' AND combo_package_id = :combo_id
+                  ORDER BY id LIMIT 1 FOR UPDATE',
+                [':cart_id' => $cartId, ':combo_id' => $comboId]
+            );
+            if ($item) {
+                $quantity = (int) $item['quantity'] + 1;
+                Database::run(
+                    'UPDATE cart_items SET quantity = :quantity, unit_price_subunit = :price WHERE id = :id',
+                    [':quantity' => $quantity, ':price' => (int) $combo['price_subunit'], ':id' => (int) $item['id']]
+                );
+            } else {
+                $quantity = 1;
+                Database::run(
+                    'INSERT INTO cart_items (cart_id, item_type, combo_package_id, quantity, unit_price_subunit)
+                     VALUES (:cart_id, \'combo\', :combo_id, 1, :price)',
+                    [':cart_id' => $cartId, ':combo_id' => $comboId, ':price' => (int) $combo['price_subunit']]
+                );
+            }
+
+            $pdo->commit();
+            return ['quantity_added' => $quantity, 'count' => self::count()];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     private static function activeCartId(): int
     {
         $existing = self::findActiveCartId();
