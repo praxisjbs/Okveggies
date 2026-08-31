@@ -84,6 +84,80 @@ final class Basket
         }
     }
 
+    /**
+     * Add one combo to the basket. Mirrors addProduct. A combo added for the
+     * first time is one cart_items row with item_type = 'combo', quantity 1 and
+     * the combo's current price_subunit as the unit price. A combo already in
+     * the basket increments the same row's quantity by 1, so a household that
+     * wants two Stew Combos ends up with one line reading quantity 2 rather
+     * than two identical rows. Fanning the combo out into order_item_components
+     * is M4/M5, not this seam.
+     *
+     * Refuses when the combo is not buyable now: is_active off, or the
+     * availability window has closed since the page loaded, or it was
+     * unpublished between the page render and the click. Combos::isBuyableNow
+     * catches all three from the row we already fetched.
+     */
+    public static function addCombo(int $comboId): array
+    {
+        $pdo = Database::getInstance()->getConnection();
+        try {
+            $pdo->beginTransaction();
+            $combo = Database::one(
+                'SELECT id, price_subunit, is_active, available_from, available_until
+                   FROM combo_packages
+                  WHERE id = :combo_id
+                  FOR UPDATE',
+                [':combo_id' => $comboId]
+            );
+            if (!$combo) {
+                throw new DomainException('not_found');
+            }
+            if (!Combos::isBuyableNow($combo)) {
+                throw new DomainException('unavailable');
+            }
+            if ((int) $combo['price_subunit'] < 1) {
+                throw new DomainException('unavailable');
+            }
+
+            $cartId = self::activeCartId();
+            $item = Database::one(
+                'SELECT id, quantity FROM cart_items
+                  WHERE cart_id = :cart_id AND item_type = \'combo\' AND combo_package_id = :combo_id
+                  ORDER BY id LIMIT 1 FOR UPDATE',
+                [':cart_id' => $cartId, ':combo_id' => $comboId]
+            );
+
+            if ($item) {
+                $quantity = (float) $item['quantity'] + 1.0;
+                Database::run(
+                    'UPDATE cart_items SET quantity = :quantity, unit_price_subunit = :price WHERE id = :id',
+                    [':quantity' => $quantity, ':price' => (int) $combo['price_subunit'], ':id' => (int) $item['id']]
+                );
+            } else {
+                $quantity = 1.0;
+                Database::run(
+                    'INSERT INTO cart_items (cart_id, item_type, combo_package_id, quantity, unit_price_subunit)
+                     VALUES (:cart_id, \'combo\', :combo_id, :quantity, :price)',
+                    [
+                        ':cart_id' => $cartId,
+                        ':combo_id' => $comboId,
+                        ':quantity' => $quantity,
+                        ':price' => (int) $combo['price_subunit'],
+                    ]
+                );
+            }
+
+            $pdo->commit();
+            return ['quantity_added' => $quantity, 'count' => self::count()];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     private static function activeCartId(): int
     {
         $existing = self::findActiveCartId();
