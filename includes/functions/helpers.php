@@ -217,3 +217,79 @@ if (!function_exists('okv_send_account_code')) {
         return Mail::send($email, $subject, $body);
     }
 }
+
+if (!function_exists('okv_limit_clause')) {
+    /**
+     * " LIMIT 25 OFFSET 50" for page three, or '' when the caller asked for
+     * every row. Only ever clamped ints, so it is the one safe thing to put
+     * into SQL by hand. Under native prepared statements a bound string cannot
+     * sit inside a LIMIT clause, which is exactly why a page is never a
+     * placeholder.
+     */
+    function okv_limit_clause(int $page, ?int $perPage): string
+    {
+        if ($perPage === null) {
+            return '';
+        }
+        $perPage = max(1, $perPage);
+        return ' LIMIT ' . $perPage . ' OFFSET ' . ((max(1, $page) - 1) * $perPage);
+    }
+}
+
+if (!function_exists('okv_page_window')) {
+    /**
+     * The run of page numbers shown under a listing: the first and last pages
+     * always, the current page with $radius neighbours on each side, and an
+     * "…" where a run breaks. Page 1 of 10 gives [1, 2, 3, '…', 10]; page 5
+     * gives [1, '…', 3, 4, 5, 6, 7, '…', 10].
+     */
+    function okv_page_window(int $page, int $lastPage, int $radius = 2): array
+    {
+        if ($lastPage < 1) {
+            return [];
+        }
+        if ($lastPage === 1) {
+            return [1];
+        }
+        $page = min(max(1, $page), $lastPage);
+        $middle = range(max(1, $page - $radius), min($lastPage, $page + $radius));
+
+        $window = [];
+        if ($middle[0] > 1) {
+            $window[] = 1;
+            if ($middle[0] > 2) {
+                $window[] = '…';
+            }
+        }
+        foreach ($middle as $n) {
+            $window[] = $n;
+        }
+        $lastMiddle = end($middle);
+        if ($lastMiddle < $lastPage) {
+            if ($lastMiddle < $lastPage - 1) {
+                $window[] = '…';
+            }
+            $window[] = $lastPage;
+        }
+        return $window;
+    }
+}
+
+if (!function_exists('okv_page_summary')) {
+    /**
+     * The line over a listing. "5 items" when everything fits on one page,
+     * "Showing 26 to 50 of 87 items" once there is more than one page.
+     */
+    function okv_page_summary(int $page, int $total, int $perPage, string $noun): string
+    {
+        $label = $total === 1 ? $noun : $noun . 's';
+        $perPage = max(1, $perPage);
+        if ($total <= $perPage) {
+            return $total . ' ' . $label;
+        }
+        $page = max(1, $page);
+        $first = ($page - 1) * $perPage + 1;
+        $last = min($total, $page * $perPage);
+        return 'Showing ' . $first . ' to ' . $last . ' of ' . $total . ' ' . $label;
+    }
+}

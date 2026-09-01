@@ -1,18 +1,24 @@
 <?php
-/** Browse active produce by search term and category. */
+/** Browse active produce by search term and category, one page at a time. */
 require_once __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/includes/components/pagination.php';
 require_once __DIR__ . '/includes/components/shop/activation_banner.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/product_card.php';
+require_once __DIR__ . '/includes/components/shop/shop_results.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
 
 $search = Catalogue::cleanSearch((string) okv_input('search', ''));
 $category = Catalogue::cleanCategory((string) okv_input('category', ''));
 $categories = Catalogue::categories();
-$products = Catalogue::products($search, $category);
+
+$perPage = Catalogue::PER_PAGE;
+$total = Catalogue::countProducts($search, $category);
+$pages = max(1, (int) ceil($total / $perPage));
+$page = min(max(1, (int) okv_input('page', 1)), $pages);
+$products = Catalogue::products($search, $category, $page, $perPage);
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
-$returnTo = shop_url($search, $category);
 
 $activeCategory = null;
 foreach ($categories as $candidate) {
@@ -20,12 +26,6 @@ foreach ($categories as $candidate) {
         $activeCategory = $candidate;
         break;
     }
-}
-
-function shop_url(string $search, string $category = ''): string
-{
-    $query = array_filter(['search' => $search, 'category' => $category], static fn($value) => $value !== '');
-    return '/shop.php' . ($query ? '?' . http_build_query($query) : '');
 }
 
 $pageTitle = $activeCategory
@@ -91,14 +91,14 @@ $noticeMessages = [
 
   <section class="okv-container py-8 md:py-12">
     <div class="mb-6 flex items-center justify-between gap-4 lg:hidden">
-      <p class="text-sm font-semibold text-ink"><?= count($products) ?> <?= count($products) === 1 ? 'item' : 'items' ?></p>
+      <p class="text-sm font-semibold text-ink" data-shop-summary aria-live="polite"><?= okv_e(okv_page_summary($page, $total, $perPage, 'item')) ?></p>
       <button type="button" class="okv-btn-outline px-4" data-filter-open aria-controls="shop-filter-sheet" aria-expanded="false">Filter by category</button>
     </div>
 
     <div class="mb-6 flex gap-2 overflow-x-auto pb-2 lg:hidden" aria-label="Quick category filters">
-      <a href="<?= okv_e(shop_url($search)) ?>" class="okv-filter-chip <?= $category === '' ? 'okv-filter-chip-active' : '' ?>">All</a>
+      <a href="<?= okv_e(okv_shop_url($search)) ?>" data-shop-category-link="" class="okv-filter-chip <?= $category === '' ? 'okv-filter-chip-active' : '' ?>">All</a>
       <?php foreach ($categories as $item): ?>
-        <a href="<?= okv_e(shop_url($search, $item['slug'])) ?>" class="okv-filter-chip <?= $category === $item['slug'] ? 'okv-filter-chip-active' : '' ?>"><?= okv_e($item['name']) ?></a>
+        <a href="<?= okv_e(okv_shop_url($search, $item['slug'])) ?>" data-shop-category-link="<?= okv_e($item['slug']) ?>" class="okv-filter-chip <?= $category === $item['slug'] ? 'okv-filter-chip-active' : '' ?>"><?= okv_e($item['name']) ?></a>
       <?php endforeach; ?>
     </div>
 
@@ -107,11 +107,11 @@ $noticeMessages = [
         <div class="sticky top-24 rounded-lg bg-white p-4 shadow-okv-1">
           <p class="font-display font-bold text-ink">Categories</p>
           <nav class="mt-3 space-y-1">
-            <a href="<?= okv_e(shop_url($search)) ?>" class="okv-category-link <?= $category === '' ? 'okv-category-link-active' : '' ?>">
+            <a href="<?= okv_e(okv_shop_url($search)) ?>" data-shop-category-link="" class="okv-category-link <?= $category === '' ? 'okv-category-link-active' : '' ?>">
               <span>All produce</span><span><?= array_sum(array_map(static fn($item) => (int) $item['product_count'], $categories)) ?></span>
             </a>
             <?php foreach ($categories as $item): ?>
-              <a href="<?= okv_e(shop_url($search, $item['slug'])) ?>" class="okv-category-link <?= $category === $item['slug'] ? 'okv-category-link-active' : '' ?>">
+              <a href="<?= okv_e(okv_shop_url($search, $item['slug'])) ?>" data-shop-category-link="<?= okv_e($item['slug']) ?>" class="okv-category-link <?= $category === $item['slug'] ? 'okv-category-link-active' : '' ?>">
                 <span><?= okv_e($item['name']) ?></span><span><?= (int) $item['product_count'] ?></span>
               </a>
             <?php endforeach; ?>
@@ -119,33 +119,8 @@ $noticeMessages = [
         </div>
       </aside>
 
-      <div class="lg:col-span-10">
-        <div class="mb-6 hidden items-end justify-between gap-4 lg:flex">
-          <div>
-            <h2 class="font-display text-2xl font-bold text-ink"><?= okv_e($activeCategory['name'] ?? 'All produce') ?></h2>
-            <?php if ($search !== ''): ?><p class="mt-1 text-sm text-ink-60">Results for “<?= okv_e($search) ?>”</p><?php endif; ?>
-          </div>
-          <p class="text-sm text-ink-60"><?= count($products) ?> <?= count($products) === 1 ? 'item' : 'items' ?></p>
-        </div>
-
-        <?php if ($products): ?>
-          <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            <?php foreach ($products as $product): ?>
-              <?php okv_product_card($product, $sourceRegions, $returnTo); ?>
-            <?php endforeach; ?>
-          </div>
-        <?php else: ?>
-          <div class="rounded-lg bg-white px-6 py-16 text-center shadow-okv-1">
-            <?php if ($search !== ''): ?>
-              <h2 class="font-display text-2xl font-bold text-ink">Nothing matched that search</h2>
-              <p class="mx-auto mt-3 max-w-md text-ink-60">Try another produce name<?= $category !== '' ? ', or clear the category to search everything available this week' : '' ?>.</p>
-            <?php else: ?>
-              <h2 class="font-display text-2xl font-bold text-ink">Nothing in <?= okv_e($activeCategory['name'] ?? 'this category') ?> this week</h2>
-              <p class="mx-auto mt-3 max-w-md text-ink-60">We are still sourcing for this one. The rest of the week's produce is ready now.</p>
-            <?php endif; ?>
-            <a href="/shop.php" class="okv-btn mt-6">See all produce</a>
-          </div>
-        <?php endif; ?>
+      <div class="lg:col-span-10" data-shop-results>
+        <?php okv_shop_results($products, $categories, $sourceRegions, $search, $category, $page, $total, $perPage); ?>
       </div>
     </div>
   </section>
@@ -158,7 +133,7 @@ $noticeMessages = [
       <button type="button" class="okv-btn-text px-2" data-filter-close>Close</button>
     </div>
     <form action="/shop.php" method="get" class="mt-6">
-      <?php if ($search !== ''): ?><input type="hidden" name="search" value="<?= okv_e($search) ?>"><?php endif; ?>
+      <input type="hidden" name="search" value="<?= okv_e($search) ?>" data-sheet-search>
       <label for="mobile-category" class="okv-label">Category</label>
       <select id="mobile-category" name="category" class="okv-input">
         <option value="">All produce</option>
