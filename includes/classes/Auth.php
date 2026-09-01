@@ -87,6 +87,11 @@ final class Auth
         $_SESSION['user_type']      = (string) ($user['user_type'] ?? 'household');
         $_SESSION['email_verified'] = !empty($user['email_verified_at']);
         $_SESSION['first_name']     = (string) ($user['first_name'] ?? '');
+        // The password marker this session logged in under. A later password
+        // change moves users.password_changed_at on, and the staff gate signs
+        // any session holding an older marker out. Missing on a row that did not
+        // select it (a fresh registration) is fine: it reads as no change.
+        $_SESSION['pwd_epoch']      = (string) ($user['password_changed_at'] ?? '');
         Rbac::loadFromDb((int) $user['id']);
     }
 

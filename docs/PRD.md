@@ -249,6 +249,15 @@ A new account can be activated by a one-time code (sent by email, and by SMS lat
 - **Business customers** have a business profile, can apply for credit, and get the Pro Portal.
 - **Staff** are the Owner and the Manager (Section 17.1). RBAC is the same engine as the reference app.
 
+### 10.4 Password reset by email code
+
+Anyone who forgets their password can set a new one with a one-time code sent to their email. Two pages, one shared engine:
+
+- **Customers** reset at `/public/auth/password_reset.php`, and land back on the storefront sign in.
+- **Staff** (the Owner and any active Manager) reset at `/admin/password_reset.php`, reached from a "Forgot your password?" link on the staff sign in, and land back on the staff sign in. The Owner is no longer locked out when there is no one to reset it for them.
+
+The flow is the same both ways: ask for the email, receive a 6 digit code (15 minute life, single use, stored hashed in `otp_verifications`), then enter the code and a new password. The "send a code" step gives the same answer whether or not the email is registered, so neither page confirms who has an account. Requests are rate limited by email (a resend cooldown, a window cap, and a verify cap), and the code is only spent after the new password passes the policy. A successful reset, an owner setting a colleague's password, or a signed-in change all move `users.password_changed_at` on, which signs every other open session for that account out (Section 20). Codes by SMS are Phase 2, as with activation.
+
 ---
 
 ## 11. Payments

@@ -74,7 +74,7 @@ $context    = (string) okv_input('context', '');
 $storefront = ($context === 'storefront');
 
 // Only these actions exist here, and every one is a state change.
-$allowed = ['login', 'logout', 'register', 'change_password', 'forgot_password', 'reset_password'];
+$allowed = ['login', 'logout', 'register', 'change_password', 'forgot_password', 'reset_password', 'staff_forgot_password', 'staff_reset_password'];
 if (!in_array($action, $allowed, true)) {
     okv_error('This action is not available.', 400, 'unknown_action');
 }
@@ -87,6 +87,8 @@ if (!Csrf::validate()) {
         case 'register':                        $back = '/account.php?mode=register'; break;
         case 'forgot_password':
         case 'reset_password':                  $back = '/public/auth/password_reset.php'; break;
+        case 'staff_forgot_password':
+        case 'staff_reset_password':            $back = '/admin/password_reset.php'; break;
         case 'login':                           $back = $storefront ? '/account.php?mode=signin' : '/admin/login.php'; break;
         default:                                $back = $storefront ? '/account.php' : '/admin/login.php';
     }
@@ -283,8 +285,10 @@ switch ($action) {
             auth_respond(false, $policy, 422, 'weak_password', '/admin/account.php');
         }
 
-        Database::run('UPDATE users SET password_hash = :h WHERE id = :id', [':h' => Password::hash($new), ':id' => $userId]);
+        Database::run('UPDATE users SET password_hash = :h, password_changed_at = NOW() WHERE id = :id', [':h' => Password::hash($new), ':id' => $userId]);
         session_regenerate_id(true); // fresh id after a credential change
+        // Keep this session valid against the new marker; other sessions fall.
+        $_SESSION['pwd_epoch'] = (string) (Database::one('SELECT password_changed_at FROM users WHERE id = :id', [':id' => $userId])['password_changed_at'] ?? '');
 
         auth_respond(true, 'Your password is changed.', 200, '', '/admin/account.php?changed=1', ['redirect' => '/admin/account.php?changed=1']);
         break;
@@ -360,8 +364,88 @@ switch ($action) {
             auth_respond(false, 'That code is not right or has expired. Ask for a new one.', 422, 'bad_code', $back);
         }
 
-        Database::run('UPDATE users SET password_hash = :h WHERE id = :id', [':h' => Password::hash($new), ':id' => (int) $user['id']]);
+        Database::run('UPDATE users SET password_hash = :h, password_changed_at = NOW() WHERE id = :id', [':h' => Password::hash($new), ':id' => (int) $user['id']]);
         auth_respond(true, 'Your password is changed. Please sign in.', 200, '', '/account.php?mode=signin&reset=1', ['redirect' => '/account.php?mode=signin&reset=1']);
+        break;
+    }
+
+    case 'staff_forgot_password': {
+        // Step 1 for staff: email a reset code. Same shape as the customer
+        // forgot_password, but it only ever looks at active staff accounts and
+        // it points the code and the link at the admin reset page. The answer is
+        // the same whether or not the email belongs to a staff account, so this
+        // page never confirms who works here.
+        $back  = '/admin/password_reset.php';
+        $email = strtolower(trim((string) okv_input('email', '')));
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            auth_respond(false, 'Enter a valid email address.', 422, 'bad_email', $back);
+        }
+
+        $done = function () use ($back) {
+            auth_respond(
+                true,
+                'If that email belongs to a staff account, we have sent a reset code. Check your inbox.',
+                200,
+                '',
+                $back . '?step=code&sent=1',
+                ['step' => 'code']
+            );
+        };
+
+        $cool   = 'staffpwreset:cool:' . sha1($email);
+        $window = 'staffpwreset:win:' . sha1($email);
+        if (RateLimiter::isLocked($cool, 1)) {
+            $done();
+        }
+        if (!RateLimiter::hit($window, (int) env('OTP_MAX_PER_IDENTIFIER', 5), (int) env('OTP_WINDOW_SECONDS', 900))) {
+            $done();
+        }
+        RateLimiter::hit($cool, 1, (int) env('OTP_RESEND_COOLDOWN_SECONDS', 60));
+
+        $user = Database::one(
+            "SELECT id, first_name FROM users WHERE email = :e AND user_type = 'staff' AND status = 'active' LIMIT 1",
+            [':e' => $email]
+        );
+        if ($user) {
+            okv_send_account_code($email, (string) $user['first_name'], 'password_reset', 'password_reset', 'reset_url', '/admin/password_reset.php', (int) $user['id']);
+        }
+        $done();
+        break;
+    }
+
+    case 'staff_reset_password': {
+        // Step 2 for staff: verify the code and set the new password. Success
+        // moves password_changed_at on, which signs out every other open session
+        // for this account, then sends the person to the staff sign-in page.
+        $back    = '/admin/password_reset.php?step=code';
+        $email   = strtolower(trim((string) okv_input('email', '')));
+        $code    = trim((string) okv_input('code', ''));
+        $new     = (string) okv_input('new_password', '');
+        $confirm = (string) okv_input('confirm_password', '');
+
+        if ($email === '' || $code === '') {
+            auth_respond(false, 'Enter the code we sent and your new password.', 422, 'missing_fields', $back);
+        }
+        if (!RateLimiter::hit('staffpwreset:verify:' . sha1($email), 10, (int) env('OTP_WINDOW_SECONDS', 900))) {
+            auth_respond(false, 'Too many tries. Wait a few minutes and try again.', 429, 'rate_limited', $back);
+        }
+        if ($new !== $confirm) {
+            auth_respond(false, 'The two new passwords do not match.', 422, 'mismatch', $back);
+        }
+
+        $user   = Database::one("SELECT id, email, phone FROM users WHERE email = :e AND user_type = 'staff' AND status = 'active' LIMIT 1", [':e' => $email]);
+        $policy = Password::policyError($new, $email, (string) ($user['phone'] ?? ''));
+        if ($policy !== null) {
+            auth_respond(false, $policy, 422, 'weak_password', $back);
+        }
+        // Verify (and consume) the code last, so a weak password never burns it.
+        if (!$user || !Otp::verify($email, 'password_reset', $code)) {
+            auth_respond(false, 'That code is not right or has expired. Ask for a new one.', 422, 'bad_code', $back);
+        }
+
+        Database::run('UPDATE users SET password_hash = :h, password_changed_at = NOW() WHERE id = :id', [':h' => Password::hash($new), ':id' => (int) $user['id']]);
+        auth_respond(true, 'Your password is changed. Please sign in.', 200, '', '/admin/login.php?reset=1', ['redirect' => '/admin/login.php?reset=1']);
         break;
     }
 }
