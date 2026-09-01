@@ -10,6 +10,8 @@ OK Veggies. Regenerates every derived brand asset from two sources of truth:
 It writes:
     assets/img/brand/monogram.svg            circular emblem, light grounds
     assets/img/brand/monogram-white.svg      circular emblem, dark grounds (3.7b)
+    assets/img/brand/monogram-mono-green.svg single-ink emblem, documents (3.7a)
+    assets/img/brand/lockup-mono-green.svg   single-ink horizontal lockup (3.7a)
     assets/img/brand/wordmark.svg            OK VEGGIES lockup text, outlined
     assets/img/brand/lockup.svg              emblem + wordmark, light grounds
     assets/img/brand/lockup-white.svg        emblem + wordmark, dark grounds
@@ -26,10 +28,17 @@ The monogram letterforms are the real Hanken Grotesk 800 outlines, embedded as
 vector paths, so the marks are font-independent. Colours are the four locked
 seal colours (bible 3.9). No em dash is emitted anywhere. Dev tooling only:
 requires fonttools, brotli, Pillow, cairosvg. Not run at request time.
+
+Run it whole, or name one group so a single mark can be refreshed without
+rewriting every raster:
+
+    python3 scripts/brand/generate_brand_assets.py
+    python3 scripts/brand/generate_brand_assets.py mono
 """
 import io
 import math
 import os
+import sys
 
 from fontTools.ttLib import TTFont
 from fontTools.varLib import instancer
@@ -307,6 +316,107 @@ def horizontal_lockup_svg(white=False):
     return head + "\n" + "\n".join(parts) + "\n</svg>"
 
 
+# --- 3.7a Single ink ----------------------------------------------------------
+# Receipts, invoices, debossing, screen printing and fax-quality documents get
+# one ink, line and fill only, no gradients and no photography (bible 3.7a and
+# the "never force photographic mono" rule in 3.8). Same letterforms and same
+# sprout geometry as every other mark, drawn in a single colour on a
+# transparent ground so it sits on white paper or a forest block alike.
+def mono_emblem_svg(size=64, ink=FOREST):
+    """The circular emblem in one ink: ring, OK, sprout. No disc, no second colour."""
+    r = size / 2.0
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" '
+             f'role="img" aria-label="OK Veggies">']
+    parts.append(f'<circle cx="{r}" cy="{r}" r="{r-0.5:.2f}" fill="none" '
+                 f'stroke="{ink}" stroke-width="{size*0.045:.2f}"/>')
+    parts.append(f'<circle cx="{r}" cy="{r}" r="{r*0.86:.2f}" fill="none" '
+                 f'stroke="{ink}" stroke-width="{size*0.02:.2f}"/>')
+    # The colour emblem lets OK cross the ring, because white letters on the
+    # forest disc read as one shape. In a single ink on white paper that same
+    # overlap reads as a printing fault, so the letters sit inside the inner
+    # ring instead, with the sprout under them.
+    g, _ = emit_word_group("OK", cx=r, baseline_y=size * 0.545, cap_px=size * 0.28,
+                           fill=ink, letter_spacing=int(UPM * 0.01))
+    parts.append(g)
+    parts.append(sprout(cx=r, cy=size * 0.705, size=size * 0.17,
+                        leaf=ink, leaf2=ink, stem=ink))
+    parts.append("</svg>")
+    return "\n".join(parts)
+
+
+def mono_lockup_svg(ink=FOREST):
+    """The horizontal lockup in one ink: emblem, divider, OK VEGGIES, FRESH PICKS.
+
+    The colour lockup carries the photographic seal; single ink cannot, so the
+    emblem stands in for it. Same proportions, so the two read as one family."""
+    H = 470.0
+    parts = []
+    # Emblem, left, vertically centred, standing in for the photographic seal.
+    ed = 430.0
+    emb = mono_emblem_svg(size=ed, ink=ink)
+    emb_inner = emb[emb.index(">") + 1: emb.rindex("</svg>")]
+    parts.append(f'<g transform="translate(6.0,{(H - ed) / 2.0:.1f})">{emb_inner}</g>')
+    dx = 476.0
+    parts.append(f'<line x1="{dx}" y1="100" x2="{dx}" y2="370" stroke="{ink}" '
+                 f'stroke-width="5" stroke-linecap="round"/>')
+    left = 512.0
+    ok_cap = 208.0
+    ok_base = 262.0
+    g_ok, ok_w = word_group_left("OK", left, ok_base, ok_cap, ink,
+                                 letter_spacing=int(UPM * 0.01))
+    parts.append(g_ok)
+    bounds = word_paths("OK", int(UPM * 0.01))[2]
+    s_ok = ok_cap / (bounds[1] - bounds[0])
+    parts.append(sprout(cx=left + (747 * s_ok) * 0.5, cy=ok_base - ok_cap * 0.52,
+                        size=ok_cap * 0.46, leaf=ink, leaf2=ink, stem="none"))
+    veg_cap = 116.0
+    veg_x = left + ok_w + 46.0
+    g_veg, veg_w = word_group_left("VEGGIES", veg_x, 226.0, veg_cap, ink,
+                                   letter_spacing=int(UPM * 0.14))
+    parts.append(g_veg)
+    right_edge = veg_x + veg_w
+    fp_cap = 60.0
+    fp_base = 372.0
+    fp_x = left + 60.0
+    g_fp, fp_w = word_group_left("FRESH PICKS", fp_x, fp_base, fp_cap, ink,
+                                 letter_spacing=int(UPM * 0.16))
+    ry = fp_base - fp_cap * 0.35
+    parts.append(f'<line x1="{left}" y1="{ry}" x2="{fp_x - 18:.1f}" y2="{ry}" '
+                 f'stroke="{ink}" stroke-width="4" stroke-linecap="round"/>')
+    parts.append(g_fp)
+    r2x1 = fp_x + fp_w + 18
+    parts.append(f'<line x1="{r2x1:.1f}" y1="{ry}" x2="{r2x1 + 60:.1f}" y2="{ry}" '
+                 f'stroke="{ink}" stroke-width="4" stroke-linecap="round"/>')
+    parts.append(sprout(cx=r2x1 + 96, cy=ry - 4, size=54, leaf=ink, leaf2=ink, stem="none"))
+    W = max(right_edge, r2x1 + 96 + 30) + 34
+    head = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W:.0f} {H:.0f}" '
+            f'role="img" aria-label="OK Veggies, Fresh Picks">')
+    return head + "\n" + "\n".join(parts) + "\n</svg>"
+
+
+def write_email_marks():
+    """A raster of the white lockup for HTML email.
+
+    An email client cannot be trusted with an SVG (Gmail drops it outright), so
+    the one mark an email carries is a PNG. It is written at 3x the size it is
+    displayed at, so it stays sharp on a phone, and it keeps its transparent
+    surround so it sits on the forest header band."""
+    print("Email mark:")
+    svg = horizontal_lockup_svg(white=True)
+    # Never stretch the mark (bible 3.8): take the height from its own viewBox.
+    vb = svg.split('viewBox="')[1].split('"')[0].split()
+    width = 720
+    height = int(round(width * float(vb[3]) / float(vb[2])))
+    svg_to_png(svg, os.path.join(BRAND, "lockup-white-720.png"), width, height)
+
+
+def write_mono_marks():
+    """The 3.7a single-ink set. Documents and anything printed on one ink."""
+    print("Single-ink marks (3.7a):")
+    write(os.path.join(BRAND, "monogram-mono-green.svg"), mono_emblem_svg(64, FOREST))
+    write(os.path.join(BRAND, "lockup-mono-green.svg"), mono_lockup_svg(FOREST))
+
+
 def write(path, text):
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(text + "\n")
@@ -389,7 +499,18 @@ def og_image(seal_rgba):
         os.remove(f_ttf)
 
 
-def main():
+def main(only=None):
+    # "mono" refreshes only the single-ink set, so a change there never rewrites
+    # every raster and the diff stays honest about what actually moved.
+    if only == "mono":
+        write_mono_marks()
+        print("Done.")
+        return
+    if only == "email":
+        write_email_marks()
+        print("Done.")
+        return
+
     # The seal transparent variants come first: the horizontal lockup embeds
     # seal-320.png, and the social card uses the returned image.
     print("Seal (transparent surround):")
@@ -430,8 +551,11 @@ def main():
 
     print("Social card:")
     og_image(seal)
+
+    write_mono_marks()
+    write_email_marks()
     print("Done.")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

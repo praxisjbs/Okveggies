@@ -52,52 +52,47 @@ $canEdit    = Rbac::can('combos.edit');
 $canPublish = Rbac::can('combos.publish');
 $canDelete  = Rbac::can('combos.delete');
 
-$okv_admin_title = 'Combos';
+$okv_admin_title   = 'Combos';
+$okv_admin_note    = 'A combo is a ready basket built from the catalogue. Change its sell price here and the change is written to the price history straight away. The component total is a live figure and never rewrites the sell price.';
+$okv_admin_actions = $canCreate
+    ? '<button type="button" class="okv-btn-sm" data-add-open>Add a combo</button>'
+    : '';
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
   <div class="space-y-6">
 
     <!-- Filters --------------------------------------------------------------->
-    <div class="okv-card">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 class="font-display font-extrabold text-xl text-ink">Combos</h2>
-          <p class="text-sm text-ink-60 mt-1 max-w-xl">
-            <?= count($combos) ?> <?= count($combos) === 1 ? 'combo' : 'combos' ?>.
-            Change the sell price on the combo below and it is written to the price history straight away.
-            The component total is a live figure and never rewrites the sell price.
-          </p>
-        </div>
-        <?php if ($canCreate): ?>
-          <button type="button" class="okv-btn px-4" data-add-open>Add a combo</button>
-        <?php endif; ?>
-      </div>
+    <div class="okv-panel okv-panel-body">
+      <p class="text-sm text-ink-60">
+        <span class="font-mono tabular-nums text-ink"><?= count($combos) ?></span>
+        <?= count($combos) === 1 ? 'combo' : 'combos' ?> built from the catalogue.
+      </p>
 
       <form action="/admin/combos.php" method="get" class="mt-4 grid gap-3 sm:grid-cols-4">
         <div class="sm:col-span-2">
           <label for="search" class="okv-label">Search</label>
-          <input id="search" name="search" type="search" value="<?= okv_e($search) ?>" class="okv-input" placeholder="Name or SKU">
+          <input id="search" name="search" type="search" value="<?= okv_e($search) ?>" class="okv-input-sm" placeholder="Name or SKU">
         </div>
         <div>
           <label for="status" class="okv-label">On the shop</label>
-          <select id="status" name="status" class="okv-input">
+          <select id="status" name="status" class="okv-input-sm">
             <option value="">Any</option>
             <option value="active"   <?= $status === 'active'   ? 'selected' : '' ?>>On the shop</option>
             <option value="inactive" <?= $status === 'inactive' ? 'selected' : '' ?>>Off the shop</option>
           </select>
         </div>
         <div class="flex items-end">
-          <button type="submit" class="okv-btn w-full px-4">Filter</button>
+          <button type="submit" class="okv-btn-sm w-full">Filter</button>
         </div>
       </form>
     </div>
 
     <!-- Add a combo ---------------------------------------------------------->
     <?php if ($canCreate): ?>
-    <section class="okv-card" data-add-panel hidden>
+    <section class="okv-panel okv-panel-body" data-add-panel hidden>
       <div class="flex items-start justify-between gap-4">
         <div>
-          <h2 class="font-display font-extrabold text-lg text-ink">Add a combo</h2>
+          <h2 class="okv-panel-title">Add a combo</h2>
           <p class="text-sm text-ink-60 mt-1">Give it a name, a SKU and one first component. Add the rest of the components on the combo's panel after.</p>
         </div>
         <button type="button" class="okv-btn-text px-2" data-add-close>Close</button>
@@ -106,7 +101,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <form action="/api/v1/combos.php" method="POST" class="mt-4 grid gap-4 sm:grid-cols-2" data-combo-form data-refresh-on-success>
         <?= Csrf::field() ?>
         <input type="hidden" name="action" value="create">
-        <div class="sm:col-span-2 rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" data-okv-error role="alert" aria-live="polite" hidden></div>
+        <div class="okv-note-bad sm:col-span-2" data-okv-error role="alert" aria-live="polite" hidden></div>
 
         <div>
           <label for="new-name" class="okv-label">Name</label>
@@ -191,7 +186,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
 
     <!-- The list -------------------------------------------------------------->
     <?php if (!$combos): ?>
-      <div class="okv-card">
+      <div class="okv-panel okv-panel-body">
         <p class="text-ink-60">
           <?= ($search !== '' || $status !== '') ? 'Nothing matched those filters.' : 'There are no combos yet.' ?>
           <?php if ($search !== '' || $status !== ''): ?>
@@ -210,7 +205,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
         $isActive = (int) $combo['is_active'] === 1;
         $featured = (int) $combo['is_featured'] === 1;
     ?>
-      <div class="okv-card" id="combo-<?= $id ?>" data-combo-panel data-combo-id="<?= $id ?>">
+      <div class="okv-panel okv-panel-body" id="combo-<?= $id ?>" data-combo-panel data-combo-id="<?= $id ?>">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="flex gap-4 min-w-0">
             <div class="w-16 h-16 rounded-md bg-forest-tint overflow-hidden shrink-0">
@@ -221,7 +216,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
               <?php endif; ?>
             </div>
             <div class="min-w-0">
-              <p class="font-display font-bold text-ink" data-combo-name><?= okv_e($combo['name']) ?></p>
+              <p class="okv-panel-title" data-combo-name><?= okv_e($combo['name']) ?></p>
               <p class="text-xs text-ink-40 font-mono"><?= okv_e($combo['sku']) ?></p>
               <p class="text-sm text-ink-60 mt-1">
                 <?= (int) $combo['component_count'] ?> <?= (int) $combo['component_count'] === 1 ? 'component' : 'components' ?>.
@@ -234,13 +229,16 @@ require __DIR__ . '/../includes/components/admin/header.php';
               <?= $sell > 0 ? okv_e(Money::format($sell)) : '<span class="text-ink-40 font-sans text-sm">Not priced</span>' ?>
             </p>
             <div class="flex flex-wrap justify-end gap-1 mt-2">
-              <span class="okv-badge <?= $isActive ? 'okv-badge-available' : 'okv-badge-out' ?>" data-combo-active-badge>
+              <!-- A draft combo is off the shop on purpose, so it reads
+                   neutral rather than as an alarm. Featured is a state, not a
+                   success, so it takes the forest tone. -->
+              <span class="okv-badge <?= $isActive ? 'okv-badge-available' : 'okv-badge-neutral' ?>" data-combo-active-badge>
                 <?= $isActive ? 'On the shop' : 'Off the shop' ?>
               </span>
               <?php if ($featured): ?>
-                <span class="okv-badge okv-badge-available" data-combo-featured-badge>Featured</span>
+                <span class="okv-badge okv-badge-info" data-combo-featured-badge>Featured</span>
               <?php else: ?>
-                <span class="okv-badge okv-badge-out" data-combo-featured-badge hidden>Featured</span>
+                <span class="okv-badge okv-badge-info" data-combo-featured-badge hidden>Featured</span>
               <?php endif; ?>
             </div>
             <div class="mt-2" data-combo-flags>
@@ -272,7 +270,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 <?= Csrf::field() ?>
                 <input type="hidden" name="action" value="update">
                 <input type="hidden" name="combo_id" value="<?= $id ?>">
-                <div class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" data-okv-error role="alert" aria-live="polite" hidden></div>
+                <div class="okv-note-bad" data-okv-error role="alert" aria-live="polite" hidden></div>
 
                 <p class="font-semibold text-sm text-ink">Details</p>
                 <div>
@@ -305,7 +303,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 <?= Csrf::field() ?>
                 <input type="hidden" name="action" value="set_availability_window">
                 <input type="hidden" name="combo_id" value="<?= $id ?>">
-                <div class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" data-okv-error role="alert" aria-live="polite" hidden></div>
+                <div class="okv-note-bad" data-okv-error role="alert" aria-live="polite" hidden></div>
                 <p class="font-semibold text-sm text-ink">Availability window</p>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
@@ -330,7 +328,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 <?= Csrf::field() ?>
                 <input type="hidden" name="action" value="set_price">
                 <input type="hidden" name="combo_id" value="<?= $id ?>">
-                <div class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" data-okv-error role="alert" aria-live="polite" hidden></div>
+                <div class="okv-note-bad" data-okv-error role="alert" aria-live="polite" hidden></div>
                 <p class="font-semibold text-sm text-ink">Sell price</p>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
@@ -440,7 +438,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                   <?= Csrf::field() ?>
                   <input type="hidden" name="action" value="add_component">
                   <input type="hidden" name="combo_id" value="<?= $id ?>">
-                  <div class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3 col-span-4" data-okv-error role="alert" aria-live="polite" hidden></div>
+                  <div class="okv-note-bad col-span-4" data-okv-error role="alert" aria-live="polite" hidden></div>
                   <div class="min-w-0">
                     <label for="ap-<?= $id ?>" class="okv-label">Add a product</label>
                     <select id="ap-<?= $id ?>" name="product_id" class="okv-input" required>
@@ -542,7 +540,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
   <div id="combo-history" class="fixed inset-0 z-40 bg-ink/40 p-4 flex items-end sm:items-center justify-center" hidden data-history-panel>
     <section class="bg-white rounded-lg shadow-okv-3 w-full max-w-xl max-h-[80vh] overflow-y-auto p-6" role="dialog" aria-modal="true" aria-labelledby="combo-history-title">
       <div class="flex items-start justify-between gap-4">
-        <h2 id="combo-history-title" class="font-display font-extrabold text-lg text-ink">Price history</h2>
+        <h2 id="combo-history-title" class="okv-panel-title">Price history</h2>
         <button type="button" class="okv-btn-text px-2" data-history-close>Close</button>
       </div>
       <div class="mt-4" data-history-body></div>

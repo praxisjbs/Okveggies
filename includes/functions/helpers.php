@@ -226,19 +226,30 @@ if (!function_exists('okv_send_account_code')) {
         ?int $userId = null
     ): bool {
         $code = Otp::issue($email, 'email', $purpose, $userId);
+        $url  = rtrim((string) APP_URL, '/') . $urlPath;
         $vars = [
             'customer_name' => $name !== '' ? $name : 'there',
             'code'          => $code,
             'minutes'       => (string) (int) round(Otp::TTL_SECONDS / 60),
-            $urlVar         => rtrim((string) APP_URL, '/') . $urlPath,
+            $urlVar         => $url,
         ];
-        $tpl = Mail::renderTemplate($templateKey, $vars);
-        if ($tpl === null) {
-            error_log('okv_send_account_code: template missing: ' . $templateKey);
-            return false;
-        }
-        [$subject, $body] = $tpl;
-        return Mail::send($email, $subject, $body);
+
+        // The one action the email asks for, as a real button in the branded
+        // shell. The label comes from which link it is, so the three callers
+        // stay as they are and no caller can forget to pass one.
+        $labels = [
+            'activate_url' => 'Activate your account',
+            'reset_url'    => 'Set a new password',
+        ];
+        $cta = ['label' => $labels[$urlVar] ?? 'Open this in your browser', 'url' => $url];
+
+        return Mail::sendTemplate(
+            $email,
+            $templateKey,
+            $vars,
+            $cta,
+            'If you did not ask for this, you can ignore this email and nothing changes.'
+        );
     }
 }
 

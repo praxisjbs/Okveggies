@@ -42,34 +42,30 @@ $canDelete = Rbac::can('products.delete');
 $canStock  = Rbac::can('products.availability.update');
 $hasFilters = $search !== '' || $category !== '' || $status !== '';
 
-$okv_admin_title = 'Products';
+$okv_admin_title   = 'Products';
+$okv_admin_note    = 'Add produce, set what is available this week, and manage the photos customers see. Prices are changed on the Pricing screen, so every change is recorded.';
+$okv_admin_actions = $canCreate
+    ? '<button type="button" class="okv-btn-sm" data-add-open>Add a product</button>'
+    : '';
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
   <div class="space-y-6">
 
     <!-- Filters --------------------------------------------------------------->
-    <div class="okv-card">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 class="font-display font-extrabold text-xl text-ink">The catalogue</h2>
-          <p class="text-sm text-ink-60 mt-1">
-            <span data-admin-summary aria-live="polite"><?= okv_e(okv_page_summary($page, $total, $perPage, 'product')) ?></span>.
-            Prices are changed on the <a href="/admin/pricing.php" class="text-forest underline underline-offset-2">Pricing screen</a>, so every change is recorded.
-          </p>
-        </div>
-        <?php if ($canCreate): ?>
-          <button type="button" class="okv-btn px-4" data-add-open>Add a product</button>
-        <?php endif; ?>
-      </div>
+    <div class="okv-panel okv-panel-body">
+      <p class="text-sm text-ink-60">
+        <span data-admin-summary aria-live="polite"><?= okv_e(okv_page_summary($page, $total, $perPage, 'product')) ?></span>.
+        Change a price on the <a href="/admin/pricing.php" class="text-forest underline underline-offset-2">Pricing screen</a>.
+      </p>
 
       <form action="/admin/products.php" method="get" class="mt-4 grid gap-3 sm:grid-cols-4" data-admin-filter>
         <div class="sm:col-span-2">
           <label for="search" class="okv-label">Search</label>
-          <input id="search" name="search" type="search" value="<?= okv_e($search) ?>" class="okv-input" placeholder="Name or SKU">
+          <input id="search" name="search" type="search" value="<?= okv_e($search) ?>" class="okv-input-sm" placeholder="Name or SKU">
         </div>
         <div>
           <label for="category" class="okv-label">Category</label>
-          <select id="category" name="category" class="okv-input">
+          <select id="category" name="category" class="okv-input-sm">
             <option value="">All categories</option>
             <?php foreach ($categories as $item): ?>
               <option value="<?= okv_e($item['slug']) ?>" <?= $category === $item['slug'] ? 'selected' : '' ?>><?= okv_e($item['name']) ?></option>
@@ -79,12 +75,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
         <div>
           <label for="status" class="okv-label">On the shop</label>
           <div class="flex gap-2">
-            <select id="status" name="status" class="okv-input">
+            <select id="status" name="status" class="okv-input-sm">
               <option value="">Any</option>
               <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>On the shop</option>
               <option value="inactive" <?= $status === 'inactive' ? 'selected' : '' ?>>Off the shop</option>
             </select>
-            <button type="submit" class="okv-btn px-4">Filter</button>
+            <button type="submit" class="okv-btn-sm">Filter</button>
           </div>
         </div>
       </form>
@@ -92,7 +88,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
 
     <!-- Add a product --------------------------------------------------------->
     <?php if ($canCreate): ?>
-    <section class="okv-card" data-add-panel hidden>
+    <section class="okv-panel okv-panel-body" data-add-panel hidden>
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 class="font-display font-extrabold text-lg text-ink">Add a product</h2>
@@ -104,7 +100,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <form action="/api/v1/products.php" method="POST" class="mt-4 grid gap-4 sm:grid-cols-2" data-product-form>
         <?= Csrf::field() ?>
         <input type="hidden" name="action" value="create">
-        <div class="sm:col-span-2 rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" data-okv-error role="alert" aria-live="polite" hidden></div>
+        <div class="okv-note-bad sm:col-span-2" data-okv-error role="alert" aria-live="polite" hidden></div>
 
         <div>
           <label for="new-name" class="okv-label">Name</label>

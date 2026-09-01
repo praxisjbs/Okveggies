@@ -62,6 +62,7 @@ if (is_readable($__okv_autoload)) {
 unset($__okv_autoload);
 
 // 6. Core classes.
+require_once __DIR__ . '/classes/Brand.php';
 require_once __DIR__ . '/classes/Money.php';
 require_once __DIR__ . '/classes/OrderNumber.php';
 require_once __DIR__ . '/classes/Settings.php';
