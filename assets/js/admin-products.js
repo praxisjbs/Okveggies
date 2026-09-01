@@ -1,6 +1,7 @@
 /**
  * assets/js/admin-products.js
- * OK Veggies. The catalogue screen. Forms marked data-product-form post to
+ * OK Veggies. The catalogue screen. The search and the two dropdowns filter
+ * live (debounced against the server), forms marked data-product-form post to
  * api/v1/products.php by fetch, show field errors in place, and reload on
  * success. Photo actions and the remove confirmation live here too.
  *
@@ -214,13 +215,127 @@
     }
   }
 
+  /** Wire every interactive form and button inside a rendered list. Runs once
+      on page load, then again on the freshly swapped nodes whenever the live
+      filter replaces the list. */
+  function wireList(root) {
+    root.querySelectorAll('form[data-product-form]').forEach(wireProductForm);
+    root.querySelectorAll('[data-availability]').forEach(wireAvailability);
+    root.querySelectorAll('form[data-image-form]').forEach(wireImageForm);
+    root.querySelectorAll('[data-image-primary], [data-image-delete]').forEach(wireImageButtons);
+    root.querySelectorAll('form[data-delete-form]').forEach(wireDeleteForm);
+  }
+
+  /**
+   * The live filter. Typing in Search or changing a dropdown asks the server
+   * for that page of the catalogue (debounced on keystrokes) and swaps the
+   * list with exactly the markup a plain reload of the same URL renders. The
+   * Filter button and the GET form still work without JavaScript.
+   */
+  function liveAdminFilter(container) {
+    if (!container || !window.fetch || !window.AbortController) { return; }
+    var form = document.querySelector('[data-admin-filter]');
+    var searchInput = document.getElementById('search');
+    var categoryInput = document.getElementById('category');
+    var statusInput = document.getElementById('status');
+    if (!form || !searchInput || !categoryInput || !statusInput) { return; }
+
+    var summary = document.querySelector('[data-admin-summary]');
+    var timer = null;
+    var controller = null;
+
+    function readState() {
+      return {
+        search: searchInput.value.trim(),
+        category: categoryInput.value,
+        status: statusInput.value
+      };
+    }
+
+    function pageUrl(state, page) {
+      var params = new URLSearchParams();
+      if (state.search !== '') { params.set('search', state.search); }
+      if (state.category !== '') { params.set('category', state.category); }
+      if (state.status !== '') { params.set('status', state.status); }
+      if (page > 1) { params.set('page', page); }
+      var query = params.toString();
+      return '/admin/products.php' + (query ? '?' + query : '');
+    }
+
+    function browse(page, push) {
+      var state = readState();
+      if (controller) { controller.abort(); }
+      controller = new AbortController();
+      container.setAttribute('aria-busy', 'true');
+
+      var api = '/api/v1/products.php?action=browse'
+        + '&search=' + encodeURIComponent(state.search)
+        + '&category=' + encodeURIComponent(state.category)
+        + '&status=' + encodeURIComponent(state.status)
+        + '&page=' + page;
+
+      fetch(api, {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      }).then(function (res) {
+        if (!res.ok || res.data.status !== 'ok' || typeof res.data.html !== 'string') {
+          throw new Error(res.data.message || 'browse failed');
+        }
+        container.innerHTML = res.data.html;
+        container.removeAttribute('aria-busy');
+        if (summary) { summary.textContent = res.data.summary; }
+        var url = pageUrl(state, res.data.page);
+        if (push) { window.history.pushState(null, '', url); }
+        else { window.history.replaceState(null, '', url); }
+        wireList(container);
+      }).catch(function (error) {
+        if (error && error.name === 'AbortError') { return; }
+        container.removeAttribute('aria-busy');
+        toast('We could not load that page. Check your connection and try again.', 'error');
+      });
+    }
+
+    searchInput.addEventListener('input', function () {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(function () { browse(1, false); }, 300);
+    });
+    categoryInput.addEventListener('change', function () { browse(1, true); });
+    statusInput.addEventListener('change', function () { browse(1, true); });
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      window.clearTimeout(timer);
+      browse(1, true);
+    });
+
+    document.addEventListener('click', function (event) {
+      var link = event.target && event.target.closest ? event.target.closest('[data-pagination] a') : null;
+      if (!link || !container.contains(link)) { return; }
+      var href = link.getAttribute('href') || '';
+      if (href.indexOf('/admin/products.php') !== 0) { return; }
+      event.preventDefault();
+      var page = parseInt(new URLSearchParams(href.split('?')[1] || '').get('page'), 10) || 1;
+      browse(page, true);
+    });
+
+    window.addEventListener('popstate', function () {
+      var params = new URLSearchParams(window.location.search);
+      searchInput.value = (params.get('search') || '').trim();
+      categoryInput.value = params.get('category') || '';
+      statusInput.value = params.get('status') || '';
+      browse(parseInt(params.get('page'), 10) || 1, false);
+    });
+  }
+
   ready(function () {
-    document.querySelectorAll('form[data-product-form]').forEach(wireProductForm);
-    document.querySelectorAll('[data-availability]').forEach(wireAvailability);
-    document.querySelectorAll('form[data-image-form]').forEach(wireImageForm);
-    document.querySelectorAll('[data-image-primary], [data-image-delete]').forEach(wireImageButtons);
-    document.querySelectorAll('form[data-delete-form]').forEach(wireDeleteForm);
+    wireList(document);
     wirePanel('[data-add-open]', '[data-add-panel]', '[data-add-close]');
+    liveAdminFilter(document.querySelector('[data-admin-results]'));
 
     // Opened straight from the pricing screen: bring that product into view.
     var params = new URLSearchParams(window.location.search);

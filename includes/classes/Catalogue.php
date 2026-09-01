@@ -6,6 +6,9 @@ final class Catalogue
 {
     public const SUGGESTION_LIMIT = 4;
 
+    /** One page of the shop grid, and of any listing paginated the same way. */
+    public const PER_PAGE = 25;
+
     public static function cleanSearch(string $search): string
     {
         return mb_substr(trim(preg_replace('/\s+/', ' ', $search) ?? ''), 0, 80);
@@ -44,11 +47,17 @@ final class Catalogue
         );
     }
 
-    public static function products(string $search = '', string $category = ''): array
+    /**
+     * The products a customer can see, featured first within a category.
+     *
+     * With $perPage set, one page of the list comes back instead of the whole
+     * thing. The page figures are clamped ints interpolated into the LIMIT on
+     * purpose: under native prepared statements a bound string cannot sit
+     * inside a LIMIT clause, and a clamped int can never carry injection.
+     */
+    public static function products(string $search = '', string $category = '', int $page = 1, ?int $perPage = null): array
     {
-        $search = self::cleanSearch($search);
-        $category = self::cleanCategory($category);
-        $like = '%' . self::escapeLike($search) . '%';
+        [$where, $params] = self::productsWhere($search, $category);
 
         return Database::all(
             'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.current_price_subunit,
@@ -63,20 +72,62 @@ final class Catalogue
                FROM products p
                JOIN product_categories c ON c.id = p.category_id AND c.is_active = 1
                JOIN units_of_measurement u ON u.id = p.unit_id AND u.is_active = 1
-               LEFT JOIN product_availability pa ON pa.product_id = p.id
-              WHERE p.is_active = 1
-                AND (:category_empty = \'\' OR c.slug = :category_slug)
-                AND (:search_empty = \'\' OR p.name LIKE :search_name OR p.short_description LIKE :search_short OR p.description LIKE :search_description)
-              ORDER BY p.is_featured DESC, c.sort_order, p.name',
-            [
-                ':category_empty' => $category,
-                ':category_slug' => $category,
-                ':search_empty' => $search,
-                ':search_name' => $like,
-                ':search_short' => $like,
-                ':search_description' => $like,
-            ]
+               LEFT JOIN product_availability pa ON pa.product_id = p.id'
+            . $where . '
+              ORDER BY p.is_featured DESC, c.sort_order, p.name'
+            . okv_limit_clause($page, $perPage),
+            $params
         );
+    }
+
+    /**
+     * How many products match the filters, so a page count and a "Showing 26
+     * to 50 of 87" line can be drawn without fetching the rows themselves.
+     * Same joins as the list, so a product on an inactive category or unit is
+     * counted exactly the way it is listed.
+     */
+    public static function countProducts(string $search = '', string $category = ''): int
+    {
+        [$where, $params] = self::productsWhere($search, $category);
+
+        $row = Database::one(
+            'SELECT COUNT(*) AS matched
+               FROM products p
+               JOIN product_categories c ON c.id = p.category_id AND c.is_active = 1
+               JOIN units_of_measurement u ON u.id = p.unit_id AND u.is_active = 1'
+            . $where,
+            $params
+        );
+
+        return (int) ($row['matched'] ?? 0);
+    }
+
+    /**
+     * The WHERE fragment the product list and its count share, built up in
+     * PHP so a filter the customer did not use never leaves a placeholder in
+     * the SQL. The search term stays data: it is escaped for LIKE and bound,
+     * never interpolated.
+     */
+    private static function productsWhere(string $search, string $category): array
+    {
+        $search = self::cleanSearch($search);
+        $category = self::cleanCategory($category);
+
+        $filters = ['p.is_active = 1'];
+        $params = [];
+        if ($category !== '') {
+            $filters[] = 'c.slug = :category_slug';
+            $params[':category_slug'] = $category;
+        }
+        if ($search !== '') {
+            $filters[] = '(p.name LIKE :search_name OR p.short_description LIKE :search_short OR p.description LIKE :search_description)';
+            $like = '%' . self::escapeLike($search) . '%';
+            $params[':search_name'] = $like;
+            $params[':search_short'] = $like;
+            $params[':search_description'] = $like;
+        }
+
+        return [' WHERE ' . implode(' AND ', $filters), $params];
     }
 
     public static function productBySlug(string $slug): ?array

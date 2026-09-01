@@ -15,6 +15,7 @@
  *
  * Actions:
  *   list              (GET,  products.view)                 the catalogue, filterable
+ *   browse            (GET,  products.view)                 one page of the catalogue, server-rendered for the live filter
  *   get               (GET,  products.view)                 one product, its photos and price history
  *   create            (POST, products.create)               add a product
  *   update            (POST, products.edit)                 edit a product
@@ -79,6 +80,61 @@ switch ($action) {
             (string) okv_input('status', '')
         );
         okv_json(['status' => 'ok', 'products' => $rows, 'count' => count($rows)]);
+    }
+
+    case 'browse': {
+        // One page of the catalogue, server-rendered. The live filter on
+        // admin/products.php swaps the list with this markup as the Manager
+        // types, so typing and a plain reload of the same URL agree exactly.
+        Rbac::requirePermission('products.view');
+
+        $search   = (string) okv_input('search', '');
+        $category = (string) okv_input('category', '');
+        $status   = (string) okv_input('status', '');
+
+        $perPage = Products::PER_PAGE;
+        $total   = Products::count($search, $category, $status);
+        $pages   = max(1, (int) ceil($total / $perPage));
+        $page    = min(max(1, (int) okv_input('page', 1)), $pages);
+        $rows    = Products::all($search, $category, $status, $page, $perPage);
+
+        $categories = Database::all('SELECT id, name, slug FROM product_categories WHERE is_active = 1 ORDER BY sort_order, name');
+        $units      = Database::all('SELECT id, name, symbol, allows_decimal FROM units_of_measurement WHERE is_active = 1 ORDER BY id');
+
+        require_once __DIR__ . '/../../includes/components/pagination.php';
+        require_once __DIR__ . '/../../includes/components/admin/product_list.php';
+
+        ob_start();
+        try {
+            okv_admin_product_cards(
+                $rows,
+                $categories,
+                $units,
+                0,
+                Rbac::can('products.edit'),
+                Rbac::can('products.delete'),
+                Rbac::can('products.availability.update'),
+                $search !== '' || $category !== '' || $status !== ''
+            );
+            okv_pagination($page, $pages, static fn (int $n): string => okv_admin_products_url($search, $category, $status, $n), 'Product pages');
+            $html = (string) ob_get_clean();
+        } catch (Throwable $e) {
+            ob_end_clean();
+            products_fail($e, 'browse');
+        }
+
+        okv_json([
+            'status'  => 'ok',
+            'search'  => $search,
+            'category' => $category,
+            'status_filter' => $status,
+            'page'    => $page,
+            'pages'   => $pages,
+            'per_page' => $perPage,
+            'total'   => $total,
+            'summary' => okv_page_summary($page, $total, $perPage, 'product'),
+            'html'    => $html,
+        ]);
     }
 
     case 'get': {
