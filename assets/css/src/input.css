@@ -127,6 +127,18 @@
            transition duration-botanical ease-botanical
            hover:bg-forest-tint disabled:opacity-50;
   }
+  /*
+   * The outline button for a forest or slate ground. The plain okv-btn-outline
+   * fills itself white, so white text on it disappears; this variant keeps the
+   * fill transparent and carries the border and the label in white. The gold
+   * focus ring comes from the base layer and is never suppressed.
+   */
+  .okv-btn-outline-invert {
+    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-6 rounded-md
+           border border-white/70 text-white font-medium bg-transparent
+           transition duration-botanical ease-botanical
+           hover:border-white hover:bg-white/10 disabled:opacity-50;
+  }
   .okv-btn-text {
     @apply inline-flex items-center gap-1 min-h-[44px] text-forest font-medium
            transition-colors hover:text-gold;
@@ -176,6 +188,28 @@
 
   /* Skeleton shimmer for content that is loading. */
   .okv-skeleton { @apply bg-mist rounded-md animate-pulse; }
+
+  /*
+   * The eyebrow over a section title. Gold ink on white, which is 5.94:1, so
+   * it never leans on Harvest Gold itself to carry small text (bible 3.10).
+   * On a forest or slate ground use okv-eyebrow-invert, where gold is large
+   * enough to pass and sits on a 3.40:1 ground only as an accent line.
+   */
+  .okv-eyebrow {
+    @apply text-okv-label font-semibold uppercase tracking-[0.2em] text-gold-ink;
+  }
+  .okv-eyebrow-invert {
+    @apply text-okv-label font-semibold uppercase tracking-[0.2em] text-white/80;
+  }
+
+  /*
+   * The sourcing trust line (bible 6.3). The same pattern shows on a product
+   * card, a product page and a combo, so it is one component, not three
+   * copies. The leaf marker means the line is never colour alone.
+   */
+  .okv-trust-line {
+    @apply flex items-start gap-2 text-sm text-ink-60;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

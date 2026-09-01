@@ -181,6 +181,30 @@ if (!function_exists('okv_availability')) {
     }
 }
 
+if (!function_exists('okv_sourced_line')) {
+    /**
+     * The sourcing trust line, in one place. Bible 6.3 fixes the pattern:
+     * "Sourced Tuesday from Ogun State." The same sentence has to read the
+     * same on a product card, a product page, a combo and, from M6, the Order
+     * Trail and the confirmation email, so the promise is never worded two
+     * ways. Both halves are admin settings: source_day and source_regions.
+     *
+     * A blank day falls back to "this week", which is what the storefront said
+     * before the day setting existed, so a site that has not set one still
+     * reads as a whole sentence. Blank regions return an empty string and the
+     * caller drops the line rather than promising a farm we cannot name.
+     */
+    function okv_sourced_line(string $regions, string $day = ''): string
+    {
+        $regions = trim($regions);
+        if ($regions === '') {
+            return '';
+        }
+        $day = ucfirst(trim($day));
+        return 'Sourced ' . ($day !== '' ? $day : 'this week') . ' from ' . $regions;
+    }
+}
+
 if (!function_exists('okv_send_account_code')) {
     /**
      * Issue a one-time code and email it from a notification template, in one

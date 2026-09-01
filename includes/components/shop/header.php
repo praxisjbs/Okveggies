@@ -18,7 +18,12 @@ if (!function_exists('okv_shop_header')) {
           <div class="okv-container flex h-16 items-center justify-between gap-4">
             <a href="/" class="inline-flex items-center rounded-md" aria-label="OK Veggies, home">
               <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup.svg')) ?>" alt="OK Veggies, Fresh Picks" width="183" height="48" class="hidden h-12 w-auto sm:block">
-              <img src="<?= okv_e(okv_asset('/assets/img/brand/seal-320.png')) ?>" alt="OK Veggies" width="44" height="44" class="h-11 w-11 sm:hidden">
+              <!--
+                The narrow header takes the compact lockup, not the seal shrunk
+                to 44px: below 120px the seal's ring lettering stops reading,
+                and the house rules reserve tight chrome for the lockup.
+              -->
+              <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup-compact.svg')) ?>" alt="OK Veggies, Fresh Picks" width="172" height="36" class="h-9 w-auto sm:hidden">
             </a>
             <nav class="hidden items-center gap-6 text-sm font-semibold text-ink md:flex" aria-label="Main navigation">
               <?php foreach ($links as $key => [$url, $label]): ?>

@@ -81,6 +81,37 @@ final class Catalogue
     }
 
     /**
+     * The week's picks for the home page: featured products only, in the same
+     * row shape products() returns. Same shape matters, because the home page
+     * renders them through okv_product_card, which needs the id, the unit, the
+     * availability and the primary photo to draw a card a customer can add
+     * from. Falls back to nothing when no product is flagged featured, and the
+     * caller then drops the section rather than showing an empty grid.
+     */
+    public static function featuredProducts(int $limit = 8): array
+    {
+        $limit = max(1, min(24, $limit));
+        return Database::all(
+            'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.current_price_subunit,
+                    p.minimum_quantity, p.quantity_increment, p.is_featured,
+                    c.name AS category_name, c.slug AS category_slug,
+                    u.name AS unit_name, u.symbol AS unit,
+                    COALESCE(pa.availability_status, \'available\') AS availability_status,
+                    pa.restock_date,
+                    (SELECT pi.image_url FROM product_images pi
+                      WHERE pi.product_id = p.id
+                      ORDER BY pi.is_primary DESC, pi.sort_order, pi.id LIMIT 1) AS image
+               FROM products p
+               JOIN product_categories c ON c.id = p.category_id AND c.is_active = 1
+               JOIN units_of_measurement u ON u.id = p.unit_id AND u.is_active = 1
+               LEFT JOIN product_availability pa ON pa.product_id = p.id
+              WHERE p.is_active = 1 AND p.is_featured = 1
+              ORDER BY c.sort_order, p.name'
+            . okv_limit_clause(1, $limit)
+        );
+    }
+
+    /**
      * How many products match the filters, so a page count and a "Showing 26
      * to 50 of 87" line can be drawn without fetching the rows themselves.
      * Same joins as the list, so a product on an inactive category or unit is

@@ -67,6 +67,13 @@
           }
           document.querySelectorAll('.okv-basket-count').forEach(function (count) {
             count.textContent = data.basket_count;
+            // Market Bounce, 320ms: the counter increment is one of the three
+            // moments the brand allows the accent curve (bible 6.5). Removing
+            // the class first lets a second add replay the animation.
+            count.classList.remove('animate-okv-pop');
+            void count.offsetWidth;
+            count.classList.add('animate-okv-pop');
+            window.setTimeout(function () { count.classList.remove('animate-okv-pop'); }, 400);
           });
           document.querySelectorAll('a[href="/cart.php"]').forEach(function (link) {
             link.setAttribute('aria-label', 'Basket, ' + data.basket_count + ' items');
@@ -86,6 +93,53 @@
         if (window.OKV && OKV.toast) { OKV.toast(error.message, 'error'); }
       });
     });
+  }
+
+  /**
+   * The skeleton the results column shows while the next page of produce is
+   * on the way (bible 6.7). It is built from the same card shape the real
+   * grid uses, so the column keeps its height and the page does not jump when
+   * the answer lands. prefers-reduced-motion collapses the pulse site-wide
+   * through the stylesheet, so there is nothing to branch on here.
+   */
+  function skeletonGrid(count) {
+    var wrap = document.createElement('div');
+
+    var status = document.createElement('p');
+    status.className = 'sr-only';
+    status.setAttribute('role', 'status');
+    status.textContent = 'Loading produce';
+    wrap.appendChild(status);
+
+    var head = document.createElement('div');
+    head.className = 'mb-6 hidden items-end justify-between gap-4 lg:flex';
+    head.setAttribute('aria-hidden', 'true');
+    var headLeft = document.createElement('div');
+    headLeft.className = 'okv-skeleton h-8 w-48';
+    var headRight = document.createElement('div');
+    headRight.className = 'okv-skeleton h-4 w-32';
+    head.appendChild(headLeft);
+    head.appendChild(headRight);
+    wrap.appendChild(head);
+
+    var grid = document.createElement('div');
+    grid.className = 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4';
+    grid.setAttribute('aria-hidden', 'true');
+    for (var i = 0; i < count; i++) {
+      var card = document.createElement('article');
+      card.className = 'okv-card';
+      ['okv-skeleton aspect-square w-full',
+       'okv-skeleton mt-3 h-4 w-3/4',
+       'okv-skeleton mt-2 h-3 w-1/2',
+       'okv-skeleton mt-4 h-11 w-full'].forEach(function (cls) {
+        var bar = document.createElement('div');
+        bar.className = cls;
+        card.appendChild(bar);
+      });
+      grid.appendChild(card);
+    }
+    wrap.appendChild(grid);
+    return wrap;
   }
 
   /**
@@ -109,6 +163,11 @@
     };
     var timer = null;
     var controller = null;
+    // The last results markup that actually rendered. A failed search puts
+    // this back, so the customer never ends up staring at a stalled skeleton.
+    // It is not read from the container at request time, because by then the
+    // container may already be showing the skeleton of a superseded search.
+    var lastGood = container.innerHTML;
 
     function shopUrl(page) {
       var params = new URLSearchParams();
@@ -123,6 +182,12 @@
       if (controller) { controller.abort(); }
       controller = new AbortController();
       container.setAttribute('aria-busy', 'true');
+
+      // Keep the column roughly the height it already is, so the skeleton
+      // reads as the same page loading rather than the page collapsing.
+      var showing = container.querySelectorAll('[data-product-card]').length;
+      container.innerHTML = '';
+      container.appendChild(skeletonGrid(Math.min(12, Math.max(4, showing))));
 
       var api = '/api/v1/catalog.php?action=browse&search=' + encodeURIComponent(state.search)
         + '&category=' + encodeURIComponent(state.category)
@@ -142,6 +207,7 @@
         }
         var data = result.data;
         container.innerHTML = data.html;
+        lastGood = data.html;
         container.removeAttribute('aria-busy');
         if (push) { window.history.pushState(null, '', shopUrl(data.page)); }
         else { window.history.replaceState(null, '', shopUrl(data.page)); }
@@ -168,7 +234,9 @@
         container.querySelectorAll('[data-add-form]').forEach(enhanceAddForm);
       }).catch(function (error) {
         if (error && error.name === 'AbortError') { return; }
+        container.innerHTML = lastGood;
         container.removeAttribute('aria-busy');
+        container.querySelectorAll('[data-add-form]').forEach(enhanceAddForm);
         if (window.OKV && OKV.toast) {
           OKV.toast('We could not search right now. Check your connection and try again.', 'error');
         }
