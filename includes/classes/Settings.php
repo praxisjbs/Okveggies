@@ -40,6 +40,16 @@ final class Settings
         }
     }
 
+    /**
+     * Drop the per-request cache. The only caller is a settings write that was
+     * rolled back: Settings::set updates the cache as it writes, so after a
+     * rollback the cache holds a value the database never took.
+     */
+    public static function flushCache(): void
+    {
+        self::$cache = null;
+    }
+
     public static function get(string $key, $default = null)
     {
         self::load();
