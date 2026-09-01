@@ -146,6 +146,10 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 
 ## Session log (newest first)
 
+### 1 Sep 2026, M4 home-page contrast correction
+
+Corrected the home hero's “See the combos” button so it stays transparent with a white border and white text, then changes its border and text to gold on hover. Gold remains text, border and focus-ring colour only, in line with the brand rule that gold is never a fill. Added a home-page regression assertion, rebuilt the production CSS and JavaScript, and verified 238/238 unit assertions plus clean PHP lint and `git diff --check`.
+
 ### 1 Sep 2026, M4 checkout, confirmation and secure Order Trail
 
 Completed the implementation pass for M4 Phases 3 and 4 on the existing milestone branch. Checkout now has four plain-form steps and keeps its two-hour state in the signed server session. Final placement revalidates the account-owned payment mode, active delivery zone and eligible delivery date, locks the basket and its lines, then writes the order, immutable item snapshots, combo component snapshots, address, first customer status event, unpaid payment obligation and basket conversion in one transaction. A unique `shopping_cart_id` prevents a retry or simultaneous request from making a second order. Guest checkout creates the approved household account only after explicit consent, then uses the existing sign-in path to merge the guest basket. New delivery addresses are saved and become the default only when the account has no default address.

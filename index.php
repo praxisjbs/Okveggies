@@ -53,7 +53,7 @@ $tagline  = Settings::str('business_tagline', 'Sourced right. Priced right. Deli
       <p class="mt-5 text-white/85 text-lg max-w-md">Fresh produce from farms we have checked ourselves in Ogun State and Jos. Weighed right, and brought on the day you pick.</p>
       <div class="mt-8 flex flex-wrap gap-3">
         <a href="/shop.php" class="okv-btn border border-white bg-white text-forest hover:bg-forest-tint">Start shopping</a>
-        <a href="/combos.php" class="okv-btn-outline border-white text-white hover:bg-white/10">See the combos</a>
+        <a href="/combos.php" class="okv-btn-outline border-white bg-transparent text-white hover:border-gold hover:bg-transparent hover:text-gold">See the combos</a>
       </div>
       <p class="mt-6 text-gold text-sm font-semibold uppercase tracking-wider"><?= okv_e($tagline) ?></p>
     </div>
