@@ -61,6 +61,24 @@ module.exports = {
         editorial: ['"DM Serif Display"', 'Georgia', 'Cambria', 'serif'],
         mono:      ['"JetBrains Mono"', '"SF Mono"', 'Consolas', 'monospace'],
       },
+      fontSize: {
+        // The bible 5.2 type scale: a 1.25 ratio on a 16px base, computed and
+        // rounded to the whole pixel, each step carrying its own line height.
+        // Named tokens sit beside Tailwind's own steps rather than replacing
+        // them, so the storefront can move onto the real scale without
+        // resizing admin and Pro, which land with the back-office pass.
+        'okv-display': ['5.9375rem', { lineHeight: '1.05' }], // 95px
+        'okv-h1':      ['4.75rem',   { lineHeight: '1.1' }],  // 76px
+        'okv-h2':      ['3.8125rem', { lineHeight: '1.15' }], // 61px
+        'okv-h3':      ['3.0625rem', { lineHeight: '1.2' }],  // 49px
+        'okv-h4':      ['2.4375rem', { lineHeight: '1.25' }], // 39px
+        'okv-h5':      ['1.9375rem', { lineHeight: '1.3' }],  // 31px
+        'okv-h6':      ['1.5625rem', { lineHeight: '1.35' }], // 25px
+        'okv-lead':    ['1.25rem',   { lineHeight: '1.5' }],  // 20px
+        'okv-body':    ['1rem',      { lineHeight: '1.7' }],  // 16px
+        'okv-label':   ['0.8125rem', { lineHeight: '1.5' }],  // 13px
+        'okv-caption': ['0.625rem',  { lineHeight: '1.4' }],  // 10px
+      },
       borderRadius: {
         sm: '3px',
         md: '6px',

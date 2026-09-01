@@ -12,6 +12,7 @@
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/../../includes/bootstrap.php';
+require_once __DIR__ . '/../../includes/components/shop/brand.php';
 
 Customer::requireLogin();
 if (Customer::isActivated()) {
@@ -54,11 +55,14 @@ $csrf = Csrf::token();
 <body class="bg-forest-tint min-h-screen text-ink">
   <div class="min-h-screen flex flex-col items-center justify-center p-4">
     <div class="w-full max-w-md">
-      <div class="text-center mb-6">
-        <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
+      <div class="mb-8 text-center">
+        <a href="/" class="inline-block rounded-md" aria-label="OK Veggies, home">
+          <?php okv_seal(120, 'mx-auto', 'The OK Veggies seal'); ?>
+        </a>
+        <p class="mt-4 text-sm text-ink-60">Sourced right. Priced right. Delivered right.</p>
       </div>
       <div class="bg-white rounded-lg shadow-okv-3 p-6 sm:p-8 animate-okv-rise">
-        <h1 class="font-display font-extrabold text-2xl">Activate your account</h1>
+        <h1 class="font-editorial text-okv-h6 text-ink">Activate your account</h1>
         <p class="text-ink-60 text-sm mt-2">We sent a 6 digit code to <span class="font-medium text-ink"><?= okv_e($maskedEmail) ?></span>. Enter it below. Activation lets you pay on delivery.</p>
 
         <div data-okv-notice role="status" aria-live="polite" class="rounded-md bg-foliage-tint text-forest text-sm px-4 py-3 mt-4"<?= $justSent ? '' : ' hidden' ?>>We have sent a new code to your email.</div>
