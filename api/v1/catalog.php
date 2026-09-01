@@ -40,7 +40,8 @@ switch ($action) {
                 $category,
                 $page,
                 $total,
-                $perPage
+                $perPage,
+                Settings::str('source_day', '')
             );
             $html = (string) ob_get_clean();
         } catch (Throwable $e) {

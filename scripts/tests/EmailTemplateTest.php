@@ -5,7 +5,7 @@
  * control, and it is often the first thing a customer sees after paying. These
  * assertions pin the branded shell: that it escapes what it is given, that the
  * one action is always reachable, that the copy carries no em dash and no
- * jargon, and that migration 009 is the shape a migration has to be.
+ * jargon, and that migration 010 is the shape a migration has to be.
  */
 
 $root = dirname(__DIR__, 2);
@@ -59,19 +59,19 @@ okv_test_eq('Open this in your browser', Mail::ctaFromVars(['tracking_url' => 'h
 okv_test_eq(null, Mail::ctaFromVars(['customer_name' => 'Ada', 'code' => '123456']), 'no address means no button, not an empty one');
 okv_test_eq(null, Mail::ctaFromVars(['order_trail_url' => '']), 'an empty address is not a button');
 
-// 8. Migration 009 is the shape every migration has to be.
-$migration = (string) file_get_contents($root . '/migrations/009_branded_email_templates.sql');
-okv_test_ok($migration !== '', 'migration 009 exists');
-okv_test_ok(str_contains($migration, 'START TRANSACTION;'), 'migration 009 opens a transaction');
-okv_test_ok(str_contains($migration, 'COMMIT;'), 'migration 009 commits');
-okv_test_ok(str_contains($migration, 'ON DUPLICATE KEY UPDATE'), 'migration 009 is idempotent on the template key');
-okv_test_ok(str_contains($migration, '-- Verification:'), 'migration 009 ends with verification queries');
-okv_test_ok(!str_contains($migration, "\u{2014}"), 'no em dash in migration 009');
-okv_test_ok(!str_contains($migration, 'UPDATE notification_templates SET'), 'migration 009 seeds by insert, so a missing row is created rather than silently skipped');
+// 8. Migration 010 is the shape every migration has to be.
+$migration = (string) file_get_contents($root . '/migrations/010_branded_email_templates.sql');
+okv_test_ok($migration !== '', 'migration 010 exists');
+okv_test_ok(str_contains($migration, 'START TRANSACTION;'), 'migration 010 opens a transaction');
+okv_test_ok(str_contains($migration, 'COMMIT;'), 'migration 010 commits');
+okv_test_ok(str_contains($migration, 'ON DUPLICATE KEY UPDATE'), 'migration 010 is idempotent on the template key');
+okv_test_ok(str_contains($migration, '-- Verification:'), 'migration 010 ends with verification queries');
+okv_test_ok(!str_contains($migration, "\u{2014}"), 'no em dash in migration 010');
+okv_test_ok(!str_contains($migration, 'UPDATE notification_templates SET'), 'migration 010 seeds by insert, so a missing row is created rather than silently skipped');
 
 foreach (['order_placed', 'payment_confirmed', 'deposit_received', 'order_dispatched',
           'order_delivered', 'account_activation', 'password_reset'] as $key) {
-    okv_test_ok(str_contains($migration, "('" . $key . "', 'email',"), "migration 009 carries the $key template");
+    okv_test_ok(str_contains($migration, "('" . $key . "', 'email',"), "migration 010 carries the $key template");
 }
 
 // 9. The copy in the migration is on brand.

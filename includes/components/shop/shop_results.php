@@ -39,7 +39,8 @@ if (!function_exists('okv_shop_results')) {
         string $category,
         int $page,
         int $total,
-        int $perPage
+        int $perPage,
+        string $sourceDay = ''
     ): void {
         $activeCategory = null;
         foreach ($categories as $candidate) {
@@ -54,29 +55,38 @@ if (!function_exists('okv_shop_results')) {
         ?>
         <div class="mb-6 hidden items-end justify-between gap-4 lg:flex">
           <div>
-            <h2 class="font-display text-2xl font-bold text-ink"><?= okv_e($activeCategory['name'] ?? 'All produce') ?></h2>
+            <h2 class="font-editorial text-okv-h5 text-ink"><?= okv_e($activeCategory['name'] ?? 'All produce') ?></h2>
             <?php if ($search !== ''): ?><p class="mt-1 text-sm text-ink-60">Results for &ldquo;<?= okv_e($search) ?>&rdquo;</p><?php endif; ?>
           </div>
-          <p class="text-sm text-ink-60" data-shop-summary aria-live="polite"><?= okv_e(okv_page_summary($page, $total, $perPage, 'item')) ?></p>
+          <p class="font-mono text-sm text-ink-60" data-shop-summary aria-live="polite"><?= okv_e(okv_page_summary($page, $total, $perPage, 'item')) ?></p>
         </div>
 
         <?php if ($products): ?>
           <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             <?php foreach ($products as $product): ?>
-              <?php okv_product_card($product, $sourceRegions, $returnTo); ?>
+              <?php okv_product_card($product, $sourceRegions, $returnTo, $sourceDay); ?>
             <?php endforeach; ?>
           </div>
           <?php okv_pagination($page, $lastPage, static fn (int $n): string => okv_shop_url($search, $category, $n), 'Produce pages'); ?>
         <?php else: ?>
           <div class="rounded-lg bg-white px-6 py-16 text-center shadow-okv-1">
             <?php if ($search !== ''): ?>
-              <h2 class="font-display text-2xl font-bold text-ink">Nothing matched that search</h2>
-              <p class="mx-auto mt-3 max-w-md text-ink-60">Try another produce name<?= $category !== '' ? ', or clear the category to search everything available this week' : '' ?>.</p>
+              <p class="okv-eyebrow">No match</p>
+              <h2 class="mt-3 font-editorial text-okv-h5 text-ink">Nothing matched &ldquo;<?= okv_e($search) ?>&rdquo;</h2>
+              <p class="mx-auto mt-3 max-w-md text-ink-60">Try another produce name<?= $category !== '' ? ', or clear the category to search everything available this week' : '' ?>. Tomatoes, garlic and herbs are all in this week.</p>
+              <div class="mt-6 flex flex-wrap justify-center gap-3">
+                <a href="/shop.php" class="okv-btn">See all produce</a>
+                <a href="/combos.php" class="okv-btn-outline">See the combos</a>
+              </div>
             <?php else: ?>
-              <h2 class="font-display text-2xl font-bold text-ink">Nothing in <?= okv_e($activeCategory['name'] ?? 'this category') ?> this week</h2>
-              <p class="mx-auto mt-3 max-w-md text-ink-60">We are still sourcing for this one. The rest of the week's produce is ready now.</p>
+              <p class="okv-eyebrow">Still sourcing</p>
+              <h2 class="mt-3 font-editorial text-okv-h5 text-ink">Nothing in <?= okv_e($activeCategory['name'] ?? 'this category') ?> this week</h2>
+              <p class="mx-auto mt-3 max-w-md text-ink-60">We are still sourcing for this one. The rest of the week's produce is ready now, and this page fills back up as soon as it lands.</p>
+              <div class="mt-6 flex flex-wrap justify-center gap-3">
+                <a href="/shop.php" class="okv-btn">See all produce</a>
+                <a href="/combos.php" class="okv-btn-outline">See the combos</a>
+              </div>
             <?php endif; ?>
-            <a href="/shop.php" class="okv-btn mt-6">See all produce</a>
           </div>
         <?php endif; ?>
         <?php

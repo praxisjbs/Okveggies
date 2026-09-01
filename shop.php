@@ -3,6 +3,7 @@
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/pagination.php';
 require_once __DIR__ . '/includes/components/shop/activation_banner.php';
+require_once __DIR__ . '/includes/components/shop/brand.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/product_card.php';
@@ -19,6 +20,7 @@ $pages = max(1, (int) ceil($total / $perPage));
 $page = min(max(1, (int) okv_input('page', 1)), $pages);
 $products = Catalogue::products($search, $category, $page, $perPage);
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
+$sourceDay = Settings::str('source_day', '');
 
 $activeCategory = null;
 foreach ($categories as $candidate) {
@@ -49,12 +51,8 @@ $noticeMessages = [
   <title><?= okv_e($pageTitle) ?></title>
   <meta name="description" content="Search fresh vegetables, herbs, spices, tubers, roots, fruits and grains by category, unit, price and availability.">
   <link rel="canonical" href="<?= okv_e($canonical) ?>">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="OK Veggies">
-  <meta property="og:title" content="<?= okv_e($pageTitle) ?>">
-  <meta property="og:description" content="Search the week's produce, check the unit and price, then add what you need.">
   <meta property="og:url" content="<?= okv_e($canonical) ?>">
-  <?php okv_head_meta(); ?>
+  <?php okv_head_meta(['og_title' => $pageTitle, 'og_description' => "Search the week's produce, check the unit and price, then add what you need."]); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen bg-forest-tint">
@@ -67,9 +65,10 @@ $noticeMessages = [
       <nav class="mb-4 text-sm text-ink-60" aria-label="Breadcrumb"><a href="/" class="hover:text-forest">Home</a> <span aria-hidden="true">/</span> <span aria-current="page">Shop</span></nav>
       <div class="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Fresh this week</p>
-          <h1 class="mt-2 font-display text-4xl font-extrabold text-ink md:text-5xl">What is going into your pot?</h1>
-          <p class="mt-3 max-w-2xl text-ink-60">Search the week's produce, check the unit and price, then add what you need.</p>
+          <p class="okv-eyebrow">Fresh this week</p>
+          <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3">What is going into your pot?</h1>
+          <p class="mt-4 max-w-2xl text-okv-lead text-ink-60">Search the week's produce, check the unit and price, then add what you need.</p>
+          <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-4'); ?>
         </div>
         <form action="/shop.php" method="get" role="search" class="w-full max-w-xl">
           <label for="shop-search" class="okv-label">Search produce</label>
@@ -105,7 +104,7 @@ $noticeMessages = [
     <div class="grid gap-8 lg:grid-cols-12">
       <aside class="hidden lg:col-span-2 lg:block" aria-label="Product categories">
         <div class="sticky top-24 rounded-lg bg-white p-4 shadow-okv-1">
-          <p class="font-display font-bold text-ink">Categories</p>
+          <p class="okv-eyebrow">Categories</p>
           <nav class="mt-3 space-y-1">
             <a href="<?= okv_e(okv_shop_url($search)) ?>" data-shop-category-link="" class="okv-category-link <?= $category === '' ? 'okv-category-link-active' : '' ?>">
               <span>All produce</span><span><?= array_sum(array_map(static fn($item) => (int) $item['product_count'], $categories)) ?></span>
@@ -120,7 +119,7 @@ $noticeMessages = [
       </aside>
 
       <div class="lg:col-span-10" data-shop-results>
-        <?php okv_shop_results($products, $categories, $sourceRegions, $search, $category, $page, $total, $perPage); ?>
+        <?php okv_shop_results($products, $categories, $sourceRegions, $search, $category, $page, $total, $perPage, $sourceDay); ?>
       </div>
     </div>
   </section>
@@ -129,11 +128,11 @@ $noticeMessages = [
 <div id="shop-filter-sheet" class="okv-sheet-backdrop" hidden data-filter-sheet>
   <section class="okv-sheet" role="dialog" aria-modal="true" aria-labelledby="filter-title">
     <div class="flex items-center justify-between gap-4">
-      <h2 id="filter-title" class="font-display text-xl font-bold text-ink">Filter by category</h2>
+      <h2 id="filter-title" class="font-editorial text-okv-h6 text-ink">Filter by category</h2>
       <button type="button" class="okv-btn-text px-2" data-filter-close>Close</button>
     </div>
     <form action="/shop.php" method="get" class="mt-6">
-      <input type="hidden" name="search" value="<?= okv_e($search) ?>" data-sheet-search>
+      <input type="hidden" name="search" value="<?= okv_e($search) ?>" data-sheet-search <?= $search === '' ? 'disabled' : '' ?>>
       <label for="mobile-category" class="okv-label">Category</label>
       <select id="mobile-category" name="category" class="okv-input">
         <option value="">All produce</option>

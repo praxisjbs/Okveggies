@@ -1,5 +1,5 @@
 -- =============================================================================
--- 009_branded_email_templates.sql
+-- 010_branded_email_templates.sql
 -- OK Veggies. The transactional email copy, rewritten for the branded HTML
 -- shell that Mail::brandedHtml() wraps every message in.
 --

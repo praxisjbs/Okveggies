@@ -13,6 +13,7 @@
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/includes/components/shop/brand.php';
 
 $signedIn = Customer::isLoggedIn();
 
@@ -69,7 +70,9 @@ $csrf = Csrf::token();
       <a href="/" class="okv-btn-text" aria-label="Back to the shop">
         <span aria-hidden="true">&larr;</span> Shop
       </a>
-      <p class="font-display font-extrabold text-forest">OK Veggies</p>
+      <a href="/" class="inline-flex items-center rounded-md" aria-label="OK Veggies, home">
+        <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup.svg')) ?>" alt="OK Veggies, Fresh Picks" width="152" height="40" class="h-10 w-auto">
+      </a>
       <form action="/api/v1/auth.php" method="POST" class="m-0">
         <?= Csrf::field() ?>
         <input type="hidden" name="action" value="logout">
@@ -80,8 +83,8 @@ $csrf = Csrf::token();
   </header>
 
   <main class="okv-container py-8 md:py-12">
-    <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">Your account</p>
-    <h1 class="font-display font-extrabold text-2xl md:text-3xl mt-1">
+    <p class="okv-eyebrow">Your account</p>
+    <h1 class="mt-3 font-editorial text-okv-h5 text-ink md:text-okv-h4">
       Hello, <?= okv_e($firstName !== '' ? $firstName : 'there') ?>
     </h1>
 
@@ -89,7 +92,7 @@ $csrf = Csrf::token();
       <!-- Profile -->
       <section class="okv-card lg:col-span-1" aria-labelledby="profile-h">
         <div class="flex items-center justify-between">
-          <h2 id="profile-h" class="font-display font-bold text-lg">Your details</h2>
+          <h2 id="profile-h" class="font-editorial text-okv-h6 text-ink">Your details</h2>
           <button type="button" class="okv-btn-text" data-okv-open="profile-sheet">Edit</button>
         </div>
         <dl class="mt-4 space-y-3 text-sm">
@@ -111,17 +114,21 @@ $csrf = Csrf::token();
 
       <!-- Orders (placeholder until M4) -->
       <section class="okv-card lg:col-span-2" aria-labelledby="orders-h">
-        <h2 id="orders-h" class="font-display font-bold text-lg">Your orders</h2>
+        <h2 id="orders-h" class="font-editorial text-okv-h6 text-ink">Your orders</h2>
         <div class="mt-4 rounded-md bg-forest-tint p-6 text-center">
-          <p class="text-ink-60">You have not placed an order yet.</p>
-          <a href="/shop.php" class="okv-btn mt-4">Start shopping</a>
+          <p class="font-medium text-ink">No orders yet</p>
+          <p class="mx-auto mt-2 max-w-sm text-sm text-ink-60">Every order you place will sit here with its delivery day, what is in it, and where it has reached.</p>
+          <div class="mt-4 flex flex-wrap justify-center gap-3">
+            <a href="/shop.php" class="okv-btn">Start shopping</a>
+            <a href="/combos.php" class="okv-btn-outline">See the combos</a>
+          </div>
         </div>
       </section>
 
       <!-- Addresses -->
       <section class="okv-card lg:col-span-3" aria-labelledby="addr-h">
         <div class="flex items-center justify-between">
-          <h2 id="addr-h" class="font-display font-bold text-lg">Delivery addresses</h2>
+          <h2 id="addr-h" class="font-editorial text-okv-h6 text-ink">Delivery addresses</h2>
           <button type="button" class="okv-btn-outline min-h-[40px] px-4" data-okv-add-address>Add address</button>
         </div>
         <div id="okv-address-list" class="mt-4 grid gap-4 sm:grid-cols-2" data-empty-text="You have no saved addresses yet.">
@@ -158,7 +165,7 @@ $csrf = Csrf::token();
   <div class="okv-sheet-backdrop" id="profile-sheet" hidden>
     <div class="okv-sheet" role="dialog" aria-modal="true" aria-labelledby="profile-sheet-h">
       <div class="flex items-center justify-between">
-        <h2 id="profile-sheet-h" class="font-display font-bold text-lg">Edit your details</h2>
+        <h2 id="profile-sheet-h" class="font-editorial text-okv-h6 text-ink">Edit your details</h2>
         <button type="button" class="okv-btn-text" data-okv-close aria-label="Close">Close</button>
       </div>
       <form action="/api/v1/account.php" method="POST" class="mt-4 space-y-4" data-okv-ajax data-okv-reload>
@@ -179,7 +186,7 @@ $csrf = Csrf::token();
   <div class="okv-sheet-backdrop" id="address-sheet" hidden>
     <div class="okv-sheet" role="dialog" aria-modal="true" aria-labelledby="address-sheet-h">
       <div class="flex items-center justify-between">
-        <h2 id="address-sheet-h" class="font-display font-bold text-lg">Add a delivery address</h2>
+        <h2 id="address-sheet-h" class="font-editorial text-okv-h6 text-ink">Add a delivery address</h2>
         <button type="button" class="okv-btn-text" data-okv-close aria-label="Close">Close</button>
       </div>
       <form action="/api/v1/account.php" method="POST" class="mt-4 space-y-4" data-okv-ajax data-okv-reload id="okv-address-form">
@@ -214,9 +221,11 @@ $csrf = Csrf::token();
   <!-- ============================== AUTH HUB =============================== -->
   <div class="min-h-screen flex flex-col items-center justify-center p-4">
     <div class="w-full max-w-md">
-      <div class="text-center mb-6">
-        <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
-        <p class="text-ink-60 text-sm mt-1">Sourced right. Priced right. Delivered right.</p>
+      <div class="mb-8 text-center">
+        <a href="/" class="inline-block rounded-md" aria-label="OK Veggies, home">
+          <?php okv_seal(120, 'mx-auto', 'The OK Veggies seal'); ?>
+        </a>
+        <p class="mt-4 text-sm text-ink-60">Sourced right. Priced right. Delivered right.</p>
       </div>
 
       <div class="bg-white rounded-lg shadow-okv-3 p-6 sm:p-8 animate-okv-rise">
@@ -316,7 +325,7 @@ $csrf = Csrf::token();
   <!-- Existing account modal (shown by JS on a duplicate registration) -->
   <div class="okv-sheet-backdrop" id="okv-exists-modal" hidden>
     <div class="okv-sheet max-w-sm mx-auto" role="dialog" aria-modal="true" aria-labelledby="exists-h">
-      <h2 id="exists-h" class="font-display font-bold text-lg">You already have an account</h2>
+      <h2 id="exists-h" class="font-editorial text-okv-h6 text-ink">You already have an account</h2>
       <p class="text-ink-60 text-sm mt-2">It looks like these details are already registered. You can sign in with your phone or email.</p>
       <div class="mt-5 flex flex-col gap-2">
         <a href="#" class="okv-btn w-full" data-okv-exists-signin>Sign in</a>
