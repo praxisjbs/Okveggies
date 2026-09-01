@@ -44,6 +44,7 @@ $csrf = Csrf::token();
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="<?= okv_e($csrf) ?>">
   <title><?= $signedIn ? 'Your account' : 'Sign in or create an account' ?> . OK Veggies</title>
+  <?php okv_head_meta(); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="bg-forest-tint min-h-screen text-ink">

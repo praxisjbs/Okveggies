@@ -45,8 +45,9 @@ function okv_setup_page(string $title, string $bodyHtml, int $code = 200): void
     $cssHref = okv_asset('/assets/css/tailwind.css');
     echo '<!doctype html><html lang="en"><head><meta charset="utf-8">'
        . '<meta name="viewport" content="width=device-width, initial-scale=1">'
-       . '<title>' . okv_e($title) . ' . OK Veggies</title>'
-       . '<link rel="stylesheet" href="' . okv_e($cssHref) . '"></head>'
+       . '<title>' . okv_e($title) . ' . OK Veggies</title>';
+    okv_head_meta();
+    echo '<link rel="stylesheet" href="' . okv_e($cssHref) . '"></head>'
        . '<body class="min-h-screen bg-forest flex items-center justify-center p-4">'
        . '<div class="w-full max-w-md bg-white rounded-lg shadow-okv-3 p-8">'
        . '<p class="text-center uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>'

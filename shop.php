@@ -54,6 +54,7 @@ $noticeMessages = [
   <meta property="og:title" content="<?= okv_e($pageTitle) ?>">
   <meta property="og:description" content="Search the week's produce, check the unit and price, then add what you need.">
   <meta property="og:url" content="<?= okv_e($canonical) ?>">
+  <?php okv_head_meta(); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen bg-forest-tint">

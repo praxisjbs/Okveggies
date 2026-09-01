@@ -154,7 +154,8 @@ final class Rbac
             exit;
         }
         http_response_code(403);
-        echo '<!doctype html><meta charset="utf-8"><title>No access</title>'
+        echo '<!doctype html><meta charset="utf-8"><title>No access. OK Veggies</title>'
+           . '<link rel="icon" href="/favicon.ico" sizes="any">'
            . '<p style="font-family:sans-serif;padding:2rem">You do not have access to this page. '
            . '<a href="/admin/">Back to the dashboard</a>.</p>';
         exit;

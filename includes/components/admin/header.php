@@ -19,6 +19,7 @@ $okv_admin_title = $okv_admin_title ?? 'OK Veggies';
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= okv_e($okv_admin_title) ?> . OK Veggies</title>
+  <?php okv_head_meta(); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen bg-forest-tint text-ink">

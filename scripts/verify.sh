@@ -29,6 +29,13 @@ expect_deny() { # url  label   (403 or 404 both acceptable)
 
 expect "$BASE/"               "200" "storefront home"
 expect "$BASE/admin/login.php" "200" "admin login page"
+
+# Brand chrome must actually serve after a deploy.
+expect "$BASE/favicon.ico"                                  "200" "favicon.ico"
+expect "$BASE/site.webmanifest"                             "200" "web manifest"
+expect "$BASE/assets/img/brand/lockup.svg"                  "200" "logo lockup"
+expect "$BASE/assets/img/brand/icons/apple-touch-icon.png" "200" "apple touch icon"
+expect "$BASE/assets/fonts/hanken-grotesk-latin.woff2"      "200" "brand font (Hanken Grotesk)"
 expect_deny "$BASE/.env"                 ".env"
 expect_deny "$BASE/includes/config/db.php" "includes/"
 expect_deny "$BASE/migrations/001_core_schema.sql" "migrations/"

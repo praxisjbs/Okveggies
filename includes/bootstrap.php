@@ -91,9 +91,10 @@ if ($__okv_tz && in_array($__okv_tz, timezone_identifiers_list(), true)) {
 }
 unset($__okv_tz);
 
-// 9. Shared helper functions.
+// 9. Shared helper functions and the brand head block.
 require_once __DIR__ . '/functions/helpers.php';
 require_once __DIR__ . '/functions/assets.php';
+require_once __DIR__ . '/components/head_meta.php';
 
 // 10. Tag the DB session with the current user id so audit columns can record
 //     who made a change. Degrades quietly if the DB is not reachable.

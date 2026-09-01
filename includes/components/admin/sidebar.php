@@ -65,7 +65,9 @@ $okv_sb_role = in_array('owner', Rbac::roles(), true) ? 'Owner' : (in_array('man
 <aside id="okv-admin-sidebar"
        class="hidden md:flex md:flex-col md:w-64 md:shrink-0 bg-forest text-white md:min-h-screen">
   <div class="flex items-center gap-2 px-5 h-16 border-b border-white/10">
-    <span class="font-display font-extrabold text-lg">OK Veggies</span>
+    <a href="/admin/" class="inline-flex items-center rounded-md" aria-label="OK Veggies admin, home">
+      <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup-white.svg')) ?>" alt="OK Veggies" width="168" height="44" class="h-11 w-auto">
+    </a>
   </div>
 
   <nav class="flex-1 overflow-y-auto py-4" aria-label="Admin">
