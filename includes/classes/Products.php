@@ -21,13 +21,16 @@ final class Products
 {
     public const STATUSES = ['available', 'out_of_stock', 'restocking'];
 
-    /** Every product for the admin list, newest first within a category. */
-    public static function all(string $search = '', string $category = '', string $status = ''): array
+    /** One page of the admin catalogue list. */
+    public const PER_PAGE = 25;
+
+    /**
+     * Every product for the admin list, newest first within a category. With
+     * $perPage set, one page comes back instead of the whole catalogue.
+     */
+    public static function all(string $search = '', string $category = '', string $status = '', int $page = 1, ?int $perPage = null): array
     {
-        $search = Catalogue::cleanSearch($search);
-        $like = '%' . Catalogue::escapeLike($search) . '%';
-        $category = Catalogue::cleanSlug($category);
-        $status = in_array($status, ['active', 'inactive'], true) ? $status : '';
+        [$where, $params] = self::whereParts($search, $category, $status);
 
         return Database::all(
             'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.current_price_subunit,
@@ -44,21 +47,93 @@ final class Products
                FROM products p
                JOIN product_categories c ON c.id = p.category_id
                JOIN units_of_measurement u ON u.id = p.unit_id
-               LEFT JOIN product_availability pa ON pa.product_id = p.id
-              WHERE (:category_empty = \'\' OR c.slug = :category_slug)
-                AND (:status_empty = \'\' OR (:status_active = \'active\') = (p.is_active = 1))
-                AND (:search_empty = \'\' OR p.name LIKE :search_name OR p.sku LIKE :search_sku)
-              ORDER BY c.sort_order, p.name',
-            [
-                ':category_empty' => $category,
-                ':category_slug'  => $category,
-                ':status_empty'   => $status,
-                ':status_active'  => $status,
-                ':search_empty'   => $search,
-                ':search_name'    => $like,
-                ':search_sku'     => $like,
+               LEFT JOIN product_availability pa ON pa.product_id = p.id'
+            . $where . '
+              ORDER BY c.sort_order, p.name'
+            . okv_limit_clause($page, $perPage),
+            $params
+        );
+    }
+
+    /** How many products the admin filters match, for the page count. */
+    public static function count(string $search = '', string $category = '', string $status = ''): int
+    {
+        [$where, $params] = self::whereParts($search, $category, $status);
+
+        $row = Database::one(
+            'SELECT COUNT(*) AS matched
+               FROM products p
+               JOIN product_categories c ON c.id = p.category_id
+               JOIN units_of_measurement u ON u.id = p.unit_id'
+            . $where,
+            $params
+        );
+
+        return (int) ($row['matched'] ?? 0);
+    }
+
+    /**
+     * The page a product lands on under the current filters, counted from the
+     * same ordering the list uses (category, then name). A deep link like
+     * /admin/products.php?product=12 from the Pricing screen has to open the
+     * product's panel no matter how long the catalogue grows, and it cannot
+     * do that when the product sits on page two. Position 1 is the safe answer
+     * whenever the product is not in the filtered list at all.
+     */
+    public static function pageOf(int $productId, string $search = '', string $category = '', string $status = '', ?int $perPage = null): int
+    {
+        $perPage = max(1, $perPage ?? self::PER_PAGE);
+        [$where, $params] = self::whereParts($search, $category, $status);
+
+        $row = Database::one(
+            'SELECT COUNT(*) AS before_count
+               FROM products p
+               JOIN product_categories c ON c.id = p.category_id
+               JOIN units_of_measurement u ON u.id = p.unit_id'
+            . $where
+            . ($where === '' ? ' WHERE ' : ' AND ')
+            . '(c.sort_order < (SELECT c0.sort_order FROM products p0 JOIN product_categories c0 ON c0.id = p0.category_id WHERE p0.id = :pid_sort)
+               OR (c.sort_order = (SELECT c0.sort_order FROM products p0 JOIN product_categories c0 ON c0.id = p0.category_id WHERE p0.id = :pid_sort_eq)
+                   AND p.name < (SELECT p0.name FROM products p0 WHERE p0.id = :pid_name)))',
+            $params + [
+                ':pid_sort'    => $productId,
+                ':pid_sort_eq' => $productId,
+                ':pid_name'    => $productId,
             ]
         );
+
+        $before = (int) ($row['before_count'] ?? 0);
+        return intdiv($before, $perPage) + 1;
+    }
+
+    /**
+     * The WHERE part the admin list and its count share. Fragments are added
+     * only for filters actually in play, so unused filters never leave an
+     * unbound placeholder in the SQL, and the search term stays bound data.
+     */
+    private static function whereParts(string $search, string $category, string $status): array
+    {
+        $search = Catalogue::cleanSearch($search);
+        $category = Catalogue::cleanSlug($category);
+        $status = in_array($status, ['active', 'inactive'], true) ? $status : '';
+
+        $filters = [];
+        $params = [];
+        if ($category !== '') {
+            $filters[] = 'c.slug = :category_slug';
+            $params[':category_slug'] = $category;
+        }
+        if ($status !== '') {
+            $filters[] = $status === 'active' ? 'p.is_active = 1' : 'p.is_active = 0';
+        }
+        if ($search !== '') {
+            $filters[] = '(p.name LIKE :search_name OR p.sku LIKE :search_sku)';
+            $like = '%' . Catalogue::escapeLike($search) . '%';
+            $params[':search_name'] = $like;
+            $params[':search_sku'] = $like;
+        }
+
+        return [$filters === [] ? '' : ' WHERE ' . implode(' AND ', $filters), $params];
     }
 
     public static function find(int $id): ?array
