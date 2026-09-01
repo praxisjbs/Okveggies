@@ -317,3 +317,15 @@ if (!function_exists('okv_page_summary')) {
         return 'Showing ' . $first . ' to ' . $last . ' of ' . $total . ' ' . $label;
     }
 }
+
+if (!function_exists('okv_page_of_position')) {
+    /**
+     * The page a row sits on, given how many rows sort before it. Row 0 opens
+     * page 1, row 25 opens page 2 at 25 a page. Kept apart from the query that
+     * counts those rows so the maths can be pinned by a test on its own.
+     */
+    function okv_page_of_position(int $before, int $perPage): int
+    {
+        return intdiv(max(0, $before), max(1, $perPage)) + 1;
+    }
+}

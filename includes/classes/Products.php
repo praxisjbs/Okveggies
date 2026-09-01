@@ -77,33 +77,49 @@ final class Products
      * same ordering the list uses (category, then name). A deep link like
      * /admin/products.php?product=12 from the Pricing screen has to open the
      * product's panel no matter how long the catalogue grows, and it cannot
-     * do that when the product sits on page two. Position 1 is the safe answer
-     * whenever the product is not in the filtered list at all.
+     * do that when the product sits on page two.
+     *
+     * The filters are asked first whether they list the product at all. One
+     * that they exclude has no position in the list, so page 1 is the only
+     * honest answer; counting the rows before it would otherwise open a page
+     * the product is nowhere on.
      */
     public static function pageOf(int $productId, string $search = '', string $category = '', string $status = '', ?int $perPage = null): int
     {
         $perPage = max(1, $perPage ?? self::PER_PAGE);
         [$where, $params] = self::whereParts($search, $category, $status);
+        $joinOn = $where === '' ? ' WHERE ' : ' AND ';
 
+        // Its place in the ordering, and whether the filters list it at all.
+        $product = Database::one(
+            'SELECT c.sort_order, p.name
+               FROM products p
+               JOIN product_categories c ON c.id = p.category_id
+               JOIN units_of_measurement u ON u.id = p.unit_id'
+            . $where . $joinOn . 'p.id = :pid',
+            $params + [':pid' => $productId]
+        );
+        if (!$product) {
+            return 1;
+        }
+
+        // How many listed products sort ahead of it, on that same ordering.
         $row = Database::one(
             'SELECT COUNT(*) AS before_count
                FROM products p
                JOIN product_categories c ON c.id = p.category_id
                JOIN units_of_measurement u ON u.id = p.unit_id'
-            . $where
-            . ($where === '' ? ' WHERE ' : ' AND ')
-            . '(c.sort_order < (SELECT c0.sort_order FROM products p0 JOIN product_categories c0 ON c0.id = p0.category_id WHERE p0.id = :pid_sort)
-               OR (c.sort_order = (SELECT c0.sort_order FROM products p0 JOIN product_categories c0 ON c0.id = p0.category_id WHERE p0.id = :pid_sort_eq)
-                   AND p.name < (SELECT p0.name FROM products p0 WHERE p0.id = :pid_name)))',
+            . $where . $joinOn
+            . '(c.sort_order < :sort_order
+                OR (c.sort_order = :sort_order_eq AND p.name < :sort_name))',
             $params + [
-                ':pid_sort'    => $productId,
-                ':pid_sort_eq' => $productId,
-                ':pid_name'    => $productId,
+                ':sort_order'    => (int) $product['sort_order'],
+                ':sort_order_eq' => (int) $product['sort_order'],
+                ':sort_name'     => (string) $product['name'],
             ]
         );
 
-        $before = (int) ($row['before_count'] ?? 0);
-        return intdiv($before, $perPage) + 1;
+        return okv_page_of_position((int) ($row['before_count'] ?? 0), $perPage);
     }
 
     /**
