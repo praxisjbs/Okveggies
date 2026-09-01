@@ -26,16 +26,16 @@ function cart_redirect_notice(string $notice): void
 
 function cart_fail(Throwable $e, string $context): void
 {
-    $code = $e instanceof DomainException ? $e->getMessage() : 'failed';
+    $reason = $e instanceof DomainException ? $e->getMessage() : 'failed';
     $known = [
-        'not_found' => ['We could not find that basket item.', 404, 'missing'],
-        'unavailable' => ['That item is no longer available.', 409, 'unavailable'],
-        'invalid_quantity' => ['Use the minimum and quantity steps shown for this item.', 422, 'quantity'],
+        'not_found' => ['We could not find that basket item.', 404, 'missing', 'not_found'],
+        'unavailable' => ['That item is no longer available.', 409, 'unavailable', 'unavailable'],
+        'invalid_quantity' => ['Use the minimum and quantity steps shown for this item.', 422, 'quantity', 'invalid_quantity'],
     ];
-    [$message, $status, $notice] = $known[$code] ?? ['We could not update your basket. Please try again.', 500, 'error'];
+    [$message, $status, $notice, $clientCode] = $known[$reason] ?? ['We could not update your basket. Please try again.', 500, 'error', 'failed'];
     if (!($e instanceof DomainException)) { error_log('cart.' . $context . ' failed: ' . $e->getMessage()); }
     if (!cart_is_fetch()) { cart_redirect_notice($notice); }
-    okv_error($message, $status, $code);
+    okv_error($message, $status, $clientCode);
 }
 
 if ($action === 'state') {

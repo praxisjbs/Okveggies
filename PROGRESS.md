@@ -12,13 +12,7 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M3, Combos. In progress, split into three PRs.** M0 through M2 are complete. M3 is being built in three PRs so the domain, the admin builder and the storefront can proceed in parallel without stepping on each other.
-
-- **PR1 (merged into `main`, was `m3-pr1-combos-domain`).** The domain foundation. `Combos` class with the full CRUD, the sell-price history writer that mirrors `Pricing::change` in one transaction, publish and unpublish with the "no components, no price" gate, the component-total maths, `isLossMaking()` and `customerSaving()` for the builder's admin-only flag, `isBuyableNow()` for the availability window, and the same referenceCount / delete rule as products. Storefront read helpers on `Catalogue`: `combos()`, `featuredCombos()`, `comboBySlug()`, `comboComponents()`, all filtered on active and inside the window. Unit tests. No schema change (M0 carries `combo_packages`, `combo_package_items`, `combo_price_history`, `cart_items.combo_package_id` and `order_items.combo_package_id` already). No UI yet.
-- **PR2 (this branch, `claude/admin-combo-builder-pr2-8afj2a`).** Admin combo builder: `admin/combos.php`, `api/v1/combos.php`, `assets/js/admin-combos.js` plus the new database-side tests. Product picker, live component total that refreshes on every component change without a page reload, sell price with the history reason, publish / unpublish, availability window, photo upload and remove, price history reveal, delete guard. Consumes PR1 only.
-- **PR3 (this branch, `claude/storefront-combos-pr3-boa1pj`).** Storefront combos page and combo detail: `combos.php`, `combo.php`, one-tap add-to-basket via a new `Basket::addCombo()` + `api/v1/cart.php` `add_combo` action, `combo_card.php` component, featured combos on the home page. Consumes PR1 only.
-
-Seven clarifying questions were answered before any code was written (loss-making combos are flagged in red to the Manager only, never to the customer; buyability checks the active flag and availability window only, not component availability; a draft is `is_active = 0`, no new column; combo internals respect the unit's decimal rule but not the product's customer-facing minimum or increment; a combo in the basket is one line, fanning out into `order_item_components` at order-snapshot time in M4/M5; the existing `combo_packages.image_url` column carries the hero photo and falls back to the first component's primary photo; combo price history mirrors products exactly, opening row null with reason "Opening price", later changes take an optional reason).
+**Milestone M4, Basket and checkout. Complete and verified.** Phases 1 to 4 are present on `m4-basket-and-checkout`. Unit, database, HTTP, migration, lint, build and responsive browser checks are green against an isolated MariaDB 10.11 database.
 
 ---
 
@@ -74,14 +68,16 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 
 ### M4. Basket and checkout
 
-- [x] Phase 2: delivery eligibility, picker foundation and delivery administration. Delivery rules use Africa/Lagos time, account-specific weekdays, per-day cutoff and lead settings, date exceptions, emergency open slots and active zones. The delivery API exposes public eligible-date and zone reads, and CSRF plus delivery permissions protect admin writes. Delivery settings replace the old M6 scaffold without adding manifests or dispatch work. Evidence: delivery unit tests are included in the 205-assertion suite. Live MariaDB and browser checks remain for the final milestone QA pass.
+- [x] Phase 2: delivery eligibility, picker foundation and delivery administration. Delivery rules use Africa/Lagos time, account-specific weekdays, per-day cutoff and lead settings, date exceptions, emergency open slots and active zones. The delivery API exposes public eligible-date and zone reads, and CSRF plus delivery permissions protect admin writes. Delivery settings replace the old M6 scaffold without adding manifests or dispatch work. Evidence: the 237-assertion unit suite and 13-assertion delivery database suite pass. The admin day and exception forms, picker reason and layouts at 390px and 1440px were checked against MariaDB 10.11.
 
-- [x] Phase 1: basket domain, quantity editing, mini-cart, guest merge and repriced repeat adds. Basket stores each price snapshot as its own cart row, so a repeat add at the same price grows that row while a repeat add after a reprice adds a new row and leaves the earlier price intact. Product quantities enforce their minimum and step on the server; combo quantities are whole baskets with a ceiling of 99. Guest lines merge transactionally on sign-in, matching only item and price snapshots, and the source cart is marked merged while its token is removed from the browser session. The canonical cart.php page has non-JavaScript forms as well as basket.js; the shared desktop mini-cart shows lines, subtotal and basket or checkout links. The cart API exposes state, product and combo update, and product and combo removal actions. Migration 009 adds lookup indexes only, without changing a shipped migration. Evidence: 197 unit assertions pass, PHP lint is clean on each touched PHP file and the JavaScript build generated basket.min.js. Live database, responsive browser and sign-in merge checks remain for the Phase 1 final QA pass when a scratch MariaDB and browser session are available.
-- [ ] Guest basket with session token, merges on login
-- [ ] Basket holds products and combos; min/increment respected; mini-cart
-- [ ] Checkout: details, delivery day picker (eligibility, cutoff, lead), payment choice
-- [ ] Tests: delivery-day eligibility; basket totals
-- [ ] Carried forward from the M3 audit, to be handled by M4: a repeat add of a product or a combo currently overwrites the basket line's `unit_price_subunit` with the current price, so a customer who added at ₦16,900 and clicks Add again after a reprice sees every unit on the line silently shift to the new price. `Basket::addProduct` and `Basket::addCombo` both do this the same way; the fix has to be one change, not two. Preserve the price the customer originally saw on the line, apply a fresh price only to newly added units, and surface a "this item has repriced" notice when the two prices differ.
+- [x] Phase 1: basket domain, quantity editing, mini-cart, guest merge and repriced repeat adds. Basket stores each price snapshot as its own cart row, so a repeat add at the same price grows that row while a repeat add after a reprice adds a new row and leaves the earlier price intact. Product quantities enforce their minimum and step on the server; combo quantities are whole baskets with a ceiling of 99. Guest lines merge transactionally on sign-in, matching only item and price snapshots, and the source cart is marked merged while its token is removed from the browser session. The canonical cart.php page has non-JavaScript forms as well as basket.js; the shared desktop mini-cart shows lines, subtotal and basket or checkout links. The cart API exposes state, product and combo update, and product and combo removal actions. Migration 009 adds lookup indexes only, without changing a shipped migration. Evidence: the 237-assertion unit suite and 6-assertion basket database suite pass. Guest merge, responsive basket behaviour, mini-cart synchronisation and both price-snapshot lines were checked through real HTTP and the browser.
+- [x] Phase 3 and Phase 4: four-step checkout, transactional order placement, immutable product and combo snapshots, delivery revalidation, payment gates, pending payment obligations, hashed Order Trail tokens, signed-in ownership checks and token-scoped public trails. Migration 010 adds the token hash and one-order-per-basket key idempotently. The canonical order page is `public/order.php`; no competing root page exists.
+- [x] Guest basket with session token, merges on login
+- [x] Basket holds products and combos; min/increment respected; mini-cart
+- [x] Checkout: details, delivery day picker (eligibility, cutoff, lead), payment choice
+- [x] Tests: delivery-day eligibility; basket totals
+- [x] Carried forward from the M3 audit: repeat adds after a price change now create a separate price-snapshot line and show a repricing notice without changing the earlier line.
+- [x] Final live QA: migration runner applied 009 and 010, then returned "Nothing to apply" on the second run; all M4 database and HTTP tests pass; guest, household and business paths are covered; forged CSRF, refresh and back/forward behaviour pass; the ₦2,700/kg to ₦3,000/kg case shows two 1 kg lines and the repricing notice; basket, checkout and private-window trail pass at 390px and 1440px with no horizontal overflow.
 
 ### M5. Payments
 - [ ] Paystack init and verify, all channels
@@ -91,11 +87,11 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [ ] Tests: webhook signature and idempotency; deposit and balance maths
 
 ### M6. Delivery and the Order Trail
-- [ ] Allowed days, cutoff, lead, zones (admin-managed), exceptions
+- [x] Allowed days, cutoff, lead, zones (admin-managed), exceptions. Delivered early in M4
 - [ ] Order lifecycle and status history
-- [ ] Public Order Trail page by token link (no login), and the "Sourced [day] from [state]" line
+- [~] Public Order Trail page by token link shipped in M4; the "Sourced [day] from [state]" line remains for M6 fulfilment data
 - [ ] Admin delivery-day manifest / packing list, grouped by zone, printable
-- [ ] Tests: order-number generation; status transitions
+- [~] Order-number generation and delivery eligibility tests pass; status-transition tests remain
 
 ### M7. Kitchen Runs
 - [ ] Request flow, four input modes (catalogue, priced-by-us, priced-by-customer, upload)
@@ -149,6 +145,18 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 ---
 
 ## Session log (newest first)
+
+### 1 Sep 2026, M4 checkout, confirmation and secure Order Trail
+
+Completed the implementation pass for M4 Phases 3 and 4 on the existing milestone branch. Checkout now has four plain-form steps and keeps its two-hour state in the signed server session. Final placement revalidates the account-owned payment mode, active delivery zone and eligible delivery date, locks the basket and its lines, then writes the order, immutable item snapshots, combo component snapshots, address, first customer status event, unpaid payment obligation and basket conversion in one transaction. A unique `shopping_cart_id` prevents a retry or simultaneous request from making a second order. Guest checkout creates the approved household account only after explicit consent, then uses the existing sign-in path to merge the guest basket. New delivery addresses are saved and become the default only when the account has no default address.
+
+Migration 010 adds a unique SHA-256 Order Trail token hash and the unique source-basket key without storing the 256-bit URL-safe token itself. `public/order.php` is the one canonical confirmation and trail page. Signed-in lookup is scoped to the owning customer. A guest needs the exact token. Random and malformed tokens receive the same branded not-found page. Public trail output is restricted to the approved order number, status history, item names and quantities, delivery day, payment choice and delivery reminder. The signed-in confirmation also shows amounts. WhatsApp sharing is customer-triggered and contains the token URL. No email is sent and no Paystack request is made.
+
+Verified against an isolated MariaDB 10.11 container: 237/237 unit assertions, 6/6 basket database assertions, 13/13 delivery database assertions, 19/19 checkout database assertions and 20/20 guest-checkout HTTP assertions. `php -l` is clean on every PHP file touched by this pass; `git diff --check` passes; CSS and JavaScript production builds pass. The migration runner first exposed an existing unbuffered `SHOW` result in Migration 009; `Migrator` now drains result-producing verification statements, after which 009 and 010 applied and two later runs both reported everything up to date. Route review found `cart.php` and `public/order.php` as the sole canonical pages. Every checkout write is POST plus CSRF, database calls use prepared statements, customer responses map exceptions to fixed safe messages, and money stays in integer kobo and renders through `Money`.
+
+Browser checks at 390px and 1440px cover product and combo adds, quantity editing, removals, empty-basket and mini-cart synchronisation, all four checkout steps, back and forward navigation, and the token-based Order Trail in a separate session. No checked page has horizontal overflow. The exact repeat-add case keeps 1 kg at ₦2,700/kg and adds a separate 1 kg line at ₦3,000/kg while showing that the earlier amount keeps its price. The browser run caught a shadowed form action in `basket.js`, which posted quantity edits to `/[object HTMLInputElement]`; it now reads the action attribute explicitly and has a regression test. Guest checkout creates an unverified household account only with consent, rejects a forged CSRF token, returns the same order on final-step retry, shows amount due only on the signed confirmation and opens the restricted trail by its 256-bit token in a private session. Approved business credit creates an unpaid account obligation; requested but unapproved credit is refused without converting the basket.
+
+The final delivery administration pass checked the real plain forms at 390px and 1440px. Household Monday was switched back on through the interface, a blocked 14 September 2026 exception saved with “Stocktaking closure” and replacement date 16 September 2026, and `Delivery::isEligible` returned that same reason and replacement. The controller now redirects non-JavaScript writes back to the admin page with a visible confirmation, while fetch callers retain JSON. The page had no horizontal overflow at either width.
 
 ### 31 Aug 2026, M3 audit follow-up: RBAC gate, transactional create, N+1 fix and hero fallback
 

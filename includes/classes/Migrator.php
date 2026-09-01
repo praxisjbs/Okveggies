@@ -221,6 +221,21 @@ final class Migrator
     {
         $stripped = trim(preg_replace('/^\s*--.*$/m', '', $stmt));
         if ($stripped === '') return;
+        if (self::isResultStatement($stripped)) {
+            $result = $pdo->query($stmt);
+            if ($result !== false) {
+                $result->fetchAll();
+                $result->closeCursor();
+            }
+            return;
+        }
         $pdo->exec($stmt);
+    }
+
+    /** Result-producing verification statements must be drained before the next statement. */
+    public static function isResultStatement(string $statement): bool
+    {
+        $stripped = trim(preg_replace('/^\s*--.*$/m', '', $statement));
+        return (bool) preg_match('/^(?:SELECT|SHOW|DESCRIBE|DESC|EXPLAIN)\b/i', $stripped);
     }
 }

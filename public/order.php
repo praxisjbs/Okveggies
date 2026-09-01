@@ -1,22 +1,10 @@
 <?php
-/**
- * public/order.php
- * OK Veggies. The public order trail, viewable by link with no sign in.
- * Status: scaffold placeholder. Build in milestone M6. See docs/PRD.md Section 14.
- * Before writing logic here: read the PRD section, then ask at least five
- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
- */
+/** Canonical confirmation and secure public Order Trail page. */
 require_once __DIR__ . '/../includes/bootstrap.php';
-?>
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Your order . OK Veggies</title>
-<link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
-<body class="bg-forest-tint min-h-screen">
-<div class="okv-container py-16">
-  <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
-  <h1 class="font-display font-extrabold text-3xl text-ink mt-2">Your order</h1>
-  <p class="text-ink-60 mt-3 max-w-xl">This screen is scaffolded and waiting to be built in milestone M6. The plan for it is in docs/PRD.md Section 14.</p>
-  <a href="/" class="okv-btn mt-6">Back to the shop</a>
-</div>
-</body></html>
+require_once __DIR__ . '/../includes/components/shop/header.php';
+require_once __DIR__ . '/../includes/components/shop/footer.php';
+$token=trim((string)okv_input('token',''));$orderId=(int)okv_input('order',0);$order=null;
+if($token!=='')$order=OrderTrail::findByToken($token);elseif($orderId>0&&Customer::id()!==null)$order=OrderTrail::findForCustomer($orderId,(int)Customer::id());
+if(!$order){http_response_code(404);?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Order not found. OK Veggies</title><link rel="stylesheet" href="<?=okv_e(okv_asset('/assets/css/tailwind.css'))?>"></head><body class="bg-forest-tint"><?php okv_shop_header();?><main class="okv-container py-16 text-center"><h1 class="font-display text-3xl font-extrabold text-ink">We could not find that order</h1><p class="mt-3 text-ink-60">Check the link or sign in to open your order.</p><a class="okv-btn mt-6" href="/account.php?mode=signin">Sign in</a></main><?php okv_shop_footer();?></body></html><?php exit;}
+$publicTrail=$token!=='';$shareToken=$token;if(!$publicTrail){$placed=Checkout::bag()['placed']??[];if((int)($placed['order_id']??0)===(int)$order['id'])$shareToken=(string)($placed['trail_token']??'');}$labels=['pay_in_full'=>'Pay in full','deposit'=>'Pay a deposit','pay_on_delivery'=>'Pay on delivery','on_account'=>'On account'];$trailUrl=OrderTrail::isValidToken($shareToken)?rtrim((string)APP_URL,'/').'/public/order.php?token='.rawurlencode($shareToken):'';$share=$trailUrl!==''?'https://wa.me/?text='.rawurlencode('Follow order '.$order['order_number'].': '.$trailUrl):'';
+?><!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Order <?=okv_e($order['order_number'])?>. OK Veggies</title><link rel="stylesheet" href="<?=okv_e(okv_asset('/assets/css/tailwind.css'))?>"></head><body class="bg-forest-tint"><?php okv_shop_header();?><main class="okv-container py-8 md:py-12"><p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Order <?=okv_e($order['order_number'])?></p><h1 class="mt-2 font-display text-4xl font-extrabold text-ink">We have your order</h1><p class="mt-3 text-ink-60">Status: <?=okv_e(ucfirst($order['order_status']))?><?= $publicTrail?'':'. No payment has been marked successful.' ?></p><div class="mt-8 grid gap-6 lg:grid-cols-3"><section class="okv-card lg:col-span-2"><h2 class="font-display text-xl font-bold">Items</h2><ul class="mt-4 space-y-3"><?php foreach($order['items'] as $item):?><li class="flex justify-between gap-4"><span><?=okv_e(okv_quantity($item['quantity']))?> <?=okv_e($item['unit_name'])?> <?=okv_e($item['item_name'])?></span><?php if(!$publicTrail):?><span class="font-mono"><?=okv_e(Money::format((int)$item['line_total_subunit']))?></span><?php endif;?></li><?php endforeach;?></ul></section><aside class="okv-card"><h2 class="font-display text-xl font-bold">Order details</h2><dl class="mt-4 space-y-3"><div><dt class="text-sm text-ink-60">Delivery day</dt><dd><?=okv_e(date('l jS F',strtotime($order['preferred_delivery_date'])))?></dd></div><div><dt class="text-sm text-ink-60">Payment choice</dt><dd><?=okv_e($labels[$order['payment_option']]??$order['payment_option'])?></dd></div><?php if(!$publicTrail):?><div><dt class="text-sm text-ink-60">Amount due</dt><dd class="font-mono"><?=okv_e(Money::format((int)$order['amount_due_subunit']))?></dd></div><?php endif;?></dl><p class="mt-5 text-sm text-ink-60">Delivery fee is arranged and settled separately after we confirm your area.</p><?php if($share!==''):?><a class="okv-btn-outline mt-5 w-full" href="<?=okv_e($share)?>" rel="noopener">Share on WhatsApp</a><?php endif;?></aside></div><section class="okv-card mt-6"><h2 class="font-display text-xl font-bold">Order Trail</h2><ol class="mt-4 space-y-3"><?php foreach($order['history'] as $event):?><li><strong><?=okv_e(ucfirst($event['new_status']))?></strong> <span class="text-sm text-ink-60"><?=okv_e(date('j M Y, H:i',strtotime($event['created_at'])))?></span></li><?php endforeach;?></ol></section></main><?php okv_shop_footer();?></body></html>
