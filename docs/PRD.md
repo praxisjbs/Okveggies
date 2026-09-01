@@ -74,7 +74,7 @@ Same seal, same promise everywhere. What changes between surfaces is information
 ### 4.1 Storefront (`/`)
 
 - **Top navigation (desktop) / bottom tab bar (mobile):** Home, Shop, Combos, Kitchen Runs (a clear button, not buried), Basket, Account.
-- **Shop:** search plus filter by category. Product cards show photo, name, unit, this week's price, and an add control.
+- **Shop:** search plus filter by category. Product cards show photo, name, unit, this week's price, and an add control. The search is live and the grid is paginated; see Section 5.6.
 - **Product page:** gallery, name, unit, this week's price, description, the "Sourced [day] from [state]" line, and at the bottom a **"Goes well with"** row of suggested products that pair with this one.
 - **Combos:** the ready-made baskets, editorial treatment, one-tap "Add full basket".
 - **Kitchen Runs:** the request flow (Section 8).
@@ -126,6 +126,19 @@ A simple status the admin sets: available, out of stock, or restocking (with an 
 ### 5.5 "Goes well with"
 
 Admin-curated pairings per product (a `product_pairings` table), with a same-category fallback when none are set. Shown at the bottom of the product page and used to nudge basket size.
+
+### 5.6 Browsing a long catalogue (search and pagination)
+
+The shop grid (`shop.php`) and the admin catalogue (`admin/products.php`) are the same behaviour on two surfaces. Both have to stay quick to use when the catalogue runs well past one screen.
+
+- **Search is live.** Typing filters the list, debounced at 300ms. There is no Search button to press. On the admin catalogue the category and on-shop dropdowns apply the moment they change.
+- **Results are rendered on the server, always.** A live filter asks `api/v1/catalog.php` or `api/v1/products.php` (action `browse`) for one page and swaps the results region with what comes back, so what someone sees as they type is the same markup a plain load of the same URL renders. The two cannot drift.
+- **25 rows to a page**, on both listings. `Catalogue::PER_PAGE` and `Products::PER_PAGE` hold that number and nothing else may repeat it.
+- **The page switcher carries the filters.** Previous and Next, plus numbered pages with the first and the last always within reach. Changing a filter drops back to page 1. Nothing renders at all when the results fit on one page.
+- **A count sits over every listing:** "24 items" while everything fits on one page, "Showing 26 to 50 of 87 items" once it does not.
+- **The address bar keeps up.** Search, category and page all live in the URL, so a set of results can be shared and the browser back button steps back through the filters.
+- **A deep link beats the pagination.** `/admin/products.php?product=12` from the Pricing screen opens that product's panel on whichever page holds it. When the filters in play do not list the product at all, the link opens page 1 rather than a page the product is nowhere on.
+- **It all works with JavaScript off.** The GET forms submit, the server filters, and the page links are plain anchors. Live filtering makes the same job faster; it is never the only way to do it.
 
 ---
 
@@ -360,6 +373,7 @@ Display: **Plus Jakarta Sans** (700, 800, 600 italic). Body, UI, prices: **Hanke
 - **Inputs:** 48px height, radius 6px, labels always visible above the field, six states, error and success carry an icon plus text, never colour alone.
 - **Product card:** 16px padding, 12px radius, hero-on-white photo.
 - **Icons:** 24px grid, 2px stroke, rounded caps and joins, line only, never filled.
+- **Pagination:** Previous, a window of numbered pages, Next, under any listing that runs past one page (Section 5.6). 44px minimum touch target on every control, the current page carrying `aria-current="page"` so it is never marked by colour alone, and the gold focus ring left visible.
 
 ### 19.5 Motion
 
