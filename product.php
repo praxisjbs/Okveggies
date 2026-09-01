@@ -2,6 +2,7 @@
 /** Product detail, availability, sourcing and related produce. */
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/activation_banner.php';
+require_once __DIR__ . '/includes/components/shop/brand.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/product_card.php';
@@ -9,6 +10,7 @@ require_once __DIR__ . '/includes/components/shop/support_widget.php';
 
 $product = Catalogue::productBySlug((string) okv_input('slug', ''));
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
+$sourceDay = Settings::str('source_day', '');
 
 if (!$product) {
     http_response_code(404);
@@ -18,8 +20,9 @@ if (!$product) {
     <body class="min-h-screen bg-forest-tint">
     <?php okv_activation_banner(); okv_shop_header('shop'); ?>
     <main class="okv-container py-16 text-center md:py-24">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Product not found</p>
-      <h1 class="mt-3 font-display text-4xl font-extrabold text-ink">That item is not on the stall</h1>
+      <?php okv_seal(120, 'mx-auto', ''); ?>
+      <p class="okv-eyebrow mt-6">Product not found</p>
+      <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3">That item is not on the stall</h1>
       <p class="mx-auto mt-4 max-w-lg text-ink-60">It may have moved or is no longer in this week's catalogue. Browse the shop to see what is available and what is restocking.</p>
       <a href="/shop.php" class="okv-btn mt-8">Back to the shop</a>
     </main>
@@ -85,19 +88,19 @@ $basketNotice = (string) okv_input('basket', '');
 
       <section class="lg:col-span-5">
         <div class="lg:sticky lg:top-24">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink"><?= okv_e($product['category_name']) ?></p>
-          <h1 class="mt-2 font-display text-4xl font-extrabold text-ink md:text-5xl"><?= okv_e($product['name']) ?></h1>
+          <p class="okv-eyebrow"><a href="/shop.php?category=<?= okv_e($product['category_slug']) ?>" class="hover:text-forest"><?= okv_e($product['category_name']) ?></a></p>
+          <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($product['name']) ?></h1>
           <div class="mt-4 flex flex-wrap items-center gap-3">
-            <p class="font-mono text-2xl font-semibold text-forest"><?= okv_e(Money::format((int) $product['current_price_subunit'])) ?></p>
+            <p class="font-mono text-okv-h6 font-semibold text-forest"><?= okv_e(Money::format((int) $product['current_price_subunit'])) ?></p>
             <span class="text-ink-60">per <?= okv_e($product['unit']) ?></span>
             <span class="okv-badge <?= $availability['key'] === 'available' ? 'okv-badge-available' : 'okv-badge-out' ?>"><?= okv_e($availability['label']) ?></span>
           </div>
 
-          <p class="mt-6 text-lg leading-relaxed text-ink-60"><?= nl2br(okv_e($product['description'])) ?></p>
+          <p class="mt-6 text-okv-lead text-ink-60"><?= nl2br(okv_e($product['description'])) ?></p>
 
           <div class="mt-6 rounded-lg border border-mist bg-white p-4">
-            <p class="font-semibold text-ink">Sourced this week from <?= okv_e($sourceRegions) ?></p>
-            <p class="mt-1 text-sm text-ink-60">Minimum <?= okv_e(okv_quantity($product['minimum_quantity'])) ?><?= okv_e($product['unit']) ?>. Add in steps of <?= okv_e(okv_quantity($product['quantity_increment'])) ?><?= okv_e($product['unit']) ?>.</p>
+            <?php okv_sourced_note($sourceRegions, $sourceDay, 'font-semibold text-ink'); ?>
+            <p class="mt-2 text-sm text-ink-60">Sold per <?= okv_e($product['unit']) ?>. Minimum <?= okv_e(okv_quantity($product['minimum_quantity'])) ?><?= okv_e($product['unit']) ?>, added in steps of <?= okv_e(okv_quantity($product['quantity_increment'])) ?><?= okv_e($product['unit']) ?>.</p>
           </div>
 
           <form method="post" action="/api/v1/cart.php" class="mt-6" data-add-form>
@@ -117,11 +120,11 @@ $basketNotice = (string) okv_input('basket', '');
     <section class="border-t border-mist bg-white">
       <div class="okv-container py-12 md:py-16">
         <div class="flex items-end justify-between gap-4">
-          <div><p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">From the same kitchen</p><h2 class="mt-2 font-display text-3xl font-bold text-ink">Goes well with</h2></div>
+          <div><p class="okv-eyebrow">From the same kitchen</p><h2 class="mt-3 font-editorial text-okv-h5 text-ink md:text-okv-h4">Goes well with</h2></div>
           <a href="/shop.php?category=<?= okv_e($product['category_slug']) ?>" class="okv-btn-text hidden sm:inline-flex">See <?= okv_e($product['category_name']) ?></a>
         </div>
         <div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          <?php foreach ($suggestions as $suggestion): ?><?php okv_product_card($suggestion, $sourceRegions, $returnTo); ?><?php endforeach; ?>
+          <?php foreach ($suggestions as $suggestion): ?><?php okv_product_card($suggestion, $sourceRegions, $returnTo, $sourceDay); ?><?php endforeach; ?>
         </div>
       </div>
     </section>

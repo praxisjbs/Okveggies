@@ -9,9 +9,11 @@
 #   2. No banned enterprise jargon in customer-facing code.
 #   3. Gold is never a solid button fill (bg-gold with text on top).
 #   4. No arbitrary colour: no Tailwind [#hex] and no inline style hex.
-#   5. The brand assets exist (logo, favicon set, manifest, fonts).
-#   6. Every page that loads the stylesheet also emits the brand head partial,
+#   5. An outline button never carries white text on its own white fill.
+#   6. The brand assets exist (logo, favicon set, manifest, fonts).
+#   7. Every page that loads the stylesheet also emits the brand head partial,
 #      so a new page can never ship without a favicon and the fonts.
+#   8. The compiled stylesheet is current with the brand.
 #
 # Reference docs (docs/), third-party code (vendor/), build output and minified
 # bundles are out of scope: this guards what we write and ship as our own.
@@ -68,7 +70,18 @@ else
   okay "no arbitrary hex in markup"
 fi
 
-echo "[brand] 5. brand assets present"
+echo "[brand] 5. an outline button on a dark ground"
+# okv-btn-outline fills itself white. Adding text-white to it paints white on
+# white, which is exactly the bug the home hero shipped with. The on-forest
+# variant is okv-btn-outline-invert, so this pairing is always a mistake.
+if printf '%s\n' $SRC_PHP $SRC_JS | xargs grep -nP 'okv-btn-outline(?!-invert)[-\w]*[^"\x27]*\btext-white\b|\btext-white\b[^"\x27]*okv-btn-outline(?!-invert)' 2>/dev/null | grep -q .; then
+  printf '%s\n' $SRC_PHP $SRC_JS | xargs grep -nP 'okv-btn-outline(?!-invert)[-\w]*[^"\x27]*\btext-white\b|\btext-white\b[^"\x27]*okv-btn-outline(?!-invert)' 2>/dev/null | sed 's/^/       /'
+  note "okv-btn-outline carrying text-white renders white on white. Use okv-btn-outline-invert on a forest or slate ground."
+else
+  okay "no outline button painting white on white"
+fi
+
+echo "[brand] 6. brand assets present"
 ASSETS="favicon.ico site.webmanifest
   assets/img/brand/monogram.svg assets/img/brand/monogram-white.svg
   assets/img/brand/lockup.svg assets/img/brand/lockup-white.svg
@@ -82,7 +95,7 @@ missing=0
 for a in $ASSETS; do [ -f "$a" ] || { note "missing brand asset: $a"; missing=1; }; done
 [ "$missing" -eq 0 ] && okay "all brand assets present"
 
-echo "[brand] 6. every page carries the brand head partial"
+echo "[brand] 7. every page carries the brand head partial"
 offenders=0
 for f in $SRC_PHP; do
   if grep -qE 'rel="stylesheet"[^>]*tailwind\.css' "$f" && ! grep -q 'okv_head_meta' "$f"; then
@@ -92,7 +105,7 @@ for f in $SRC_PHP; do
 done
 [ "$offenders" -eq 0 ] && okay "every page emits okv_head_meta()"
 
-echo "[brand] 7. compiled stylesheet is current with the brand"
+echo "[brand] 8. compiled stylesheet is current with the brand"
 CSS="assets/css/tailwind.css"
 if [ ! -f "$CSS" ]; then
   note "missing built stylesheet: $CSS (run: npm run build:css)"

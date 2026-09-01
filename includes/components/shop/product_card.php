@@ -1,7 +1,21 @@
 <?php
-/** Product card used by search results and related-product rows. */
+/**
+ * includes/components/shop/product_card.php
+ * -----------------------------------------------------------------------------
+ * OK Veggies. The product card used by the shop grid, the "Goes well with" row
+ * and the home page's week of picks. Bible 5.5: 16px padding, 12px radius, a
+ * hero-on-white photo. The sourcing line rides on the card too, because the
+ * promise is meant to be read where the buying decision is made (bible 6.3),
+ * not only on the product page.
+ *
+ * Alt text follows the pattern in bible 6.8: "[Product], [unit], sourced from
+ * [state]". Availability is a badge with words, never colour on its own.
+ * -----------------------------------------------------------------------------
+ */
+require_once __DIR__ . '/brand.php';
+
 if (!function_exists('okv_product_card')) {
-    function okv_product_card(array $product, string $sourceRegions, string $returnTo): void
+    function okv_product_card(array $product, string $sourceRegions, string $returnTo, string $sourceDay = ''): void
     {
         $availability = okv_availability((string) ($product['availability_status'] ?? 'available'), $product['restock_date'] ?? null);
         $unit = (string) ($product['unit'] ?? '');
@@ -31,14 +45,20 @@ if (!function_exists('okv_product_card')) {
           <?php if (!empty($product['short_description'])): ?>
             <p class="mt-2 line-clamp-2 text-sm text-ink-60"><?= okv_e($product['short_description']) ?></p>
           <?php endif; ?>
-          <div class="mt-auto flex items-end justify-between gap-2 pt-4">
-            <p class="font-mono font-semibold text-forest"><?= okv_e(Money::format((int) $product['current_price_subunit'])) ?></p>
-            <form method="post" action="/api/v1/cart.php" data-add-form>
+          <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-2 text-xs text-ink-60'); ?>
+          <!--
+            The row wraps on purpose. On a two-up grid at 390px the price and
+            the Add button do not both fit on one line, and wrapping puts the
+            button on its own line rather than pushing the whole page sideways.
+          -->
+          <div class="mt-auto flex flex-wrap items-end justify-between gap-2 pt-4">
+            <p class="font-mono text-okv-lead font-semibold text-forest"><?= okv_e(Money::format((int) $product['current_price_subunit'])) ?></p>
+            <form method="post" action="/api/v1/cart.php" class="ml-auto" data-add-form>
               <?= Csrf::field() ?>
               <input type="hidden" name="action" value="add_product">
               <input type="hidden" name="product_id" value="<?= (int) $product['id'] ?>">
               <input type="hidden" name="return_to" value="<?= okv_e($returnTo) ?>">
-              <button type="submit" class="okv-btn min-w-[72px] px-4" <?= $availability['can_add'] ? '' : 'disabled' ?> data-add-button><?= $availability['can_add'] ? 'Add' : 'Waiting' ?></button>
+              <button type="submit" class="okv-btn px-4" <?= $availability['can_add'] ? '' : 'disabled' ?> data-add-button><?= $availability['can_add'] ? 'Add' : 'Waiting' ?></button>
             </form>
           </div>
         </article>

@@ -4,9 +4,14 @@
  * One combo, its contents and the one-tap Add. Filters on active plus inside
  * the availability window through Catalogue::comboBySlug(); a combo that is
  * off the shop returns null and the branded 404 renders instead.
+ *
+ * The basket name is set in DM Serif Display (bible 5.1) and the contents are
+ * listed as real produce lines with a link to every component, which is the
+ * combo half of the two-way deep link in PRD 4.4.
  */
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/activation_banner.php';
+require_once __DIR__ . '/includes/components/shop/brand.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
@@ -14,6 +19,7 @@ require_once __DIR__ . '/includes/components/shop/combo_card.php';
 
 $combo = Catalogue::comboBySlug((string) okv_input('slug', ''));
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
+$sourceDay = Settings::str('source_day', '');
 
 if (!$combo) {
     http_response_code(404);
@@ -23,8 +29,9 @@ if (!$combo) {
     <body class="min-h-screen bg-forest-tint">
     <?php okv_activation_banner(); okv_shop_header('combos'); ?>
     <main class="okv-container py-16 text-center md:py-24">
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Combo not found</p>
-      <h1 class="mt-3 font-display text-4xl font-extrabold text-ink">That basket is not on the shop</h1>
+      <?php okv_seal(120, 'mx-auto', ''); ?>
+      <p class="okv-eyebrow mt-6">Combo not found</p>
+      <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3">That basket is not on the shop</h1>
       <p class="mx-auto mt-4 max-w-lg text-ink-60">It may have moved or is no longer on this week's list. Browse the combos to see what is ready now.</p>
       <a href="/combos.php" class="okv-btn mt-8">See this week's combos</a>
     </main>
@@ -45,6 +52,7 @@ $canonical = rtrim((string) APP_URL, '/') . $returnTo;
 $ogImage = $image !== '' ? rtrim((string) APP_URL, '/') . okv_image_url($image) : '';
 $basketNotice = (string) okv_input('basket', '');
 $description = trim((string) ($combo['description'] ?? ''));
+$componentCount = (int) $combo['component_count'];
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -81,7 +89,7 @@ $description = trim((string) ($combo['description'] ?? ''));
       <section class="lg:col-span-7" aria-label="Combo photo">
         <div class="overflow-hidden rounded-lg bg-white p-4 shadow-okv-1">
           <?php if ($image !== ''): ?>
-            <img src="<?= okv_e(okv_image_url($image)) ?>" alt="<?= okv_e($combo['name']) ?>, ready basket of <?= (int) $combo['component_count'] ?> items, sourced from <?= okv_e($sourceRegions) ?>" class="aspect-square w-full rounded-md object-cover">
+            <img src="<?= okv_e(okv_image_url($image)) ?>" alt="<?= okv_e($combo['name']) ?>, ready basket of <?= $componentCount ?> items, sourced from <?= okv_e($sourceRegions) ?>" class="aspect-square w-full rounded-md object-cover">
           <?php else: ?>
             <div class="flex aspect-square items-center justify-center text-ink-40">Photo coming soon</div>
           <?php endif; ?>
@@ -90,26 +98,26 @@ $description = trim((string) ($combo['description'] ?? ''));
 
       <section class="lg:col-span-5">
         <div class="lg:sticky lg:top-24">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Ready basket</p>
-          <h1 class="mt-2 font-display text-4xl font-extrabold text-ink md:text-5xl"><?= okv_e($combo['name']) ?></h1>
+          <p class="okv-eyebrow">Ready basket</p>
+          <h1 class="mt-2 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($combo['name']) ?></h1>
 
           <?php if ($saving > 0): ?>
             <div class="mt-4 flex flex-wrap items-baseline gap-3">
-              <p class="font-mono text-2xl font-semibold text-forest"><?= okv_e(Money::format($price)) ?></p>
-              <p class="font-mono text-lg text-ink-40 line-through" aria-label="Component total"><?= okv_e(Money::format($componentTotal)) ?></p>
+              <p class="font-mono text-okv-h6 font-semibold text-forest"><?= okv_e(Money::format($price)) ?></p>
+              <p class="font-mono text-okv-lead text-ink-40 line-through" aria-label="Component total"><?= okv_e(Money::format($componentTotal)) ?></p>
             </div>
-            <p class="mt-1 text-sm font-semibold uppercase tracking-wider text-foliage">You save <?= okv_e(Money::format($saving)) ?> against buying the pieces separately</p>
+            <p class="okv-badge okv-badge-available mt-2">You save <?= okv_e(Money::format($saving)) ?> against buying the pieces separately</p>
           <?php else: ?>
-            <p class="mt-4 font-mono text-2xl font-semibold text-forest"><?= okv_e(Money::format($price)) ?></p>
+            <p class="mt-4 font-mono text-okv-h6 font-semibold text-forest"><?= okv_e(Money::format($price)) ?></p>
           <?php endif; ?>
 
           <?php if ($description !== ''): ?>
-            <p class="mt-6 text-lg leading-relaxed text-ink-60"><?= nl2br(okv_e($description)) ?></p>
+            <p class="mt-6 text-okv-lead text-ink-60"><?= nl2br(okv_e($description)) ?></p>
           <?php endif; ?>
 
           <div class="mt-6 rounded-lg border border-mist bg-white p-4">
-            <p class="font-semibold text-ink">Sourced this week from <?= okv_e($sourceRegions) ?></p>
-            <p class="mt-1 text-sm text-ink-60"><?= (int) $combo['component_count'] ?> <?= (int) $combo['component_count'] === 1 ? 'item arrives together' : 'items arrive together' ?>. One tap adds the whole basket to your order.</p>
+            <?php okv_sourced_note($sourceRegions, $sourceDay, 'font-semibold text-ink'); ?>
+            <p class="mt-2 text-sm text-ink-60"><?= $componentCount ?> <?= $componentCount === 1 ? 'item arrives together' : 'items arrive together' ?>. One tap adds the whole basket to your order.</p>
           </div>
 
           <form method="post" action="/api/v1/cart.php" class="mt-6" data-add-form>
@@ -126,7 +134,7 @@ $description = trim((string) ($combo['description'] ?? ''));
     <section class="mt-12" aria-labelledby="combo-contents">
       <div class="rounded-lg bg-white p-6 shadow-okv-1 md:p-8">
         <div class="flex flex-wrap items-baseline justify-between gap-4">
-          <h2 id="combo-contents" class="font-display text-2xl font-bold text-ink">What is inside this basket</h2>
+          <h2 id="combo-contents" class="font-editorial text-okv-h5 text-ink">What is inside this basket</h2>
           <p class="text-sm text-ink-60"><?= count($components) ?> <?= count($components) === 1 ? 'item' : 'items' ?></p>
         </div>
         <?php if ($components): ?>
@@ -140,13 +148,14 @@ $description = trim((string) ($combo['description'] ?? ''));
               <li class="flex items-center gap-4 py-3">
                 <div class="h-14 w-14 flex-none overflow-hidden rounded-md bg-forest-tint">
                   <?php if (!empty($line['image'])): ?>
-                    <img src="<?= okv_e(okv_image_url((string) $line['image'])) ?>" alt="<?= okv_e($productName) ?>, per <?= okv_e($unit) ?>" class="h-full w-full object-cover" loading="lazy">
+                    <img src="<?= okv_e(okv_image_url((string) $line['image'])) ?>" alt="<?= okv_e($productName) ?>, per <?= okv_e($unit) ?>, sourced from <?= okv_e($sourceRegions) ?>" class="h-full w-full object-cover" loading="lazy">
                   <?php endif; ?>
                 </div>
                 <div class="min-w-0 flex-1">
-                  <p class="font-semibold text-ink"><a href="/product.php?slug=<?= okv_e($productSlug) ?>" class="hover:text-forest"><?= okv_e($productName) ?></a></p>
-                  <p class="text-sm text-ink-60"><?= okv_e($quantity) ?><?= okv_e($unit) ?></p>
+                  <p class="font-semibold text-ink"><a href="/product.php?slug=<?= okv_e($productSlug) ?>" class="transition-colors duration-botanical ease-botanical hover:text-forest"><?= okv_e($productName) ?></a></p>
+                  <p class="font-mono text-sm text-ink-60"><?= okv_e($quantity) ?><?= okv_e($unit) ?></p>
                 </div>
+                <a href="/product.php?slug=<?= okv_e($productSlug) ?>" class="okv-btn-text flex-none px-2 text-sm" aria-label="See <?= okv_e($productName) ?> on its own">See item</a>
               </li>
             <?php endforeach; ?>
           </ul>
