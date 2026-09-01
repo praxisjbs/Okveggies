@@ -38,3 +38,19 @@ RedirectMatch 403 ^/(includes|migrations|scripts|docs|vendor|node_modules)(/|$)
 
 # --- Let the uploads folder serve files but never execute PHP ----------------
 # (uploads/.htaccess enforces the no-execution rule.)
+
+# --- Correct MIME types for the brand assets ---------------------------------
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+    AddType font/woff2 .woff2
+    AddType image/svg+xml .svg
+</IfModule>
+
+# --- Long-cache the fingerprinted static assets (okv_asset appends ?v=) -------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType font/woff2   "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 30 days"
+    ExpiresByType image/png    "access plus 30 days"
+    ExpiresByType image/x-icon "access plus 30 days"
+</IfModule>

@@ -12,7 +12,8 @@ Rbac::requirePermission('issues.view');
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Make It Right . OK Veggies</title>
-<link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
+<?php okv_head_meta(); ?>
+  <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
 <body class="bg-forest-tint min-h-screen">
 <div class="okv-container py-16">
   <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>

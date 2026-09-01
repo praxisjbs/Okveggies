@@ -38,6 +38,7 @@ $tagline  = Settings::str('business_tagline', 'Sourced right. Priced right. Deli
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>OK Veggies. Fresh from farms we can name.</title>
   <meta name="description" content="Fresh produce from verified farms in Ogun State and Jos, delivered on the day you pick. Sourced right. Priced right. Delivered right.">
+  <?php okv_head_meta(); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen">
@@ -49,7 +50,7 @@ $tagline  = Settings::str('business_tagline', 'Sourced right. Priced right. Deli
   <div class="okv-container py-16 md:py-24 grid md:grid-cols-2 gap-10 items-center">
     <div class="animate-okv-rise">
       <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold mb-4">Est. 2026 . Lagos</p>
-      <h1 class="font-display font-extrabold text-4xl md:text-5xl leading-tight">We are bringing the other half home.</h1>
+      <h1 class="font-editorial text-4xl md:text-5xl leading-tight">We are bringing the other half home.</h1>
       <p class="mt-5 text-white/85 text-lg max-w-md">Fresh produce from farms we have checked ourselves in Ogun State and Jos. Weighed right, and brought on the day you pick.</p>
       <div class="mt-8 flex flex-wrap gap-3">
         <a href="/shop.php" class="okv-btn border border-white bg-white text-forest hover:bg-forest-tint">Start shopping</a>
@@ -88,7 +89,7 @@ $tagline  = Settings::str('business_tagline', 'Sourced right. Priced right. Deli
   <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Cooked together, priced together</p>
-      <h2 class="font-display font-bold text-2xl text-ink mt-2">This week's combos</h2>
+      <h2 class="font-editorial text-2xl text-ink mt-2">This week's combos</h2>
     </div>
     <a href="/combos.php" class="okv-btn-text">See all combos</a>
   </div>
@@ -102,7 +103,7 @@ $tagline  = Settings::str('business_tagline', 'Sourced right. Priced right. Deli
 
 <!-- Categories -->
 <section class="okv-container py-14">
-  <h2 class="font-display font-bold text-2xl text-ink mb-6">Shop by category</h2>
+  <h2 class="font-editorial text-2xl text-ink mb-6">Shop by category</h2>
   <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
     <?php foreach ($categories as $c): ?>
       <a href="/shop.php?category=<?= okv_e($c['slug']) ?>" class="okv-card text-center font-medium text-ink hover:text-forest">
@@ -114,7 +115,7 @@ $tagline  = Settings::str('business_tagline', 'Sourced right. Priced right. Deli
 
 <!-- Featured products -->
 <section class="okv-container pb-16">
-  <h2 class="font-display font-bold text-2xl text-ink mb-6">This week's picks</h2>
+  <h2 class="font-editorial text-2xl text-ink mb-6">This week's picks</h2>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
     <?php foreach ($featured as $p): ?>
       <a href="/product.php?slug=<?= okv_e($p['slug']) ?>" class="okv-card block">
