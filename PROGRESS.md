@@ -32,6 +32,7 @@ The host is a Truehost shared cPanel account with **SFTP only, no SSH shell**, s
 - Docroot is `/home/ibbbnlso/public_html`. PHP is 8.3 (MultiPHP Manager). The error log lives under `/home/ibbbnlso/logs/`.
 - Secrets live only in GitHub Actions and the server `.env`, never in the repo. The `MIGRATE_TOKEN` in the server `.env` must match the GitHub secret of the same name. Full setup, the secret list, and a manual FileZilla fallback are in `docs/DEPLOYMENT.md`.
 - The deploy never deletes remote files, so the server `.env` and everything under `uploads/` survive every deploy.
+- **One deploy runs at a time** (`concurrency: deploy-production`). The upload is a whole-tree sync into one docroot and the last step calls one shared migration runner, so two overlapping runs mean one is writing files into the tree the other is migrating from. A queued run is superseded by a newer one rather than cancelling a run mid-upload, which would leave the docroot half old and half new.
 
 ---
 
@@ -169,6 +170,14 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 - `assets/js/auth.js` gains the two-step reset wiring (send the code, then set the password), so the admin page moves between steps without a reload and carries the email across; with JavaScript off the server redirects between steps, same as the customer page.
 - PRD gains **Section 10.4, "Password reset by email code"**, stating the rule once for both customers and staff.
 - Tests: new `scripts/tests/staff_password_reset_db_test.php` (eligibility: active staff yes, disabled staff, customer and unknown email no; the full code cycle including a spent and an expired code; and that a reset stamps and moves `password_changed_at`). Not runnable in this sandbox (no `.env`, no database), so it is linted here and needs a run against a scratch database. Verified here: `php scripts/tests/run.php` green at 243 assertions, `php -l` clean on every touched file, `node --check assets/js/auth.js` clean, `node scripts/build-js.mjs` rebuilt the minified JS (only `auth.min.js` moved; every other min file reproduced byte for byte with the pinned esbuild 0.24.0), and `bash scripts/brand-check.sh` green (no em dash, no banned words).
+
+### 1 Sep 2026, one deploy at a time
+
+Three deploys ran together on the evening of 1 Sep: brand PR2, brand PR3 and the staff password reset follow-up. Each uploads the whole tree into the same docroot over SFTP and then calls the same migration runner, so the runs crossed: PR3's migration (`010`) was applied by another run's runner, and PR3's own run found only `011` pending, a migration from a branch it had never seen. Every run reported success and the end state was correct, but only because migrations are idempotent and recorded in `schema_migrations`. That is luck holding a race closed, not a design.
+
+`.github/workflows/deploy.yml` now carries `concurrency: deploy-production` with `cancel-in-progress: false`, so a deploy waits for the one ahead of it instead of racing it. Cancelling was rejected on purpose: killing a run mid-upload leaves the docroot half old and half new, which is worse than waiting. A queued run being superseded by a newer one is safe, because every upload is the full tree and the runner applies every version still pending.
+
+Not changed, and worth a decision later: the upload sends `vendor/` in full on every deploy, which is most of the 7 minutes each run takes. Adding a `timeout-minutes` to the job would also turn a genuinely hung SFTP session into a fast failure rather than a six hour one.
 
 ### 1 Sep 2026, Brand identity PR3: the back office, the documents and the emails
 
