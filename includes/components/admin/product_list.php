@@ -52,7 +52,7 @@ if (!function_exists('okv_admin_product_cards')) {
     ): void {
 ?>
     <?php if (!$products): ?>
-      <div class="okv-card">
+      <div class="okv-panel okv-panel-body">
         <p class="text-ink-60">
           <?= $hasFilters ? 'Nothing matched those filters.' : 'There are no products yet.' ?>
           <?php if ($hasFilters): ?>
@@ -68,8 +68,8 @@ if (!function_exists('okv_admin_product_cards')) {
         $availability = okv_availability((string) $product['availability_status'], $product['restock_date'] ?? null);
         $isActive = (int) $product['is_active'] === 1;
     ?>
-      <div class="okv-card" id="product-<?= $id ?>">
-        <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="okv-panel" id="product-<?= $id ?>">
+        <div class="okv-panel-head">
           <div class="flex gap-4 min-w-0">
             <div class="w-16 h-16 rounded-md bg-forest-tint overflow-hidden shrink-0">
               <?php if (!empty($product['image'])): ?>
@@ -77,7 +77,7 @@ if (!function_exists('okv_admin_product_cards')) {
               <?php endif; ?>
             </div>
             <div class="min-w-0">
-              <p class="font-display font-bold text-ink"><?= okv_e($product['name']) ?></p>
+              <p class="okv-panel-title"><?= okv_e($product['name']) ?></p>
               <p class="text-xs text-ink-40 font-mono"><?= okv_e($product['sku']) ?></p>
               <p class="text-sm text-ink-60 mt-1">
                 <?= okv_e($product['category_name']) ?>, per <?= okv_e($product['unit']) ?>
@@ -88,17 +88,29 @@ if (!function_exists('okv_admin_product_cards')) {
             </div>
           </div>
           <div class="text-right shrink-0">
-            <p class="font-mono font-semibold text-forest">
+            <p class="font-mono tabular-nums font-semibold text-forest">
               <?= $price > 0 ? okv_e(Money::format($price)) : '<span class="text-ink-40 font-sans text-sm">Not priced</span>' ?>
             </p>
             <div class="flex flex-wrap justify-end gap-1 mt-2">
-              <span class="okv-badge <?= $isActive ? 'okv-badge-available' : 'okv-badge-out' ?>"><?= $isActive ? 'On the shop' : 'Off the shop' ?></span>
-              <span class="okv-badge <?= $availability['key'] === 'available' ? 'okv-badge-available' : 'okv-badge-out' ?>"><?= okv_e($availability['short_label']) ?></span>
+              <!-- Off the shop is a decision, not a fault, so it reads neutral.
+                   Tomato is kept for the state that actually costs a sale. -->
+              <span class="okv-badge <?= $isActive ? 'okv-badge-available' : 'okv-badge-neutral' ?>"><?= $isActive ? 'On the shop' : 'Off the shop' ?></span>
+              <?php
+                // Three availability states, three readings. Restocking is not
+                // out of stock: it has a date, so it carries the warning tone
+                // rather than the alarm one. Every badge still says its word,
+                // so colour is never the only signal (bible 6.8).
+                $availabilityTone = [
+                    'available'  => 'okv-badge-available',
+                    'restocking' => 'okv-badge-warn',
+                ][$availability['key']] ?? 'okv-badge-out';
+              ?>
+              <span class="okv-badge <?= $availabilityTone ?>"><?= okv_e($availability['short_label']) ?></span>
             </div>
           </div>
         </div>
 
-        <details class="mt-4" <?= $openId === $id ? 'open' : '' ?>>
+        <details class="okv-panel-body" <?= $openId === $id ? 'open' : '' ?>>
           <summary class="okv-btn-text text-sm cursor-pointer select-none">Manage</summary>
           <div class="mt-4 grid gap-6 lg:grid-cols-2">
 
@@ -108,7 +120,7 @@ if (!function_exists('okv_admin_product_cards')) {
               <?= Csrf::field() ?>
               <input type="hidden" name="action" value="update">
               <input type="hidden" name="product_id" value="<?= $id ?>">
-              <div class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" data-okv-error role="alert" aria-live="polite" hidden></div>
+              <div class="okv-note-bad" data-okv-error role="alert" aria-live="polite" hidden></div>
 
               <p class="font-semibold text-sm text-ink">Details</p>
               <div>

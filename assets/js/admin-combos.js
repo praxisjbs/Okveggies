@@ -234,7 +234,8 @@
     var activeBadge = panel.querySelector('[data-combo-active-badge]');
     if (activeBadge) {
       activeBadge.textContent = Number(combo.is_active) === 1 ? 'On the shop' : 'Off the shop';
-      activeBadge.className = 'okv-badge ' + (Number(combo.is_active) === 1 ? 'okv-badge-available' : 'okv-badge-out');
+      // Same two tones the server renders: off the shop is neutral, not an alarm.
+      activeBadge.className = 'okv-badge ' + (Number(combo.is_active) === 1 ? 'okv-badge-available' : 'okv-badge-neutral');
     }
     var featured = panel.querySelector('[data-combo-featured-badge]');
     if (featured) { featured.hidden = Number(combo.is_featured) !== 1; }

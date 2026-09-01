@@ -9,7 +9,8 @@
 #   2. No banned enterprise jargon in customer-facing code.
 #   3. Gold is never a solid button fill (bg-gold with text on top).
 #   4. No arbitrary colour: no Tailwind [#hex] and no inline style hex.
-#   5. The brand assets exist (logo, favicon set, manifest, fonts).
+#   5. The brand assets exist (logo, favicon set, manifest, fonts, the
+#      single-ink set for documents and the raster mark for email).
 #   6. Every page that loads the stylesheet also emits the brand head partial,
 #      so a new page can never ship without a favicon and the fonts.
 #
@@ -72,6 +73,8 @@ echo "[brand] 5. brand assets present"
 ASSETS="favicon.ico site.webmanifest
   assets/img/brand/monogram.svg assets/img/brand/monogram-white.svg
   assets/img/brand/lockup.svg assets/img/brand/lockup-white.svg
+  assets/img/brand/lockup-mono-green.svg assets/img/brand/monogram-mono-green.svg
+  assets/img/brand/lockup-white-720.png
   assets/img/brand/wordmark.svg assets/img/brand/seal-640.png assets/img/brand/og-image.png
   assets/img/brand/icons/favicon.svg assets/img/brand/icons/favicon-32.png
   assets/img/brand/icons/apple-touch-icon.png assets/img/brand/icons/icon-192.png

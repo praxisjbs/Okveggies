@@ -2,23 +2,27 @@
 /**
  * admin/content.php
  * OK Veggies. Page copy and contact messages.
- * Status: scaffold placeholder. Build in milestone M9. See docs/PRD.md Section 18.
- * Before writing logic here: read the PRD section, then ask at least five
- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
+ * Status: scaffold placeholder inside the real admin shell. Build in milestone M9.
+ * See docs/PRD.md Section 18. Before writing logic here: read the PRD section, then
+ * ask at least five clarifying questions (see CLAUDE.md). No em dash, no
+ * jargon, on brand.
  */
 require_once __DIR__ . '/../includes/bootstrap.php';
+require_once __DIR__ . '/../includes/components/admin/placeholder.php';
 Rbac::requirePermission('content.view');
-?>
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Content and Messages . OK Veggies</title>
-<?php okv_head_meta(); ?>
-  <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
-<body class="bg-forest-tint min-h-screen">
-<div class="okv-container py-16">
-  <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
-  <h1 class="font-display font-extrabold text-3xl text-ink mt-2">Content and Messages</h1>
-  <p class="text-ink-60 mt-3 max-w-xl">This screen is scaffolded and waiting to be built in milestone M9. The plan for it is in docs/PRD.md Section 18.</p>
-  <a href="/" class="okv-btn mt-6">Back to the shop</a>
-</div>
-</body></html>
+
+$okv_admin_title = 'Content and Messages';
+$okv_admin_note  = 'The page copy customers read, and the messages they send you.';
+require __DIR__ . '/../includes/components/admin/header.php';
+
+okv_admin_placeholder(
+    'M9',
+    'Section 18',
+    'Our Story, How It Works, the questions and answers and the legal pages are edited here rather than in code, alongside the messages that come in from the contact form and the support widget.',
+    [
+        ['label' => 'See the shop as a customer does', 'href' => '/'],
+        ['label' => 'Manage the catalogue', 'href' => '/admin/products.php'],
+    ]
+);
+
+require __DIR__ . '/../includes/components/admin/footer.php';
