@@ -5,6 +5,24 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# One deploy at a time. The upload is a whole-tree SFTP sync into a single
+# docroot, and the last step calls one shared migration runner against whatever
+# migrations/ holds at that moment. Two runs overlapping means one is writing
+# files into the tree the other is migrating from: on 1 Sep 2026 three deploys
+# ran together and a migration from one branch was applied by another branch's
+# runner. It came out right only because migrations are idempotent and version
+# tracked. Serialising removes the race rather than relying on that.
+#
+# cancel-in-progress stays false on purpose. Cancelling a running deploy would
+# kill an SFTP upload part way and leave the docroot half old and half new,
+# which is the one state worse than waiting. A queued run is superseded by a
+# newer one instead, and that is safe: every upload is the full tree, so the
+# newer commit carries whatever the skipped one held, and the migration runner
+# applies every version that is still pending.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
