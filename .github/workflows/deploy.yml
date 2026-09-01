@@ -12,6 +12,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Brand consistency check
+        # Nothing ships that breaks a house law. Same guard as CI.
+        run: bash scripts/brand-check.sh
+
       - name: Stage a clean upload set
         run: |
           mkdir -p _dist

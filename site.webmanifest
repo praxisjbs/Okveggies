@@ -1,0 +1,20 @@
+{
+  "name": "OK Veggies",
+  "short_name": "OK Veggies",
+  "description": "Fresh from farms we can name. Sourced right, priced right, delivered right.",
+  "lang": "en-NG",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0F5132",
+  "background_color": "#FFFFFF",
+  "categories": ["food", "shopping", "lifestyle"],
+  "icons": [
+    { "src": "/assets/img/brand/icons/favicon-32.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "/assets/img/brand/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/img/brand/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/assets/img/brand/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -34,6 +34,7 @@ $errorText = $errorCode !== ''
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sign in . OK Veggies</title>
+  <?php okv_head_meta(); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen bg-forest flex items-center justify-center p-4">

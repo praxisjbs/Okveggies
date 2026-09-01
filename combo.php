@@ -19,7 +19,7 @@ if (!$combo) {
     http_response_code(404);
     ?><!doctype html>
     <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Combo not found. OK Veggies</title><meta name="robots" content="noindex"><link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
+    <title>Combo not found. OK Veggies</title><meta name="robots" content="noindex"><?php okv_head_meta(); ?><link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
     <body class="min-h-screen bg-forest-tint">
     <?php okv_activation_banner(); okv_shop_header('combos'); ?>
     <main class="okv-container py-16 text-center md:py-24">
@@ -53,12 +53,8 @@ $description = trim((string) ($combo['description'] ?? ''));
   <title><?= okv_e($pageTitle) ?></title>
   <meta name="description" content="<?= okv_e($description !== '' ? $description : $combo['name'] . ', a ready basket from OK Veggies.') ?>">
   <link rel="canonical" href="<?= okv_e($canonical) ?>">
-  <meta property="og:type" content="product">
-  <meta property="og:site_name" content="OK Veggies">
-  <meta property="og:title" content="<?= okv_e($pageTitle) ?>">
-  <meta property="og:description" content="<?= okv_e($description !== '' ? $description : $combo['name']) ?>">
   <meta property="og:url" content="<?= okv_e($canonical) ?>">
-  <?php if ($ogImage !== ''): ?><meta property="og:image" content="<?= okv_e($ogImage) ?>"><?php endif; ?>
+  <?php okv_head_meta(['og_type' => 'product', 'og_title' => $pageTitle, 'og_description' => ($description !== '' ? $description : (string) $combo['name']), 'og_image' => $ogImage]); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen bg-forest-tint">

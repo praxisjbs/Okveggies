@@ -52,9 +52,14 @@ module.exports = {
         mist: '#EAE8E8',
       },
       fontFamily: {
-        display: ['"Plus Jakarta Sans"', '"Hanken Grotesk"', 'Segoe UI', '-apple-system', 'sans-serif'],
-        sans:    ['"Hanken Grotesk"', 'Segoe UI', '-apple-system', 'sans-serif'],
-        mono:    ['"JetBrains Mono"', '"SF Mono"', 'Consolas', 'monospace'],
+        // Hanken Grotesk is the workhorse for body, UI and strong headings; it
+        // carries the 400 to 800 weights the interface leans on. DM Serif Display
+        // is the editorial voice (headlines, manifesto, pull quotes, combo names),
+        // opted in with `font-editorial`. JetBrains Mono lines up figures. Bible 5.1.
+        sans:      ['"Hanken Grotesk"', 'Segoe UI', '-apple-system', 'sans-serif'],
+        display:   ['"Hanken Grotesk"', 'Segoe UI', '-apple-system', 'sans-serif'],
+        editorial: ['"DM Serif Display"', 'Georgia', 'Cambria', 'serif'],
+        mono:      ['"JetBrains Mono"', '"SF Mono"', 'Consolas', 'monospace'],
       },
       borderRadius: {
         sm: '3px',

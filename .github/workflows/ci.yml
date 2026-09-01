@@ -1,0 +1,44 @@
+name: CI
+
+# Every push and pull request gets linted, built and brand-checked, so nothing
+# reaches main that breaks the build or the brand. The deploy workflow gates on
+# the same brand check before it ships.
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: PHP lint (every file we ship)
+        run: |
+          set -e
+          find . -name '*.php' -not -path './vendor/*' -not -path './node_modules/*' -print0 \
+            | xargs -0 -n1 php -l >/dev/null
+          echo "php -l: all clean"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build CSS and JS
+        # This repo does not commit package-lock.json, so use install, not ci.
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Brand consistency check
+        run: bash scripts/brand-check.sh
+
+      - name: Unit tests
+        run: php scripts/tests/run.php

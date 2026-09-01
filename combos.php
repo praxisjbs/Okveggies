@@ -40,6 +40,7 @@ $noticeMessages = [
   <meta property="og:title" content="<?= okv_e($pageTitle) ?>">
   <meta property="og:description" content="Ready-made combo baskets for a Lagos kitchen. One tap, one price, delivered on the day you pick.">
   <meta property="og:url" content="<?= okv_e($canonical) ?>">
+  <?php okv_head_meta(); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen bg-forest-tint">
