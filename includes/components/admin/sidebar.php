@@ -80,7 +80,7 @@ $okv_sb_role = in_array('owner', Rbac::roles(), true) ? 'Owner' : (in_array('man
           $active = okv_admin_nav_is_active($item['href']);
       ?>
         <a href="<?= okv_e($item['href']) ?>"
-           class="flex items-center gap-3 mx-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-botanical <?= $active ? 'bg-white/15 text-white' : 'text-white/85 hover:bg-white/10 hover:text-white' ?>"
+           class="flex min-h-[44px] md:min-h-[40px] items-center gap-3 mx-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-botanical <?= $active ? 'bg-white/15 text-white ring-1 ring-white/20' : 'text-white/85 hover:bg-white/10 hover:text-white' ?>"
            <?= $active ? 'aria-current="page"' : '' ?>>
           <?= okv_admin_nav_icon($item['icon']) ?>
           <span><?= okv_e($item['label']) ?></span>
@@ -91,13 +91,13 @@ $okv_sb_role = in_array('owner', Rbac::roles(), true) ? 'Owner' : (in_array('man
 
   <div class="border-t border-white/10 px-5 py-4">
     <p class="text-sm font-medium leading-tight"><?= okv_e($okv_sb_name) ?></p>
-    <p class="text-xs text-white/60"><?= okv_e($okv_sb_role) ?></p>
-    <div class="mt-3 flex items-center gap-4">
-      <a href="/admin/account.php" class="text-xs text-white/80 hover:text-white underline underline-offset-2">Your account</a>
+    <p class="mt-1 inline-flex items-center rounded-full border border-white/25 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/75"><?= okv_e($okv_sb_role) ?></p>
+    <div class="mt-2 flex items-center gap-4">
+      <a href="/admin/account.php" class="inline-flex min-h-[44px] items-center text-xs text-white/80 hover:text-white underline underline-offset-2">Your account</a>
       <form method="POST" action="/api/v1/auth.php" class="inline">
         <?= Csrf::field() ?>
         <input type="hidden" name="action" value="logout">
-        <button type="submit" class="text-xs text-white/80 hover:text-white underline underline-offset-2">Sign out</button>
+        <button type="submit" class="inline-flex min-h-[44px] items-center text-xs text-white/80 hover:text-white underline underline-offset-2">Sign out</button>
       </form>
     </div>
   </div>

@@ -41,18 +41,22 @@ $resetDone = isset($_GET['reset']);
 </head>
 <body class="min-h-screen bg-forest flex items-center justify-center p-4">
   <div class="w-full max-w-sm bg-white rounded-lg shadow-okv-3 p-8 animate-okv-rise">
-    <p class="text-center uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
-    <h1 class="text-center font-display font-extrabold text-2xl text-ink mt-1">Staff sign in</h1>
+    <!-- Sign in has room for the full seal to read, so it gets the seal rather
+         than the small lockup (bible 3.4 and the minimum sizes in 3.3). -->
+    <img src="<?= okv_e(okv_asset('/assets/img/brand/seal-320.png')) ?>" alt="OK Veggies"
+         width="128" height="128" class="mx-auto h-32 w-32">
+    <h1 class="text-center font-display font-extrabold text-2xl text-ink mt-4">Staff sign in</h1>
+    <p class="text-center text-sm text-ink-60 mt-1">The Owner and the Manager enter here.</p>
 
     <form action="/api/v1/auth.php" method="POST" class="mt-6 space-y-4" autocomplete="on" data-okv-auth id="okv-login-form">
       <?= Csrf::field() ?>
       <input type="hidden" name="action" value="login">
 
       <div role="status" aria-live="polite"
-           class="rounded-md bg-foliage-tint text-forest text-sm px-4 py-3"<?= $resetDone ? '' : ' hidden' ?>>Your password is changed. Please sign in with it.</div>
+           class="okv-note-ok"<?= $resetDone ? '' : ' hidden' ?>>Your password is changed. Please sign in with it.</div>
 
       <div data-okv-error role="alert" aria-live="polite"
-           class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3"<?= $errorText === '' ? ' hidden' : '' ?>><?= okv_e($errorText) ?></div>
+           class="okv-note-bad"<?= $errorText === '' ? ' hidden' : '' ?>><?= okv_e($errorText) ?></div>
 
       <div>
         <label for="identifier" class="okv-label">Phone number or email</label>
@@ -68,6 +72,7 @@ $resetDone = isset($_GET['reset']);
     </form>
 
     <p class="mt-6 text-center text-sm"><a href="/admin/password_reset.php" class="okv-btn-text">Forgot your password?</a></p>
+    <p class="mt-2 text-center text-xs"><a href="/" class="text-forest underline underline-offset-4">Back to the shop</a></p>
   </div>
   <script src="<?= okv_e(okv_asset('/assets/js/auth.js')) ?>" defer></script>
 </body>

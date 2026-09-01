@@ -23,12 +23,13 @@ $errorCode = (string) ($_GET['error'] ?? '');
 $errorText = $errorCode !== '' ? ($errorMessages[$errorCode] ?? 'We could not change your password. Try again.') : '';
 
 $okv_admin_title = 'Your account';
+$okv_admin_note  = 'Your details as they stand, and the one thing you can change yourself: your password.';
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
   <div class="grid gap-6 lg:grid-cols-2 max-w-4xl">
 
-    <div class="okv-card">
-      <h2 class="font-display font-extrabold text-xl text-ink">Your details</h2>
+    <div class="okv-panel okv-panel-body">
+      <h2 class="okv-panel-title">Your details</h2>
       <dl class="mt-4 space-y-3 text-sm">
         <div class="flex justify-between gap-4"><dt class="text-ink-60">Name</dt><dd class="text-ink font-medium text-right"><?= okv_e($fullName) ?></dd></div>
         <div class="flex justify-between gap-4"><dt class="text-ink-60">Email</dt><dd class="text-ink font-medium text-right break-all"><?= okv_e($me['email'] ?? '') ?></dd></div>
@@ -38,11 +39,11 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <p class="text-xs text-ink-40 mt-4">To change your name, email or phone, ask the Owner in Users and Roles.</p>
     </div>
 
-    <div class="okv-card">
-      <h2 class="font-display font-extrabold text-xl text-ink">Change your password</h2>
+    <div class="okv-panel okv-panel-body">
+      <h2 class="okv-panel-title">Change your password</h2>
 
       <?php if ($changed): ?>
-        <div role="status" class="rounded-md bg-foliage-tint text-forest text-sm px-4 py-3 mt-4">Your password is changed.</div>
+        <div role="status" class="okv-note-ok mt-4">Your password is changed.</div>
       <?php endif; ?>
 
       <form action="/api/v1/auth.php" method="POST" class="mt-4 space-y-4" data-okv-auth autocomplete="off">
@@ -50,7 +51,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
         <input type="hidden" name="action" value="change_password">
 
         <div data-okv-error role="alert" aria-live="polite"
-             class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3"<?= $errorText === '' ? ' hidden' : '' ?>><?= okv_e($errorText) ?></div>
+             class="okv-note-bad"<?= $errorText === '' ? ' hidden' : '' ?>><?= okv_e($errorText) ?></div>
 
         <div>
           <label for="current_password" class="okv-label">Current password</label>

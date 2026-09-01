@@ -215,3 +215,152 @@
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
+
+/* ---------------------------------------------------------------------------
+ * Admin and Pro Portal. The back office is desktop software (bible 1.9, PRD
+ * Section 2.2): denser than the shop, flatter, quicker to scan. These classes
+ * keep every admin screen on the same rhythm so a new page cannot drift.
+ *
+ * On density and the 44px rule: a compact control drops to 36px only from md
+ * up, where the pointer is a mouse. On a phone every control is still 44px, so
+ * bible 6.8 holds with no exception.
+ * ------------------------------------------------------------------------ */
+@layer components {
+  /* The page head: what this screen is, one line of context, its actions. */
+  .okv-page-head { @apply flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-mist; }
+  .okv-page-title { @apply font-display font-extrabold text-2xl text-ink leading-tight; }
+  .okv-page-note { @apply text-sm text-ink-60 mt-1 max-w-2xl; }
+  .okv-eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-40; }
+
+  /* Breadcrumbs. Every admin screen says where it sits and how to get back. */
+  .okv-crumbs { @apply flex flex-wrap items-center gap-1.5 text-xs text-ink-40; }
+  .okv-crumbs a { @apply text-ink-60 hover:text-forest underline underline-offset-2; }
+
+  /* A panel is the admin's card: flat, bordered, no hover lift. The shop lifts
+     its cards because they are merchandise; a data panel that moves under the
+     pointer only makes a long screen restless. */
+  .okv-panel { @apply bg-white rounded-lg border border-mist shadow-okv-1; }
+  .okv-panel-head { @apply flex flex-wrap items-start justify-between gap-4 px-4 py-3 border-b border-mist md:px-5; }
+  .okv-panel-title { @apply font-display font-bold text-base text-ink; }
+  .okv-panel-body { @apply p-4 md:p-5; }
+
+  /* Data tables. Hairline rules, quiet heads, figures in the mono face so a
+     column of naira lines up on the decimal.
+     The head is deliberately not sticky: a table that can scroll sideways is a
+     scroll container in both directions, so a sticky head inside one sticks to
+     a box that never scrolls and simply never moves. Better an honest head. */
+  .okv-table-wrap { @apply overflow-x-auto; }
+  .okv-table { @apply w-full text-sm border-collapse; }
+  .okv-table thead th {
+    @apply bg-white text-left align-bottom whitespace-nowrap
+           px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-40
+           border-b border-mist;
+  }
+  .okv-table tbody td { @apply px-3 py-2.5 align-middle border-b border-mist; }
+  .okv-table tbody tr:last-child td { @apply border-b-0; }
+  .okv-table tbody tr:hover { @apply bg-forest-tint/40; }
+  .okv-table-name { @apply font-medium text-ink; }
+  .okv-table-sub { @apply text-xs text-ink-40; }
+
+  /* Compact controls for dense screens. 40px is one step of the 8px grid down
+     from the 44px touch target, and it only applies from md up, where the
+     pointer is a mouse. On a phone every control is still 44px (bible 6.8). */
+  .okv-btn-sm { @apply okv-btn min-h-[44px] md:min-h-10 px-4 text-sm; }
+  .okv-btn-outline-sm { @apply okv-btn-outline min-h-[44px] md:min-h-10 px-4 text-sm; }
+  .okv-input-sm { @apply okv-input min-h-[44px] md:min-h-10 px-3 text-sm; }
+
+  /* Stat tiles. The figure is the point, so it carries the mono face and the
+     label sits above it, quiet. */
+  .okv-stat { @apply bg-white rounded-lg border border-mist p-4; }
+  .okv-stat-label { @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-40; }
+  .okv-stat-figure { @apply font-mono tabular-nums text-2xl font-semibold text-ink mt-1; }
+  .okv-stat-note { @apply text-xs text-ink-60 mt-1; }
+
+  /* Badges. Colour is never the only signal, so every badge carries its word. */
+  .okv-badge-neutral { @apply bg-mist text-ink-60; }
+  .okv-badge-info { @apply bg-forest-tint text-forest; }
+  .okv-badge-warn { @apply bg-gold-tint2 text-gold-ink; }
+
+  /* Notices. Icon plus text, per bible 6.2. */
+  .okv-note { @apply rounded-md text-sm px-4 py-3; }
+  .okv-note-ok { @apply okv-note bg-foliage-tint text-forest; }
+  .okv-note-bad { @apply okv-note bg-tomato-tint text-tomato; }
+}
+
+/* ---------------------------------------------------------------------------
+ * Documents: invoice, receipt and anything else that is printed or saved as a
+ * PDF. Built from plain block and table CSS rather than flex or grid, because
+ * the same markup goes through dompdf in M5 and dompdf reads neither. Colours
+ * still come from the tokens (theme()), never a hand-typed hex.
+ *
+ * The letterhead carries the single-ink mono-green lockup: bible 3.7a names
+ * receipts and invoices as its use, and 3.8 forbids desaturating the
+ * photographic seal for one-colour work.
+ * ------------------------------------------------------------------------ */
+@layer components {
+  .okv-doc {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 32px;
+    background: #fff;
+    color: theme('colors.ink.DEFAULT');
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .okv-doc-head { width: 100%; border-collapse: collapse; }
+  .okv-doc-head td { vertical-align: top; padding: 0; }
+  .okv-doc-mark { width: 260px; height: auto; }
+  .okv-doc-org { text-align: right; font-size: 12px; line-height: 1.7; color: theme('colors.ink.60'); }
+  .okv-doc-org strong { color: theme('colors.ink.DEFAULT'); }
+  .okv-doc-rule { height: 2px; background: theme('colors.forest.DEFAULT'); margin: 20px 0 24px; }
+  .okv-doc-kind {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase; color: theme('colors.ink.40');
+  }
+  .okv-doc-title { font-size: 25px; font-weight: 800; line-height: 1.35; margin: 2px 0 0; }
+  .okv-doc-ref { font-family: theme('fontFamily.mono'); font-size: 14px; color: theme('colors.forest.DEFAULT'); }
+  .okv-doc-gap { margin-top: 12px; }
+  .okv-doc-gap-lg { margin-top: 24px; }
+  .okv-doc-meta { width: 100%; border-collapse: collapse; margin-top: 24px; }
+  .okv-doc-meta td { vertical-align: top; padding: 0 16px 0 0; width: 33%; font-size: 13px; }
+  .okv-doc-meta dt, .okv-doc-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase; color: theme('colors.ink.40'); margin-bottom: 4px;
+  }
+  .okv-doc-lines { width: 100%; border-collapse: collapse; margin-top: 32px; font-size: 13px; }
+  .okv-doc-lines th {
+    text-align: left; padding: 8px 12px 8px 0; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; color: theme('colors.ink.40');
+    border-bottom: 1px solid theme('colors.forest.DEFAULT');
+  }
+  .okv-doc-lines td { padding: 10px 12px 10px 0; border-bottom: 1px solid theme('colors.mist'); }
+  .okv-doc-lines .okv-doc-figure { text-align: right; padding-right: 0; }
+  .okv-doc-figure { font-family: theme('fontFamily.mono'); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .okv-doc-totals { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+  .okv-doc-totals td { padding: 6px 0; }
+  .okv-doc-totals .okv-doc-figure { text-align: right; }
+  .okv-doc-total-row td { border-top: 2px solid theme('colors.forest.DEFAULT'); font-weight: 700; font-size: 16px; padding-top: 12px; }
+  .okv-doc-foot {
+    margin-top: 48px; padding-top: 16px; border-top: 1px solid theme('colors.mist');
+    font-size: 12px; color: theme('colors.ink.60');
+  }
+  .okv-doc-stamp {
+    display: inline-block; border: 1px solid theme('colors.forest.DEFAULT');
+    border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+    color: theme('colors.forest.DEFAULT');
+  }
+}
+
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff; }
+  .okv-no-print { display: none !important; }
+  .okv-doc { max-width: none; margin: 0; padding: 0; box-shadow: none; }
+  .okv-doc-lines thead { display: table-header-group; }
+  .okv-doc-lines tr, .okv-doc-totals tr { page-break-inside: avoid; }
+  /* The forest rules and the mark are the document's only ink. Keep them. */
+  .okv-doc-rule, .okv-doc-lines th, .okv-doc-total-row td, .okv-doc-stamp {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

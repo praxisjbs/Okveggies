@@ -1,23 +1,21 @@
 <?php
 /**
  * pro/orders.php
- * OK Veggies. Your order history.
- * Status: scaffold placeholder. Build in milestone M8. See docs/PRD.md Section 3.
- * Before writing logic here: read the PRD section, then ask at least five
- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
+ * OK Veggies. Your orders and their invoices.
+ * Status: scaffold placeholder inside the Pro Portal shell. Build in milestone
+ * M8. See docs/PRD.md Section 3 and Section 4.2. Before writing logic here:
+ * read the PRD section, then ask at least five clarifying questions (see
+ * CLAUDE.md), and add the server-side access check this screen needs. No em
+ * dash, no jargon, on brand.
  */
 require_once __DIR__ . '/../includes/bootstrap.php';
-?>
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Orders and Invoices . OK Veggies</title>
-<?php okv_head_meta(); ?>
-  <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
-<body class="bg-forest-tint min-h-screen">
-<div class="okv-container py-16">
-  <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
-  <h1 class="font-display font-extrabold text-3xl text-ink mt-2">Orders and Invoices</h1>
-  <p class="text-ink-60 mt-3 max-w-xl">This screen is scaffolded and waiting to be built in milestone M8. The plan for it is in docs/PRD.md Section 3.</p>
-  <a href="/" class="okv-btn mt-6">Back to the shop</a>
-</div>
-</body></html>
+require_once __DIR__ . '/../includes/components/pro/placeholder.php';
+
+$okv_pro_title  = 'Orders and Invoices';
+$okv_pro_note   = 'Every order you have placed, with its invoice and its delivery day.';
+$okv_pro_active = '/pro/orders.php';
+require __DIR__ . '/../includes/components/pro/header.php';
+
+okv_pro_placeholder('Every order for every branch, what it cost, when it arrived, and the invoice to download for your records.');
+
+require __DIR__ . '/../includes/components/pro/footer.php';

@@ -47,41 +47,39 @@ $canEdit   = Rbac::can('pricing.update');
 $canImport = Rbac::can('pricing.import');
 $canExport = Rbac::can('pricing.export');
 
-$okv_admin_title = 'Pricing';
+$okv_admin_title   = 'Pricing';
+$okv_admin_note    = 'Change a price by typing over it. Every change is recorded with who made it and when, so nothing is ever lost.';
+$okv_admin_actions = trim(
+    ($canExport ? '<a href="/api/v1/pricing.php?action=export" class="okv-btn-outline-sm">Download price list</a>' : '')
+    . ($canEdit ? '<button type="button" class="okv-btn-outline-sm" data-bulk-open>Move a whole category</button>' : '')
+    . ($canImport ? '<button type="button" class="okv-btn-sm" data-import-open>Import a price sheet</button>' : '')
+);
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
   <div class="space-y-6">
 
-    <!-- What this screen is, and the two bulk tools -->
-    <div class="okv-card">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 class="font-display font-extrabold text-xl text-ink">This week's prices</h2>
-          <p class="text-sm text-ink-60 mt-1 max-w-xl">
-            Change a price by typing over it. Every change is recorded with who made it and when, so nothing is ever lost.
-            <?= count($products) ?> active <?= count($products) === 1 ? 'product' : 'products' ?><?= $unpriced > 0 ? ', ' . $unpriced . ' still without a price' : '' ?>.
-          </p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <?php if ($canExport): ?>
-            <a href="/api/v1/pricing.php?action=export" class="okv-btn-outline px-4">Download price list</a>
-          <?php endif; ?>
-          <?php if ($canEdit): ?>
-            <button type="button" class="okv-btn-outline px-4" data-bulk-open>Move a whole category</button>
-          <?php endif; ?>
-          <?php if ($canImport): ?>
-            <button type="button" class="okv-btn px-4" data-import-open>Import a price sheet</button>
-          <?php endif; ?>
-        </div>
-      </div>
+    <!-- Where the price list stands this week -->
+    <div class="okv-panel okv-panel-body flex flex-wrap items-center gap-x-6 gap-y-2">
+      <p class="text-sm text-ink-60">
+        <span class="font-mono tabular-nums text-ink"><?= count($products) ?></span>
+        active <?= count($products) === 1 ? 'product' : 'products' ?>
+      </p>
+      <?php if ($unpriced > 0): ?>
+        <p class="text-sm text-tomato">
+          <span class="font-mono tabular-nums font-semibold"><?= $unpriced ?></span>
+          still without a price, so <?= $unpriced === 1 ? 'it cannot' : 'they cannot' ?> sell
+        </p>
+      <?php else: ?>
+        <p class="text-sm text-forest">Every active product is priced.</p>
+      <?php endif; ?>
     </div>
 
     <!-- Move a whole category ------------------------------------------------>
     <?php if ($canEdit): ?>
-    <section class="okv-card" data-bulk-panel hidden>
+    <section class="okv-panel okv-panel-body" data-bulk-panel hidden>
       <div class="flex items-start justify-between gap-4">
         <div>
-          <h2 class="font-display font-extrabold text-lg text-ink">Move a whole category</h2>
+          <h2 class="okv-panel-title">Move a whole category</h2>
           <p class="text-sm text-ink-60 mt-1">See exactly what would change before anything is saved. If one product cannot take the move, none of them do.</p>
         </div>
         <button type="button" class="okv-btn-text px-2" data-bulk-close>Close</button>
@@ -126,10 +124,10 @@ require __DIR__ . '/../includes/components/admin/header.php';
 
     <!-- Import a price sheet -------------------------------------------------->
     <?php if ($canImport): ?>
-    <section class="okv-card" data-import-panel hidden>
+    <section class="okv-panel okv-panel-body" data-import-panel hidden>
       <div class="flex items-start justify-between gap-4">
         <div>
-          <h2 class="font-display font-extrabold text-lg text-ink">Import a price sheet</h2>
+          <h2 class="okv-panel-title">Import a price sheet</h2>
           <p class="text-sm text-ink-60 mt-1 max-w-2xl">
             Send back the sheet you downloaded, or any sheet with a SKU column and a price column. We read it and show you
             what would change. Nothing is saved until you say so. A row with an empty price is left alone, and a SKU we do
@@ -160,22 +158,22 @@ require __DIR__ . '/../includes/components/admin/header.php';
         $rows = $byCategory[(int) $category['id']] ?? [];
         if (!$rows) { continue; }
     ?>
-      <section class="okv-card">
-        <div class="flex items-baseline justify-between gap-4">
-          <h2 class="font-display font-extrabold text-lg text-ink"><?= okv_e($category['name']) ?></h2>
+      <section class="okv-panel">
+        <div class="okv-panel-head">
+          <h2 class="okv-panel-title"><?= okv_e($category['name']) ?></h2>
           <p class="text-sm text-ink-60"><?= count($rows) ?> <?= count($rows) === 1 ? 'product' : 'products' ?></p>
         </div>
 
-        <div class="mt-4 overflow-x-auto">
-          <table class="w-full text-sm">
+        <div class="okv-table-wrap">
+          <table class="okv-table">
             <caption class="sr-only"><?= okv_e($category['name']) ?> prices, editable</caption>
             <thead>
-              <tr class="text-left text-ink-60 border-b border-mist">
-                <th scope="col" class="py-2 pr-4 font-medium">Product</th>
-                <th scope="col" class="py-2 pr-4 font-medium hidden sm:table-cell">SKU</th>
-                <th scope="col" class="py-2 pr-4 font-medium">This week</th>
-                <th scope="col" class="py-2 pr-4 font-medium hidden md:table-cell">Last changed</th>
-                <th scope="col" class="py-2 font-medium"><span class="sr-only">Actions</span></th>
+              <tr>
+                <th scope="col">Product</th>
+                <th scope="col" class="hidden sm:table-cell">SKU</th>
+                <th scope="col">This week</th>
+                <th scope="col" class="hidden md:table-cell">Last changed</th>
+                <th scope="col" class="text-right"><span class="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -183,13 +181,13 @@ require __DIR__ . '/../includes/components/admin/header.php';
                   $id = (int) $product['id'];
                   $price = (int) $product['current_price_subunit'];
               ?>
-                <tr class="border-b border-mist last:border-0" data-price-row data-product-id="<?= $id ?>">
-                  <td class="py-3 pr-4">
-                    <a href="/admin/products.php?product=<?= $id ?>" class="font-medium text-ink hover:text-forest"><?= okv_e($product['name']) ?></a>
-                    <p class="text-xs text-ink-40">per <?= okv_e($product['unit']) ?></p>
+                <tr data-price-row data-product-id="<?= $id ?>">
+                  <td>
+                    <a href="/admin/products.php?product=<?= $id ?>" class="okv-table-name hover:text-forest"><?= okv_e($product['name']) ?></a>
+                    <p class="okv-table-sub">per <?= okv_e($product['unit']) ?></p>
                   </td>
-                  <td class="py-3 pr-4 hidden sm:table-cell font-mono text-xs text-ink-60"><?= okv_e($product['sku']) ?></td>
-                  <td class="py-3 pr-4">
+                  <td class="hidden sm:table-cell font-mono text-xs text-ink-60"><?= okv_e($product['sku']) ?></td>
+                  <td>
                     <?php if ($canEdit): ?>
                       <form action="/api/v1/pricing.php" method="POST" class="flex items-center gap-2" data-price-form>
                         <?= Csrf::field() ?>
@@ -199,21 +197,21 @@ require __DIR__ . '/../includes/components/admin/header.php';
                         <div class="flex items-center gap-1">
                           <span aria-hidden="true" class="text-ink-60">₦</span>
                           <input id="price-<?= $id ?>" name="price" type="text" inputmode="decimal"
-                                 class="okv-input w-28 font-mono"
+                                 class="okv-input-sm w-28 font-mono tabular-nums"
                                  value="<?= $price > 0 ? okv_e(number_format($price / 100, 0, '.', '')) : '' ?>"
                                  placeholder="Not priced"
                                  data-price-input data-original="<?= $price > 0 ? okv_e(number_format($price / 100, 0, '.', '')) : '' ?>">
                         </div>
-                        <button type="submit" class="okv-btn-outline px-3 text-xs" data-price-save hidden>Save</button>
+                        <button type="submit" class="okv-btn-outline-sm px-3 text-xs" data-price-save hidden>Save</button>
                       </form>
                     <?php else: ?>
-                      <span class="font-mono"><?= $price > 0 ? okv_e(Money::format($price)) : '<span class="text-ink-40">Not priced</span>' ?></span>
+                      <span class="font-mono tabular-nums"><?= $price > 0 ? okv_e(Money::format($price)) : '<span class="text-ink-40">Not priced</span>' ?></span>
                     <?php endif; ?>
                   </td>
-                  <td class="py-3 pr-4 hidden md:table-cell text-xs text-ink-40">
+                  <td class="hidden md:table-cell text-xs text-ink-40">
                     <?= $product['last_changed_at'] ? okv_e(date('j M Y', strtotime((string) $product['last_changed_at']))) : 'Never' ?>
                   </td>
-                  <td class="py-3 text-right">
+                  <td class="text-right">
                     <button type="button" class="okv-btn-text text-xs px-2" data-history-open data-product-id="<?= $id ?>" data-product-name="<?= okv_e($product['name']) ?>">History</button>
                   </td>
                 </tr>
@@ -225,7 +223,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <?php endforeach; ?>
 
     <?php if (!$products): ?>
-      <div class="okv-card">
+      <div class="okv-panel okv-panel-body">
         <p class="text-ink-60">There are no active products to price yet. <a href="/admin/products.php" class="text-forest underline underline-offset-2">Add one first</a>.</p>
       </div>
     <?php endif; ?>
@@ -235,7 +233,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
   <div id="price-history" class="fixed inset-0 z-40 bg-ink/40 p-4 flex items-end sm:items-center justify-center" hidden data-history-panel>
     <section class="bg-white rounded-lg shadow-okv-3 w-full max-w-xl max-h-[80vh] overflow-y-auto p-6" role="dialog" aria-modal="true" aria-labelledby="price-history-title">
       <div class="flex items-start justify-between gap-4">
-        <h2 id="price-history-title" class="font-display font-extrabold text-lg text-ink">Price history</h2>
+        <h2 id="price-history-title" class="okv-panel-title">Price history</h2>
         <button type="button" class="okv-btn-text px-2" data-history-close>Close</button>
       </div>
       <div class="mt-4" data-history-body></div>

@@ -1,5 +1,5 @@
 -- =============================================================================
--- 010_users_password_changed_at.sql
+-- 011_users_password_changed_at.sql
 -- OK Veggies. Add users.password_changed_at, the marker that lets a password
 -- change (a staff reset, an owner setting a colleague's password, or a signed-in
 -- change) sign every other open session for that person out. A session records
