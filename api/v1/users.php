@@ -163,7 +163,9 @@ switch ($action) {
         if ($policy !== null) {
             okv_error($policy, 422, 'weak_password');
         }
-        Database::run('UPDATE users SET password_hash = :h WHERE id = :id', [':h' => Password::hash($pass), ':id' => $id]);
+        // Move the password marker on too, so any session that person still has
+        // open elsewhere is signed out the next time it touches a staff page.
+        Database::run('UPDATE users SET password_hash = :h, password_changed_at = NOW() WHERE id = :id', [':h' => Password::hash($pass), ':id' => $id]);
         okv_json(['status' => 'ok', 'message' => 'Password set for ' . ($target['first_name'] ?? 'that person') . '.']);
         break;
     }

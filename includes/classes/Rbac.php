@@ -121,6 +121,7 @@ final class Rbac
     /** Require a logged-in staff user, or stop with a 401 (API) or a redirect. */
     public static function requireAuth(): void
     {
+        self::enforceSessionEpoch();
         if (self::isLoggedIn() && self::isStaff()) {
             return;
         }
@@ -130,11 +131,45 @@ final class Rbac
     /** Require a permission, or stop with a 403 (API) or a redirect. */
     public static function requirePermission(string $perm): void
     {
+        self::enforceSessionEpoch();
         if (!self::isLoggedIn()) {
             self::deny(401);
         }
         if (!self::hasPermission($perm)) {
             self::deny(403);
+        }
+    }
+
+    /**
+     * Sign this session out if the account's password has changed since the
+     * session logged in. It is how a password reset (or the owner setting a
+     * colleague's password) takes effect on every other open device. Runs only
+     * for a session that carries the login marker, so a session opened before
+     * this shipped is left alone until it next signs in, and it fails open on a
+     * database hiccup so a transient error never locks staff out.
+     */
+    private static function enforceSessionEpoch(): void
+    {
+        if (!array_key_exists('pwd_epoch', $_SESSION)) {
+            return;
+        }
+        $id = self::userId();
+        if ($id === null) {
+            return;
+        }
+        try {
+            $row = Database::one('SELECT password_changed_at FROM users WHERE id = :id', [':id' => $id]);
+        } catch (Throwable $e) {
+            error_log('rbac epoch check: ' . $e->getMessage());
+            return;
+        }
+        if ($row === null) {
+            return;
+        }
+        $current = (string) ($row['password_changed_at'] ?? '');
+        if ($current !== (string) $_SESSION['pwd_epoch']) {
+            Auth::logout();
+            self::deny(401);
         }
     }
 

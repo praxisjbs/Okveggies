@@ -28,6 +28,8 @@ $errorCode = (string) ($_GET['error'] ?? '');
 $errorText = $errorCode !== ''
     ? ($errorMessages[$errorCode] ?? 'We could not sign you in. Check your details and try again.')
     : '';
+// Landed here straight after a successful password reset.
+$resetDone = isset($_GET['reset']);
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -46,6 +48,9 @@ $errorText = $errorCode !== ''
       <?= Csrf::field() ?>
       <input type="hidden" name="action" value="login">
 
+      <div role="status" aria-live="polite"
+           class="rounded-md bg-foliage-tint text-forest text-sm px-4 py-3"<?= $resetDone ? '' : ' hidden' ?>>Your password is changed. Please sign in with it.</div>
+
       <div data-okv-error role="alert" aria-live="polite"
            class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3"<?= $errorText === '' ? ' hidden' : '' ?>><?= okv_e($errorText) ?></div>
 
@@ -62,7 +67,7 @@ $errorText = $errorCode !== ''
       <button type="submit" class="okv-btn w-full">Sign in</button>
     </form>
 
-    <p class="mt-6 text-center text-xs text-ink-40">Forgot your password? Ask the owner to set a new one for you.</p>
+    <p class="mt-6 text-center text-sm"><a href="/admin/password_reset.php" class="okv-btn-text">Forgot your password?</a></p>
   </div>
   <script src="<?= okv_e(okv_asset('/assets/js/auth.js')) ?>" defer></script>
 </body>
