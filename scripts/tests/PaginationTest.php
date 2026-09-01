@@ -28,6 +28,17 @@ okv_test_eq([1, '…', 8, 9, 10], okv_page_window(10, 10), 'the last page keeps 
 okv_test_eq([1, '…', 8, 9, 10], okv_page_window(14, 10), 'a page past the end clamps to the end');
 okv_test_eq([1, 2, 3], okv_page_window(-2, 3), 'a page below one clamps to one');
 
+// Which page a row sits on, given how many rows sort ahead of it. This is the
+// half of Products::pageOf() that is pure maths; the query that counts those
+// rows, and the check that the filters list the product at all, need a
+// database and are covered by the admin catalogue smoke test.
+okv_test_eq(1, okv_page_of_position(0, 25), 'the first row opens page one');
+okv_test_eq(1, okv_page_of_position(24, 25), 'the last row of page one is still page one');
+okv_test_eq(2, okv_page_of_position(25, 25), 'the twenty sixth row opens page two');
+okv_test_eq(4, okv_page_of_position(75, 25), 'row seventy six sits on page four');
+okv_test_eq(1, okv_page_of_position(-3, 25), 'a position below zero clamps to page one');
+okv_test_eq(4, okv_page_of_position(3, 0), 'a page size below one counts one row a page');
+
 // The summary line over a listing.
 okv_test_eq('0 items', okv_page_summary(1, 0, 25, 'item'), 'no matches says so plainly');
 okv_test_eq('1 item', okv_page_summary(1, 1, 25, 'item'), 'one row stays singular');

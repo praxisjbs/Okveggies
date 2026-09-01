@@ -133,7 +133,7 @@ $noticeMessages = [
       <button type="button" class="okv-btn-text px-2" data-filter-close>Close</button>
     </div>
     <form action="/shop.php" method="get" class="mt-6">
-      <input type="hidden" name="search" value="<?= okv_e($search) ?>" data-sheet-search>
+      <input type="hidden" name="search" value="<?= okv_e($search) ?>" data-sheet-search <?= $search === '' ? 'disabled' : '' ?>>
       <label for="mobile-category" class="okv-label">Category</label>
       <select id="mobile-category" name="category" class="okv-input">
         <option value="">All produce</option>

@@ -159,7 +159,12 @@
           var query = params.toString();
           node.setAttribute('href', '/shop.php' + (query ? '?' + query : ''));
         });
-        if (sheetSearch) { sheetSearch.value = state.search; }
+        // Disabled when empty so the sheet submits /shop.php?category=fruit
+        // rather than trailing an empty search= behind it.
+        if (sheetSearch) {
+          sheetSearch.value = state.search;
+          sheetSearch.disabled = state.search === '';
+        }
         container.querySelectorAll('[data-add-form]').forEach(enhanceAddForm);
       }).catch(function (error) {
         if (error && error.name === 'AbortError') { return; }
