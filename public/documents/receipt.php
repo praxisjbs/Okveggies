@@ -2,47 +2,113 @@
 /**
  * public/documents/receipt.php
  * -----------------------------------------------------------------------------
- * OK Veggies. The receipt for money already taken on an order.
+ * OK Veggies. The receipt for an order: what was paid, when, and how.
  *
- * Status: the branded frame is built and the letterhead is on brand. The rows
- * are not, because nothing takes a payment yet: the basket lands in M4 and
- * payments in M5. What is here is what M5 fills in, not a mock of it.
+ * Same access rules as the invoice (OrderDocument): the trail token, the
+ * signed-in owner, or staff with payments.view. Never a plain order id.
  *
- * When M5 builds the real receipt it must add, before anything is printed:
- *   1. The access check. A receipt is reached by the token link emailed with
- *      the payment, or by a signed-in customer who owns the order, or by staff
- *      with payments.view.
- *   2. The payment read: what was taken, when, by which channel, and whether it
- *      was the deposit or the balance, all from the payment record rather than
- *      recomputed, so a reprint always says what actually happened.
- *   3. dompdf for the PDF, rendering this same markup.
- *
- * Money goes through Money, the order number is whatever OrderNumber issued and
- * the order stored, and the mark is the single-ink mono-green lockup (bible
- * 3.7a). See docs/PRD.md Section 11.
+ * Where the invoice says what is owed, this says what has actually arrived, so
+ * it lists each payment against the order rather than the order total, and it
+ * shows a refund where one has been sent. Amounts come from the payment rows,
+ * which are the record of what really moved.
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/../../includes/bootstrap.php';
 require_once __DIR__ . '/../../includes/components/documents/document.php';
 
-okv_document_open(['title' => 'Receipt', 'print' => false]);
+$document = OrderDocument::load();
+
+if (!$document) {
+    okv_document_open(['title' => 'Receipt', 'print' => false]);
+    okv_document_letterhead([
+        'kind'      => 'Receipt',
+        'title'     => 'We could not open this receipt',
+        'reference' => null,
+        'issued_on' => date('j M Y'),
+    ]);
+    ?>
+    <div class="okv-doc-foot okv-doc-gap-lg">
+      <p class="okv-doc-stamp">Not available</p>
+      <p class="okv-doc-gap">
+        This receipt link is not one we can open. It may have been mistyped, or it may belong to
+        someone else. Use the link in your order email, or sign in and open the order from your account.
+      </p>
+    </div>
+    <?php
+    okv_document_close();
+    return;
+}
+
+$order    = $document['order'];
+$paid     = (int) $order['amount_paid_subunit'];
+$refunded = (int) $document['refunded_subunit'];
+
+if ($paid < 1) {
+    okv_document_open(['title' => 'Receipt ' . (string) $order['order_number'], 'print' => false]);
+    okv_document_letterhead([
+        'kind'      => 'Receipt',
+        'title'     => 'Nothing has been paid on this order yet',
+        'reference' => okv_document_reference((string) $order['order_number']),
+        'issued_on' => date('j M Y'),
+    ]);
+    ?>
+    <div class="okv-doc-foot okv-doc-gap-lg">
+      <p>A receipt is raised once money has arrived. Nothing has been paid on this order so far.</p>
+      <p class="okv-doc-gap">The invoice shows what is owed.</p>
+    </div>
+    <?php
+    okv_document_close();
+    return;
+}
+
+/** Each payment that actually holds money, as a document line. */
+$lines = [];
+foreach ($document['payments'] as $payment) {
+    $held = (int) $payment['paid_amount_subunit'];
+    if ($held < 1) {
+        continue;
+    }
+    $lines[] = [
+        'name'     => ucfirst(str_replace('_', ' ', (string) $payment['payment_type'])),
+        'unit'     => (string) $payment['provider'] === 'manual' ? 'recorded by us' : 'through Paystack',
+        'quantity' => $payment['confirmed_at'] ? date('j M Y', strtotime((string) $payment['confirmed_at'])) : '',
+        'amount'   => okv_document_money($held),
+    ];
+}
+
+okv_document_open(['title' => 'Receipt ' . (string) $order['order_number'], 'print' => true]);
 okv_document_letterhead([
     'kind'      => 'Receipt',
-    'title'     => 'What has been paid',
-    'reference' => null,
+    'title'     => 'What has been paid on this order',
+    'reference' => okv_document_reference((string) $order['order_number']),
     'issued_on' => date('j M Y'),
 ]);
+
+okv_document_meta([
+    'Received from' => OrderDocument::addressBlock($document['address']),
+    'Delivery day'  => date('l jS F Y', strtotime((string) $order['preferred_delivery_date'])),
+    'Order placed'  => date('j M Y', strtotime((string) $order['created_at'])),
+]);
+
+okv_document_lines($lines);
+
+$totals = [
+    ['label' => 'Order total', 'amount' => okv_document_money((int) $order['order_total_subunit']), 'is_total' => false],
+    ['label' => 'Paid',        'amount' => okv_document_money($paid), 'is_total' => false],
+];
+if ($refunded > 0) {
+    $totals[] = ['label' => 'Refunded', 'amount' => okv_document_money($refunded), 'is_total' => false];
+    $totals[] = ['label' => 'Net paid', 'amount' => okv_document_money($paid - $refunded), 'is_total' => true];
+} else {
+    $totals[] = ['label' => 'Balance due', 'amount' => okv_document_money(Money::balance((int) $order['order_total_subunit'], $paid)), 'is_total' => true];
+}
+okv_document_totals($totals);
 ?>
     <div class="okv-doc-foot okv-doc-gap-lg">
-      <p class="okv-doc-stamp">Not available yet</p>
-      <p class="okv-doc-gap">
-        A receipt is issued against a payment. Taking payment is still being built, so there is
-        nothing to receipt today. The letterhead, the layout and the print rules above are the ones
-        every receipt will carry.
-      </p>
-      <p class="okv-doc-gap">
-        Paid us for something already? Ask and we will send you the receipt.
-      </p>
+      <?php if ($refunded > 0): ?>
+        <p><?= okv_e(Money::format($refunded)) ?> has been refunded to you on this order.</p>
+      <?php endif; ?>
+      <p class="okv-doc-gap">Thank you for shopping with OK Veggies.</p>
     </div>
 <?php
 okv_document_close();

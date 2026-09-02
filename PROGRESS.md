@@ -92,10 +92,11 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] Paystack init and verify, all channels (`Paystack` client returns typed results so a decline and an unreachable gateway never collapse into one failure; channels come from Payment Settings and default to letting the Paystack dashboard decide)
 - [x] Webhook endpoint, signature check, idempotent inbox, status history (raw body signature, 200 acknowledged before any slow work, dedupe on event plus resource id with two unique keys behind it, append-only `payment_status_history` on every move)
 - [x] Deposit (configurable percentage) and balance; pay-on-delivery recorded by admin with proof (PR1 writes both payment rows at placement, guarded by a unique index on `(order_id, payment_type)`; PR2 adds one-step staff recording of cash and transfer, the evidence rule, the review queue and permission-gated reversals)
-- [ ] Refunds; settlement reconciliation view (PR3)
+- [x] Refunds; settlement reconciliation view (PR3: full and partial refunds through Paystack, all four refund states mirrored from webhooks, and a 30 day reconciliation of gross, Paystack fees, refunds and net computed from our own ledger)
 - [x] Tests: webhook signature and idempotency; deposit and balance maths (71 new assertions in `PaymentsTest.php`)
 
 ### M6. Delivery and the Order Trail
+- [ ] Order cancellation flow and screens. The money rules are already built and tested in M5 (`Cancellation`): who may cancel, the cutoff, and what happens to a deposit. M6 wires them to the order detail screen and does not get to reinvent them. Paid cancellations call the M5 refund engine.
 - [ ] Allowed days, cutoff, lead, zones (admin-managed), exceptions
 - [ ] Order lifecycle and status history
 - [ ] Public Order Trail page by token link (no login), and the "Sourced [day] from [state]" line
@@ -169,6 +170,28 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 2 Sep 2026, M5 payments PR3, refunds and the cancellation rules
+
+The last of three PRs on M5. Money going back out, and the policy M6 will read when it builds cancellation. M5 is now complete.
+
+**A refund is not a reversal.** A reversal (PR2) undoes a staff typing mistake and no money moves. A refund sends real naira back and cannot be undone, so it is Owner gated, it is never retried automatically, and it is never a single click: the confirmation names the order, the customer, what was paid, what has already gone back and what is left, before anything is sent.
+
+**The modal re-reads before it opens.** A Payments screen left open in a tab goes stale, and offering to refund money that has already gone back is how a customer gets paid twice. The panel is a `details` element that works with JavaScript off carrying the server's own figures; `admin-payments.js` upgrades it into a real modal and re-reads the refundable amount from the server at the moment it opens. If that read fails the modal does not open at all.
+
+**Refund payload shape was never needed.** The refund webhook payloads were the one piece of Paystack documentation this build never obtained. It turned out not to matter: an event identifies which refund and nothing more, and the state written is read back from Paystack with `fetchRefund`. That is the same rule PR1 applies to charges, and here it also means the code holds whatever shape their payload takes.
+
+- **`includes/classes/Refunds.php`.** Full and partial refunds, the amount guard that makes over-refunding impossible even with two approvers racing, and all four Paystack states mirrored onto the order in plain English. `refund.failed` is the case that justifies mirroring all four: without it a failed refund looks exactly like a slow one until the customer complains. A refund deliberately does not restore `balance_due`, because the order was paid and restoring it would put a settled order back on the chase list.
+- **`includes/classes/Cancellation.php`.** Pure policy, no database: the deadline in Lagos time, who may cancel, and what happens to a deposit. Built in M5 because every question it answers is a money question. M6 wires it to buttons.
+- **Cancellation settings** in the Order settings tab beside the deposit percentage, where the same kind of rule already lives: a cancellation cutoff separate from the delivery cutoff (they start equal and mean different things, one is about scheduling a van and the other about produce already bought), whether a late cancellation forfeits the deposit, and whether customers may cancel unaided at all.
+- **Invoice and receipt, carried since PR1, now real.** `OrderDocument` holds the access rules: the trail token, the signed-in owner, or staff with `payments.view`, and deliberately no plain `?order=12`. Every amount comes from the order snapshot, so reprinting an old invoice shows the figures the customer was actually given.
+- **Reconciliation.** Thirty days of gross, Paystack fees, refunds and net, computed from our own ledger rather than from Paystack settlement records, so it is useful the moment a payment lands rather than after a settlement run. A gap against the bank means a settlement in flight or a transaction Paystack never settled.
+
+Verified: `php -l` clean on every changed file, `brand-check.sh` eight of eight green, `782 / 782` assertions pass (89 new across `RefundsTest` and `CancellationTest`). `verify.sh` still needs a base URL and has not been run in any of the three PRs; it and a test mode payment end to end remain the outstanding checks before this goes live.
+
+Also removed `PAYSTACK_WEBHOOK_SECRET` from `.env.example`. No code has ever read it: Paystack signs webhooks with the secret key itself, so a separate webhook secret does not exist. Leaving it in the template invited someone debugging a signature failure to change the one key with no effect.
+
+Not built, and worth naming: pulling Paystack's own settlement records to cross check against the reconciliation above, and generating the invoice as a PDF through dompdf (the print rules are in place, so a browser print already produces one). Disputes remain modelled in the schema and unsurfaced.
 
 ### 2 Sep 2026, M5 payments PR2, manual money
 

@@ -81,9 +81,44 @@ if ($search !== '') {
     }
 }
 
+$canRefund = Rbac::can('payments.refund');
+$refundsStuck = $canRefund ? Refunds::needingAttention() : [];
+
+// Reconciliation, from our own ledger. What we took, what Paystack kept as its
+// fee, what went back out, and what should therefore reach the bank. Computed
+// from the transactions we recorded rather than from Paystack's settlement
+// records, so it is available the moment a payment lands rather than after a
+// settlement run.
+$reconciliation = Database::all(
+    'SELECT DATE(t.paid_at) AS day,
+            COUNT(*) AS payments,
+            COALESCE(SUM(t.requested_amount_subunit), 0) AS gross_subunit,
+            COALESCE(SUM(t.provider_fee_subunit), 0) AS fees_subunit
+       FROM payment_transactions t
+      WHERE t.status IN (\'success\', \'part_refunded\', \'refunded\')
+        AND t.paid_at IS NOT NULL
+        AND t.paid_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      GROUP BY DATE(t.paid_at)
+      ORDER BY day DESC'
+);
+
+$refundsByDay = [];
+foreach (Database::all(
+    'SELECT DATE(refunded_at) AS day, COALESCE(SUM(amount_subunit), 0) AS refunded_subunit
+       FROM refunds
+      WHERE status = :processed AND refunded_at IS NOT NULL
+        AND refunded_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      GROUP BY DATE(refunded_at)',
+    [':processed' => Refunds::STATUS_PROCESSED]
+) as $row) {
+    $refundsByDay[(string) $row['day']] = (int) $row['refunded_subunit'];
+}
+
 $recent = Database::all(
     'SELECT t.id, t.reference, t.provider, t.status, t.amount_subunit, t.channel,
-            t.paid_at, t.created_at, p.payment_type, o.id AS order_id, o.order_number
+            t.paid_at, t.created_at, p.payment_type, o.id AS order_id, o.order_number,
+            COALESCE((SELECT SUM(r.amount_subunit) FROM refunds r
+                       WHERE r.payment_transaction_id = t.id AND r.status <> \'failed\'), 0) AS refunded_subunit
        FROM payment_transactions t
        JOIN payments p ON p.id = t.payment_id
        JOIN orders o ON o.id = p.order_id
@@ -106,8 +141,9 @@ function okv_payment_badge(string $status): string
 
 $flash = (string) okv_input('payments', '');
 
-$okv_admin_title = 'Payments';
-$okv_admin_note  = 'The queue waiting on you, recording money that arrived outside Paystack, and every transaction so far.';
+$okv_admin_title  = 'Payments';
+$okv_admin_note   = 'The queue waiting on you, recording money that arrived outside Paystack, refunds, and every transaction so far.';
+$okv_admin_script = '/assets/js/admin-payments.js';
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
 <div class="space-y-8">
@@ -195,6 +231,33 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 <button class="okv-btn-outline min-h-[44px]">Ask for a reversal</button>
               </form>
             <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($refundsStuck): ?>
+      <h3 class="mt-6 text-sm font-semibold uppercase tracking-wide text-ink">
+        Refunds needing a look (<?= count($refundsStuck) ?>)
+      </h3>
+      <div class="mt-3 space-y-3">
+        <?php foreach ($refundsStuck as $stuck): ?>
+          <div class="rounded-lg border border-clay p-4">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <p class="font-semibold text-ink"><?= okv_e(Money::format((int) $stuck['amount_subunit'])) ?></p>
+              <a class="text-sm underline" href="/admin/orders.php?order=<?= (int) $stuck['order_id'] ?>">
+                Order <?= okv_e($stuck['order_number']) ?>
+              </a>
+            </div>
+            <p class="mt-1 text-sm text-ink">
+              <?php if ((string) $stuck['status'] === Refunds::STATUS_FAILED): ?>
+                This refund did not go through. The customer has not been paid. Check Paystack, then raise it again.
+              <?php else: ?>
+                This refund was raised but Paystack never confirmed it. Check the Paystack dashboard before raising another,
+                so the customer is not paid twice.
+              <?php endif; ?>
+            </p>
+            <p class="mt-1 text-xs text-ink-60">Reference <?= okv_e($stuck['reference']) ?>.</p>
           </div>
         <?php endforeach; ?>
       </div>
@@ -344,7 +407,70 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <?php endif; ?>
   </section>
 
-  <!-- 3. Everything that has happened. -->
+  <!-- 3. What should reach the bank. -->
+  <section class="okv-card" aria-labelledby="reconcile-heading">
+    <h2 id="reconcile-heading" class="font-display text-xl font-bold text-ink">Money reconciliation</h2>
+    <p class="mt-1 text-sm text-ink-60">
+      The last 30 days. Gross is what customers were charged for goods, fees is what Paystack kept,
+      refunds is what went back out, and net is what should reach the bank.
+    </p>
+
+    <?php if (!$reconciliation): ?>
+      <p class="mt-4 text-sm text-ink-60">No payment has settled yet.</p>
+    <?php else: ?>
+      <?php $totalGross = 0; $totalFees = 0; $totalRefunds = 0; ?>
+      <div class="okv-table-wrap mt-4">
+        <table class="okv-table">
+          <caption class="sr-only">Payments, fees and refunds by day</caption>
+          <thead>
+            <tr>
+              <th scope="col">Day</th>
+              <th scope="col">Payments</th>
+              <th scope="col">Gross</th>
+              <th scope="col">Paystack fees</th>
+              <th scope="col">Refunds</th>
+              <th scope="col">Net</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($reconciliation as $day): ?>
+              <?php
+                $gross   = (int) $day['gross_subunit'];
+                $fees    = (int) $day['fees_subunit'];
+                $back    = $refundsByDay[(string) $day['day']] ?? 0;
+                $net     = $gross - $fees - $back;
+                $totalGross += $gross; $totalFees += $fees; $totalRefunds += $back;
+              ?>
+              <tr>
+                <td><?= okv_e(date('j M Y', strtotime((string) $day['day']))) ?></td>
+                <td><?= (int) $day['payments'] ?></td>
+                <td><?= okv_e(Money::format($gross)) ?></td>
+                <td><?= okv_e(Money::format($fees)) ?></td>
+                <td><?= $back > 0 ? okv_e(Money::format($back)) : '' ?></td>
+                <td><?= okv_e(Money::format($net)) ?></td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row">30 day total</th>
+              <td></td>
+              <td><?= okv_e(Money::format($totalGross)) ?></td>
+              <td><?= okv_e(Money::format($totalFees)) ?></td>
+              <td><?= $totalRefunds > 0 ? okv_e(Money::format($totalRefunds)) : '' ?></td>
+              <td><?= okv_e(Money::format($totalGross - $totalFees - $totalRefunds)) ?></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p class="mt-3 text-sm text-ink-60">
+        Cross check net against what actually reached the bank. A gap means a settlement is still in
+        flight, or a transaction was recorded here that Paystack never settled.
+      </p>
+    <?php endif; ?>
+  </section>
+
+  <!-- 4. Everything that has happened. -->
   <section class="okv-card" aria-labelledby="recent-heading">
     <h2 id="recent-heading" class="font-display text-xl font-bold text-ink">Recent payments</h2>
     <p class="mt-1 text-sm text-ink-60">The last 20 transactions, newest first.</p>
@@ -362,6 +488,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
               <th scope="col">How</th>
               <th scope="col">Status</th>
               <th scope="col">When</th>
+              <?php if ($canRefund): ?><th scope="col">Refund</th><?php endif; ?>
             </tr>
           </thead>
           <tbody>
@@ -381,6 +508,77 @@ require __DIR__ . '/../includes/components/admin/header.php';
                   </span>
                 </td>
                 <td><?= okv_e(date('j M Y, H:i', strtotime((string) ($row['paid_at'] ?: $row['created_at'])))) ?></td>
+                <?php if ($canRefund): ?>
+                  <?php
+                    $paidOnTxn   = (int) ($row['amount_subunit'] ?? 0);
+                    $refundedOn  = (int) ($row['refunded_subunit'] ?? 0);
+                    $refundable  = Refunds::refundableAmount($paidOnTxn, $refundedOn);
+                    $isRefundable = $row['provider'] === 'paystack'
+                        && $row['status'] === 'success'
+                        && $refundable > 0;
+                  ?>
+                  <td>
+                    <?php if (!$isRefundable): ?>
+                      <span class="text-sm text-ink-60">
+                        <?php if ($row['provider'] !== 'paystack'): ?>
+                          Reverse instead
+                        <?php elseif ($refundedOn > 0 && $refundable < 1): ?>
+                          Fully refunded
+                        <?php else: ?>
+                          Not refundable
+                        <?php endif; ?>
+                      </span>
+                    <?php else: ?>
+                      <!-- A details element so this works with JavaScript off.
+                           admin-payments.js upgrades it into a real modal, and
+                           refreshes the figures from the server first so a page
+                           left open cannot offer money that has already gone. -->
+                      <details class="okv-refund" data-refund data-transaction-id="<?= (int) $row['id'] ?>">
+                        <summary class="okv-btn-outline-sm inline-flex min-h-[44px] cursor-pointer items-center">Refund</summary>
+                        <form action="/api/v1/payments.php" method="POST" class="mt-3 space-y-3 text-left" data-refund-form>
+                          <?= Csrf::field() ?>
+                          <input type="hidden" name="action" value="request_refund">
+                          <input type="hidden" name="transaction_id" value="<?= (int) $row['id'] ?>">
+
+                          <div class="rounded-md border border-mist bg-forest-tint p-3 text-sm" data-refund-summary>
+                            <p class="font-semibold text-ink">Check this before you send money back</p>
+                            <dl class="mt-2 space-y-1 text-ink-60">
+                              <div><dt class="inline">Order:</dt> <dd class="inline text-ink"><?= okv_e($row['order_number']) ?></dd></div>
+                              <div><dt class="inline">Paid on this transaction:</dt> <dd class="inline text-ink" data-refund-paid><?= okv_e(Money::format($paidOnTxn)) ?></dd></div>
+                              <div><dt class="inline">Already refunded:</dt> <dd class="inline text-ink" data-refund-done><?= okv_e(Money::format($refundedOn)) ?></dd></div>
+                              <div><dt class="inline">Still refundable:</dt> <dd class="inline text-ink" data-refund-left><?= okv_e(Money::format($refundable)) ?></dd></div>
+                            </dl>
+                            <p class="mt-2 text-ink">A refund cannot be undone. It goes back to the card or account the customer paid from.</p>
+                          </div>
+
+                          <label class="block text-sm text-ink-60">Amount to refund (naira)
+                            <input class="okv-input mt-1" name="amount" inputmode="decimal" required
+                                   data-refund-amount
+                                   value="<?= okv_e(Money::format($refundable, false, false)) ?>">
+                          </label>
+
+                          <label class="block text-sm text-ink-60">Note for the customer
+                            <input class="okv-input mt-1" name="customer_note" maxlength="255" placeholder="They may see this">
+                          </label>
+
+                          <label class="block text-sm text-ink-60">Note for our records
+                            <input class="okv-input mt-1" name="merchant_note" maxlength="255" placeholder="Why we are refunding">
+                          </label>
+
+                          <label class="flex items-start gap-2 text-sm text-ink">
+                            <input type="checkbox" required class="mt-1 min-h-[20px] min-w-[20px]" name="confirmed" value="1">
+                            <span>I have checked the figures above and I am sending this money back now.</span>
+                          </label>
+
+                          <div class="flex flex-wrap gap-2">
+                            <button class="okv-btn min-h-[44px]">Send the refund</button>
+                            <button type="button" class="okv-btn-outline min-h-[44px]" data-refund-cancel hidden>Cancel</button>
+                          </div>
+                        </form>
+                      </details>
+                    <?php endif; ?>
+                  </td>
+                <?php endif; ?>
               </tr>
             <?php endforeach; ?>
           </tbody>

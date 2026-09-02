@@ -147,6 +147,46 @@ final class Paystack
     }
 
     /**
+     * Ask Paystack to refund a transaction, in whole or in part.
+     *
+     * $amountSubunit of null refunds the whole transaction. Paystack refuses an
+     * amount larger than the original, and the caller checks that first anyway,
+     * because a refusal here is a support conversation rather than a number.
+     *
+     * Never retried. A refund that reached Paystack has moved money, and a
+     * blind retry is how a customer gets paid twice.
+     */
+    public static function createRefund(string $transactionReference, ?int $amountSubunit = null, string $customerNote = '', string $merchantNote = ''): array
+    {
+        if (!self::isValidReference($transactionReference)) {
+            return self::failure('api', 'That payment reference is not valid.', 0, false);
+        }
+
+        $payload = ['transaction' => $transactionReference];
+        if ($amountSubunit !== null) {
+            if ($amountSubunit < 1) {
+                return self::failure('api', 'A refund amount must be greater than zero.', 0, false);
+            }
+            $payload['amount']   = $amountSubunit;
+            $payload['currency'] = Money::CODE;
+        }
+        if ($customerNote !== '') {
+            $payload['customer_note'] = mb_substr($customerNote, 0, 255);
+        }
+        if ($merchantNote !== '') {
+            $payload['merchant_note'] = mb_substr($merchantNote, 0, 255);
+        }
+
+        return self::request('POST', '/refund', $payload, 0);
+    }
+
+    /** Read one refund back from Paystack. Safe to retry: it is a read. */
+    public static function fetchRefund(string $refundId): array
+    {
+        return self::request('GET', '/refund/' . rawurlencode($refundId), null, self::READ_RETRIES);
+    }
+
+    /**
      * Verify an incoming webhook. Paystack signs the raw body with HMAC SHA512
      * using the secret key and sends it in the X-Paystack-Signature header.
      * $rawBody must be the unparsed request body.
