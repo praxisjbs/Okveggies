@@ -104,13 +104,43 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <?php $first = true; foreach ($groups as $groupKey => $group):
         $canEdit = Rbac::can($group['permission']);
         $values  = SettingsEditor::values($groupKey);
-        $action  = $groupKey === 'order' ? 'save_order_settings' : 'save_site_settings';
+        $action  = 'save_' . ($groupKey === 'order' ? 'order' : ($groupKey === 'payment' ? 'payment' : 'site')) . '_settings';
       ?>
         <div class="okv-panel-body <?= $first ? '' : 'hidden' ?>"
              id="panel-<?= okv_e($groupKey) ?>" role="tabpanel"
              aria-labelledby="tab-<?= okv_e($groupKey) ?>" data-settings-panel="<?= okv_e($groupKey) ?>">
 
           <p class="text-sm text-ink-60 max-w-2xl"><?= okv_e($group['note']) ?></p>
+
+          <?php if (!empty($group['guide'])): $guide = $group['guide']; ?>
+            <!-- Settings that belong to the Paystack account rather than to us.
+                 Saying so plainly beats a control that cannot do what it says. -->
+            <aside class="mt-5 rounded-lg border border-mist bg-forest-tint p-5" aria-labelledby="guide-<?= okv_e($groupKey) ?>">
+              <h3 id="guide-<?= okv_e($groupKey) ?>" class="font-semibold text-ink"><?= okv_e($guide['title']) ?></h3>
+              <p class="mt-2 text-sm text-ink-60 max-w-2xl"><?= okv_e($guide['intro']) ?></p>
+
+              <dl class="mt-4 space-y-4">
+                <?php foreach ($guide['items'] as $item): ?>
+                  <div>
+                    <dt class="text-sm font-semibold text-ink"><?= okv_e($item['heading']) ?></dt>
+                    <dd class="mt-1 text-sm text-ink-60 max-w-2xl"><?= okv_e($item['body']) ?></dd>
+                  </div>
+                <?php endforeach; ?>
+              </dl>
+
+              <div class="mt-4">
+                <p class="text-sm font-semibold text-ink">Your webhook URL</p>
+                <p class="mt-1 text-xs text-ink-60">Copy this into the Webhook URL field on Paystack.</p>
+                <code class="mt-2 block overflow-x-auto rounded-md border border-mist bg-white px-3 py-2 font-mono text-sm text-ink"><?= okv_e(rtrim((string) APP_URL, '/') . '/api/v1/paystack_webhook.php') ?></code>
+              </div>
+
+              <a class="okv-btn-outline mt-4 inline-flex min-h-[44px] items-center"
+                 href="<?= okv_e($guide['link']) ?>" target="_blank" rel="noopener noreferrer">
+                <?= okv_e($guide['link_label']) ?>
+                <span class="sr-only">, opens in a new tab</span>
+              </a>
+            </aside>
+          <?php endif; ?>
 
           <!-- novalidate on purpose: the server is the authority on every rule
                here, so one error path shows one message in our own words rather

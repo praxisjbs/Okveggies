@@ -47,6 +47,9 @@ require_once $appRoot . '/includes/classes/Basket.php';
 require_once $appRoot . '/includes/classes/Delivery.php';
 require_once $appRoot . '/includes/classes/OrderTrail.php';
 require_once $appRoot . '/includes/classes/Checkout.php';
+require_once $appRoot . '/includes/config/env.php';
+require_once $appRoot . '/includes/classes/Paystack.php';
+require_once $appRoot . '/includes/classes/Payments.php';
 require_once $appRoot . '/includes/functions/helpers.php';
 
 foreach (glob(__DIR__ . '/*Test.php') as $file) {

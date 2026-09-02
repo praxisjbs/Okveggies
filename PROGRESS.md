@@ -87,11 +87,13 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - Deferred by design: taking the payment (Paystack init, verify and webhook) is M5, so M4 records the choice and writes an unpaid payment row. The admin delivery-day manifest and printable packing list are M6; this milestone builds the delivery settings the picker reads (days, cutoff, lead, zones, exceptions).
 
 ### M5. Payments
-- [ ] Paystack init and verify, all channels
-- [ ] Webhook endpoint, signature check, idempotent inbox, status history
-- [ ] Deposit (configurable percentage) and balance; pay-on-delivery recorded by admin with proof
-- [ ] Refunds; settlement reconciliation view
-- [ ] Tests: webhook signature and idempotency; deposit and balance maths
+**Split into three PRs.** PR1 is the charge spine, the only path by which money is recorded. PR2 is manual money (admin recording, proofs, the payments screen). PR3 is money going back out (refunds, settlements, disputes, invoice and receipt rows).
+
+- [x] Paystack init and verify, all channels (`Paystack` client returns typed results so a decline and an unreachable gateway never collapse into one failure; channels come from Payment Settings and default to letting the Paystack dashboard decide)
+- [x] Webhook endpoint, signature check, idempotent inbox, status history (raw body signature, 200 acknowledged before any slow work, dedupe on event plus resource id with two unique keys behind it, append-only `payment_status_history` on every move)
+- [~] Deposit (configurable percentage) and balance: PR1 writes both payment rows at placement, deposit due now and balance due on the delivery day, guarded by a unique index on `(order_id, payment_type)`. Pay-on-delivery recorded by admin with proof is PR2.
+- [ ] Refunds; settlement reconciliation view (PR3)
+- [x] Tests: webhook signature and idempotency; deposit and balance maths (71 new assertions in `PaymentsTest.php`)
 
 ### M6. Delivery and the Order Trail
 - [ ] Allowed days, cutoff, lead, zones (admin-managed), exceptions
@@ -167,6 +169,25 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 2 Sep 2026, M5 payments PR1, the charge spine
+
+The first of three PRs on M5. This one is the only path by which money is recorded against an order. Manual recording and proofs are PR2, refunds and settlement are PR3.
+
+**Documentation first.** `paystack.com` is blocked by the session egress policy, so the build was grounded on Paystack's official OpenAPI specification (`PaystackOSS/openapi`, MIT, commit `07c5abc`) and on the Webhooks and Transactions reference pages supplied directly. Two things the specification settled that guesswork would have got wrong: the reference charset is only `-`, `.`, `=` and alphanumerics, and the live channel enum already carries `apple_pay`, `capitec_pay`, `payattitude` and `eft`, none of which the PRD anticipated. That is why channels default to whatever the Paystack dashboard has switched on rather than a list baked into PHP.
+
+**The bug caught before it existed.** Paystack's own documented verify sample has `amount` 40333, `requested_amount` 30050 and `fees` 10283, which is requested plus fees exactly. Crediting `amount`, the obvious-looking field, would have over-credited every order by the Paystack fee, zeroed deposit balances early and left the settlement view permanently unbalanced. The ledger credits `requested_amount` and records the fee separately, which is correct whichever side bears the fee. `PaymentsTest.php` pins that with the real figures so it cannot regress.
+
+- **`includes/classes/Payments.php`**, the ledger. A charge is bound to an order by six layers: we mint the reference and write the row before Paystack is called, the reference is unique so it resolves by key rather than search, an unknown reference is recorded unmatched and never guessed at, four guards run before any credit (status, currency, reference and domain, the last of which stops a test event crediting a live order), the credit itself is a conditional update where exactly one caller sees `rowCount() === 1`, and a reconciliation sweep settles anything left hanging by asking Paystack directly. A second successful charge on a settled payment is recorded as an overpayment for a refund decision rather than being double-credited or silently dropped.
+- **`includes/classes/Paystack.php`**, rewritten. A decline and an unreachable gateway no longer collapse into one `false`: `network` means we do not know and the caller must not record a failure, `api` means Paystack answered and said no. Reads retry, writes never do. The raw-body signature check was already correct and is unchanged, now with a note explaining why Paystack's own Node sample, which hashes the re-serialised body, is not safe to copy.
+- **`api/v1/paystack_webhook.php`**, the inbox. Raw body read before anything parses it, signature verified before anything else runs, a bad signature answered 401 rather than 200 so a genuine event keeps being retried while a misconfigured secret is fixed. The event is recorded and 200 is returned and flushed before any call to Paystack, because their attempt timeout is 30 seconds. Two unique keys catch a repeat, which matters because Paystack retries the same event for 72 hours and sends no idempotency header. The source IP is recorded and flagged when it is not one of Paystack's three, and never used to refuse a correctly signed event.
+- **`api/v1/payments.php`**, `public/payment/callback.php`, `scripts/payment_sweep.php`. Ownership is re-checked server side on every initialise. The callback and the webhook both call the same ledger, so whichever arrives first credits and the other is recorded as a duplicate; a customer who closes the tab loses nothing.
+- **`Checkout` amendment.** A deposit order now writes two payment rows at placement, the deposit due now and the balance due on the delivery day, so the order page and the admin screen can say "paid X, Y due on delivery" from the moment the order exists. A unique index on `(order_id, payment_type)` makes a duplicate of either row impossible.
+- **Payment Settings, and an honest one.** A `payment_fee_bearer` setting was added in migration 014 and removed again in 015. Who bears the Paystack fee is settled in the Paystack dashboard; Paystack's `bearer` parameter is scoped to subaccount splits, so an OK Veggies control could only have implied a power it does not have. The Payments tab now carries a short guide pointing at the dashboard, with the site's own webhook URL rendered ready to copy.
+
+Verified: `php -l` clean on all fourteen touched files, `brand-check.sh` eight of eight green, `657 / 657` assertions pass (71 new). `verify.sh` was not run because it needs a base URL and this environment serves no site; it should be run against staging before deploy, along with a test-mode payment end to end to capture a real `charge.success` payload in the inbox.
+
+Carried into PR2: admin recording of cash and transfer with proof, the manual proof review queue, and the admin payments screen. Carried into PR3: refunds, settlement reconciliation, disputes, and rows on the invoice and receipt documents.
 
 ### 2 Sep 2026, M4 basket and checkout (consolidated review)
 
