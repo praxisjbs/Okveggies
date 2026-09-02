@@ -4,13 +4,17 @@
  * -----------------------------------------------------------------------------
  * OK Veggies. Starting a Paystack charge. See docs/PRD.md Section 11.
  *
- * PR1 opens one action: a signed-in customer starts a charge against a payment
- * row on their own order and is handed the Paystack URL. Recording cash and
- * transfers, reviewing proofs and issuing refunds are staff actions and belong
- * to later PRs in this milestone.
+ * Two audiences, one controller. A signed-in customer starts a Paystack charge
+ * against a payment row on their own order. Staff record money that arrived
+ * outside Paystack, review the evidence behind it, and ask for and approve a
+ * reversal when something was recorded wrongly.
  *
- * Ownership is re-checked on the server on every call. A payment id in a form
- * field proves nothing.
+ * Ownership is re-checked on the server on every customer call, and every staff
+ * action is gated on its own permission rather than on a role name, so a new
+ * role tomorrow can be granted any one of them without touching this file. An
+ * id in a form field proves nothing.
+ *
+ * Refunds, where money really does travel back to a customer, are PR3.
  * -----------------------------------------------------------------------------
  */
 
@@ -82,6 +86,135 @@ if ($action === 'initialise' || $action === 'initialize') {
         ]);
     }
     okv_redirect($result['authorization_url'], 303);
+}
+
+// -----------------------------------------------------------------------------
+// Staff actions. Each one gates on its own permission.
+// -----------------------------------------------------------------------------
+
+/** The gate every staff payment write passes: POST, permission, CSRF. */
+function payments_staff_guard(string $permission): int
+{
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission($permission);
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    return (int) Rbac::userId();
+}
+
+/** Answer a staff write: JSON for a fetch, a 303 back to the screen otherwise. */
+function payments_staff_done(array $result, string $flag): void
+{
+    if (payments_is_fetch()) {
+        okv_json(['status' => 'ok', 'message' => $result['message'], 'code' => $result['code']]);
+    }
+    okv_redirect('/admin/payments.php?payments=' . rawurlencode($flag), 303);
+}
+
+if ($action === 'record_manual') {
+    $staffId = payments_staff_guard('payments.record');
+
+    // The confirmation is a real gate, not just a tick on the form. A staff
+    // action that credits an order immediately should not be reachable by
+    // replaying a request without it.
+    if (!okv_input('confirmed', '')) {
+        okv_error('Tick the confirmation before recording a payment.', 422, 'not_confirmed');
+    }
+
+    $input = [
+        'payment_id'     => (int) okv_input('payment_id', 0),
+        'amount_subunit' => Money::toSubunit((string) okv_input('amount', '')),
+        'method'         => (string) okv_input('method', ''),
+        'record_token'   => (string) okv_input('record_token', ''),
+        'bank_reference' => (string) okv_input('bank_reference', ''),
+        'payer_name'     => (string) okv_input('payer_name', ''),
+        'customer_email' => (string) okv_input('customer_email', ''),
+    ];
+
+    // An uploaded screenshot or PDF receipt. Optional for cash, and one of the
+    // two accepted forms of evidence for a transfer.
+    if (!empty($_FILES['proof']['name'] ?? '')) {
+        try {
+            $input['proof_url'] = Uploads::saveUploadedFile($_FILES['proof'], 'payment_proofs');
+        } catch (Throwable $e) {
+            okv_error($e->getMessage(), 422, 'bad_upload');
+        }
+    }
+
+    try {
+        $result = ManualPayments::record($input, $staffId);
+    } catch (Throwable $e) {
+        error_log('payments.record_manual failed: ' . $e->getMessage());
+        okv_error('We could not record that payment. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    payments_staff_done($result, 'recorded');
+}
+
+if ($action === 'review_proof') {
+    $staffId = payments_staff_guard('payments.proof.review');
+    try {
+        $result = ManualPayments::reviewProof(
+            (int) okv_input('proof_id', 0),
+            (string) okv_input('decision', ''),
+            (string) okv_input('note', ''),
+            $staffId
+        );
+    } catch (Throwable $e) {
+        error_log('payments.review_proof failed: ' . $e->getMessage());
+        okv_error('We could not record that review. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    payments_staff_done($result, 'reviewed');
+}
+
+if ($action === 'request_reversal') {
+    $staffId = payments_staff_guard('payments.reversal.request');
+    try {
+        $result = ManualPayments::requestReversal(
+            (int) okv_input('transaction_id', 0),
+            (string) okv_input('reason', ''),
+            $staffId
+        );
+    } catch (Throwable $e) {
+        error_log('payments.request_reversal failed: ' . $e->getMessage());
+        okv_error('We could not raise that reversal. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    payments_staff_done($result, 'reversal_requested');
+}
+
+if ($action === 'decide_reversal') {
+    $staffId = payments_staff_guard('payments.reversal.approve');
+    // The Owner may approve their own request, because at launch the Owner can
+    // be the only staff account and a one person business still has to be able
+    // to fix a typo. Everyone else needs a second pair of eyes.
+    $isOwner = in_array('owner', Rbac::roles(), true);
+    try {
+        $result = ManualPayments::decideReversal(
+            (int) okv_input('reversal_id', 0),
+            (string) okv_input('decision', ''),
+            (string) okv_input('note', ''),
+            $staffId,
+            $isOwner
+        );
+    } catch (Throwable $e) {
+        error_log('payments.decide_reversal failed: ' . $e->getMessage());
+        okv_error('We could not decide that reversal. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    payments_staff_done($result, 'reversal_' . $result['code']);
 }
 
 okv_error('That action is not available.', 400, 'unknown_action');
