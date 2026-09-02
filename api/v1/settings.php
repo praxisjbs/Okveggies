@@ -188,6 +188,11 @@ switch ($action) {
         settings_save('site');
         break;
 
+    case 'save_payment_settings':
+        settings_guard_write('settings.edit');
+        settings_save('payment');
+        break;
+
     case 'history':
         Rbac::requirePermission('settings.view');
         try {

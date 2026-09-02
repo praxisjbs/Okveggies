@@ -90,6 +90,48 @@ $OKV_SETTINGS_GROUPS = [
         ],
     ],
 
+    'payment' => [
+        'label'      => 'Payments',
+        'permission' => 'settings.edit',
+        'note'       => 'How the Paystack charge behaves. The keys themselves live in .env and are never editable from a screen.',
+        'guide'      => [
+            'title' => 'Two things are set on Paystack, not here',
+            'intro' => 'OK Veggies cannot change these for you. They belong to your Paystack account, and the ledger is correct either way they are set.',
+            'link'       => 'https://dashboard.paystack.com/#/settings/developers',
+            'link_label' => 'Open your Paystack dashboard',
+            'items' => [
+                [
+                    'heading' => 'The webhook URL',
+                    'body'    => 'Paystack has to know where to send payment events. In the dashboard go to Settings, then API Keys and Webhooks, and paste the address below into the Webhook URL field for the mode you are in, test or live. Without it a payment can still be confirmed when the customer returns to the shop, but an order paid in a closed tab waits for the reconciliation sweep instead of settling at once.',
+                ],
+                [
+                    'heading' => 'Who pays the transaction fee',
+                    'body'    => 'Whether OK Veggies absorbs the Paystack fee or the customer pays it on top is a Paystack account setting, not an OK Veggies one. Change it in your dashboard. Either way an order is credited with the price you asked for the goods, and the fee is recorded against the transaction, so the books stay right whichever you choose.',
+                ],
+            ],
+        ],
+        'fields'     => [
+
+            'payment_channels' => [
+                'label'       => 'Payment channels offered',
+                'help'        => 'Leave this empty to offer whatever your Paystack dashboard has switched on, which is the recommended setting. To narrow it, list channels separated by commas, for example card, bank_transfer, ussd. An unrecognised name is ignored rather than sent to Paystack.',
+                'type'        => 'text',
+                'value_type'  => 'string',
+                'max'         => 200,
+                'placeholder' => 'card, bank_transfer, ussd',
+            ],
+
+            'payment_verify_sweep_minutes' => [
+                'label'      => 'Minutes before a payment is chased',
+                'help'       => 'How long an unfinished payment may sit before we ask Paystack directly what happened to it. This is the safety net for a customer who closed the tab and a webhook that never arrived.',
+                'type'       => 'minutes',
+                'value_type' => 'int',
+                'min'        => 1,
+                'cap'        => 1440,
+            ],
+        ],
+    ],
+
     'site' => [
         'label'      => 'Site details',
         'permission' => 'settings.edit',

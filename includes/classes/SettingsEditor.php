@@ -92,7 +92,7 @@ final class SettingsEditor
     {
         switch ($field['type']) {
             case 'bool':                      return false;
-            case 'percent': case 'days': case 'money': return 0;
+            case 'percent': case 'days': case 'minutes': case 'money': return 0;
             default:                          return '';
         }
     }
@@ -154,6 +154,7 @@ final class SettingsEditor
 
             case 'percent':
             case 'days':
+            case 'minutes':
                 if ($value === '' || !preg_match('/^-?\d+$/', $value)) {
                     return self::bad($label . ' has to be a whole number.');
                 }

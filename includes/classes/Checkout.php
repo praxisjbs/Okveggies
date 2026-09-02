@@ -12,9 +12,11 @@
  * racing on the same basket cannot both write an order. The second submit finds
  * the first order and returns it.
  *
- * No money moves here. M4 records the choice (pay in full, deposit, pay on
- * delivery, on account) and writes an unpaid payment row. Taking the payment is
- * M5. The delivery fee is never charged on the platform.
+ * No money moves here. Placement records the choice (pay in full, deposit, pay
+ * on delivery, on account) and writes the unpaid payment rows the order starts
+ * with: two for a deposit order, one otherwise. Taking the payment is the M5
+ * ledger in includes/classes/Payments.php. The delivery fee is never charged on
+ * the platform.
  *
  * The pure helpers (total, paymentAllowed, amountDue) hold no database and are
  * unit tested in scripts/tests/CheckoutTest.php.
@@ -280,20 +282,7 @@ final class Checkout
              VALUES (:order, NULL, \'pending\', \'customer\', :user)',
             [':order' => $orderId, ':user' => $userId]
         );
-        Database::run(
-            'INSERT INTO payments
-                (payment_number, user_id, order_id, provider, payment_type, expected_amount_subunit, currency, status)
-             VALUES (:number, :user, :order, :provider, :type, :amount, :currency, \'unpaid\')',
-            [
-                ':number'   => 'PAY-' . $orderNumber,
-                ':user'     => $userId,
-                ':order'    => $orderId,
-                ':provider' => self::providerFor($option),
-                ':type'     => $option,
-                ':amount'   => $due,
-                ':currency' => Money::CODE,
-            ]
-        );
+        self::writePayments($orderId, $userId, $orderNumber, $option, $total, $due, $deliveryDate);
 
         Database::run('UPDATE shopping_carts SET status = \'converted\' WHERE id = :id', [':id' => $cartId]);
 
@@ -415,6 +404,62 @@ final class Checkout
                     ]
                 );
             }
+        }
+    }
+
+    /**
+     * The payment rows an order starts life with.
+     *
+     * A deposit order gets two: the deposit, due now and charged through
+     * Paystack, and the balance, due on the delivery day and settled by the
+     * admin. Writing both at placement is what lets the order page and the
+     * admin screen say "paid X, Y due on delivery" from the moment the order
+     * exists, and gives the balance a real due date for the aging views.
+     * Every other choice is a single row.
+     *
+     * A unique index on (order_id, payment_type) makes a duplicate of either
+     * row impossible. Part payments are transactions against a row, never
+     * extra rows.
+     */
+    private static function writePayments(int $orderId, int $userId, string $orderNumber, string $option, int $total, int $due, string $deliveryDate): void
+    {
+        $rows = [[
+            'number'   => 'PAY-' . $orderNumber,
+            'provider' => self::providerFor($option),
+            'type'     => $option,
+            'amount'   => $due,
+            'due_at'   => $option === 'pay_on_delivery' ? $deliveryDate . ' 00:00:00' : null,
+        ]];
+
+        if ($option === 'deposit') {
+            $balance = Money::balance($total, $due);
+            if ($balance > 0) {
+                $rows[] = [
+                    'number'   => 'PAY-' . $orderNumber . '-B',
+                    'provider' => 'manual',
+                    'type'     => 'balance',
+                    'amount'   => $balance,
+                    'due_at'   => $deliveryDate . ' 00:00:00',
+                ];
+            }
+        }
+
+        foreach ($rows as $row) {
+            Database::run(
+                'INSERT INTO payments
+                    (payment_number, user_id, order_id, provider, payment_type, expected_amount_subunit, currency, status, due_at)
+                 VALUES (:number, :user, :order, :provider, :type, :amount, :currency, \'unpaid\', :due_at)',
+                [
+                    ':number'   => $row['number'],
+                    ':user'     => $userId,
+                    ':order'    => $orderId,
+                    ':provider' => $row['provider'],
+                    ':type'     => $row['type'],
+                    ':amount'   => $row['amount'],
+                    ':currency' => Money::CODE,
+                    ':due_at'   => $row['due_at'],
+                ]
+            );
         }
     }
 

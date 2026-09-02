@@ -26,6 +26,40 @@ if (!function_exists('okv_json')) {
     }
 }
 
+if (!function_exists('okv_webhook_acknowledge')) {
+    /**
+     * Answer a webhook sender straight away, then keep running.
+     *
+     * Paystack times an attempt out at 30 seconds and their guidance is to
+     * acknowledge before doing any slow work, or the attempt fails and the
+     * event is retried for 72 hours. This sends the body, closes the request
+     * where the server allows it (php-fpm), and returns so the caller can carry
+     * on with the actual processing off the sender's clock.
+     */
+    function okv_webhook_acknowledge(array $data, int $code = 200): void
+    {
+        $body = json_encode($data + (isset($data['status']) ? [] : ['status' => 'ok']));
+        http_response_code($code);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Length: ' . strlen((string) $body));
+        header('Connection: close');
+        echo $body;
+
+        // Keep working even though the client is no longer listening.
+        ignore_user_abort(true);
+
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+            return;
+        }
+        // Apache mod_php and the built in server: flush what we can.
+        while (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+        flush();
+    }
+}
+
 if (!function_exists('okv_error')) {
     /** Send a JSON error and stop. Never leak an exception message to the client. */
     function okv_error(string $message, int $code = 400, ?string $errorCode = null): void
