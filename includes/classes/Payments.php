@@ -432,8 +432,14 @@ final class Payments
         );
     }
 
-    /** Append-only. Every move records why, from where, and on whose event. */
-    private static function writeHistory(int $paymentId, ?int $txnId, ?string $old, string $new, string $source, ?int $eventId, ?string $reason): void
+    /**
+     * Append-only. Every move records why, from where, and on whose event.
+     *
+     * Public because manual money in ManualPayments writes to the same history
+     * as a Paystack charge does. One ledger, one trail: an order's money story
+     * reads the same whether it arrived by card or by bank transfer.
+     */
+    public static function writeHistory(int $paymentId, ?int $txnId, ?string $old, string $new, string $source, ?int $eventId, ?string $reason): void
     {
         Database::run(
             'INSERT INTO payment_status_history

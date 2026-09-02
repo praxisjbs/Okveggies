@@ -91,7 +91,7 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 
 - [x] Paystack init and verify, all channels (`Paystack` client returns typed results so a decline and an unreachable gateway never collapse into one failure; channels come from Payment Settings and default to letting the Paystack dashboard decide)
 - [x] Webhook endpoint, signature check, idempotent inbox, status history (raw body signature, 200 acknowledged before any slow work, dedupe on event plus resource id with two unique keys behind it, append-only `payment_status_history` on every move)
-- [~] Deposit (configurable percentage) and balance: PR1 writes both payment rows at placement, deposit due now and balance due on the delivery day, guarded by a unique index on `(order_id, payment_type)`. Pay-on-delivery recorded by admin with proof is PR2.
+- [x] Deposit (configurable percentage) and balance; pay-on-delivery recorded by admin with proof (PR1 writes both payment rows at placement, guarded by a unique index on `(order_id, payment_type)`; PR2 adds one-step staff recording of cash and transfer, the evidence rule, the review queue and permission-gated reversals)
 - [ ] Refunds; settlement reconciliation view (PR3)
 - [x] Tests: webhook signature and idempotency; deposit and balance maths (71 new assertions in `PaymentsTest.php`)
 
@@ -169,6 +169,25 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 2 Sep 2026, M5 payments PR2, manual money
+
+The second of three PRs on M5. PR1 built the Paystack charge spine; this one covers money that never touches Paystack, which is the majority of what this business will actually take. Refunds and settlement are PR3.
+
+**Recording is one step.** A staff member with `payments.record` enters the payment and the order is credited immediately, behind a confirmation that is enforced on the server as well as on the form. Holding the credit until a second person approved would leave a customer staring at an unpaid order after they had already paid, which is a worse failure than the one it guards against.
+
+**Double submission cannot double credit.** The record form carries a one-time token that becomes part of the transaction reference, and `payment_transactions.reference` is UNIQUE. A second submit of the same form collides in the database and is reported back as already recorded. No new column, no new state to keep in step: the constraint that already existed does the work.
+
+**Part payments add up rather than overwrite.** Manual money increments what a payment holds, because a balance really can arrive in two transfers. A Paystack charge overwrites, because one payment row holds one charge. Getting this backwards would have silently dropped the first of two transfers.
+
+- **`includes/classes/ManualPayments.php`.** Recording, the evidence rule, proof review and the reversal workflow. A transfer needs either a transaction reference or an uploaded screenshot, because a transfer always leaves one of the two behind; cash needs neither, since a photograph of a banknote proves nothing. Everything about a recording happens in one transaction, so a failure anywhere leaves no half-recorded payment.
+- **Reversals, not deletions.** A payment recorded against the wrong order is a data error and no money travels back to a customer, so it is reversed rather than refunded. One person asks, another approves, and both entries stay visible. The rule that nobody approves their own request lives in code rather than in the role seed, so it holds however the roles are later rearranged. The Owner is the deliberate exception, because at launch the Owner may be the only staff account and a one person business still has to be able to fix a typo.
+- **`migrations/016`.** The drafted schema recorded who REVIEWED a proof and never who RECORDED it, and never said how the money arrived. Both columns added. Plus `payment_reversals`, and two new permissions so this is governed by the permission system rather than by a role name baked into PHP: a new role tomorrow can be granted either one without a code change.
+- **`admin/payments.php`.** The queue leads, because a proof nobody has checked and a reversal nobody has decided are both money sitting in limbo, and everything else on the page is lookup. Then recording against a looked-up order, then the last twenty transactions.
+
+Verified: `php -l` clean on every touched file, `brand-check.sh` eight of eight green, `690 / 690` assertions pass (33 new). `verify.sh` still needs a base URL and was not run here.
+
+Open question put to the owner: order cancellation. A customer cancelling a paid order, and cancelling one that is still awaiting payment, are different problems with different money consequences, and neither is currently scoped to a milestone. Carried into PR3: refunds, settlement reconciliation, disputes, and rows on the invoice and receipt documents.
 
 ### 2 Sep 2026, M5 payments PR1, the charge spine
 
