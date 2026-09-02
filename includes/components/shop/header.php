@@ -1,5 +1,7 @@
 <?php
 /** Shared storefront navigation for desktop and mobile. */
+require_once __DIR__ . '/mini_cart.php';
+
 if (!function_exists('okv_shop_header')) {
     function okv_shop_header(string $active = ''): void
     {
@@ -36,7 +38,7 @@ if (!function_exists('okv_shop_header')) {
             </nav>
             <div class="flex items-center gap-2">
               <a href="/account.php" class="okv-btn-text hidden sm:inline-flex"><?= okv_e($accountLabel) ?></a>
-              <a href="/cart.php" class="okv-btn px-4" aria-label="Basket, <?= $basketCount ?> items">
+              <a href="/cart.php" class="okv-btn px-4" aria-label="Basket, <?= $basketCount ?> items" data-basket-open>
                 Basket <span class="okv-basket-count rounded-full bg-white px-2 py-0.5 text-xs text-forest" aria-live="polite"><?= $basketCount ?></span>
               </a>
             </div>
@@ -44,12 +46,13 @@ if (!function_exists('okv_shop_header')) {
         </header>
         <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-mist bg-white px-1 pb-2 md:hidden" aria-label="Mobile navigation">
           <?php foreach ($links as $key => [$url, $label]): ?>
-            <a href="<?= okv_e($url) ?>" class="flex min-h-[56px] flex-col items-center justify-center px-1 text-center text-xs font-semibold leading-tight <?= $active === $key ? 'text-forest' : 'text-ink-60' ?>" <?= $active === $key ? 'aria-current="page"' : '' ?> <?= $key === 'basket' ? 'aria-label="Basket, ' . $basketCount . ' items"' : '' ?>>
+            <a href="<?= okv_e($url) ?>" class="flex min-h-[56px] flex-col items-center justify-center px-1 text-center text-xs font-semibold leading-tight <?= $active === $key ? 'text-forest' : 'text-ink-60' ?>" <?= $active === $key ? 'aria-current="page"' : '' ?> <?= $key === 'basket' ? 'aria-label="Basket, ' . $basketCount . ' items" data-basket-open' : '' ?>>
               <span><?= okv_e($label) ?></span>
               <?php if ($key === 'basket'): ?><span class="okv-basket-count text-xs" aria-live="polite"><?= $basketCount ?></span><?php endif; ?>
             </a>
           <?php endforeach; ?>
         </nav>
+        <?php okv_mini_cart(); ?>
         <?php
     }
 }

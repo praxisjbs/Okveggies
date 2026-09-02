@@ -221,6 +221,25 @@ final class Migrator
     {
         $stripped = trim(preg_replace('/^\s*--.*$/m', '', $stmt));
         if ($stripped === '') return;
+        // A verification query (SELECT, SHOW, DESCRIBE, EXPLAIN) hands back a
+        // result set. It has to be drained before the next statement runs on
+        // the same connection, or the driver reports "commands out of sync".
+        // Every migration that ends with a SHOW/SELECT check depends on this.
+        if (self::isResultStatement($stripped)) {
+            $result = $pdo->query($stmt);
+            if ($result !== false) {
+                $result->fetchAll();
+                $result->closeCursor();
+            }
+            return;
+        }
         $pdo->exec($stmt);
+    }
+
+    /** True for a statement that returns rows, so the caller drains it. */
+    public static function isResultStatement(string $statement): bool
+    {
+        $stripped = trim(preg_replace('/^\s*--.*$/m', '', $statement));
+        return (bool) preg_match('/^(?:SELECT|SHOW|DESCRIBE|DESC|EXPLAIN)\b/i', $stripped);
     }
 }

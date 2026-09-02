@@ -93,6 +93,15 @@ final class Auth
         // select it (a fresh registration) is fine: it reads as no change.
         $_SESSION['pwd_epoch']      = (string) ($user['password_changed_at'] ?? '');
         Rbac::loadFromDb((int) $user['id']);
+
+        // Fold this browser's guest basket into the account now that the
+        // customer is signed in. A no-op when there is no guest basket, and its
+        // failure must never block a sign-in, so it is logged, not thrown.
+        try {
+            Basket::mergeGuestIntoAccount((int) $user['id']);
+        } catch (Throwable $e) {
+            error_log('basket merge on sign-in failed: ' . $e->getMessage());
+        }
     }
 
     /** Tear a session down completely: data cleared, cookie expired, session destroyed. */

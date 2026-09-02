@@ -79,5 +79,12 @@ if (!function_exists('okv_shop_footer')) {
           </div>
         </footer>
         <?php
+        // The mini-cart drawer is shared chrome rendered by the header on every
+        // storefront page, so its behaviour loads here, once, alongside it.
+        // Without JavaScript the header basket control stays a real link to
+        // /cart.php, so nothing here is required for the basket to work.
+        ?>
+        <script src="<?= okv_e(okv_asset('/assets/js/basket.min.js')) ?>" defer></script>
+        <?php
     }
 }
