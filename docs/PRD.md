@@ -455,13 +455,14 @@ The monolithic schema is split into numbered, idempotent migrations run by `scri
 007_storefront_extras.sql        product_pairings, delivery_zones, otp_verifications, contact_messages, issue_reports, content_pages
 ```
 
-Every migration is idempotent (`IF NOT EXISTS`, `INSERT ... ON DUPLICATE KEY UPDATE`), wraps writes in a transaction, and ends with a short block of verification queries.
+Every migration is idempotent, wraps writes in a transaction, and ends with a short block of verification queries. The production database is MySQL 8: `CREATE TABLE IF NOT EXISTS` and `INSERT ... ON DUPLICATE KEY UPDATE` work, but MySQL 8 has no `ADD COLUMN IF NOT EXISTS` or `ADD INDEX IF NOT EXISTS` (those are MariaDB only), so an additive column or index is guarded against `information_schema` and applied through a prepared statement (see `011_users_password_changed_at.sql` and `013_order_trail_tokens.sql`).
 
 ---
 
 ## 21. Non-functional requirements
 
 - **Hosting:** cPanel shared hosting. No Composer on the server, so `vendor/` is committed. PHP 8.x (pin to the host's version, target 8.3 to match the reference app).
+- **Database:** MySQL 8 on cPanel (phpMyAdmin). It is not MariaDB, so migrations avoid MariaDB-only DDL such as `ADD COLUMN IF NOT EXISTS` (Section 20.5).
 - **Performance:** product images optimised (WebP where supported) and lazy-loaded; Tailwind built and minified, not CDN; the storefront usable on a mid-range Android phone over 3G. First shop paint under 3 seconds on such a connection.
 - **Security:** prepared statements only, CSRF on every state change, output escaping, no secrets in code (`.env` only), RBAC on every admin and pro route and API action, uploads validated (extension, MIME, size, randomised name, denied execution). Same non-negotiables list as the reference app.
 - **SEO:** clean slugs, per-page titles and meta, Open Graph tags, a sitemap, and `wa.me` click-to-chat.
