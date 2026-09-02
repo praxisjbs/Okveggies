@@ -158,8 +158,26 @@ try {
         return;
     }
 
+    // A refund moving through Paystack's four states. The payload identifies
+    // which refund and nothing more: the state written is read back from
+    // Paystack, so this holds whatever shape their refund payload takes.
+    if (Refunds::statusFromEvent($eventType) !== null) {
+        $result = Refunds::applyWebhook($eventType, $data, $eventId);
+        Database::run(
+            'UPDATE payment_webhook_events
+                SET processing_status = :status, processed_at = NOW(), error_message = :message
+              WHERE id = :id',
+            [
+                ':status'  => $result['code'] === 'unmatched' ? 'unmatched' : 'processed',
+                ':message' => $result['ok'] ? null : substr((string) $result['code'] . ': ' . (string) $result['message'], 0, 1000),
+                ':id'      => $eventId,
+            ]
+        );
+        return;
+    }
+
     // Every other event is recorded for the milestones that will read it.
-    // Refunds and disputes are M5 PR3.
+    // Disputes are modelled in the schema and surfaced in a later milestone.
     Database::run(
         'UPDATE payment_webhook_events SET processing_status = \'ignored\', processed_at = NOW() WHERE id = :id',
         [':id' => $eventId]

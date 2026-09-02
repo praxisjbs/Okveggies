@@ -80,6 +80,30 @@ $OKV_SETTINGS_GROUPS = [
                 'confirm'    => true,
             ],
 
+            'cancellation_cutoff_time' => [
+                'label'      => 'Cancellation cutoff time',
+                'help'       => 'The time the day before delivery after which a customer can no longer cancel on their own. Separate from the delivery cutoff, because by then the produce has usually been bought. 24-hour clock, for example 18:00.',
+                'type'       => 'time',
+                'value_type' => 'string',
+                'confirm'    => true,
+            ],
+
+            'cancellation_deposit_forfeit_after_cutoff' => [
+                'label'      => 'Keep the deposit on a late cancellation',
+                'help'       => 'On, a deposit is kept when a customer cancels after the cutoff, and the checkout copy says so before they pay. Off, a deposit is always returned in full.',
+                'type'       => 'bool',
+                'value_type' => 'bool',
+                'confirm'    => true,
+            ],
+
+            'cancellation_customer_allowed' => [
+                'label'      => 'Customers may cancel their own orders',
+                'help'       => 'On, a customer can cancel an unpaid order themselves before the cutoff. Off, every cancellation goes through staff.',
+                'type'       => 'bool',
+                'value_type' => 'bool',
+                'confirm'    => true,
+            ],
+
             'pay_on_delivery_requires_activation' => [
                 'label'      => 'Pay on delivery needs an activated account',
                 'help'       => 'On, a customer must verify their email before they can choose pay on delivery. Off, anyone can.',

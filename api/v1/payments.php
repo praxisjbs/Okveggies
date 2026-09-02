@@ -217,4 +217,45 @@ if ($action === 'decide_reversal') {
     payments_staff_done($result, 'reversal_' . $result['code']);
 }
 
+if ($action === 'refund_quote') {
+    // Everything at stake, for the confirmation. Read only, so no CSRF, but
+    // still permission gated: what a customer paid is not public.
+    Rbac::requirePermission('payments.refund');
+    $quote = Refunds::quote((int) okv_input('transaction_id', 0));
+    if (!$quote['ok']) {
+        okv_error($quote['message'], 404, $quote['code']);
+    }
+    $quote['paid']       = Money::format($quote['paid_subunit']);
+    $quote['refunded']   = Money::format($quote['refunded_subunit']);
+    $quote['refundable'] = Money::format($quote['refundable_subunit']);
+    okv_json(['status' => 'ok'] + $quote);
+}
+
+if ($action === 'request_refund') {
+    $staffId = payments_staff_guard('payments.refund');
+
+    // A refund cannot be undone, so the confirmation is a server side gate and
+    // not merely a dialog the browser drew.
+    if (!okv_input('confirmed', '')) {
+        okv_error('Confirm the refund details before sending money back.', 422, 'not_confirmed');
+    }
+
+    try {
+        $result = Refunds::request(
+            (int) okv_input('transaction_id', 0),
+            Money::toSubunit((string) okv_input('amount', '')),
+            (string) okv_input('customer_note', ''),
+            (string) okv_input('merchant_note', ''),
+            $staffId
+        );
+    } catch (Throwable $e) {
+        error_log('payments.request_refund failed: ' . $e->getMessage());
+        okv_error('We could not raise that refund. Check the Paystack dashboard before trying again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    payments_staff_done($result, 'refunded');
+}
+
 okv_error('That action is not available.', 400, 'unknown_action');

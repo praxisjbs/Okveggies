@@ -51,6 +51,8 @@ require_once $appRoot . '/includes/config/env.php';
 require_once $appRoot . '/includes/classes/Paystack.php';
 require_once $appRoot . '/includes/classes/Payments.php';
 require_once $appRoot . '/includes/classes/ManualPayments.php';
+require_once $appRoot . '/includes/classes/Refunds.php';
+require_once $appRoot . '/includes/classes/Cancellation.php';
 require_once $appRoot . '/includes/functions/helpers.php';
 
 foreach (glob(__DIR__ . '/*Test.php') as $file) {
