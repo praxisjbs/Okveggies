@@ -12,7 +12,9 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M3, Combos. In progress, split into three PRs.** M0 through M2 are complete. M3 is being built in three PRs so the domain, the admin builder and the storefront can proceed in parallel without stepping on each other.
+**M0 reopened to build the Settings screen it had claimed and never built (1 Sep 2026).** See the M0 section below for what was missed and why. M1 and M2 are complete, M3 shipped in three PRs.
+
+**Milestone M3, Combos. Shipped, split into three PRs.** M0 through M2 are complete. M3 is being built in three PRs so the domain, the admin builder and the storefront can proceed in parallel without stepping on each other.
 
 - **PR1 (merged into `main`, was `m3-pr1-combos-domain`).** The domain foundation. `Combos` class with the full CRUD, the sell-price history writer that mirrors `Pricing::change` in one transaction, publish and unpublish with the "no components, no price" gate, the component-total maths, `isLossMaking()` and `customerSaving()` for the builder's admin-only flag, `isBuyableNow()` for the availability window, and the same referenceCount / delete rule as products. Storefront read helpers on `Catalogue`: `combos()`, `featuredCombos()`, `comboBySlug()`, `comboComponents()`, all filtered on active and inside the window. Unit tests. No schema change (M0 carries `combo_packages`, `combo_package_items`, `combo_price_history`, `cart_items.combo_package_id` and `order_items.combo_package_id` already). No UI yet.
 - **PR2 (this branch, `claude/admin-combo-builder-pr2-8afj2a`).** Admin combo builder: `admin/combos.php`, `api/v1/combos.php`, `assets/js/admin-combos.js` plus the new database-side tests. Product picker, live component total that refreshes on every component change without a page reload, sell price with the history reason, publish / unpublish, availability window, photo upload and remove, price history reveal, delete guard. Consumes PR1 only.
@@ -32,12 +34,14 @@ The host is a Truehost shared cPanel account with **SFTP only, no SSH shell**, s
 - Docroot is `/home/ibbbnlso/public_html`. PHP is 8.3 (MultiPHP Manager). The error log lives under `/home/ibbbnlso/logs/`.
 - Secrets live only in GitHub Actions and the server `.env`, never in the repo. The `MIGRATE_TOKEN` in the server `.env` must match the GitHub secret of the same name. Full setup, the secret list, and a manual FileZilla fallback are in `docs/DEPLOYMENT.md`.
 - The deploy never deletes remote files, so the server `.env` and everything under `uploads/` survive every deploy.
+- **One deploy runs at a time** (`concurrency: deploy-production`). The upload is a whole-tree sync into one docroot and the last step calls one shared migration runner, so two overlapping runs mean one is writing files into the tree the other is migrating from. A queued run is superseded by a newer one rather than cancelling a run mid-upload, which would leave the docroot half old and half new.
 
 ---
 
 ## Phase 1 milestones
 
-### M0. Foundation  (done, verified 26 Aug 2026)
+### M0. Foundation  (reopened 1 Sep 2026, was marked done 26 Aug 2026)
+**Why it was reopened.** The M0 commit scaffolded `admin/settings.php` and `api/v1/settings.php` with the words "Build in milestone M0" in both file headers, but the M0 checklist below never carried a line for the Settings screen. It listed the `Settings` class, which was built and works. So the milestone was ticked with a module it had claimed for itself still unbuilt, and it stayed that way through M1, M2 and M3 while the endpoint answered 501 and the screen said it was waiting on a milestone that had already closed. The gap surfaced on 1 Sep 2026 when the screen was opened in production. The lesson is narrow and worth keeping: a scaffold that names a milestone is an acceptance criterion, and the checklist has to carry it or nobody will notice it is missing.
 - [x] Folder structure and stub files created (storefront at root, /admin, /pro, api/v1, includes, migrations, scripts)
 - [x] `composer.json` (dompdf, PhpSpreadsheet, PHPMailer). Run `composer install` once to populate and commit `vendor/`
 - [x] `package.json`, `tailwind.config.js` with the brand tokens; `npm run build` produces `assets/css/tailwind.css`
@@ -48,6 +52,7 @@ The host is a Truehost shared cPanel account with **SFTP only, no SSH shell**, s
 - [x] Migrations 000 to 006, idempotent; `php scripts/migrate.php` runs clean (verified against MariaDB 10.11)
 - [x] `scripts/migrate.php`, `deploy.sh`, `verify.sh`, `backup.sh`, and a dependency-free test runner
 - [x] Tests: Money and OrderNumber unit tests pass (28 assertions); full-stack integration verified; storefront home renders live data
+- [x] Admin Settings screen and its endpoint (PRD Section 17.2). Added 1 Sep 2026 as the criterion M0 was missing. Two tabs, order settings and site details, each saved in one transaction; a fixed field registry so only a registered key can be written; hard limits and a confirmation step on the five values that change what a customer pays; Owner-only writes with the Manager read-only; every change recorded in `audit_logs`, which this screen is the first writer of. Notification templates, the third part of Section 17.2, move to M9 where the sending is built
 
 ### M1. Authentication and RBAC
 Delivered in two parts. Part 1 is staff sign in and RBAC. Part 2 is customer accounts (household and business) and OTP activation. Guest-cart merge moves to M4, where the basket is built (nothing writes a guest cart yet); a documented seam is left for it.
@@ -156,13 +161,14 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 - Sourcing is still described site-wide, not per product: `source_regions` and now `source_day` are two settings every product reads. The M2 audit already carried forward "give products a real source region"; the day has the same shape and should move with it, so a product sourced on Thursday from Jos can say so.
 - The storefront scaffolds (`cart.php`, `checkout.php`, `kitchen-runs.php`, `page.php`, `public/order.php`) still carry the old gold-on-white "OK VEGGIES" wordmark line, which is 2.75:1 and fails AA. They were left alone in the brand PR2 pass because they render no real data yet; each one gets the brand when its milestone builds it (M4, M7, M12, M6).
 - Carried forward from brand PR3, for M8: the `pro/*.php` screens still have no server-side access check. They render nothing but static copy today, so there is nothing to leak, but M8 must add the gate as it builds each screen. The file headers say so.
+- The remaining scaffolds each name the milestone that builds them, and every one of those milestones is still open: `api/v1/payments.php` and `api/v1/paystack_webhook.php` (M5), `api/v1/orders.php` (M6), `kitchen-runs.php` and `api/v1/kitchen_runs.php` (M7), `api/v1/credit.php` and `api/v1/customers.php` (M8), `api/v1/contact.php` (M9), `api/v1/make_it_right.php` (M10), `page.php` (M12), the nine admin placeholders and the six Pro Portal placeholders. Checked on 1 Sep 2026: none of them names a milestone that has already closed. Settings was built (M0 reopened), and M4 built out `cart.php`, `checkout.php`, `api/v1/checkout.php`, `api/v1/delivery.php` and `public/order.php` (the confirmation and the public Order Trail), leaving only the M6 order manifest and trail-writing behind those two files' fuller M6 scope.
 - Carried forward from brand PR3, for M5: `public/documents/invoice.php` and `receipt.php` have the branded frame and the print rules but no rows, because nothing creates an order yet. Each file lists what M5 has to add first: the access check (token link, or the owner of the order, or staff with `payments.view`), the read from the order snapshot rather than today's prices, and dompdf over the same markup.
 
 ---
 
 ## Session log (newest first)
 
-### 1 Sep 2026, M4 basket and checkout (consolidated review)
+### 2 Sep 2026, M4 basket and checkout (consolidated review)
 
 Milestone 4 was attempted twice on stale branches (an in-depth basket, and a wider basket-plus-checkout). This session consolidated the two into one milestone on top of the current `main`, brought the whole thing up to standard, and closed the M3 carry-forward.
 
@@ -172,6 +178,28 @@ Milestone 4 was attempted twice on stale branches (an in-depth basket, and a wid
 - **Migrations.** The two additive migrations were renumbered to avoid colliding with `main`'s 009/010: `012_basket_snapshot_indexes.sql` (lookup indexes) and `013_order_trail_tokens.sql` (`order_trail_token_hash` and a unique `shopping_cart_id` on orders). `Migrator` now drains a verification `SHOW`/`SELECT` before the next statement, which those migrations need.
 - **Tests and build.** 506 pure assertions pass (up from 435): `BasketTest`, `CheckoutTest`, `DeliveryTest`, plus the existing suites. Three live-database scripts (`basket_db_test`, `checkout_db_test`, `delivery_db_test`) cover the transactional side; they need MariaDB and were not run here, the same limitation the earlier `*_db_test.php` carry. `php -l` clean across the repo, `npm run build:css` and `npm run build:js` clean, `bash scripts/brand-check.sh` on brand.
 
+### 1 Sep 2026, M0 reopened: the admin Settings screen
+
+The screen was opened on the live site and still read "This screen is scaffolded and waiting to be built in milestone M0". A sweep of the repository found that exactly two files had ever carried an M0 label, and they were the two halves of one module: `admin/settings.php` and `api/v1/settings.php`. Every other M0 checklist line verified out. The milestone had been ticked because its checklist named the `Settings` class, which exists and works, and never named the screen the scaffold had claimed. Written up in the M0 section above.
+
+Seven clarifying questions were answered before any code was written: build order settings and site details now and leave notification templates to M9; a fixed field registry rather than a generic table-driven editor; a full audit trail with Settings as the first writer of `audit_logs`; the Manager reads the whole screen with every input disabled; hard limits plus a confirmation step on the money-affecting values; one save per tab in one transaction; and M0 reopened rather than the gap folded into another milestone.
+
+**What was built**
+
+- `includes/config/settings_fields.php`. The registry and the allowlist. Eleven editable keys across two tabs, each with its label, help line, validation rule, `value_type` and whether a change needs confirming. Only a registered key renders and only a registered key can be written, so a crafted key name cannot insert a row. `currency` and `order_number_prefix` are deliberately absent and shown read-only with the reason: changing the prefix would orphan every order number `OrderNumber` has issued, and changing the currency would misread every kobo figure already recorded.
+- `includes/classes/SettingsEditor.php`. Validation, the change diff and the transactional save. `validate()` and `validateField()` touch no database, so the rules are unit tested without one. `save()` writes only what actually moved, through `Settings::set`, inside one transaction with the audit rows.
+- `includes/classes/Audit.php`. The first writer `audit_logs` has had since it shipped in migration 001. One row per value that moved, old and new as JSON, actor, IP and user agent, written inside the caller's transaction so the record and the change cannot come apart.
+- `api/v1/settings.php`. Was a 501 stub carrying the M0 label. Now `get_group`, `preview`, `save_order_settings`, `save_site_settings` and `history`. Reads need `settings.view`; every write is POST plus a valid CSRF token plus the tab's Owner-only permission. `preview` needs the write permission too: what the deposit is about to become is not a read.
+- `admin/settings.php`. Two tabs inside the admin shell, the confirmation panel, the fixed-values panel and the last 20 changes with who made each one. `novalidate` on the forms on purpose, so one error path shows one message in our own words rather than a native bubble for a number and our copy for everything else.
+- `assets/js/admin-settings.js`. Tabs, dirty tracking, the confirm step and inline errors. The confirmation list is drawn from what the server said the change would be, never from the form, so it cannot claim a change the server would not make.
+- `includes/classes/Settings.php` gained `flushCache()`, called when a save rolls back so the request never serves a value the database refused.
+
+**Verified.** 515 unit assertions (80 new in `SettingsEditorTest.php`), up from 435. 33 database assertions in `scripts/tests/settings_db_test.php` against MariaDB 10.11: the value written, exactly one audit row per change, no row for a value that did not move, and a mid-tab failure rolling the whole tab back. 45 HTTP assertions in `scripts/tests/settings_http_test.php` driving the real endpoints as an Owner and as a Manager: the Manager is refused both saves and the preview with 403 by the server, a write with no CSRF token is 419, a write over GET is 405, a deposit of 150 is 422 and changes nothing, and unregistered keys sent alongside a valid save are dropped. The screen was driven in Chromium at 390px and 1440px for both roles, no horizontal overflow and no JavaScript errors, plus 16 browser assertions covering the tabs, the confirm step, Go back, the inline error and Undo. `php -l` clean across every non-vendor file, brand check green, and the other five database suites still pass.
+
+**Three bugs the checks caught, all fixed.** The preview call did not send the tab name, so the confirmation step never opened; a long stored value in the history panel had no wrap rule and pushed the page 2210px wide at a 390px viewport; and native number validation intercepted the submit, so the server's own error message never reached the screen.
+
+**Not done here.** Notification templates, the third part of PRD Section 17.2, stay in M9 with the sending they belong to. The screen says so rather than leaving a gap. No new migration was needed: `site_settings` and `audit_logs` both shipped in migration 001.
+
 ### 1 Sep 2026, staff password reset by email code
 
 - The Owner had no way back in after forgetting their own password: the customer reset (`forgot_password`/`reset_password`) filters to `household` and `business`, and the staff sign in only said "ask the owner". Now staff reset themselves. New page `admin/password_reset.php` (the staff twin of `public/auth/password_reset.php`, on the forest sign-in ground), reached from a "Forgot your password?" link on `admin/login.php`, which also shows a plain "your password is changed, sign in" notice on `?reset=1`.
@@ -180,6 +208,14 @@ Milestone 4 was attempted twice on stale branches (an in-depth basket, and a wid
 - `assets/js/auth.js` gains the two-step reset wiring (send the code, then set the password), so the admin page moves between steps without a reload and carries the email across; with JavaScript off the server redirects between steps, same as the customer page.
 - PRD gains **Section 10.4, "Password reset by email code"**, stating the rule once for both customers and staff.
 - Tests: new `scripts/tests/staff_password_reset_db_test.php` (eligibility: active staff yes, disabled staff, customer and unknown email no; the full code cycle including a spent and an expired code; and that a reset stamps and moves `password_changed_at`). Not runnable in this sandbox (no `.env`, no database), so it is linted here and needs a run against a scratch database. Verified here: `php scripts/tests/run.php` green at 243 assertions, `php -l` clean on every touched file, `node --check assets/js/auth.js` clean, `node scripts/build-js.mjs` rebuilt the minified JS (only `auth.min.js` moved; every other min file reproduced byte for byte with the pinned esbuild 0.24.0), and `bash scripts/brand-check.sh` green (no em dash, no banned words).
+
+### 1 Sep 2026, one deploy at a time
+
+Three deploys ran together on the evening of 1 Sep: brand PR2, brand PR3 and the staff password reset follow-up. Each uploads the whole tree into the same docroot over SFTP and then calls the same migration runner, so the runs crossed: PR3's migration (`010`) was applied by another run's runner, and PR3's own run found only `011` pending, a migration from a branch it had never seen. Every run reported success and the end state was correct, but only because migrations are idempotent and recorded in `schema_migrations`. That is luck holding a race closed, not a design.
+
+`.github/workflows/deploy.yml` now carries `concurrency: deploy-production` with `cancel-in-progress: false`, so a deploy waits for the one ahead of it instead of racing it. Cancelling was rejected on purpose: killing a run mid-upload leaves the docroot half old and half new, which is worse than waiting. A queued run being superseded by a newer one is safe, because every upload is the full tree and the runner applies every version still pending.
+
+Not changed, and worth a decision later: the upload sends `vendor/` in full on every deploy, which is most of the 7 minutes each run takes. Adding a `timeout-minutes` to the job would also turn a genuinely hung SFTP session into a fast failure rather than a six hour one.
 
 ### 1 Sep 2026, Brand identity PR3: the back office, the documents and the emails
 

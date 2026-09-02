@@ -42,6 +42,7 @@ require_once $appRoot . '/includes/classes/Catalogue.php';
 require_once $appRoot . '/includes/classes/Pricing.php';
 require_once $appRoot . '/includes/classes/Combos.php';
 require_once $appRoot . '/includes/classes/Settings.php';
+require_once $appRoot . '/includes/classes/SettingsEditor.php';
 require_once $appRoot . '/includes/classes/Basket.php';
 require_once $appRoot . '/includes/classes/Delivery.php';
 require_once $appRoot . '/includes/classes/OrderTrail.php';
