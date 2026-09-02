@@ -38,7 +38,7 @@ If any step fails, the task is not done. Do not mark it done.
 
 ### Data
 - Every entry point starts with `require_once .../includes/bootstrap.php;`.
-- Every migration is numbered, idempotent (`IF NOT EXISTS`, `INSERT ... ON DUPLICATE KEY UPDATE`), wrapped in a transaction, and ends with verification queries. One migration, one file. Never edit a migration that has shipped; write a new one.
+- Every migration is numbered, idempotent, wrapped in a transaction, and ends with verification queries. One migration, one file. Never edit a migration that has shipped; write a new one. **The production database is MySQL 8, not MariaDB.** `CREATE TABLE IF NOT EXISTS` and `INSERT ... ON DUPLICATE KEY UPDATE` work, but MySQL 8 has no `ADD COLUMN IF NOT EXISTS` or `ADD INDEX IF NOT EXISTS` (that is MariaDB only, and it fails the deploy with a syntax error). To add a column or index idempotently, guard it against `information_schema` and run the `ALTER` through a prepared statement, the way `011_users_password_changed_at.sql` and `013_order_trail_tokens.sql` do.
 - Never delete an order, payment or credit record. Reverse it. History tables are append-only.
 - snake_case for columns and PHP variables, PascalCase for classes, camelCase for JS.
 
