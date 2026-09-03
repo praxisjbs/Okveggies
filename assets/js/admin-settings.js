@@ -261,8 +261,67 @@
     refreshDirty();
   }
 
+  // --- Notification templates -----------------------------------------------
+  // The words each automated email sends. Preview renders the branded shell in
+  // a sandboxed iframe so an Owner sees the real thing before saving. The
+  // preview HTML comes from our own server and is written with srcdoc into a
+  // sandbox with no scripts, so it cannot reach the admin page around it.
+
+  function showPreview(form, html) {
+    var frame = form.querySelector('[data-template-frame]');
+    if (!frame) { return; }
+    frame.setAttribute('sandbox', '');
+    frame.srcdoc = String(html || '');
+    frame.classList.remove('hidden');
+  }
+
+  function say(form, message, isError) {
+    var slot = form.querySelector('[data-template-message]');
+    if (!slot) { return; }
+    slot.textContent = String(message || '');
+    slot.className = 'text-sm ' + (isError ? 'text-tomato' : 'text-forest');
+  }
+
+  function templateBody(form, action) {
+    var body = new FormData(form);
+    body.set('action', action);
+    return body;
+  }
+
+  function wireTemplateForm(form) {
+    var preview = form.querySelector('[data-template-preview]');
+    if (preview) {
+      preview.addEventListener('click', function () {
+        say(form, 'Rendering the preview.', false);
+        post(templateBody(form, 'preview_template')).then(function (res) {
+          if (!res.ok) { say(form, res.data.message || 'The preview could not be built.', true); return; }
+          say(form, 'This is what the customer sees.', false);
+          showPreview(form, res.data.preview);
+        }).catch(function () { say(form, 'We could not reach the server.', true); });
+      });
+    }
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      say(form, 'Saving.', false);
+      post(templateBody(form, 'save_template')).then(function (res) {
+        if (!res.ok) {
+          say(form, res.data.message || 'Those words were not saved.', true);
+          toast(res.data.message || 'Those words were not saved.', 'error');
+          return;
+        }
+        say(form, res.data.message || 'Saved.', false);
+        toast(res.data.message || 'Saved.', 'ok');
+        showPreview(form, res.data.preview);
+      }).catch(function () {
+        say(form, 'We could not reach the server. Nothing was changed.', true);
+      });
+    });
+  }
+
   ready(function () {
     wireTabs();
     document.querySelectorAll('[data-settings-form]').forEach(wireForm);
+    document.querySelectorAll('[data-template-form]').forEach(wireTemplateForm);
   });
 })();

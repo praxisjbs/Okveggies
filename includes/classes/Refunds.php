@@ -368,7 +368,17 @@ final class Refunds
             OrderCancellation::syncRefundStatus((int) $refund['order_id']);
         }
 
-        return ['ok' => true, 'code' => $status, 'message' => 'Refund moved to ' . $status . '.'];
+        // The order, the amount and the refund id ride back on the result so the
+        // caller can tell the customer (or staff, on a failure) without going
+        // looking for the row again.
+        return [
+            'ok'             => true,
+            'code'           => $status,
+            'message'        => 'Refund moved to ' . $status . '.',
+            'refund_id'      => $refundId,
+            'order_id'       => (int) $refund['order_id'],
+            'amount_subunit' => (int) $refund['amount_subunit'],
+        ];
     }
 
     /**

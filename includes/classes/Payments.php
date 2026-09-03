@@ -581,6 +581,11 @@ final class Payments
             $status = (string) ($verified['data']['status'] ?? '');
             if ($status === 'success') {
                 $result = self::applyVerifiedCharge($reference, $verified['data'], 'sweep');
+                if ($result['ok']) {
+                    // applyVerifiedCharge has already committed, so this is
+                    // outside the transaction the way the controllers do it.
+                    Notifications::announceCharge($result);
+                }
                 if ($result['ok'] || $result['code'] === 'duplicate') {
                     $counts['credited']++;
                 } else {

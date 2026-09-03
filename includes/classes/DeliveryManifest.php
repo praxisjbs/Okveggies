@@ -21,17 +21,15 @@ final class DeliveryManifest
               ORDER BY COALESCE(z.sort_order, 2147483647), z.name, o.order_number',
             [':date' => $date]
         );
+        // Two queries for the whole day, not two per order. A Saturday with 60
+        // orders and a couple of combos each was over 180 round trips before
+        // this, on the one screen the team stands at while the van waits.
+        $itemsByOrder = self::itemsForOrders(array_map(
+            static fn(array $row): int => (int) $row['order_id'],
+            $orders
+        ));
         foreach ($orders as &$order) {
-            $items = Database::all(
-                'SELECT id, item_type, item_name, quantity, unit_name FROM order_items WHERE order_id = :id ORDER BY id',
-                [':id' => (int) $order['order_id']]
-            );
-            foreach ($items as &$item) {
-                $item['components'] = (string) $item['item_type'] === 'combo'
-                    ? Database::all('SELECT product_name, quantity, unit_name FROM order_item_components WHERE order_item_id = :id ORDER BY id', [':id' => (int) $item['id']])
-                    : [];
-            }
-            unset($item);
+            $items = $itemsByOrder[(int) $order['order_id']] ?? [];
             $order['items'] = $items;
             $order['packing_lines'] = self::packingLines($items);
         }
@@ -42,6 +40,46 @@ final class DeliveryManifest
         }
         unset($zone);
         return ['date' => $date, 'order_count' => count($orders), 'zones' => $zones];
+    }
+
+    /**
+     * Every line and every combo component for a day's orders, in two queries.
+     *
+     * @param  array<int, int> $orderIds
+     * @return array<int, array<int, array<string, mixed>>> keyed by order id
+     */
+    private static function itemsForOrders(array $orderIds): array
+    {
+        $orderIds = array_values(array_unique(array_filter($orderIds)));
+        if (!$orderIds) {
+            return [];
+        }
+        $items = Database::all(
+            'SELECT id, order_id, item_type, item_name, quantity, unit_name
+               FROM order_items WHERE order_id IN (' . implode(',', array_fill(0, count($orderIds), '?')) . ')
+              ORDER BY order_id, id',
+            $orderIds
+        );
+        if (!$items) {
+            return [];
+        }
+        $itemIds = array_map(static fn(array $row): int => (int) $row['id'], $items);
+        $components = Database::all(
+            'SELECT order_item_id, product_name, quantity, unit_name
+               FROM order_item_components WHERE order_item_id IN (' . implode(',', array_fill(0, count($itemIds), '?')) . ')
+              ORDER BY id',
+            $itemIds
+        );
+        $byItem = [];
+        foreach ($components as $component) {
+            $byItem[(int) $component['order_item_id']][] = $component;
+        }
+        $byOrder = [];
+        foreach ($items as $item) {
+            $item['components'] = $byItem[(int) $item['id']] ?? [];
+            $byOrder[(int) $item['order_id']][] = $item;
+        }
+        return $byOrder;
     }
 
     public static function groupByZone(array $orders): array
@@ -75,23 +113,35 @@ final class DeliveryManifest
             $lineQty = (float) ($item['quantity'] ?? 0);
             if ((string) ($item['item_type'] ?? '') === 'combo' && !empty($item['components'])) {
                 foreach ($item['components'] as $component) {
-                    $lines[] = [
-                        'name' => (string) $component['product_name'],
-                        'quantity' => self::quantity($lineQty * (float) $component['quantity']),
-                        'unit' => (string) $component['unit_name'],
-                        'from_combo' => (string) $item['item_name'],
-                    ];
+                    $lines[] = self::line(
+                        (string) $component['product_name'],
+                        $lineQty * (float) $component['quantity'],
+                        (string) $component['unit_name'],
+                        (string) $item['item_name']
+                    );
                 }
                 continue;
             }
-            $lines[] = [
-                'name' => (string) $item['item_name'],
-                'quantity' => self::quantity($lineQty),
-                'unit' => (string) $item['unit_name'],
-                'from_combo' => null,
-            ];
+            $lines[] = self::line((string) $item['item_name'], $lineQty, (string) $item['unit_name'], null);
         }
         return $lines;
+    }
+
+    /**
+     * One packing line. It carries both the display string a packer reads and
+     * the exact number, because the zone totals add these up: rounding each
+     * line to three places first and then summing drifts, and a drifting
+     * kilogramme total is the one number on this page nobody can check.
+     */
+    private static function line(string $name, float $quantity, string $unit, ?string $fromCombo): array
+    {
+        return [
+            'name' => $name,
+            'quantity' => self::quantity($quantity),
+            'quantity_exact' => $quantity,
+            'unit' => $unit,
+            'from_combo' => $fromCombo,
+        ];
     }
 
     private static function totals(array $orders): array
@@ -103,7 +153,7 @@ final class DeliveryManifest
                 if (!isset($totals[$key])) {
                     $totals[$key] = ['name' => $line['name'], 'unit' => $line['unit'], 'quantity_raw' => 0.0];
                 }
-                $totals[$key]['quantity_raw'] += (float) $line['quantity'];
+                $totals[$key]['quantity_raw'] += (float) ($line['quantity_exact'] ?? $line['quantity']);
             }
         }
         $out = [];

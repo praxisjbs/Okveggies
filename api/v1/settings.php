@@ -193,6 +193,81 @@ switch ($action) {
         settings_save('payment');
         break;
 
+    // ---------------------------------------------------------------------
+    // Notification templates. The words live in notification_templates, not in
+    // PHP, because they are content an Owner rewrites without a deploy. The
+    // letterhead is not editable here on purpose: it lives in Mail::brandedHtml
+    // where the brand guard can see it.
+    // ---------------------------------------------------------------------
+    case 'save_template':
+        settings_guard_write('settings.notifications.edit');
+        $key = trim((string) okv_input('template_key', ''));
+        $subject = trim((string) okv_input('subject_template', ''));
+        $body = trim((string) okv_input('body_template', ''));
+        if (!isset(Notifications::TOKENS[$key])) {
+            okv_error('That is not a notification we send.', 422, 'unknown_template');
+        }
+        if ($subject === '' || mb_strlen($subject) > 255) {
+            okv_error('Give the email a subject of 255 characters or fewer.', 422, 'bad_subject');
+        }
+        if ($body === '' || mb_strlen($body) > 5000) {
+            okv_error('Write a message of 5,000 characters or fewer.', 422, 'bad_body');
+        }
+        if (str_contains($subject . $body, "\u{2014}")) {
+            okv_error('The house style has no em dash. Use a full stop, a comma or a colon.', 422, 'em_dash');
+        }
+        try {
+            $before = Database::one(
+                'SELECT subject_template, body_template FROM notification_templates WHERE template_key = :k',
+                [':k' => $key]
+            );
+            if (!$before) {
+                okv_error('That notification has no template yet.', 404, 'not_found');
+            }
+            Database::run(
+                'UPDATE notification_templates
+                    SET subject_template = :subject, body_template = :body, updated_by = :actor
+                  WHERE template_key = :key',
+                [':subject' => $subject, ':body' => $body, ':actor' => Rbac::userId(), ':key' => $key]
+            );
+            Audit::record('settings.template.update', 'notification_template', null, $before, [
+                'template_key'     => $key,
+                'subject_template' => $subject,
+                'body_template'    => $body,
+            ]);
+        } catch (Throwable $e) {
+            settings_fail($e, 'save_template');
+            return;
+        }
+        okv_json([
+            'status'  => 'ok',
+            'message' => 'The words for this email have been saved.',
+            'preview' => Mail::brandedHtml(
+                SettingsEditor::fillTemplate($subject, SettingsEditor::sampleTokens($key)),
+                SettingsEditor::fillTemplate($body, SettingsEditor::sampleTokens($key)),
+                Mail::ctaFromVars(SettingsEditor::sampleTokens($key))
+            ),
+        ]);
+        break;
+
+    case 'preview_template':
+        Rbac::requirePermission('settings.view');
+        $key = trim((string) okv_input('template_key', ''));
+        if (!isset(Notifications::TOKENS[$key])) {
+            okv_error('That is not a notification we send.', 422, 'unknown_template');
+        }
+        $sample = SettingsEditor::sampleTokens($key);
+        okv_json([
+            'status'  => 'ok',
+            'subject' => SettingsEditor::fillTemplate((string) okv_input('subject_template', ''), $sample),
+            'preview' => Mail::brandedHtml(
+                SettingsEditor::fillTemplate((string) okv_input('subject_template', ''), $sample),
+                SettingsEditor::fillTemplate((string) okv_input('body_template', ''), $sample),
+                Mail::ctaFromVars($sample)
+            ),
+        ]);
+        break;
+
     case 'history':
         Rbac::requirePermission('settings.view');
         try {

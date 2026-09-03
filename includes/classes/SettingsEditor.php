@@ -359,6 +359,75 @@ final class SettingsEditor
         return $changes;
     }
 
+    /**
+     * Fill {{tokens}} the way Mail does, so a preview on the settings screen is
+     * the same rendering the customer will receive rather than a lookalike.
+     */
+    public static function fillTemplate(string $template, array $vars): string
+    {
+        return trim((string) preg_replace_callback(
+            '/\{\{\s*([a-z0-9_]+)\s*\}\}/i',
+            static fn(array $m): string => isset($vars[$m[1]]) ? (string) $vars[$m[1]] : '',
+            $template
+        ));
+    }
+
+    /**
+     * Believable stand-in values for one template's tokens, so a preview reads
+     * like a real email instead of a row of empty gaps. Sample only: nothing
+     * here is ever sent.
+     */
+    public static function sampleTokens(string $templateKey): array
+    {
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $all = [
+            'customer_name'  => 'Ada',
+            'order_number'   => 'OKV26014',
+            'delivery_day'   => 'Thursday 24th September',
+            'order_total'    => Money::format(1250000),
+            'amount'         => Money::format(500000),
+            'zone_name'      => 'Ikeja',
+            'payment_choice' => 'Deposit online, balance on delivery',
+            'source_line'    => okv_sourced_line(Settings::str('source_regions', 'Ogun State'), Settings::str('source_day', 'Tuesday')),
+            'balance_line'   => 'There is still ' . Money::format(750000) . ' to settle on this order.',
+            'money_line'     => 'We are sending ' . Money::format(500000) . ' back to you.',
+            'reason'         => 'The customer bank account could not be reached.',
+            'order_trail_url' => $base . '/public/order.php?token=sample',
+            'admin_url'      => $base . '/admin/orders.php?order=1',
+        ];
+        $tokens = Notifications::TOKENS[$templateKey] ?? [];
+        $sample = [];
+        foreach ($tokens as $token) {
+            $sample[$token] = $all[$token] ?? '';
+        }
+        return $sample;
+    }
+
+    /** Every notification template with the words currently stored for it. */
+    public static function templates(): array
+    {
+        $stored = [];
+        foreach (Database::all('SELECT template_key, subject_template, body_template, is_active, updated_at FROM notification_templates') as $row) {
+            $stored[(string) $row['template_key']] = $row;
+        }
+        $out = [];
+        foreach (Notifications::EVENTS as $event => $definition) {
+            $key = $definition['template'];
+            $row = $stored[$key] ?? null;
+            $out[$key] = [
+                'key'      => $key,
+                'label'    => $definition['label'],
+                'audience' => $definition['audience'],
+                'subject'  => (string) ($row['subject_template'] ?? ''),
+                'body'     => (string) ($row['body_template'] ?? ''),
+                'missing'  => $row === null,
+                'tokens'   => Notifications::TOKENS[$key] ?? [],
+                'updated_at' => (string) ($row['updated_at'] ?? ''),
+            ];
+        }
+        return $out;
+    }
+
     /** The string form Settings::set will store, so the audit row matches the column. */
     private static function store($value): string
     {

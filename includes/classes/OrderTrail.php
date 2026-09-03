@@ -79,11 +79,22 @@ final class OrderTrail
             [':id' => (int) $order['id']]
         );
         $order['public_trail'] = OrderLifecycle::customerTrail($order['history']);
-        $order['source_line'] = '';
-        if ($order['confirmed_at'] !== null && trim((string) $order['source_regions_snapshot']) !== '') {
-            $day = date('l', strtotime((string) $order['confirmed_at']));
-            $order['source_line'] = okv_sourced_line((string) $order['source_regions_snapshot'], $day);
-        }
+
+        // PRD 14.2 makes the "Sourced [day] from [state]" line one of the three
+        // places the promise is made, and the trail is where an anxious customer
+        // looks first. Once the order is confirmed it reads the snapshot taken
+        // at that moment, which is a fact. Before then it reads the live source
+        // settings, which is the promise. It is never blank, because a pending
+        // order is exactly when the reassurance is worth most.
+        $confirmed = $order['confirmed_at'] !== null
+            && trim((string) $order['source_regions_snapshot']) !== '';
+        $order['source_line'] = $confirmed
+            ? okv_sourced_line(
+                (string) $order['source_regions_snapshot'],
+                date('l', strtotime((string) $order['confirmed_at']))
+            )
+            : okv_sourced_line(Settings::str('source_regions', ''), Settings::str('source_day', ''));
+        $order['source_is_promise'] = !$confirmed;
         $order['refund_lines'] = [];
         $refunds = Database::all(
             'SELECT r.status FROM refunds r WHERE r.order_id = :id ORDER BY r.id',

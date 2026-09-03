@@ -102,6 +102,12 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] Public Order Trail page by token link (no login), and the "Sourced [day] from [state]" line
 - [x] Admin delivery-day manifest / packing list, grouped by zone, printable
 - [x] Tests: order-number generation; status transitions
+- [x] Notifications on every order and payment event, by email and in the app. `docs/M6_GUIDE.md` Section 1 moved these out of M9 and into M6, because a notification belongs with the event that fires it and PRD 14.2 makes the confirmation email the way a customer reaches the Order Trail. One `Notifications` dispatcher, a row in `notifications` and one in `notification_deliveries` per recipient and channel, and a failed send that is recorded rather than thrown at the caller.
+- [x] The six templates the events had no words for, plus `order_packed`, so a customer hears about every stage rather than three of six (migration `019`).
+- [x] M5's orphaned payment events wired: verified charge, deposit, staff-recorded payment, refund sent, refund failed.
+- [x] Notification template editor behind `settings.notifications.edit`, with the tokens each message accepts and a preview of the real branded email.
+- [x] Order 360 lists every message sent, to which address, when, whether it landed and the error if it did not, with a resend behind `notifications.resend`.
+- [x] Tests: dispatcher rows, a failing send, every template rendering with no `{{placeholder}}` left, the trail link on every customer email.
 
 ### M7. Kitchen Runs
 - [ ] Request flow, four input modes (catalogue, priced-by-us, priced-by-customer, upload)
@@ -116,10 +122,10 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [ ] Tests: credit limit and balance
 
 ### M9. Notifications and contact
-- [ ] Email templates and delivery: placed, payment confirmed, dispatched, delivered, trail link
+- [x] Email templates and delivery: placed, payment confirmed, dispatched, delivered, trail link. **Delivered in M6**, per `docs/M6_GUIDE.md` Section 1: every one of these is fired by a status change M6 builds, so building them apart meant writing every transition twice. Contact stayed here, which is the clean seam.
 - [ ] Floating support widget: WhatsApp click-to-chat and contact form
 - [ ] Contact messages surface in admin
-- [ ] Tests: template render; notification queued on order events
+- [x] Tests: template render; notification queued on order events (**M6**, `NotificationsTest.php` and `notifications_db_test.php`)
 
 ### M10. Trust and Make It Right
 - [ ] Report an issue against an order (category, note, photos)
@@ -170,6 +176,54 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 3 Sep 2026, M6 senior review: the milestone finished and verified
+
+A senior pass over `M6-pr1-order-cancellation`. The lifecycle, cancellation,
+trail and manifest work was sound and is kept almost whole. Two things were
+not: the milestone's notification half had not been started, and nothing in the
+branch had ever been run against a database. Both are closed here. The full
+report for the engineer is `docs/M6_REVIEW.md`.
+
+- **Verified, not asserted.** MySQL 8.0.46 and a PHP server were stood up and
+  every migration from `000` to `020` applied twice from an empty database, so
+  the idempotency claims are now facts. The three checks the branch listed as
+  never run were run: 310 database assertions, 94 HTTP assertions and
+  `scripts/verify.sh`. Everything the branch already had passed, first time.
+  A local SMTP sink captured real messages, so the branded email is a rendered
+  artefact rather than a belief.
+- **Notifications, the missing half of M6.** New `Notifications` dispatcher:
+  one path in, a `notifications` row and a `notification_deliveries` row per
+  recipient and channel, `Mail::sendTemplate` for the branded HTML and plain
+  text, and a send that is caught and recorded rather than thrown at the caller.
+  Two channels ship, email and in the app. Migration `019` adds the seven
+  templates that did not exist, the `notifications.resend` permission, and the
+  index the in-app inbox reads. Every order stage, every cancellation and all
+  four of M5's orphaned payment events now announce themselves; an order taken
+  end to end sends seven branded emails and writes the matching in-app rows.
+- **The words are content.** A Notifications tab on the settings screen behind
+  `settings.notifications.edit` lists every message, names the tokens it
+  accepts, previews the real branded render in a sandboxed frame, and refuses
+  an em dash before it can reach a customer.
+- **Order 360 finished.** The M5 money ledger (expected, paid, refunded, net,
+  outstanding), links to the invoice, the receipt, the customer's trail and the
+  delivery day, an internal staff note that can never surface on the public
+  trail (migration `020`), and the list of every message sent with a resend on
+  a failed one.
+- **Six defects fixed.** `clay` was used by name in eleven places across M5 and
+  M6 but had never been added to `tailwind.config.js`, so every "needs
+  attention" state compiled to no colour at all. The Order Trail showed no
+  sourcing line until an order was confirmed, which is exactly when a customer
+  is least reassured. The day manifest ran two queries per order, over 180 on a
+  60 order Saturday. Zone totals summed values already rounded to three places.
+  `Cancellation::policyLine` existed and was never shown at checkout. The
+  manifest and Order 360 were dead ends with no link between them.
+- **Not run, and named as such.** No real or sandbox Paystack charge or refund
+  was sent; the M5 test-mode ledger regressions stand in. No production SMTP
+  account was used, so deliverability, SPF and DKIM are unproven. Nothing was
+  printed on paper; the print rules were read off the rendered page. The
+  cancellation and lifecycle row locks are tested for the stale and repeat
+  paths but were not forced under concurrent load.
 
 ### 3 Sep 2026, M6 tasks 2 to 5: delivery and the Order Trail
 

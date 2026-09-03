@@ -265,6 +265,7 @@ final class ManualPayments
                 'reference'   => $reference,
                 'transaction_id' => $txnId,
                 'order_id'    => (int) $payment['order_id'],
+                'amount_subunit' => $amount,
                 'message'     => self::confirmationLine($amount, $outstanding),
             ];
         } catch (Throwable $e) {

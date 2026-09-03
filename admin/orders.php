@@ -26,10 +26,22 @@ $items = $selected ? Database::all(
     'SELECT id, item_type, item_name, quantity, unit_name, line_total_subunit FROM order_items WHERE order_id = :id ORDER BY id',
     [':id' => $selectedId]
 ) : [];
+// One query for every component on the order rather than one per combo line.
+// A basket order with six combos was six extra round trips before this.
+$componentsByItem = [];
+if ($items) {
+    $ids = array_map(static fn(array $row): int => (int) $row['id'], $items);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    foreach (Database::all(
+        'SELECT order_item_id, product_name, quantity, unit_name
+           FROM order_item_components WHERE order_item_id IN (' . $placeholders . ') ORDER BY id',
+        $ids
+    ) as $component) {
+        $componentsByItem[(int) $component['order_item_id']][] = $component;
+    }
+}
 foreach ($items as &$item) {
-    $item['components'] = (string) $item['item_type'] === 'combo'
-        ? Database::all('SELECT product_name, quantity, unit_name FROM order_item_components WHERE order_item_id = :id ORDER BY id', [':id' => (int) $item['id']])
-        : [];
+    $item['components'] = $componentsByItem[(int) $item['id']] ?? [];
 }
 unset($item);
 $address = $selected ? Database::one(
@@ -49,7 +61,37 @@ $history = $selected ? Database::all(
       WHERE h.order_id = :id ORDER BY h.created_at, h.id',
     [':id' => $selectedId]
 ) : [];
+// The money, read from the M5 ledger rather than recomputed here, so this
+// screen and the invoice can never disagree about what is owed.
+$ledger = $selected ? Database::one(
+    'SELECT COALESCE(SUM(p.expected_amount_subunit), 0) AS expected,
+            COALESCE(SUM(p.paid_amount_subunit), 0) AS paid
+       FROM payments p WHERE p.order_id = :id',
+    [':id' => $selectedId]
+) : null;
+$refundedSubunit = $selected ? (int) (Database::one(
+    'SELECT COALESCE(SUM(amount_subunit), 0) AS total FROM refunds
+      WHERE order_id = :id AND status = :processed',
+    [':id' => $selectedId, ':processed' => Refunds::STATUS_PROCESSED]
+)['total'] ?? 0) : 0;
+$expectedSubunit = (int) ($ledger['expected'] ?? 0);
+$paidSubunit     = (int) ($ledger['paid'] ?? 0);
+$netSubunit      = max(0, $paidSubunit - $refundedSubunit);
+$outstandingSubunit = Money::balance($expectedSubunit, $netSubunit);
+
+// Everything that has been sent about this order, so "we emailed them" is a
+// fact on the screen rather than a belief.
+try {
+    $messages = $selected ? Notifications::forOrder($selectedId) : [];
+} catch (Throwable $e) {
+    error_log('admin orders notifications: ' . $e->getMessage());
+    $messages = [];
+}
+
 $canCancel = Rbac::can('orders.cancel');
+$canNote     = Rbac::can('orders.update');
+$canResend   = Rbac::can('notifications.resend');
+$canDocument = Rbac::can('payments.view');
 $canRefund = Rbac::can('payments.refund');
 $canTransition = Rbac::can('orders.status.update');
 $targets = $selected ? OrderLifecycle::staffTargets((string) $selected['order_status']) : [];
@@ -64,7 +106,11 @@ require __DIR__ . '/../includes/components/admin/header.php';
   <p class="okv-note-ok mb-5" role="status"><?= $flag === 'already_cancelled' ? 'The order was already cancelled. No second refund was raised.' : 'The order has been cancelled.' ?></p>
 <?php endif; ?>
 <?php if ($statusFlag !== ''): ?>
-  <p class="okv-note-ok mb-5" role="status"><?= $statusFlag === 'already_transitioned' ? 'That stage was already recorded. No duplicate history was added.' : 'The order stage has been updated.' ?></p>
+  <p class="okv-note-ok mb-5" role="status"><?=
+    $statusFlag === 'already_transitioned' ? 'That stage was already recorded. No duplicate history was added.'
+      : ($statusFlag === 'note_saved' ? 'The internal note has been saved. The customer never sees it.'
+      : ($statusFlag === 'resent' ? 'That email has been sent again.'
+      : 'The order stage has been updated. The customer has been told.')) ?></p>
 <?php endif; ?>
 
 <form method="get" class="mb-5 grid gap-3 rounded-md border border-mist bg-white p-4 sm:grid-cols-4">
@@ -118,10 +164,48 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <div class="space-y-6 p-4 md:p-5">
         <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div><dt class="text-ink-60">Customer</dt><dd class="mt-1 font-medium"><?= okv_e($address['recipient_name'] ?? 'Customer') ?></dd></div>
-          <div><dt class="text-ink-60">Delivery</dt><dd class="mt-1"><?= okv_e(date('l jS F', strtotime((string) $selected['preferred_delivery_date']))) ?></dd></div>
+          <div>
+            <dt class="text-ink-60">Delivery</dt>
+            <dd class="mt-1">
+              <?= okv_e(date('l jS F', strtotime((string) $selected['preferred_delivery_date']))) ?>
+              <?php if (Rbac::can('delivery.manifest.view')): ?>
+                <a class="ml-1 underline decoration-mist underline-offset-2 hover:text-forest"
+                   href="/admin/delivery-manifest.php?date=<?= okv_e((string) $selected['preferred_delivery_date']) ?>">See the day</a>
+              <?php endif; ?>
+            </dd>
+          </div>
           <div><dt class="text-ink-60">Order total</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format((int) $selected['order_total_subunit'])) ?></dd></div>
-          <div><dt class="text-ink-60">Paid</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format((int) $selected['amount_paid_subunit'])) ?></dd></div>
+          <div><dt class="text-ink-60">Stage</dt><dd class="mt-1"><?= okv_e(ucfirst((string) $selected['order_status'])) ?></dd></div>
         </dl>
+
+        <!-- The money, straight from the M5 ledger. Expected is what the
+             payment rows ask for, net is what we have kept after refunds, and
+             outstanding is what is still owed. -->
+        <div>
+          <h3 class="text-sm font-semibold text-ink">Money</h3>
+          <dl class="mt-2 grid gap-4 text-sm sm:grid-cols-3 lg:grid-cols-5">
+            <div><dt class="text-ink-60">Expected</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format($expectedSubunit)) ?></dd></div>
+            <div><dt class="text-ink-60">Paid</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format($paidSubunit)) ?></dd></div>
+            <div><dt class="text-ink-60">Refunded</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format($refundedSubunit)) ?></dd></div>
+            <div><dt class="text-ink-60">Net</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format($netSubunit)) ?></dd></div>
+            <div><dt class="text-ink-60">Outstanding</dt><dd class="mt-1 font-mono <?= $outstandingSubunit > 0 ? 'text-clay' : '' ?>"><?= okv_e(Money::format($outstandingSubunit)) ?></dd></div>
+          </dl>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <a class="okv-btn-outline min-h-[44px] px-3" href="/public/order.php?order=<?= (int) $selected['id'] ?>" target="_blank" rel="noopener">
+              Open the customer trail<span class="sr-only">, opens in a new tab</span>
+            </a>
+            <?php if ($canDocument): ?>
+              <a class="okv-btn-outline min-h-[44px] px-3" href="/public/documents/invoice.php?order=<?= (int) $selected['id'] ?>" target="_blank" rel="noopener">
+                Invoice<span class="sr-only">, opens in a new tab</span>
+              </a>
+              <?php if ($paidSubunit > 0): ?>
+                <a class="okv-btn-outline min-h-[44px] px-3" href="/public/documents/receipt.php?order=<?= (int) $selected['id'] ?>" target="_blank" rel="noopener">
+                  Receipt<span class="sr-only">, opens in a new tab</span>
+                </a>
+              <?php endif; ?>
+            <?php endif; ?>
+          </div>
+        </div>
         <?php if ($address): ?>
           <p class="text-sm text-ink-60"><strong class="text-ink">Zone:</strong> <?= okv_e($address['zone_name'] ?: 'Not assigned') ?>. <strong class="text-ink">Phone:</strong> <?= okv_e($address['recipient_phone']) ?>.</p>
           <p class="text-sm text-ink-60"><strong class="text-ink">Address:</strong> <?= okv_e(implode(', ', array_filter([$address['address_line_1'], $address['address_line_2'], $address['city'], $address['state']]))) ?><?= $address['landmark'] ? '. Near ' . okv_e($address['landmark']) : '' ?></p>
@@ -152,6 +236,67 @@ require __DIR__ . '/../includes/components/admin/header.php';
               </li>
             <?php endforeach; ?>
           </ol>
+        </div>
+
+        <!-- The internal note. It lives on the order, never in the status
+             history, so it can never surface as a step on the public trail. -->
+        <div>
+          <h3 class="text-sm font-semibold text-ink">Internal note</h3>
+          <p class="mt-1 text-xs text-ink-60">For the team only. The customer never sees this, on the trail or in any email.</p>
+          <?php if ($canNote): ?>
+            <form action="/api/v1/orders.php" method="POST" class="mt-2 space-y-3">
+              <?= Csrf::field() ?>
+              <input type="hidden" name="action" value="save_note">
+              <input type="hidden" name="order_id" value="<?= (int) $selected['id'] ?>">
+              <label class="sr-only" for="staff-note">Internal note</label>
+              <textarea class="okv-input" id="staff-note" name="staff_note" rows="3" maxlength="2000"><?= okv_e((string) ($selected['staff_note'] ?? '')) ?></textarea>
+              <button class="okv-btn-outline min-h-[44px] px-4">Save the note</button>
+            </form>
+          <?php elseif (trim((string) ($selected['staff_note'] ?? '')) !== ''): ?>
+            <p class="mt-2 text-sm"><?= nl2br(okv_e((string) $selected['staff_note'])) ?></p>
+          <?php else: ?>
+            <p class="mt-2 text-sm text-ink-60">No note yet.</p>
+          <?php endif; ?>
+        </div>
+
+        <!-- What was actually sent. A belief becomes a fact here: the address,
+             the moment, whether it landed, and the error when it did not. -->
+        <div>
+          <h3 class="text-sm font-semibold text-ink">Messages sent</h3>
+          <?php if (!$messages): ?>
+            <p class="mt-2 text-sm text-ink-60">Nothing has been sent about this order yet.</p>
+          <?php else: ?>
+            <ul class="mt-2 divide-y divide-mist border-y border-mist">
+              <?php foreach ($messages as $message): ?>
+                <li class="flex flex-wrap items-start justify-between gap-3 py-3 text-sm">
+                  <span class="min-w-0">
+                    <span class="font-medium"><?= okv_e(Notifications::EVENTS[(string) $message['event_type']]['label'] ?? ucfirst(str_replace('_', ' ', (string) $message['event_type']))) ?></span>
+                    <span class="text-ink-60">
+                      by <?= (string) $message['channel'] === 'email' ? 'email to ' . okv_e((string) $message['recipient_address']) : 'in the app' ?>,
+                      <?= okv_e(date('j M Y, H:i', strtotime((string) $message['created_at']))) ?>
+                    </span>
+                    <?php if ($message['last_error']): ?>
+                      <span class="mt-1 block text-xs text-clay-ink"><?= okv_e((string) $message['last_error']) ?></span>
+                    <?php endif; ?>
+                  </span>
+                  <span class="flex shrink-0 items-center gap-2">
+                    <span class="okv-badge <?= (string) $message['delivery_status'] === 'sent' ? 'okv-badge-available' : 'okv-badge-warn' ?>">
+                      <?= (string) $message['delivery_status'] === 'sent' ? 'Sent' : 'Not sent' ?>
+                    </span>
+                    <?php if ($canResend && (string) $message['delivery_status'] !== 'sent' && (string) $message['channel'] === 'email'): ?>
+                      <form action="/api/v1/orders.php" method="POST">
+                        <?= Csrf::field() ?>
+                        <input type="hidden" name="action" value="resend_notification">
+                        <input type="hidden" name="order_id" value="<?= (int) $selected['id'] ?>">
+                        <input type="hidden" name="delivery_id" value="<?= (int) $message['delivery_id'] ?>">
+                        <button class="okv-btn-text min-h-[44px]">Send it again</button>
+                      </form>
+                    <?php endif; ?>
+                  </span>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
         </div>
 
         <?php if ($canTransition && $targets): ?>

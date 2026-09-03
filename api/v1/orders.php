@@ -62,6 +62,11 @@ if ($action === 'transition') {
         $status = $result['code'] === 'not_found' ? 404 : ($result['code'] === 'stale' ? 409 : 422);
         okv_error($result['message'], $status, $result['code']);
     }
+    if ($result['code'] === 'transitioned') {
+        // Committed first, announced second. A bounced email never un-packs an
+        // order, and the failure shows on the order screen instead.
+        Notifications::announceStage($orderId, (string) $result['status'], (int) Rbac::userId());
+    }
     if (orders_is_fetch()) {
         okv_json(['status' => 'ok'] + $result);
     }
@@ -89,6 +94,9 @@ if ($action === 'cancel_customer') {
     if (!$result['ok']) {
         okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
     }
+    if ($result['code'] === 'cancelled') {
+        Notifications::announceCancellation((int) okv_input('order_id', 0), $result, (int) Customer::id());
+    }
     orders_done($result, '/public/order.php?order=' . (int) okv_input('order_id', 0));
 }
 
@@ -115,7 +123,66 @@ if ($action === 'cancel_staff') {
         $status = $result['code'] === 'not_found' ? 404 : ($result['code'] === 'refund_permission_required' ? 403 : 422);
         okv_error($result['message'], $status, $result['code']);
     }
+    if ($result['code'] === 'cancelled') {
+        Notifications::announceCancellation((int) okv_input('order_id', 0), $result, (int) Rbac::userId());
+    }
     orders_done($result, '/admin/orders.php?order=' . (int) okv_input('order_id', 0));
+}
+
+if ($action === 'save_note') {
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission('orders.update');
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    $orderId = (int) okv_input('order_id', 0);
+    $note = trim((string) okv_input('staff_note', ''));
+    if (mb_strlen($note) > 2000) {
+        okv_error('Keep the note to 2,000 characters or fewer.', 422, 'note_too_long');
+    }
+    try {
+        $changed = Database::run(
+            'UPDATE orders SET staff_note = :note WHERE id = :id',
+            [':note' => $note !== '' ? $note : null, ':id' => $orderId]
+        );
+        if ($changed === 0 && !Database::one('SELECT id FROM orders WHERE id = :id', [':id' => $orderId])) {
+            okv_error('That order could not be found.', 404, 'not_found');
+        }
+        Audit::record('orders.note.update', 'order', $orderId, null, ['staff_note' => $note]);
+    } catch (Throwable $e) {
+        error_log('orders.save_note failed: ' . $e->getMessage());
+        okv_error('The note was not saved. Please try again.', 500, 'failed');
+    }
+    if (orders_is_fetch()) {
+        okv_json(['status' => 'ok', 'code' => 'note_saved']);
+    }
+    okv_redirect('/admin/orders.php?order=' . $orderId . '&status=note_saved', 303);
+}
+
+if ($action === 'resend_notification') {
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission('notifications.resend');
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    $orderId = (int) okv_input('order_id', 0);
+    try {
+        $result = Notifications::resend((int) okv_input('delivery_id', 0), (int) Rbac::userId());
+    } catch (Throwable $e) {
+        error_log('orders.resend_notification failed: ' . $e->getMessage());
+        okv_error('That email could not be sent again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    if (orders_is_fetch()) {
+        okv_json(['status' => 'ok'] + $result);
+    }
+    okv_redirect('/admin/orders.php?order=' . $orderId . '&status=resent', 303);
 }
 
 okv_error('That action is not available.', 400, 'unknown_action');

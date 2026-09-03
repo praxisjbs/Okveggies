@@ -13,6 +13,22 @@ try {
     $manifest = DeliveryManifest::forDate($date);
 }
 
+// A driver wants their own zone and nobody else's, so the day can be narrowed
+// to one. The filter is applied after the read, so the grouping and the per zone
+// totals stay the single code path that the tests cover.
+$zoneFilter = trim((string) okv_input('zone', ''));
+$allZones = $manifest['zones'];
+if ($zoneFilter !== '') {
+    $manifest['zones'] = array_values(array_filter(
+        $manifest['zones'],
+        static fn(array $zone): bool => (string) ($zone['id'] ?? 'none') === $zoneFilter
+    ));
+    $manifest['order_count'] = array_sum(array_map(
+        static fn(array $zone): int => count($zone['orders']),
+        $manifest['zones']
+    ));
+}
+
 $okv_admin_title = 'Day manifest';
 $okv_admin_note = 'Orders to pack and deliver, grouped by the zone recorded at checkout.';
 $okv_admin_crumbs = [['label' => 'Delivery', 'href' => '/admin/delivery.php']];
@@ -26,6 +42,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
   #okv-admin-main { padding: 0 !important; max-width: none !important; }
   .okv-manifest-zone { break-inside: avoid; box-shadow: none !important; }
   .okv-manifest-order { break-inside: avoid; }
+  [data-print-plain] { text-decoration: none !important; color: inherit !important; }
 }
 </style>
 
@@ -34,6 +51,15 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <div>
       <label class="okv-label" for="manifest-date">Delivery date</label>
       <input class="okv-input mt-1" id="manifest-date" type="date" name="date" value="<?= okv_e($date) ?>" required>
+    </div>
+    <div>
+      <label class="okv-label" for="manifest-zone">Zone</label>
+      <select class="okv-input mt-1" id="manifest-zone" name="zone">
+        <option value="">Every zone</option>
+        <?php foreach ($allZones as $option): $value = (string) ($option['id'] ?? 'none'); ?>
+          <option value="<?= okv_e($value) ?>" <?= $zoneFilter === $value ? 'selected' : '' ?>><?= okv_e($option['name']) ?></option>
+        <?php endforeach; ?>
+      </select>
     </div>
     <button class="okv-btn min-h-[44px] px-4">Show manifest</button>
   </form>
@@ -44,11 +70,17 @@ require __DIR__ . '/../includes/components/admin/header.php';
 <header class="mb-6 border-b-2 border-forest pb-4">
   <p class="okv-eyebrow">OK Veggies delivery day</p>
   <h1 class="mt-1 font-display text-3xl font-bold text-ink"><?= okv_e(date('l jS F Y', strtotime($date))) ?></h1>
-  <p class="mt-2 text-sm text-ink-60"><?= (int) $manifest['order_count'] ?> order<?= (int) $manifest['order_count'] === 1 ? '' : 's' ?> to pack and deliver.</p>
+  <p class="mt-2 text-sm text-ink-60">
+    <?= (int) $manifest['order_count'] ?> order<?= (int) $manifest['order_count'] === 1 ? '' : 's' ?> to pack and deliver<?php
+      if ($zoneFilter !== '' && $manifest['zones']) { echo ' in ' . okv_e((string) $manifest['zones'][0]['name']); }
+    ?>.
+  </p>
 </header>
 
 <?php if (!$manifest['zones']): ?>
-  <section class="okv-card"><p class="text-sm text-ink-60">There are no non-cancelled orders scheduled for this date.</p></section>
+  <section class="okv-card"><p class="text-sm text-ink-60"><?= $zoneFilter !== ''
+    ? 'No orders are scheduled for that zone on this date. Choose every zone to see the whole day.'
+    : 'There are no orders scheduled for this date. Cancelled orders are never listed.' ?></p></section>
 <?php endif; ?>
 
 <div class="space-y-7">
@@ -64,7 +96,14 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <article class="okv-manifest-order rounded-md border border-mist p-4">
             <div class="flex items-start justify-between gap-3">
               <div>
-                <h3 class="font-mono font-bold text-ink"><?= okv_e($order['order_number']) ?></h3>
+                <h3 class="font-mono font-bold text-ink">
+                  <?php if (Rbac::can('orders.view')): ?>
+                    <a class="underline decoration-mist underline-offset-2 hover:text-forest" data-print-plain
+                       href="/admin/orders.php?order=<?= (int) $order['order_id'] ?>"><?= okv_e($order['order_number']) ?></a>
+                  <?php else: ?>
+                    <?= okv_e($order['order_number']) ?>
+                  <?php endif; ?>
+                </h3>
                 <p class="mt-1 font-semibold"><?= okv_e($order['recipient_name'] ?: 'Customer') ?></p>
               </div>
               <span class="okv-badge okv-badge-available"><?= okv_e(ucfirst((string) $order['order_status'])) ?></span>

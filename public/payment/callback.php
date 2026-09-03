@@ -75,6 +75,9 @@ try {
 }
 
 if ($result['ok']) {
+    // The money is banked and committed. Tell the customer now, from the
+    // caller, so an SMTP round trip never sits inside the ledger's transaction.
+    Notifications::announceCharge($result);
     payment_callback_land((int) $result['order_id'], $result['mismatch'] === 'exact' ? 'paid' : 'review');
 }
 if ($result['code'] === 'duplicate') {

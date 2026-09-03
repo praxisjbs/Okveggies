@@ -259,6 +259,71 @@ t_eq('NGN', Settings::str('currency'), 'the currency was not written');
 
 // --- Put the deposit back the way it was --------------------------------------------------
 
+// --- M6 notification templates ---------------------------------------------
+// The words an automated email sends are content an Owner edits, so the gate
+// here is the same shape as the settings gates above: Owner writes, Manager
+// reads, and neither can smuggle an em dash into a customer's inbox.
+$templateBefore = Database::one('SELECT subject_template, body_template FROM notification_templates WHERE template_key = :k', [':k' => 'order_packed']);
+
+[$code, $body] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'preview_template', 'template_key' => 'order_packed',
+    'subject_template' => 'Order {{order_number}} is packed',
+    'body_template' => 'Hi {{customer_name}}, it is packed.',
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+$preview = (string) (json_decode($body, true)['preview'] ?? '');
+t_eq(200, $code, 'an Owner can preview a template');
+t_ok(str_contains($preview, 'OKV26014'), 'the preview fills the tokens with sample values');
+t_ok(!str_contains($preview, '{{'), 'the preview leaves no placeholder on screen');
+t_ok(str_contains($preview, 'lockup-white-720.png'), 'the preview shows the real branded letterhead');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'order_packed',
+    'subject_template' => 'Order {{order_number}} is packed and waiting',
+    'body_template' => "Hi {{customer_name}}, order {{order_number}} is packed.\n\nDelivery is set for {{delivery_day}}.",
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+t_eq(200, $code, 'an Owner can save the words an email sends');
+$stored = Database::one('SELECT subject_template FROM notification_templates WHERE template_key = :k', [':k' => 'order_packed']);
+t_ok(str_contains((string) $stored['subject_template'], 'and waiting'), 'the saved words are the ones the next email will use');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'order_packed',
+    'subject_template' => 'Order {{order_number}} is packed',
+    'body_template' => "Hi {{customer_name}} \u{2014} it is packed.",
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+t_eq(422, $code, 'an em dash is refused before it can reach a customer');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'not_a_template',
+    'subject_template' => 'Hello', 'body_template' => 'Hello',
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+t_eq(422, $code, 'a template key we do not send is refused');
+
+[$code] = req($jarManager, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'order_packed',
+    'subject_template' => 'Manager edit', 'body_template' => 'Manager edit',
+    'okv_csrf' => csrf_from($jarManager, $base . '/admin/settings.php'),
+]);
+t_eq(403, $code, 'a Manager cannot rewrite what a customer is sent');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'order_packed',
+    'subject_template' => 'No token', 'body_template' => 'No token',
+    'okv_csrf' => 'wrong-token',
+]);
+t_eq(419, $code, 'a template save without a CSRF token is refused');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php?action=save_template&template_key=order_packed', null, 'GET');
+t_eq(405, $code, 'a template cannot be rewritten by a GET');
+
+Database::run(
+    'UPDATE notification_templates SET subject_template = :s, body_template = :b WHERE template_key = :k',
+    [':s' => $templateBefore['subject_template'], ':b' => $templateBefore['body_template'], ':k' => 'order_packed']
+);
+
 Settings::set('deposit_percentage_default', $before, 'int', null);
 
 @unlink($jarOwner); @unlink($jarManager); @unlink($jarGuest);
