@@ -23,6 +23,17 @@ function orders_write_guard(): void
     }
 }
 
+function orders_status_guard(): void
+{
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission('orders.status.update');
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+}
+
 function orders_done(array $result, string $redirect): void
 {
     if (orders_is_fetch()) {
@@ -30,6 +41,31 @@ function orders_done(array $result, string $redirect): void
     }
     $flag = $result['code'] === 'already_cancelled' ? 'already_cancelled' : 'cancelled';
     okv_redirect($redirect . (str_contains($redirect, '?') ? '&' : '?') . 'cancellation=' . $flag, 303);
+}
+
+if ($action === 'transition') {
+    orders_status_guard();
+    $orderId = (int) okv_input('order_id', 0);
+    try {
+        $result = OrderLifecycle::transition(
+            $orderId,
+            (string) okv_input('expected_status', ''),
+            (string) okv_input('target_status', ''),
+            (int) Rbac::userId(),
+            trim((string) okv_input('note', ''))
+        );
+    } catch (Throwable $e) {
+        error_log('orders.transition failed: ' . $e->getMessage());
+        okv_error('The order was not changed. Please reload it and try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        $status = $result['code'] === 'not_found' ? 404 : ($result['code'] === 'stale' ? 409 : 422);
+        okv_error($result['message'], $status, $result['code']);
+    }
+    if (orders_is_fetch()) {
+        okv_json(['status' => 'ok'] + $result);
+    }
+    okv_redirect('/admin/orders.php?order=' . $orderId . '&status=' . rawurlencode($result['code']), 303);
 }
 
 if ($action === 'cancel_customer') {

@@ -3,27 +3,58 @@
 require_once __DIR__ . '/../includes/bootstrap.php';
 Rbac::requirePermission('orders.view');
 
+$statusFilter = trim((string) okv_input('filter_status', ''));
+$dateFilter = trim((string) okv_input('filter_date', ''));
+$customerFilter = mb_substr(trim((string) okv_input('filter_customer', '')), 0, 100);
+$validStatuses = ['pending', 'confirmed', 'packed', 'dispatched', 'delivered', 'cancelled'];
+$where = []; $params = [];
+if (in_array($statusFilter, $validStatuses, true)) { $where[] = 'o.order_status = :status'; $params[':status'] = $statusFilter; }
+if (Delivery::validDate($dateFilter)) { $where[] = 'o.preferred_delivery_date = :date'; $params[':date'] = $dateFilter; }
+if ($customerFilter !== '') { $where[] = '(a.recipient_name LIKE :customer OR o.order_number LIKE :customer)'; $params[':customer'] = '%' . $customerFilter . '%'; }
 $orders = Database::all(
     'SELECT o.id, o.order_number, o.order_status, o.payment_status, o.order_total_subunit,
             o.preferred_delivery_date, o.created_at, a.recipient_name
        FROM orders o
        LEFT JOIN order_addresses a ON a.order_id = o.id
-      ORDER BY o.id DESC LIMIT 50'
+      ' . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . '
+      ORDER BY o.id DESC LIMIT 50',
+    $params
 );
 $selectedId = (int) okv_input('order', $orders ? $orders[0]['id'] : 0);
 $selected = $selectedId > 0 ? OrderCancellation::forStaff($selectedId) : null;
 $items = $selected ? Database::all(
-    'SELECT item_name, quantity, unit_name, line_total_subunit FROM order_items WHERE order_id = :id ORDER BY id',
+    'SELECT id, item_type, item_name, quantity, unit_name, line_total_subunit FROM order_items WHERE order_id = :id ORDER BY id',
     [':id' => $selectedId]
 ) : [];
+foreach ($items as &$item) {
+    $item['components'] = (string) $item['item_type'] === 'combo'
+        ? Database::all('SELECT product_name, quantity, unit_name FROM order_item_components WHERE order_item_id = :id ORDER BY id', [':id' => (int) $item['id']])
+        : [];
+}
+unset($item);
 $address = $selected ? Database::one(
-    'SELECT recipient_name, recipient_phone, address_line_1, address_line_2, city, state, landmark
-       FROM order_addresses WHERE order_id = :id',
+    'SELECT a.recipient_name, a.recipient_phone, a.address_line_1, a.address_line_2, a.city, a.state, a.landmark,
+            z.name AS zone_name
+       FROM order_addresses a
+       LEFT JOIN orders o ON o.id = a.order_id
+       LEFT JOIN delivery_zones z ON z.id = o.delivery_zone_id
+      WHERE a.order_id = :id',
     [':id' => $selectedId]
 ) : null;
+$history = $selected ? Database::all(
+    'SELECT h.old_status, h.new_status, h.source, h.note, h.created_at,
+            TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS actor_name
+       FROM order_status_history h
+       LEFT JOIN users u ON u.id = h.changed_by
+      WHERE h.order_id = :id ORDER BY h.created_at, h.id',
+    [':id' => $selectedId]
+) : [];
 $canCancel = Rbac::can('orders.cancel');
 $canRefund = Rbac::can('payments.refund');
+$canTransition = Rbac::can('orders.status.update');
+$targets = $selected ? OrderLifecycle::staffTargets((string) $selected['order_status']) : [];
 $flag = (string) okv_input('cancellation', '');
+$statusFlag = (string) okv_input('status', '');
 
 $okv_admin_title = 'Orders';
 $okv_admin_note  = 'Every order, what was paid, the delivery day it is on, and the trail the customer follows.';
@@ -32,6 +63,16 @@ require __DIR__ . '/../includes/components/admin/header.php';
 <?php if ($flag !== ''): ?>
   <p class="okv-note-ok mb-5" role="status"><?= $flag === 'already_cancelled' ? 'The order was already cancelled. No second refund was raised.' : 'The order has been cancelled.' ?></p>
 <?php endif; ?>
+<?php if ($statusFlag !== ''): ?>
+  <p class="okv-note-ok mb-5" role="status"><?= $statusFlag === 'already_transitioned' ? 'That stage was already recorded. No duplicate history was added.' : 'The order stage has been updated.' ?></p>
+<?php endif; ?>
+
+<form method="get" class="mb-5 grid gap-3 rounded-md border border-mist bg-white p-4 sm:grid-cols-4">
+  <div><label class="okv-label" for="filter-status">Stage</label><select class="okv-input mt-1" id="filter-status" name="filter_status"><option value="">All stages</option><?php foreach ($validStatuses as $status): ?><option value="<?= okv_e($status) ?>" <?= $statusFilter === $status ? 'selected' : '' ?>><?= okv_e(ucfirst($status)) ?></option><?php endforeach; ?></select></div>
+  <div><label class="okv-label" for="filter-date">Delivery date</label><input class="okv-input mt-1" id="filter-date" type="date" name="filter_date" value="<?= okv_e($dateFilter) ?>"></div>
+  <div><label class="okv-label" for="filter-customer">Customer or order</label><input class="okv-input mt-1" id="filter-customer" name="filter_customer" value="<?= okv_e($customerFilter) ?>"></div>
+  <button class="okv-btn min-h-[44px] self-end justify-center">Filter orders</button>
+</form>
 
 <div class="grid gap-5 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.4fr)]">
   <section class="okv-panel" aria-labelledby="orders-list-heading">
@@ -81,18 +122,55 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <div><dt class="text-ink-60">Order total</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format((int) $selected['order_total_subunit'])) ?></dd></div>
           <div><dt class="text-ink-60">Paid</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format((int) $selected['amount_paid_subunit'])) ?></dd></div>
         </dl>
+        <?php if ($address): ?>
+          <p class="text-sm text-ink-60"><strong class="text-ink">Zone:</strong> <?= okv_e($address['zone_name'] ?: 'Not assigned') ?>. <strong class="text-ink">Phone:</strong> <?= okv_e($address['recipient_phone']) ?>.</p>
+          <p class="text-sm text-ink-60"><strong class="text-ink">Address:</strong> <?= okv_e(implode(', ', array_filter([$address['address_line_1'], $address['address_line_2'], $address['city'], $address['state']]))) ?><?= $address['landmark'] ? '. Near ' . okv_e($address['landmark']) : '' ?></p>
+        <?php endif; ?>
 
         <div>
           <h3 class="text-sm font-semibold text-ink">Items</h3>
           <ul class="mt-2 divide-y divide-mist border-y border-mist">
             <?php foreach ($items as $item): ?>
               <li class="flex justify-between gap-4 py-3 text-sm">
-                <span><?= okv_e(okv_quantity($item['quantity'])) ?> <?= okv_e($item['unit_name']) ?> <?= okv_e($item['item_name']) ?></span>
+                <span><?= okv_e(okv_quantity($item['quantity'])) ?> <?= okv_e($item['unit_name']) ?> <?= okv_e($item['item_name']) ?>
+                  <?php if ($item['components']): ?><span class="mt-1 block text-xs text-ink-60"><?php foreach ($item['components'] as $i => $component): ?><?= $i ? ', ' : '' ?><?= okv_e(okv_quantity($component['quantity'])) ?> <?= okv_e($component['unit_name']) ?> <?= okv_e($component['product_name']) ?> per basket<?php endforeach; ?></span><?php endif; ?>
+                </span>
                 <span class="font-mono"><?= okv_e(Money::format((int) $item['line_total_subunit'])) ?></span>
               </li>
             <?php endforeach; ?>
           </ul>
         </div>
+
+        <div>
+          <h3 class="text-sm font-semibold text-ink">Status history</h3>
+          <ol class="mt-2 divide-y divide-mist border-y border-mist">
+            <?php foreach ($history as $event): ?>
+              <li class="py-3 text-sm">
+                <span class="font-semibold"><?= okv_e(ucfirst((string) $event['new_status'])) ?></span>
+                <span class="text-ink-60">at <?= okv_e(date('j M Y, H:i', strtotime((string) $event['created_at']))) ?> by <?= okv_e(trim((string) $event['actor_name']) ?: ucfirst((string) $event['source'])) ?></span>
+                <?php if ($event['note']): ?><p class="mt-1 text-xs text-ink-60"><?= nl2br(okv_e($event['note'])) ?></p><?php endif; ?>
+              </li>
+            <?php endforeach; ?>
+          </ol>
+        </div>
+
+        <?php if ($canTransition && $targets): ?>
+          <div class="rounded-md border border-foliage bg-foliage-tint p-4">
+            <h3 class="font-semibold text-ink">Move this order forward</h3>
+            <p class="mt-1 text-sm text-ink-60">The current stage is rechecked when you submit. The note stays internal.</p>
+            <form action="/api/v1/orders.php" method="post" class="mt-4 grid gap-3 sm:grid-cols-[minmax(12rem,1fr)_minmax(14rem,2fr)_auto]">
+              <?= Csrf::field() ?>
+              <input type="hidden" name="action" value="transition">
+              <input type="hidden" name="order_id" value="<?= (int) $selected['id'] ?>">
+              <input type="hidden" name="expected_status" value="<?= okv_e($selected['order_status']) ?>">
+              <div><label class="okv-label" for="target-status">Next stage</label><select class="okv-input mt-1" id="target-status" name="target_status" required><?php foreach ($targets as $target): ?><option value="<?= okv_e($target) ?>"><?= okv_e($target === 'confirmed' ? 'Confirm as sourced' : ucfirst($target)) ?></option><?php endforeach; ?></select></div>
+              <div><label class="okv-label" for="status-note">Internal note (optional)</label><input class="okv-input mt-1" id="status-note" name="note" maxlength="500"></div>
+              <button class="okv-btn min-h-[44px] self-end justify-center px-4">Record stage</button>
+            </form>
+          </div>
+        <?php elseif (!$canTransition && $targets): ?>
+          <p class="okv-note bg-clay-tint">You may view this order, but you do not have permission to change its stage.</p>
+        <?php endif; ?>
 
         <?php if ($selected['cancellation_id'] !== null): ?>
           <div class="rounded-md border border-mist bg-forest-tint p-4">

@@ -33,6 +33,17 @@ final class Delivery
      */
     private const DEFAULT_CUTOFF = '16:00';
 
+    public static function validCutoff(string $cutoff): bool
+    {
+        return (bool) preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $cutoff);
+    }
+
+    public static function validDate(string $date): bool
+    {
+        $value = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone(self::TZ));
+        return $value !== false && $value->format('Y-m-d') === $date;
+    }
+
     /** The allowed-day rules for a customer type, keyed by ISO day of week (1..7). */
     public static function rulesByDay(string $customerType): array
     {
@@ -157,7 +168,7 @@ final class Delivery
             ? (string) $rule['cutoff_time']
             : self::DEFAULT_CUTOFF;
         $previous = $target->modify('-1 day')->setTime((int) substr($cutoff, 0, 2), (int) substr($cutoff, 3, 2));
-        if ($now > $previous) {
+        if ($now >= $previous) {
             return ['eligible' => false, 'reason' => 'The order cutoff for that delivery day has passed. Pick a later day.'];
         }
 

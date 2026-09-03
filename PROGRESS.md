@@ -97,11 +97,11 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 
 ### M6. Delivery and the Order Trail
 - [x] Order cancellation flow and screens. Customer and staff order details read the existing M5 `Cancellation` policy, recheck it under an order row lock at submission, append one cancellation and status-history row, and route Paystack money through `Refunds`. Paid cancellation needs both `orders.cancel` and `payments.refund`; manual money stays visibly due for return. POST, CSRF, ownership, permission, repeat-click and in-flight-payment gates are server enforced.
-- [ ] Allowed days, cutoff, lead, zones (admin-managed), exceptions
-- [ ] Order lifecycle and status history
-- [ ] Public Order Trail page by token link (no login), and the "Sourced [day] from [state]" line
-- [ ] Admin delivery-day manifest / packing list, grouped by zone, printable
-- [ ] Tests: order-number generation; status transitions
+- [x] Allowed days, cutoff, lead, zones (admin-managed), exceptions
+- [x] Order lifecycle and status history
+- [x] Public Order Trail page by token link (no login), and the "Sourced [day] from [state]" line
+- [x] Admin delivery-day manifest / packing list, grouped by zone, printable
+- [x] Tests: order-number generation; status transitions
 
 ### M7. Kitchen Runs
 - [ ] Request flow, four input modes (catalogue, priced-by-us, priced-by-customer, upload)
@@ -170,6 +170,17 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 3 Sep 2026, M6 tasks 2 to 5: delivery and the Order Trail
+
+M6 delivery configuration, the staff lifecycle, the public Order Trail and the day manifest are complete on the existing cancellation branch. Migration `018_delivery_order_trail.sql` adds the immutable source-region snapshot and backfills the already-defined `delivery_schedules` table without changing a shipped migration.
+
+- **One delivery rule.** Checkout, the customer date picker and public delivery API continue to use `Delivery`. The exact configured cutoff now closes the date, real calendar dates and 24 hour cutoffs are validated, lead time is bounded from 0 to 30 days, all seven weekdays for both customer types are manageable, unknown zones are refused, and exceptions can be created, updated or explicitly removed. Every write is POST, permission and CSRF protected.
+- **Atomic lifecycle.** New `OrderLifecycle` holds the pure transition map and the single transactional write. Staff may move `pending` to `confirmed`, then `packed`, `dispatched` and `delivered`; cancellation stays on `OrderCancellation`, so M5 money rules cannot be bypassed. The locked reread rejects stale or skipped transitions, a repeat of the same transition succeeds without another row, and status, timestamp, delivery schedule and actor-attributed history are committed together. Confirmation means sourced and snapshots the current source regions.
+- **Customer trail.** The existing SHA-256 token lookup and canonical `/public/order.php?token=...` route remain in place. The page projects only Placed, Sourced, Packed, Dispatched, Delivered and Cancelled, with timestamps, and uses the recorded confirmation time and source snapshot for the sourcing line. Public viewers see no payment choice, amount, address, contact detail, staff note or another order. Refund wording comes from the M5 `Refunds` customer status helper and never promotes a pending refund to complete. Bad tokens retain the branded 404.
+- **Manifest and packing list.** Checkout now creates `delivery_schedules` in the same placement transaction. The permission-gated day manifest reads every non-cancelled scheduled order, including delivered orders on a historical reprint, groups by the order's recorded zone, shows delivery contact and address, expands combo snapshots with basket multiplication, and calculates per-zone packing totals. Its print media removes the admin navigation and every interactive control.
+- **Tests and checks.** Tests were written before production changes. The full unit runner passes 1,183 assertions. New database tests pass 11 lifecycle and 4 manifest assertions; new HTTP tests pass 10 delivery, 9 lifecycle and 7 public-trail assertions. Existing checkout passes 17, delivery passes 10, M5 payments passes 43, cancellation database passes 13 and cancellation HTTP passes 12. All touched PHP files pass `php -l`; `npm run build`, `git diff --check` and `scripts/brand-check.sh` are green. Browser checks at 390px and 1440px found no horizontal overflow on the customer trail, staff order screen or manifest; responsive layouts, 44px actions, zone totals and the five-column desktop trail rendered correctly. The print CSS was read from the rendered page and confirms navigation and controls are removed.
+- **Not run and remaining risk.** No real or sandbox Paystack charge/refund was sent; the existing M5 test-mode ledger and cancellation regressions were used. No physical printer or generated paper copy was available, so print media rules and screen layout were checked rather than a hard-copy output. The row-lock, stale-form and repeat paths are tested, but a multi-process race was not forced under load. `scripts/verify.sh` was not run against staging because this work was verified on localhost only.
 
 ### 3 Sep 2026, M6 task 1: order cancellation flow and screens
 

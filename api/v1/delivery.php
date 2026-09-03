@@ -58,17 +58,26 @@ try {
             delivery_guard('delivery.days.edit');
             $type = (string) okv_input('customer_type', '');
             $day  = (int) okv_input('day_of_week', 0);
+            $cutoff = trim((string) okv_input('cutoff_time', ''));
+            $leadRaw = (string) okv_input('minimum_lead_days', '');
             if (!in_array($type, ['household', 'business'], true) || $day < 1 || $day > 7) {
                 okv_error('Choose a valid day and account type.', 422, 'bad_day');
             }
+            if (!Delivery::validCutoff($cutoff)) {
+                okv_error('Enter the cutoff in 24 hour HH:MM format.', 422, 'bad_cutoff');
+            }
+            if (!preg_match('/^\d{1,2}$/', $leadRaw) || (int) $leadRaw > 30) {
+                okv_error('Lead days must be a whole number from 0 to 30.', 422, 'bad_lead');
+            }
             Database::run(
-                'UPDATE allowed_delivery_days
-                    SET is_active = :active, cutoff_time = :cutoff, minimum_lead_days = :lead
-                  WHERE customer_type = :type AND day_of_week = :day',
+                'INSERT INTO allowed_delivery_days (customer_type, day_of_week, is_active, cutoff_time, minimum_lead_days)
+                 VALUES (:type, :day, :active, :cutoff, :lead)
+                 ON DUPLICATE KEY UPDATE is_active = VALUES(is_active), cutoff_time = VALUES(cutoff_time),
+                    minimum_lead_days = VALUES(minimum_lead_days)',
                 [
                     ':active' => (int) okv_input('is_active', 0),
-                    ':cutoff' => (string) okv_input('cutoff_time', '16:00'),
-                    ':lead'   => max(0, (int) okv_input('minimum_lead_days', 1)),
+                    ':cutoff' => $cutoff,
+                    ':lead'   => (int) $leadRaw,
                     ':type'   => $type,
                     ':day'    => $day,
                 ]
@@ -78,9 +87,13 @@ try {
 
         case 'set_zone_active':
             delivery_guard('delivery.zones.edit');
+            $zoneId = (int) okv_input('zone_id', 0);
+            if ($zoneId < 1 || !Database::one('SELECT id FROM delivery_zones WHERE id = :id', [':id' => $zoneId])) {
+                okv_error('Choose a valid delivery zone.', 422, 'bad_zone');
+            }
             Database::run(
                 'UPDATE delivery_zones SET is_active = :active WHERE id = :id',
-                [':active' => (int) okv_input('is_active', 0), ':id' => (int) okv_input('zone_id', 0)]
+                [':active' => (int) okv_input('is_active', 0), ':id' => $zoneId]
             );
             delivery_success('Delivery zone updated.');
             break;
@@ -88,8 +101,16 @@ try {
         case 'save_exception':
             delivery_guard('delivery.exceptions.edit');
             $date = (string) okv_input('exception_date', '');
-            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            $replacement = trim((string) okv_input('replacement_date', ''));
+            $reason = trim((string) okv_input('reason', ''));
+            if (!Delivery::validDate($date)) {
                 okv_error('Choose a valid date.', 422, 'bad_date');
+            }
+            if ($replacement !== '' && !Delivery::validDate($replacement)) {
+                okv_error('Choose a valid replacement date.', 422, 'bad_replacement');
+            }
+            if (mb_strlen($reason) > 255) {
+                okv_error('Keep the exception reason to 255 characters.', 422, 'reason_too_long');
             }
             Database::run(
                 'INSERT INTO delivery_date_exceptions (exception_date, is_available, reason, replacement_date, created_by)
@@ -102,12 +123,24 @@ try {
                 [
                     ':date'        => $date,
                     ':available'   => (int) okv_input('is_available', 0),
-                    ':reason'      => trim((string) okv_input('reason', '')) ?: null,
-                    ':replacement' => trim((string) okv_input('replacement_date', '')) ?: null,
+                    ':reason'      => $reason ?: null,
+                    ':replacement' => $replacement ?: null,
                     ':user'        => Rbac::userId(),
                 ]
             );
             delivery_success('Delivery date saved.');
+            break;
+
+        case 'delete_exception':
+            delivery_guard('delivery.exceptions.edit');
+            $date = (string) okv_input('exception_date', '');
+            if (!Delivery::validDate($date)) {
+                okv_error('Choose a valid date.', 422, 'bad_date');
+            }
+            if (Database::run('DELETE FROM delivery_date_exceptions WHERE exception_date = :date', [':date' => $date]) !== 1) {
+                okv_error('That delivery exception no longer exists.', 404, 'not_found');
+            }
+            delivery_success('Delivery exception removed.');
             break;
 
         default:

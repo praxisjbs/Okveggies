@@ -304,6 +304,7 @@ try {
         Database::run('DELETE FROM order_items WHERE order_id = :o', [':o' => $id]);
         Database::run('DELETE FROM order_status_history WHERE order_id = :o', [':o' => $id]);
         Database::run('DELETE FROM order_addresses WHERE order_id = :o', [':o' => $id]);
+        Database::run('DELETE FROM delivery_schedules WHERE order_id = :o', [':o' => $id]);
         Database::run('DELETE FROM orders WHERE id = :o', [':o' => $id]);
     }
     if ($userId) {

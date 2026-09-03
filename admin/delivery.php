@@ -15,14 +15,33 @@
 require_once __DIR__ . '/../includes/bootstrap.php';
 Rbac::requirePermission('delivery.view');
 
-$days = Database::all('SELECT * FROM allowed_delivery_days ORDER BY customer_type, day_of_week');
+$storedDays = Database::all('SELECT * FROM allowed_delivery_days ORDER BY customer_type, day_of_week');
+$dayMap = [];
+foreach ($storedDays as $storedDay) {
+    $dayMap[(string) $storedDay['customer_type']][(int) $storedDay['day_of_week']] = $storedDay;
+}
+$days = [];
+foreach (['household', 'business'] as $customerType) {
+    for ($weekday = 1; $weekday <= 7; $weekday++) {
+        $days[] = $dayMap[$customerType][$weekday] ?? [
+            'customer_type' => $customerType,
+            'day_of_week' => $weekday,
+            'is_active' => 0,
+            'cutoff_time' => Settings::str('delivery_cutoff_time', '18:00') . ':00',
+            'minimum_lead_days' => Settings::int('delivery_min_lead_days', 1),
+        ];
+    }
+}
 $zones = Database::all('SELECT * FROM delivery_zones ORDER BY sort_order, name');
 $exceptions = Database::all('SELECT * FROM delivery_date_exceptions ORDER BY exception_date DESC LIMIT 20');
 
 $isoDays = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'];
 
 $okv_admin_title = 'Delivery';
-$okv_admin_note  = 'Delivery days, the cutoff and lead, the Lagos zones and dated exceptions. The packing manifest is M6.';
+$okv_admin_note  = 'Delivery days, cutoff and lead time, Lagos zones, dated exceptions, and the day packing list.';
+if (Rbac::can('delivery.manifest.view')) {
+    $okv_admin_actions = '<a class="okv-btn px-4" href="/admin/delivery-manifest.php">Open day manifest</a>';
+}
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
 <div class="space-y-8">
@@ -47,10 +66,10 @@ require __DIR__ . '/../includes/components/admin/header.php';
             <input type="checkbox" name="is_active" value="1" <?= $day['is_active'] ? 'checked' : '' ?>>
           </label>
           <label class="text-sm text-ink-60">Cutoff
-            <input class="okv-input mt-1" name="cutoff_time" value="<?= okv_e(substr((string) $day['cutoff_time'], 0, 5)) ?>">
+            <input class="okv-input mt-1" type="time" name="cutoff_time" value="<?= okv_e(substr((string) $day['cutoff_time'], 0, 5)) ?>" required>
           </label>
           <label class="text-sm text-ink-60">Lead days
-            <input class="okv-input mt-1" name="minimum_lead_days" inputmode="numeric" value="<?= (int) $day['minimum_lead_days'] ?>">
+            <input class="okv-input mt-1" type="number" name="minimum_lead_days" min="0" max="30" value="<?= (int) $day['minimum_lead_days'] ?>" required>
           </label>
           <button class="okv-btn-outline px-3">Save</button>
         </form>
@@ -73,11 +92,20 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <button class="okv-btn px-3">Save date</button>
     </form>
     <?php if ($exceptions): ?>
-      <ul class="mt-4 space-y-1 text-sm text-ink-60">
+      <ul class="mt-4 divide-y divide-mist text-sm text-ink-60">
         <?php foreach ($exceptions as $exception): ?>
-          <li>
-            <?= okv_e((string) $exception['exception_date']) ?>:
-            <?= $exception['is_available'] ? 'Open' : 'Blocked' ?><?= trim((string) $exception['reason']) !== '' ? '. ' . okv_e($exception['reason']) : '' ?>
+          <li class="flex min-h-[52px] items-center justify-between gap-4 py-2">
+            <span>
+              <?= okv_e(date('D j M Y', strtotime((string) $exception['exception_date']))) ?>:
+              <?= $exception['is_available'] ? 'Open' : 'Blocked' ?><?= trim((string) $exception['reason']) !== '' ? '. ' . okv_e($exception['reason']) : '' ?>
+              <?= $exception['replacement_date'] ? ' Replacement: ' . okv_e(date('D j M', strtotime((string) $exception['replacement_date']))) . '.' : '' ?>
+            </span>
+            <form method="post" action="/api/v1/delivery.php">
+              <?= Csrf::field() ?>
+              <input type="hidden" name="action" value="delete_exception">
+              <input type="hidden" name="exception_date" value="<?= okv_e($exception['exception_date']) ?>">
+              <button class="okv-btn-text min-h-[44px] text-tomato">Remove</button>
+            </form>
           </li>
         <?php endforeach; ?>
       </ul>

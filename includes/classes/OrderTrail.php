@@ -58,7 +58,7 @@ final class OrderTrail
         $order = Database::one(
             'SELECT o.id, o.order_number, o.order_status, o.payment_option, o.payment_status,
                     o.order_total_subunit, o.deposit_required_subunit, o.balance_due_subunit,
-                    o.preferred_delivery_date, o.created_at,
+                    o.preferred_delivery_date, o.created_at, o.confirmed_at, o.source_regions_snapshot,
                     (SELECT p.expected_amount_subunit FROM payments p WHERE p.order_id = o.id ORDER BY p.id LIMIT 1) AS amount_due_subunit
                FROM orders o
               WHERE ' . $where . '
@@ -78,6 +78,20 @@ final class OrderTrail
             'SELECT new_status, created_at FROM order_status_history WHERE order_id = :id ORDER BY created_at, id',
             [':id' => (int) $order['id']]
         );
+        $order['public_trail'] = OrderLifecycle::customerTrail($order['history']);
+        $order['source_line'] = '';
+        if ($order['confirmed_at'] !== null && trim((string) $order['source_regions_snapshot']) !== '') {
+            $day = date('l', strtotime((string) $order['confirmed_at']));
+            $order['source_line'] = okv_sourced_line((string) $order['source_regions_snapshot'], $day);
+        }
+        $order['refund_lines'] = [];
+        $refunds = Database::all(
+            'SELECT r.status FROM refunds r WHERE r.order_id = :id ORDER BY r.id',
+            [':id' => (int) $order['id']]
+        );
+        foreach ($refunds as $refund) {
+            $order['refund_lines'][] = Refunds::customerStatusLine((string) $refund['status']);
+        }
 
         return $order;
     }

@@ -121,6 +121,9 @@ try {
 
     t_ok((bool) Database::one('SELECT id FROM order_addresses WHERE order_id = :id', [':id' => $orderId]), 'the delivery address is snapshotted');
     t_ok((bool) Database::one('SELECT id FROM order_status_history WHERE order_id = :id AND new_status = \'pending\'', [':id' => $orderId]), 'the first status event is written');
+    $schedule = Database::one('SELECT delivery_date, status FROM delivery_schedules WHERE order_id = :id', [':id' => $orderId]);
+    t_eq($date, (string) $schedule['delivery_date'], 'checkout creates the delivery schedule for the chosen day');
+    t_eq('scheduled', (string) $schedule['status'], 'a new delivery schedule is ready for fulfilment');
 
     $payment = Database::one('SELECT expected_amount_subunit, status FROM payments WHERE order_id = :id', [':id' => $orderId]);
     t_eq($expectedTotal, (int) $payment['expected_amount_subunit'], 'the payment records the amount due');
@@ -141,6 +144,7 @@ try {
         Database::run('DELETE FROM order_items WHERE order_id = :o', [':o' => $orderId]);
         Database::run('DELETE FROM order_addresses WHERE order_id = :o', [':o' => $orderId]);
         Database::run('DELETE FROM order_status_history WHERE order_id = :o', [':o' => $orderId]);
+        Database::run('DELETE FROM delivery_schedules WHERE order_id = :o', [':o' => $orderId]);
         Database::run('DELETE FROM payments WHERE order_id = :o', [':o' => $orderId]);
         Database::run('DELETE FROM orders WHERE id = :o', [':o' => $orderId]);
     }

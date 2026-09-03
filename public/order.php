@@ -96,6 +96,10 @@ $paymentNotice = $paymentNotices[$paymentFlag] ?? null;
 $cancellationFlag = (string) okv_input('cancellation', '');
 
 $pageTitle = 'Order ' . $order['order_number'] . '. OK Veggies';
+$publicStatus = [
+    'pending' => 'Placed', 'confirmed' => 'Sourced', 'packed' => 'Packed',
+    'dispatched' => 'Dispatched', 'delivered' => 'Delivered', 'cancelled' => 'Cancelled',
+][(string) $order['order_status']] ?? 'In progress';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -113,7 +117,7 @@ $pageTitle = 'Order ' . $order['order_number'] . '. OK Veggies';
   <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Order <?= okv_e($order['order_number']) ?></p>
   <h1 class="mt-2 font-display text-4xl font-extrabold text-ink"><?= $publicTrail ? 'Follow this order' : 'We have your order' ?></h1>
   <p class="mt-3 text-ink-60">
-    Status: <?= okv_e(ucfirst((string) $order['order_status'])) ?><?php
+    Status: <?= okv_e($publicStatus) ?><?php
       if (!$publicTrail) {
           $paidLabels = [
               'paid'      => '. Paid in full.',
@@ -163,10 +167,10 @@ $pageTitle = 'Order ' . $order['order_number'] . '. OK Veggies';
           <dt class="text-sm text-ink-60">Delivery day</dt>
           <dd><?= okv_e(date('l jS F', strtotime((string) $order['preferred_delivery_date']))) ?></dd>
         </div>
-        <div>
+        <?php if (!$publicTrail): ?><div>
           <dt class="text-sm text-ink-60">Payment choice</dt>
           <dd><?= okv_e($labels[$order['payment_option']] ?? (string) $order['payment_option']) ?></dd>
-        </div>
+        </div><?php endif; ?>
         <?php if (!$publicTrail && $order['amount_due_subunit'] !== null): ?>
           <div>
             <dt class="text-sm text-ink-60">Amount due now</dt>
@@ -267,14 +271,31 @@ $pageTitle = 'Order ' . $order['order_number'] . '. OK Veggies';
 
   <section class="okv-card mt-6">
     <h2 class="font-display text-xl font-bold text-ink">Order Trail</h2>
-    <ol class="mt-4 space-y-3">
-      <?php foreach ($order['history'] as $event): ?>
-        <li>
-          <strong><?= okv_e(ucfirst((string) $event['new_status'])) ?></strong>
-          <span class="text-sm text-ink-60"><?= okv_e(date('j M Y, H:i', strtotime((string) $event['created_at']))) ?></span>
+    <?php if ($order['source_line'] !== ''): ?>
+      <p class="mt-2 text-sm font-semibold text-forest"><?= okv_e($order['source_line']) ?></p>
+    <?php endif; ?>
+    <?php
+      $eventMap = [];
+      foreach ($order['public_trail'] as $event) { $eventMap[$event['status']] = $event; }
+      $cancelledEvent = $eventMap['cancelled'] ?? null;
+      $steps = ['pending' => 'Placed', 'sourced' => 'Sourced', 'packed' => 'Packed', 'dispatched' => 'Dispatched', 'delivered' => 'Delivered'];
+    ?>
+    <ol class="mt-5 grid gap-3 sm:grid-cols-5" aria-label="Order progress">
+      <?php foreach ($steps as $status => $label): $event = $eventMap[$status] ?? null; ?>
+        <li class="rounded-md border p-3 <?= $event ? 'border-foliage bg-foliage-tint' : 'border-mist bg-white' ?>">
+          <span class="block text-xs font-bold uppercase tracking-wide <?= $event ? 'text-forest' : 'text-ink-40' ?>"><?= okv_e($label) ?></span>
+          <?php if ($event): ?><time class="mt-1 block text-xs text-ink-60" datetime="<?= okv_e($event['created_at']) ?>"><?= okv_e(date('j M, H:i', strtotime($event['created_at']))) ?></time><?php else: ?><span class="mt-1 block text-xs text-ink-40">Waiting</span><?php endif; ?>
         </li>
       <?php endforeach; ?>
     </ol>
+    <?php if ($cancelledEvent): ?>
+      <p class="okv-note mt-4 bg-clay-tint"><strong>Cancelled</strong> on <?= okv_e(date('j M Y, H:i', strtotime($cancelledEvent['created_at']))) ?>.</p>
+    <?php endif; ?>
+    <?php if ($order['refund_lines']): ?>
+      <div class="mt-4 space-y-2" aria-label="Refund status">
+        <?php foreach ($order['refund_lines'] as $line): ?><p class="okv-note bg-clay-tint"><?= okv_e($line) ?></p><?php endforeach; ?>
+      </div>
+    <?php endif; ?>
   </section>
 </main>
 

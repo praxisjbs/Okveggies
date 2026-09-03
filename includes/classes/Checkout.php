@@ -282,6 +282,11 @@ final class Checkout
              VALUES (:order, NULL, \'pending\', \'customer\', :user)',
             [':order' => $orderId, ':user' => $userId]
         );
+        Database::run(
+            'INSERT INTO delivery_schedules (order_id, delivery_date, status, updated_by)
+             VALUES (:order, :date, \'scheduled\', :user)',
+            [':order' => $orderId, ':date' => $deliveryDate, ':user' => $userId]
+        );
         self::writePayments($orderId, $userId, $orderNumber, $option, $total, $due, $deliveryDate);
 
         Database::run('UPDATE shopping_carts SET status = \'converted\' WHERE id = :id', [':id' => $cartId]);
