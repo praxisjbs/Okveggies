@@ -144,6 +144,14 @@ final class PaymentHealth
                 !$placeholder,
                 $placeholder ? 'this is still the sk_..._xxxxx placeholder from .env.example' : ''
             );
+            // Safe to show: prefix, length and last four only. A truncated
+            // paste is the commonest reason a real key is rejected, and the
+            // length gives that away at a glance.
+            $out[] = [
+                'label'  => 'key fingerprint, compare with your Paystack dashboard',
+                'state'  => 'note',
+                'detail' => self::keyFingerprint($secret),
+            ];
         }
         $out[] = self::check('APP_URL is set', (string) APP_URL !== '', (string) APP_URL);
         $out[] = [
@@ -162,6 +170,25 @@ final class PaymentHealth
     public static function looksLikePlaceholder(string $secret): bool
     {
         return $secret !== '' && stripos($secret, 'xxxx') !== false;
+    }
+
+    /**
+     * A safe fingerprint of a secret key: the prefix, the total length, and the
+     * last four characters. Enough to compare against what the Paystack
+     * dashboard shows without ever putting the key on screen or in a log.
+     *
+     * A truncated paste is the commonest cause of a rejected key, and a wrong
+     * length is the fastest way to see it.
+     */
+    public static function keyFingerprint(string $secret): string
+    {
+        if ($secret === '') {
+            return 'not set';
+        }
+        $prefix = str_starts_with($secret, 'sk_live_') ? 'sk_live_'
+                : (str_starts_with($secret, 'sk_test_') ? 'sk_test_' : 'unknown prefix');
+        $tail = strlen($secret) >= 4 ? substr($secret, -4) : '';
+        return $prefix . '... ' . strlen($secret) . ' characters, ending ' . $tail;
     }
 
     /**

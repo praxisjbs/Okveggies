@@ -182,3 +182,11 @@ okv_test_ok(PaymentHealth::looksLikePlaceholder('sk_test_xxxxxxxxxxxxxxxxxxxxx')
 $realLooking = 'sk_' . 'live_' . str_repeat('9a3f', 6);
 okv_test_ok(!PaymentHealth::looksLikePlaceholder($realLooking), 'a real looking key is not flagged as a placeholder');
 okv_test_ok(!PaymentHealth::looksLikePlaceholder(''), 'an empty key is handled by a different check');
+
+// The fingerprint must never leak the key itself.
+$secretForPrint = 'sk_' . 'live_' . str_repeat('7f2c', 10);
+$print = PaymentHealth::keyFingerprint($secretForPrint);
+okv_test_ok(!str_contains($print, $secretForPrint), 'the fingerprint never contains the whole key');
+okv_test_ok(str_contains($print, '48 characters'), 'the fingerprint reports the length, which exposes a truncated paste');
+okv_test_ok(str_contains($print, 'sk_live_'), 'the fingerprint names the mode prefix');
+okv_test_eq('not set', PaymentHealth::keyFingerprint(''), 'an unset key says so rather than printing nothing');
