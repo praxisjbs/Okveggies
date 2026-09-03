@@ -177,6 +177,29 @@ final class Payments
     // -------------------------------------------------------------------------
 
     /**
+     * The Paystack payment still owed on an order, or null when there is
+     * nothing for the customer to pay online right now.
+     *
+     * This is what the checkout redirect and the order page both ask, so that
+     * "can this customer pay, and for what" is answered in one place rather
+     * than by two screens guessing at it separately.
+     */
+    public static function pendingOnlinePayment(int $orderId): ?array
+    {
+        return Database::one(
+            'SELECT id, payment_type, expected_amount_subunit, paid_amount_subunit, status
+               FROM payments
+              WHERE order_id = :id
+                AND provider = \'paystack\'
+                AND status <> :paid
+                AND expected_amount_subunit > paid_amount_subunit
+              ORDER BY id
+              LIMIT 1',
+            [':id' => $orderId, ':paid' => self::STATUS_PAID]
+        );
+    }
+
+    /**
      * Open a Paystack transaction for a payment row and hand back the URL the
      * customer is sent to. The local row is written first and always survives,
      * so a call that dies without an answer leaves something for the sweep.

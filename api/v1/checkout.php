@@ -124,10 +124,38 @@ try {
     $result['confirmation_url'] = $base . $result['confirmation_url'];
     $result['trail_url'] = $result['trail_url'] === '' ? '' : $base . $result['trail_url'];
 
-    if (checkout_is_fetch()) {
-        okv_json(['status' => 'ok'] + $result);
+    // The order exists now. If money is due online, send the customer straight
+    // to Paystack rather than leaving them on a placed order with no way to pay.
+    // Anything that goes wrong from here lands them on the order page, which
+    // offers the same payment again: the order is never lost to a failed charge.
+    $payNow  = null;
+    $pending = null;
+    $orderId = (int) $result['order_id'];
+    try {
+        $pending = Payments::pendingOnlinePayment($orderId);
+        if ($pending) {
+            $charge = Payments::beginCharge(
+                (int) $pending['id'],
+                rtrim((string) APP_URL, '/') . '/public/payment/callback.php'
+            );
+            if ($charge['ok'] && $charge['authorization_url'] !== '') {
+                $payNow = $charge['authorization_url'];
+            } else {
+                error_log('checkout.place_order: could not open a charge for order ' . $orderId . ': ' . (string) ($charge['code'] ?? 'unknown'));
+            }
+        }
+    } catch (Throwable $e) {
+        // Never let a payment problem lose a placed order.
+        error_log('checkout.place_order: charge failed for order ' . $orderId . ': ' . $e->getMessage());
     }
-    okv_redirect('/public/order.php?order=' . (int) $result['order_id'], 303);
+
+    if (checkout_is_fetch()) {
+        okv_json(['status' => 'ok', 'pay_url' => $payNow] + $result);
+    }
+    if ($payNow !== null) {
+        okv_redirect($payNow, 303);
+    }
+    okv_redirect('/public/order.php?order=' . $orderId . ($pending !== null ? '&payment=unavailable' : ''), 303);
 } catch (DomainException $e) {
     $known = [
         'consent_required'    => ['Tick the account consent box to continue.', 'consent_required'],

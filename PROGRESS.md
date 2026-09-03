@@ -171,6 +171,64 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 
 ## Session log (newest first)
 
+### 3 Sep 2026, M5 hotfix: the payment path was dead in production
+
+Three faults found from a live error log and a screenshot of checkout. Two were
+mine, one was already fixed on disk and needs a deploy. All of M5 was reviewed.
+
+**1. Five M5 classes were never loaded, so every payment page fatalled.**
+`includes/bootstrap.php` carries an explicit require list and there is no
+autoloader for application classes. `Payments`, `ManualPayments`, `Refunds`,
+`Cancellation` and `OrderDocument` were written, unit tested and merged without
+ever being added to it. Every entry point died on open: the admin payments
+screen, the payments API, the Paystack callback, the invoice, and, worst of all,
+the webhook. A payment could have been taken with nothing on our side able to
+record it.
+
+The unit tests stayed green throughout because `scripts/tests/run.php` has its
+own require list, which had been kept up to date. Tests that load their subject
+directly can never catch a class the application does not load.
+
+`scripts/tests/BootstrapTest.php` now closes that permanently. It asserts every
+file in `includes/classes/` is required by the bootstrap (with `Migrator`, which
+runs before the application exists, as the one deliberate exception), and it
+walks every M5 entry point resolving each `Foo::bar` reference against the real
+class. The guard was verified by removing `Payments` from the bootstrap and
+watching it fail before being restored.
+
+**2. There was no way for a customer to pay.** The charge spine, the callback,
+the webhook and the ledger were all built in PR1, and nothing ever called them.
+Checkout placed an order, wrote an unpaid payment row, and left the customer on
+an order page with no button, while the copy still said "No payment is taken on
+this page" three times over. That sentence was written in M4 when it was true
+and was never revisited when M5 made it false.
+
+Fixed at both ends. Placing an order that owes money online now opens the charge
+and redirects straight to Paystack, and any failure there lands the customer on
+the order page rather than losing the order. The order page carries a "Pay X
+now" button for anything still owed, so a closed tab, a declined card or an
+unreachable gateway all have the same recovery. `Payments::pendingOnlinePayment`
+answers "what can this customer pay right now" in one place, so the two screens
+cannot drift apart. The order page also reports what the Paystack return
+actually said, including the failed and abandoned cases that previously showed
+nothing.
+
+**3. Migration 012 fails on the server, blocking every migration after it.**
+This one is already fixed on disk: the M4 hotfix rewrote it to guard against
+`information_schema` instead of using MariaDB's `ADD INDEX IF NOT EXISTS`, which
+MySQL 8 cannot parse. The deployed copy is older than that fix. Since
+`Migrator::apply` throws on the first failure, 013 through 017 have never run,
+which means none of the M5 schema exists in production yet. The fix is a deploy
+followed by a migration run. Nothing needs forcing: 012 never recorded itself,
+so there is no checksum conflict.
+
+Every migration was swept for the same syntax and all 18 are MySQL 8 safe.
+`BootstrapTest` now asserts that too, so a MariaDB-only statement cannot reach
+the deploy again.
+
+Verified: `php -l` clean on every touched file, `brand-check.sh` eight of eight
+green, `1055 / 1055` assertions pass, up from 782.
+
 ### 2 Sep 2026, M5 payments PR3, refunds and the cancellation rules
 
 The last of three PRs on M5. Money going back out, and the policy M6 will read when it builds cancellation. M5 is now complete.
