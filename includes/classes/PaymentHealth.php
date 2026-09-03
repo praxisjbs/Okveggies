@@ -135,6 +135,15 @@ final class PaymentHealth
         if ($secret !== '') {
             $shape = str_starts_with($secret, 'sk_test_') || str_starts_with($secret, 'sk_live_');
             $out[] = self::check('secret key shape', $shape, $shape ? Paystack::domain() . ' mode' : 'expected sk_test_ or sk_live_');
+
+            // A placeholder is "set" and has the right prefix, so it passes
+            // every other check here. It has to be called out by name.
+            $placeholder = self::looksLikePlaceholder($secret);
+            $out[] = self::check(
+                'secret key is a real key, not the template placeholder',
+                !$placeholder,
+                $placeholder ? 'this is still the sk_..._xxxxx placeholder from .env.example' : ''
+            );
         }
         $out[] = self::check('APP_URL is set', (string) APP_URL !== '', (string) APP_URL);
         $out[] = [
@@ -145,20 +154,65 @@ final class PaymentHealth
         return $out;
     }
 
+    /**
+     * Is a key obviously still the template placeholder rather than a real one.
+     * .env.example ships sk_live_xxxxxxxxxxxxxxxxxxxxx, and a placeholder is
+     * "set" and has the right prefix, so nothing else here would notice it.
+     */
+    public static function looksLikePlaceholder(string $secret): bool
+    {
+        return $secret !== '' && stripos($secret, 'xxxx') !== false;
+    }
+
+    /**
+     * Decide what a probe of Paystack actually proved.
+     *
+     * This used to treat any answer from Paystack as proof the key worked,
+     * which is wrong and reported a rejected key as authenticated. Paystack
+     * answers 401 to a bad key just as readily as 404 to an unknown reference,
+     * and only the second means our credentials are good. Pure so it can be
+     * tested without reaching Paystack at all.
+     *
+     * @return array{ok: bool, detail: string}
+     */
+    public static function classifyProbe(array $probe): array
+    {
+        if (!empty($probe['ok'])) {
+            return ['ok' => true, 'detail' => 'authenticated'];
+        }
+
+        $reason = (string) ($probe['reason'] ?? 'unknown');
+        $code   = (int) ($probe['http_code'] ?? 0);
+
+        if ($reason === 'network' || $reason === 'http') {
+            return ['ok' => false, 'detail' => 'could not reach Paystack at all. Check outbound HTTPS from this server.'];
+        }
+
+        if ($reason === 'api') {
+            if ($code === 401 || $code === 403) {
+                return ['ok' => false, 'detail' => 'Paystack REJECTED this key (HTTP ' . $code . '). The key in .env is wrong, a placeholder, or from the other mode.'];
+            }
+            if ($code === 404) {
+                // The key authenticated; Paystack simply has no such reference,
+                // which is exactly what we asked it about.
+                return ['ok' => true, 'detail' => 'authenticated (HTTP 404 on a deliberately unknown reference, which is the expected answer)'];
+            }
+            return ['ok' => false, 'detail' => 'Paystack answered HTTP ' . $code . ': ' . (string) ($probe['message'] ?? '')];
+        }
+
+        return ['ok' => false, 'detail' => $reason . ': ' . (string) ($probe['message'] ?? '')];
+    }
+
     private static function reachability(): array
     {
-        if ((string) env('PAYSTACK_SECRET_KEY', '') === '') {
-            return [self::check('Paystack answers our key', false, 'no secret key to try with')];
+        $secret = (string) env('PAYSTACK_SECRET_KEY', '');
+        if ($secret === '') {
+            return [self::check('Paystack accepts our key', false, 'no secret key to try with')];
         }
-        // Verify a reference that cannot exist. Paystack answering at all, even
-        // to say it does not know it, proves the key authenticated.
-        $probe = Paystack::verifyTransaction('okvhealthcheck0000');
-        $reachable = $probe['ok'] || ($probe['reason'] ?? '') === 'api';
-        return [self::check(
-            'Paystack answers our key',
-            $reachable,
-            $reachable ? 'authenticated' : (string) ($probe['reason'] ?? 'unknown') . ': ' . (string) ($probe['message'] ?? '')
-        )];
+        // A reference that cannot exist. A good key earns 404; a bad one earns
+        // 401, and telling those two apart is the whole point of this check.
+        $verdict = self::classifyProbe(Paystack::verifyTransaction('okvhealthcheck0000'));
+        return [self::check('Paystack accepts our key', $verdict['ok'], $verdict['detail'])];
     }
 
     private static function orders(): array

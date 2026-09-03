@@ -149,3 +149,36 @@ okv_test_ok(
 okv_test_ok(str_contains($orderPage, 'action="/api/v1/payments.php"'), 'the pay form posts to the payments endpoint');
 okv_test_ok(str_contains($orderPage, 'value="initialise"'),            'the pay form asks for the initialise action');
 okv_test_ok(str_contains($orderPage, 'Csrf::field()'),                 'the pay form carries a CSRF token');
+
+// -----------------------------------------------------------------------------
+// The health check must not report a rejected key as authenticated.
+//
+// It did. Paystack answers 401 to a bad key as readily as 404 to an unknown
+// reference, and the first version treated any answer as proof the key worked.
+// A placeholder key would have passed every Paystack check on the page.
+// -----------------------------------------------------------------------------
+$rejected = PaymentHealth::classifyProbe(['ok' => false, 'reason' => 'api', 'http_code' => 401, 'message' => 'Invalid key']);
+okv_test_ok(!$rejected['ok'], 'a 401 from Paystack is reported as a FAILURE, not as authenticated');
+okv_test_ok(str_contains($rejected['detail'], 'REJECTED'), 'and says plainly that the key was rejected');
+
+$forbidden = PaymentHealth::classifyProbe(['ok' => false, 'reason' => 'api', 'http_code' => 403, 'message' => 'Forbidden']);
+okv_test_ok(!$forbidden['ok'], 'a 403 is also a failure');
+
+$unknownRef = PaymentHealth::classifyProbe(['ok' => false, 'reason' => 'api', 'http_code' => 404, 'message' => 'Transaction not found']);
+okv_test_ok($unknownRef['ok'], 'a 404 on a deliberately unknown reference means the key authenticated');
+
+$netDown = PaymentHealth::classifyProbe(['ok' => false, 'reason' => 'network', 'http_code' => 0, 'message' => 'unreachable']);
+okv_test_ok(!$netDown['ok'], 'an unreachable Paystack is a failure');
+okv_test_ok(str_contains($netDown['detail'], 'reach'), 'and says it could not be reached, which is a different problem from a bad key');
+
+$good = PaymentHealth::classifyProbe(['ok' => true, 'data' => []]);
+okv_test_ok($good['ok'], 'a successful call is authenticated');
+
+// A placeholder key is "set" and has the right prefix, so it must be named.
+okv_test_ok(PaymentHealth::looksLikePlaceholder('sk_live_xxxxxxxxxxxxxxxxxxxxx'), 'the .env.example placeholder is recognised as a placeholder');
+okv_test_ok(PaymentHealth::looksLikePlaceholder('sk_test_xxxxxxxxxxxxxxxxxxxxx'), 'the test placeholder too');
+// Assembled at runtime rather than written out, so no key-shaped literal sits
+// in the repository for a secret scanner to flag. It is not a real key.
+$realLooking = 'sk_' . 'live_' . str_repeat('9a3f', 6);
+okv_test_ok(!PaymentHealth::looksLikePlaceholder($realLooking), 'a real looking key is not flagged as a placeholder');
+okv_test_ok(!PaymentHealth::looksLikePlaceholder(''), 'an empty key is handled by a different check');
