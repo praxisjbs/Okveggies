@@ -62,6 +62,20 @@ $csrf = Csrf::token();
            FROM customer_addresses WHERE user_id = :u ORDER BY is_default DESC, id DESC',
         [':u' => Customer::id()]
     );
+    // Every order this customer has placed, newest first, with what is owed.
+    // The panel below was a hardcoded empty state left over from before orders
+    // existed, so it told someone with three orders they had none.
+    $orders = Database::all(
+        'SELECT o.id, o.order_number, o.order_status, o.payment_status,
+                o.order_total_subunit, o.amount_paid_subunit, o.balance_due_subunit,
+                o.preferred_delivery_date, o.created_at,
+                (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
+           FROM orders o
+          WHERE o.user_id = :user
+          ORDER BY o.id DESC
+          LIMIT 20',
+        [':user' => (int) Customer::id()]
+    );
     $firstName = (string) ($me['first_name'] ?? '');
 ?>
   <!-- ============================ SIGNED-IN HOME ============================ -->
@@ -112,17 +126,47 @@ $csrf = Csrf::token();
         </dl>
       </section>
 
-      <!-- Orders (placeholder until M4) -->
+      <!-- Orders -->
       <section class="okv-card lg:col-span-2" aria-labelledby="orders-h">
         <h2 id="orders-h" class="font-editorial text-okv-h6 text-ink">Your orders</h2>
-        <div class="mt-4 rounded-md bg-forest-tint p-6 text-center">
-          <p class="font-medium text-ink">No orders yet</p>
-          <p class="mx-auto mt-2 max-w-sm text-sm text-ink-60">Every order you place will sit here with its delivery day, what is in it, and where it has reached.</p>
-          <div class="mt-4 flex flex-wrap justify-center gap-3">
-            <a href="/shop.php" class="okv-btn">Start shopping</a>
-            <a href="/combos.php" class="okv-btn-outline">See the combos</a>
+
+        <?php if (!$orders): ?>
+          <div class="mt-4 rounded-md bg-forest-tint p-6 text-center">
+            <p class="font-medium text-ink">No orders yet</p>
+            <p class="mx-auto mt-2 max-w-sm text-sm text-ink-60">Every order you place will sit here with its delivery day, what is in it, and where it has reached.</p>
+            <div class="mt-4 flex flex-wrap justify-center gap-3">
+              <a href="/shop.php" class="okv-btn">Start shopping</a>
+              <a href="/combos.php" class="okv-btn-outline">See the combos</a>
+            </div>
           </div>
-        </div>
+        <?php else: ?>
+          <ul class="mt-4 space-y-3">
+            <?php foreach ($orders as $o): ?>
+              <?php $owed = (int) $o['balance_due_subunit']; ?>
+              <li class="rounded-md border border-mist p-4">
+                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                  <a class="font-semibold text-ink underline" href="/public/order.php?order=<?= (int) $o['id'] ?>">
+                    <?= okv_e($o['order_number']) ?>
+                  </a>
+                  <span class="font-mono text-ink"><?= okv_e(Money::format((int) $o['order_total_subunit'])) ?></span>
+                </div>
+                <p class="mt-1 text-sm text-ink-60">
+                  <?= (int) $o['item_count'] ?> <?= (int) $o['item_count'] === 1 ? 'item' : 'items' ?>.
+                  Delivery <?= okv_e(date('l jS F', strtotime((string) $o['preferred_delivery_date']))) ?>.
+                  Status <?= okv_e(ucfirst((string) $o['order_status'])) ?>.
+                </p>
+                <?php if ($owed > 0): ?>
+                  <div class="mt-3 flex flex-wrap items-center gap-3">
+                    <span class="okv-badge okv-badge-warn"><?= okv_e(Money::format($owed)) ?> still to pay</span>
+                    <a class="okv-btn-sm inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>">Pay now</a>
+                  </div>
+                <?php else: ?>
+                  <p class="mt-2"><span class="okv-badge okv-badge-available">Paid in full</span></p>
+                <?php endif; ?>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
       </section>
 
       <!-- Addresses -->

@@ -108,7 +108,37 @@ $basketNotice = (string) okv_input('basket', '');
             <input type="hidden" name="action" value="add_product">
             <input type="hidden" name="product_id" value="<?= (int) $product['id'] ?>">
             <input type="hidden" name="return_to" value="<?= okv_e($returnTo) ?>">
-            <button type="submit" class="okv-btn w-full" <?= $availability['can_add'] ? '' : 'disabled' ?> data-add-button><?= $availability['can_add'] ? 'Add to basket' : $availability['short_label'] ?></button>
+
+            <?php if ($availability['can_add']): ?>
+              <?php
+                $minQty  = okv_quantity($product['minimum_quantity']);
+                $stepQty = okv_quantity($product['quantity_increment']);
+                $stepQty = (float) $stepQty > 0 ? $stepQty : $minQty;
+              ?>
+              <div class="mb-4">
+                <label for="okv-qty" class="block text-sm font-semibold text-ink">
+                  How much do you want?
+                </label>
+                <div class="mt-2 flex items-stretch gap-2">
+                  <input id="okv-qty"
+                         class="okv-input min-h-[44px] w-32 text-center font-mono text-lg"
+                         type="number"
+                         name="quantity"
+                         value="<?= okv_e($minQty) ?>"
+                         min="<?= okv_e($minQty) ?>"
+                         step="<?= okv_e($stepQty) ?>"
+                         inputmode="decimal"
+                         data-qty-input
+                         data-unit-price="<?= (int) $product['current_price_subunit'] ?>">
+                  <span class="flex items-center text-sm text-ink-60"><?= okv_e($product['unit']) ?></span>
+                </div>
+                <p class="mt-2 text-sm text-ink-60" data-qty-total aria-live="polite">
+                  Total <?= okv_e(Money::format((int) $product['current_price_subunit'])) ?>
+                </p>
+              </div>
+            <?php endif; ?>
+
+            <button type="submit" class="okv-btn w-full min-h-[44px]" <?= $availability['can_add'] ? '' : 'disabled' ?> data-add-button><?= $availability['can_add'] ? 'Add to basket' : $availability['short_label'] ?></button>
           </form>
           <?php if (!$availability['can_add']): ?><p class="mt-3 text-center text-sm text-ink-60">Keep this page handy. The status will change when sourcing is complete.</p><?php endif; ?>
         </div>

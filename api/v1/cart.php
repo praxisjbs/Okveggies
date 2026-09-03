@@ -85,7 +85,10 @@ try {
             if ($id < 1) {
                 throw new DomainException('not_found');
             }
-            $result = Basket::addProduct($id);
+            // The product page sends the quantity the customer chose. A card
+            // that sends none still adds one minimum, as it always has.
+            $chosen = trim((string) okv_input('quantity', ''));
+            $result = Basket::addProduct($id, $chosen === '' ? null : $chosen);
             $notice  = !empty($result['repriced']) ? 'repriced' : 'added';
             $message = !empty($result['repriced'])
                 ? 'The latest amount was added at ' . Money::format((int) $result['new_price_subunit']) . '. Your earlier amount keeps its price.'
