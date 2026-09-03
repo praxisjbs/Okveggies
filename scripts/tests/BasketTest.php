@@ -87,3 +87,25 @@ okv_test_ok($decorated[1]['price_changed'], 'the later line at a new price is fl
 okv_test_eq(270000, $decorated[1]['previous_price_subunit'], 'the flagged line remembers the price it moved from');
 okv_test_ok(Basket::hasRepricedLines($decorated), 'a basket holding two prices shows the reprice notice');
 okv_test_ok(!Basket::hasRepricedLines(Basket::decorateLines([$lines[0]])), 'a basket at one price shows no notice');
+
+// -----------------------------------------------------------------------------
+// Choosing a quantity before adding to the basket.
+// The grid is integer thousandths, so 0.1 + 0.2 is exactly 0.3.
+// -----------------------------------------------------------------------------
+okv_test_eq('0.500', Basket::sellableQuantity(null,    '0.500', '0.500'), 'no chosen quantity adds one minimum, as a product card always has');
+okv_test_eq('0.500', Basket::sellableQuantity('0.500', '0.500', '0.500'), 'the minimum itself is allowed');
+okv_test_eq('0.500', Basket::sellableQuantity('0.100', '0.500', '0.500'), 'below the minimum is raised to the minimum, never sold short');
+okv_test_eq('0.500', Basket::sellableQuantity('0',     '0.500', '0.500'), 'zero is raised to the minimum');
+okv_test_eq('0.500', Basket::sellableQuantity('-3',    '0.500', '0.500'), 'a negative quantity cannot be added');
+okv_test_eq('3.000', Basket::sellableQuantity('3',     '0.500', '0.500'), 'a whole number on the grid is kept exactly');
+okv_test_eq('2.500', Basket::sellableQuantity('2.500', '0.500', '0.500'), 'a half step on the grid is kept exactly');
+okv_test_eq('2.500', Basket::sellableQuantity('2.400', '0.500', '0.500'), 'a quantity between steps snaps to the nearest');
+okv_test_eq('2.000', Basket::sellableQuantity('2.200', '0.500', '0.500'), 'and snaps down when that is nearer');
+okv_test_eq('0.500', Basket::sellableQuantity('rubbish', '0.500', '0.500'), 'an unreadable quantity falls back to the minimum');
+okv_test_eq('1.000', Basket::sellableQuantity('1',     '1.000', '1.000'), 'a whole-unit product works the same way');
+okv_test_eq('5.000', Basket::sellableQuantity('5',     '1.000', '1.000'), 'five whole units');
+
+// A tricky one: a minimum that is not a multiple of the step still lands on the
+// grid measured from the minimum, never below it.
+okv_test_eq('1.200', Basket::sellableQuantity('1.200', '0.200', '0.500'), 'the grid is measured from the minimum, not from zero');
+okv_test_eq('0.200', Basket::sellableQuantity('0.100', '0.200', '0.500'), 'and still never goes below the minimum');

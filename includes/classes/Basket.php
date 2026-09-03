@@ -56,6 +56,32 @@ final class Basket
         return ((int) $match[1]) * 1000 + (int) str_pad($match[2] ?? '', 3, '0');
     }
 
+    /**
+     * Bring a requested quantity onto the sellable grid: never below the
+     * minimum, and always a whole number of steps above it. All in integer
+     * thousandths, so 0.1 + 0.2 is exactly 0.3 and never 0.30000000000000004.
+     *
+     * A null or unreadable request falls back to one minimum, which is what
+     * adding from a product card has always done.
+     */
+    public static function sellableQuantity(?string $requested, string $minimum, string $step): string
+    {
+        $minMilli  = self::quantityMilli($minimum) ?? 1000;
+        $stepMilli = self::quantityMilli($step) ?? $minMilli;
+        if ($stepMilli < 1) {
+            $stepMilli = $minMilli > 0 ? $minMilli : 1000;
+        }
+
+        $wantMilli = $requested === null ? null : self::quantityMilli($requested);
+        if ($wantMilli === null || $wantMilli <= $minMilli) {
+            return self::milliToQuantity($minMilli);
+        }
+
+        // How many whole steps above the minimum the request reaches.
+        $steps = (int) round(($wantMilli - $minMilli) / $stepMilli);
+        return self::milliToQuantity($minMilli + ($steps * $stepMilli));
+    }
+
     /** Render integer thousandths back as a decimal string, for example 1500 -> "1.500". */
     private static function milliToQuantity(int $milli): string
     {
@@ -440,7 +466,16 @@ final class Basket
      * today's price folds into the line already there; a repeat add after the
      * price moved opens a second line and leaves the first alone.
      */
-    public static function addProduct(int $productId): array
+    /**
+     * Add one product. $quantity is what the customer chose on the product page;
+     * null keeps the old behaviour of adding one minimum.
+     *
+     * A chosen quantity is brought onto the sellable grid rather than refused:
+     * anything below the minimum becomes the minimum, and anything between two
+     * steps snaps to the nearest one. The basket then shows what was actually
+     * added, so nothing is hidden from the customer.
+     */
+    public static function addProduct(int $productId, ?string $quantity = null): array
     {
         $pdo = Database::getInstance()->getConnection();
         try {
@@ -466,12 +501,19 @@ final class Basket
             $step   = self::quantityMilli((string) $product['quantity_increment']) > 0
                 ? (string) $product['quantity_increment']
                 : (string) $product['minimum_quantity'];
+
+            $toAdd = self::sellableQuantity(
+                $quantity,
+                (string) $product['minimum_quantity'],
+                $step
+            );
+
             $result = self::addSnapshot(
                 $cartId,
                 'product',
                 $productId,
                 (int) $product['current_price_subunit'],
-                (string) $product['minimum_quantity'],
+                $toAdd,
                 $step
             );
             self::touchCart($cartId);
