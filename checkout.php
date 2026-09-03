@@ -5,7 +5,11 @@
  * OK Veggies. Checkout in four steps: review the basket, give your details,
  * choose a delivery day and area, then choose how to pay. Every essential
  * action is a plain HTML form posting to the checkout API, so checkout works
- * with JavaScript switched off. No payment is taken on this page.
+ * with JavaScript switched off.
+ *
+ * Placing an order with a card option hands the customer to Paystack, so the
+ * copy on this page has to say so. It used to say no payment is taken here,
+ * which was true only while M5 was unbuilt.
  * -----------------------------------------------------------------------------
  */
 
@@ -52,7 +56,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= okv_e($pageTitle) ?></title>
-  <meta name="description" content="Give your delivery details, choose a delivery day and area, then choose how to pay. No payment is taken on this page.">
+  <meta name="description" content="Give your delivery details, choose a delivery day and area, then choose how to pay.">
   <meta name="robots" content="noindex">
   <link rel="canonical" href="<?= okv_e($canonical) ?>">
   <meta property="og:url" content="<?= okv_e($canonical) ?>">
@@ -177,17 +181,17 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
             <label class="block rounded-md border border-mist p-4">
               <input type="radio" name="payment_option" value="pay_in_full" <?= $payment === 'pay_in_full' ? 'checked' : '' ?> required>
               <strong>Pay the full amount</strong>
-              <span class="mt-1 block text-sm text-ink-60">We will save the full amount due. No payment is taken on this page.</span>
+              <span class="mt-1 block text-sm text-ink-60">Pay <?= okv_e(Money::format((int) $basket['subtotal_subunit'])) ?> now. We take you to Paystack, where you can pay by card, bank transfer or USSD.</span>
             </label>
             <label class="block rounded-md border border-mist p-4">
               <input type="radio" name="payment_option" value="deposit" <?= $payment === 'deposit' ? 'checked' : '' ?>>
               <strong>Pay a <?= okv_e(rtrim(rtrim(number_format(Settings::depositPercentage(), 2), '0'), '.')) ?>% deposit</strong>
-              <span class="mt-1 block text-sm text-ink-60">Amount due now: <?= okv_e(Money::format($deposit)) ?>. No payment is taken on this page.</span>
+              <span class="mt-1 block text-sm text-ink-60">Pay <?= okv_e(Money::format($deposit)) ?> now through Paystack. The rest is settled on delivery.</span>
             </label>
             <label class="block rounded-md border border-mist p-4 <?= Customer::isActivated() ? '' : 'opacity-60' ?>">
               <input type="radio" name="payment_option" value="pay_on_delivery" <?= $payment === 'pay_on_delivery' ? 'checked' : '' ?> <?= Customer::isActivated() ? '' : 'disabled' ?>>
               <strong>Pay on delivery</strong>
-              <span class="mt-1 block text-sm text-ink-60"><?= Customer::isActivated() ? 'Available for your verified account.' : 'Verify your email before choosing pay on delivery.' ?></span>
+              <span class="mt-1 block text-sm text-ink-60"><?= Customer::isActivated() ? 'Nothing is taken now. You pay our team when your order arrives.' : 'Verify your email before choosing pay on delivery.' ?></span>
             </label>
             <?php if (Customer::isBusiness()): ?>
               <label class="block rounded-md border border-mist p-4">

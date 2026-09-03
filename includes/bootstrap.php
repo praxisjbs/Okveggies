@@ -86,6 +86,16 @@ require_once __DIR__ . '/classes/Otp.php';
 require_once __DIR__ . '/classes/Mail.php';
 require_once __DIR__ . '/classes/Paystack.php';
 require_once __DIR__ . '/classes/Uploads.php';
+// M5 payments. Every one of these is reachable from a page or an endpoint, so
+// every one has to be loaded here. There is no autoloader for app classes: a
+// class file that is not on this list does not exist at runtime, however green
+// the unit tests are, because the test runner has its own require list.
+// scripts/tests/BootstrapTest.php guards that from happening again.
+require_once __DIR__ . '/classes/Payments.php';
+require_once __DIR__ . '/classes/ManualPayments.php';
+require_once __DIR__ . '/classes/Refunds.php';
+require_once __DIR__ . '/classes/Cancellation.php';
+require_once __DIR__ . '/classes/OrderDocument.php';
 
 // 7. Warm the RBAC cache from the session (no DB hit unless a user is loaded).
 Rbac::init();
