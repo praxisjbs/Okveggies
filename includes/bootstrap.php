@@ -96,6 +96,7 @@ require_once __DIR__ . '/classes/ManualPayments.php';
 require_once __DIR__ . '/classes/Refunds.php';
 require_once __DIR__ . '/classes/Cancellation.php';
 require_once __DIR__ . '/classes/OrderDocument.php';
+require_once __DIR__ . '/classes/PaymentHealth.php';
 
 // 7. Warm the RBAC cache from the session (no DB hit unless a user is loaded).
 Rbac::init();
