@@ -118,3 +118,34 @@ foreach ($entryPoints as $relative) {
         }
     }
 }
+
+// -----------------------------------------------------------------------------
+// A variable used by a page must be assigned on the path that actually renders.
+//
+// The pay button did not appear in production because its lookup was inserted
+// into the "order not found" branch of public/order.php, above the exit, so on
+// a real order it never ran and the variable read as null. php -l cannot see
+// that, and no unit test opens the page.
+// -----------------------------------------------------------------------------
+$orderPage = (string) file_get_contents($appRoot . '/public/order.php');
+
+$exitPos    = strpos($orderPage, 'exit;');
+$assignPos  = strpos($orderPage, '$pendingPayment =');
+$usePos     = strpos($orderPage, '$pendingPayment !== null');
+
+okv_test_ok($exitPos !== false,   'public/order.php still has a not-found branch that exits');
+okv_test_ok($assignPos !== false, 'public/order.php assigns $pendingPayment');
+okv_test_ok($usePos !== false,    'public/order.php uses $pendingPayment to draw the pay button');
+okv_test_ok(
+    $assignPos !== false && $exitPos !== false && $assignPos > $exitPos,
+    '$pendingPayment is assigned AFTER the not-found exit, so it runs for a real order'
+);
+okv_test_ok(
+    $assignPos !== false && $usePos !== false && $assignPos < $usePos,
+    '$pendingPayment is assigned before it is used'
+);
+
+// The button and its target must both exist, or the page renders a dead form.
+okv_test_ok(str_contains($orderPage, 'action="/api/v1/payments.php"'), 'the pay form posts to the payments endpoint');
+okv_test_ok(str_contains($orderPage, 'value="initialise"'),            'the pay form asks for the initialise action');
+okv_test_ok(str_contains($orderPage, 'Csrf::field()'),                 'the pay form carries a CSRF token');
