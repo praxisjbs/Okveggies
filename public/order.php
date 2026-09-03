@@ -51,6 +51,7 @@ if (!$order) {
 }
 
 $publicTrail = $token !== '';
+$cancellation = $publicTrail ? null : OrderCancellation::forCustomer((int) $order['id'], (int) Customer::id());
 
 // The owner, fresh from checkout, gets the share token from the bag so the page
 // can offer a share link. A public visitor already has it in the URL.
@@ -78,7 +79,9 @@ $shareUrl = $trailUrl !== ''
 // What the customer can still pay online, and what the Paystack return told us.
 // Only ever for the signed-in owner: the public trail shows no money and offers
 // no payment.
-$pendingPayment = $publicTrail ? null : Payments::pendingOnlinePayment((int) $order['id']);
+$pendingPayment = ($publicTrail || (string) $order['order_status'] === 'cancelled')
+    ? null
+    : Payments::pendingOnlinePayment((int) $order['id']);
 $paymentFlag    = (string) okv_input('payment', '');
 $paymentNotices = [
     'paid'        => ['Payment received. Thank you.', 'ok'],
@@ -90,6 +93,7 @@ $paymentNotices = [
     'missing'     => ['We could not match that payment. If money left your account, send us a message and we will sort it out.', 'problem'],
 ];
 $paymentNotice = $paymentNotices[$paymentFlag] ?? null;
+$cancellationFlag = (string) okv_input('cancellation', '');
 
 $pageTitle = 'Order ' . $order['order_number'] . '. OK Veggies';
 ?><!doctype html>
@@ -126,6 +130,14 @@ $pageTitle = 'Order ' . $order['order_number'] . '. OK Veggies';
           ? 'border-foliage bg-foliage-tint text-ink'
           : ($paymentNotice[1] === 'problem' ? 'border-clay bg-clay-tint text-ink' : 'border-mist bg-white text-ink') ?>" role="status">
       <?= okv_e($paymentNotice[0]) ?>
+    </p>
+  <?php endif; ?>
+
+  <?php if ($cancellationFlag !== ''): ?>
+    <p class="mt-4 rounded-xl border border-foliage bg-foliage-tint px-4 py-3 text-sm text-ink" role="status">
+      <?= $cancellationFlag === 'already_cancelled'
+          ? 'This order was already cancelled. No second cancellation was made.'
+          : 'Your order has been cancelled.' ?>
     </p>
   <?php endif; ?>
 
@@ -183,6 +195,75 @@ $pageTitle = 'Order ' . $order['order_number'] . '. OK Veggies';
       <?php endif; ?>
     </aside>
   </div>
+
+  <?php if (!$publicTrail && $cancellation): ?>
+    <?php
+      $supportNumber = preg_replace('/\D+/', '', Settings::str('support_whatsapp_number', '2348000000000'));
+      $supportText = rawurlencode('Please help me with cancellation for order ' . $order['order_number'] . '.');
+    ?>
+    <section class="okv-card mt-6" aria-labelledby="cancellation-heading">
+      <h2 id="cancellation-heading" class="font-display text-xl font-bold text-ink">Cancellation</h2>
+
+      <?php if ($cancellation['cancellation_id'] !== null): ?>
+        <p class="mt-3 text-ink">This order was cancelled on <?= okv_e(date('l jS F, H:i', strtotime((string) $cancellation['cancellation_at']))) ?>.</p>
+        <?php if ((int) $cancellation['refund_required'] === 1): ?>
+          <?php if ($cancellation['refunds']): ?>
+            <div class="mt-4 space-y-3">
+              <?php foreach ($cancellation['refunds'] as $refund): ?>
+                <div class="rounded-md border border-mist bg-forest-tint p-4">
+                  <p class="font-mono font-semibold"><?= okv_e(Money::format((int) $refund['amount_subunit'])) ?></p>
+                  <p class="mt-1 text-sm text-ink-60"><?= okv_e(OrderCancellation::refundStatusLine((string) $refund['status'], (string) $cancellation['refund_status'])) ?></p>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+          <?php if (in_array((string) $cancellation['refund_status'], ['manual_required', 'pending_manual'], true)): ?>
+            <p class="okv-note mt-4 bg-clay-tint">Part of your refund was paid outside Paystack. Our team still needs to return it and confirm that with you.</p>
+          <?php elseif (in_array((string) $cancellation['refund_status'], ['failed', 'failed_manual'], true)): ?>
+            <p class="okv-note-bad mt-4">The refund needs attention. We have kept the order cancelled and our team will follow up.</p>
+          <?php elseif (!$cancellation['refunds']): ?>
+            <p class="okv-note mt-4 bg-clay-tint">Your refund is not confirmed yet. Our team is checking it.</p>
+          <?php endif; ?>
+        <?php else: ?>
+          <p class="mt-2 text-sm text-ink-60">Nothing had been paid, so no refund was needed.</p>
+        <?php endif; ?>
+      <?php elseif ($cancellation['may_cancel']): ?>
+        <p class="mt-3 text-sm text-ink-60">
+          You may cancel before <?= okv_e($cancellation['deadline'] instanceof DateTimeImmutable ? $cancellation['deadline']->format('l jS F, H:i') : 'the cancellation cutoff') ?>.
+          Nothing has been paid, so there is no refund to wait for.
+        </p>
+        <details class="mt-4 rounded-md border border-mist p-4">
+          <summary class="flex min-h-[44px] cursor-pointer items-center font-semibold text-tomato">Cancel this order</summary>
+          <form action="/api/v1/orders.php" method="POST" class="mt-4 space-y-4">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="action" value="cancel_customer">
+            <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+            <div>
+              <label for="customer-cancel-reason" class="okv-label">Reason</label>
+              <select id="customer-cancel-reason" name="reason_code" class="okv-input" required>
+                <option value="">Choose a reason</option>
+                <?php foreach (OrderCancellation::CUSTOMER_REASONS as $value => $label): ?>
+                  <option value="<?= okv_e($value) ?>"><?= okv_e($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div>
+              <label for="customer-cancel-note" class="okv-label">Note (optional)</label>
+              <textarea id="customer-cancel-note" name="reason_text" class="okv-input" rows="3" maxlength="1000"></textarea>
+            </div>
+            <label class="flex min-h-[44px] items-start gap-3 text-sm">
+              <input type="checkbox" name="confirmed" value="1" class="mt-1 h-5 w-5" required>
+              <span>I understand this cancels the whole order and cannot be undone.</span>
+            </label>
+            <button type="submit" class="okv-btn-outline min-h-[44px] border-tomato text-tomato">Confirm cancellation</button>
+          </form>
+        </details>
+      <?php else: ?>
+        <p class="mt-3 text-sm text-ink-60"><?= okv_e($cancellation['restriction']) ?></p>
+        <a href="https://wa.me/<?= okv_e($supportNumber) ?>?text=<?= okv_e($supportText) ?>" class="okv-btn-outline mt-4 min-h-[44px]" rel="noopener">Ask us on WhatsApp</a>
+      <?php endif; ?>
+    </section>
+  <?php endif; ?>
 
   <section class="okv-card mt-6">
     <h2 class="font-display text-xl font-bold text-ink">Order Trail</h2>

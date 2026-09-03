@@ -96,7 +96,7 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] Tests: webhook signature and idempotency; deposit and balance maths (71 new assertions in `PaymentsTest.php`)
 
 ### M6. Delivery and the Order Trail
-- [ ] Order cancellation flow and screens. The money rules are already built and tested in M5 (`Cancellation`): who may cancel, the cutoff, and what happens to a deposit. M6 wires them to the order detail screen and does not get to reinvent them. Paid cancellations call the M5 refund engine.
+- [x] Order cancellation flow and screens. Customer and staff order details read the existing M5 `Cancellation` policy, recheck it under an order row lock at submission, append one cancellation and status-history row, and route Paystack money through `Refunds`. Paid cancellation needs both `orders.cancel` and `payments.refund`; manual money stays visibly due for return. POST, CSRF, ownership, permission, repeat-click and in-flight-payment gates are server enforced.
 - [ ] Allowed days, cutoff, lead, zones (admin-managed), exceptions
 - [ ] Order lifecycle and status history
 - [ ] Public Order Trail page by token link (no login), and the "Sourced [day] from [state]" line
@@ -170,6 +170,19 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 3 Sep 2026, M6 task 1: order cancellation flow and screens
+
+The first M6 task is complete on `M6-pr1-order-cancellation`. It wires the M5 cancellation policy and refund engine into the existing customer order detail and a focused staff Orders list and detail screen. No cancellation money rule was recreated, no migration was added or changed, and the remaining M6 delivery, lifecycle, trail and manifest tasks were left alone.
+
+- **One orchestration path.** New `OrderCancellation` reads `Cancellation::customerMayCancel`, `staffMayCancel`, `moneyOutcome` and the three existing settings. The submission locks and rereads the order, checks ownership or staff authority, refuses an active or unknown payment attempt, writes `order_cancellations`, moves the order to cancelled and appends `order_status_history` in one transaction. The unique order-cancellation key plus the row lock makes repeats and concurrent clicks return the saved result without another cancellation or refund.
+- **Money stays truthful.** A paid staff cancellation requires both `orders.cancel` and the Owner-only `payments.refund`. Refundable transactions are unwound newest first through `Refunds::request`; late deposit forfeiture therefore leaves the older deposit in place in the normal deposit-then-balance flow. Money recorded outside Paystack is labelled as requiring manual return. Pending, processed, failed and mixed manual states remain distinct, and refund webhooks refresh the cancellation summary. A cancelled order no longer offers or starts another Paystack charge.
+- **Customer screen.** The signed-in owner sees whether cancellation is available, the deadline and consequence, then a required reason, optional note and explicit confirmation. Paid, late or disabled self-service cases explain the restriction and link to WhatsApp. A cancelled order shows each refund using the M5 customer status copy and never says money arrived before Paystack reports `processed`. The public token view still withholds all money and cancellation controls.
+- **Staff screen.** `admin/orders.php` now has a reachable latest-orders list and focused detail without taking on later M6 status-management work. It shows items, paid and total figures, the M5 deposit/refund summary, the permission boundary and the recorded cancellation outcome.
+- **Tests.** The unit runner is green at 1,115 assertions. New pure regression checks cover newest-first multi-transaction allocation, manual and unmatched money, controller POST and CSRF wiring, ownership in the locked query, refund-engine routing, uncertain gateway copy and repeat handling. New database and HTTP integration scripts cover eligible and refused cancellations, ownership, staff refund permission, CSRF, GET refusal, repeat submission, history and manual paid outcomes.
+- **Interface and gates.** `brand-check.sh` is green. A representative render using the shipped stylesheet was checked at 390px and 1440px: no horizontal overflow, responsive columns switch correctly, and the cancellation trigger and submit button are 44px tall. The first pass caught a 24px summary target and corrected it.
+
+Could not run `cancellation_db_test.php` or `cancellation_http_test.php` because this checkout has no `.env` database credentials. `verify.sh` could not run because no base URL is configured. A live Paystack refund was not sent because no test key or scratch database is available; only test-mode payments may be used when those checks run. Run those three checks against the migrated scratch environment before merging.
 
 ### 3 Sep 2026, M5 hotfix: the payment path was dead in production
 

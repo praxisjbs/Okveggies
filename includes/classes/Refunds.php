@@ -364,6 +364,9 @@ final class Refunds
         if ($status === self::STATUS_PROCESSED) {
             self::applyProcessed($refundId);
         }
+        if (class_exists('OrderCancellation', false)) {
+            OrderCancellation::syncRefundStatus((int) $refund['order_id']);
+        }
 
         return ['ok' => true, 'code' => $status, 'message' => 'Refund moved to ' . $status . '.'];
     }

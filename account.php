@@ -155,7 +155,9 @@ $csrf = Csrf::token();
                   Delivery <?= okv_e(date('l jS F', strtotime((string) $o['preferred_delivery_date']))) ?>.
                   Status <?= okv_e(ucfirst((string) $o['order_status'])) ?>.
                 </p>
-                <?php if ($owed > 0): ?>
+                <?php if ((string) $o['order_status'] === 'cancelled'): ?>
+                  <p class="mt-2"><span class="okv-badge okv-badge-neutral">Cancelled</span></p>
+                <?php elseif ($owed > 0): ?>
                   <div class="mt-3 flex flex-wrap items-center gap-3">
                     <span class="okv-badge okv-badge-warn"><?= okv_e(Money::format($owed)) ?> still to pay</span>
                     <a class="okv-btn-sm inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>">Pay now</a>
