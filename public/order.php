@@ -26,23 +26,7 @@ if ($token !== '') {
 if (!$order) {
     http_response_code(404);
     $notFoundTitle = 'Order not found. OK Veggies';
-    
-// What the customer can still pay online, and what the Paystack return told us.
-// Only ever for the signed-in owner: the public trail shows no money and offers
-// no payment.
-$pendingPayment = $publicTrail ? null : Payments::pendingOnlinePayment((int) $order['id']);
-$paymentFlag    = (string) okv_input('payment', '');
-$paymentNotices = [
-    'paid'        => ['Payment received. Thank you.', 'ok'],
-    'pending'     => ['We are still confirming your payment with the bank. This page updates once it clears.', 'wait'],
-    'review'      => ['Payment received. The amount differs from what we expected, so we are checking it and will be in touch.', 'wait'],
-    'failed'      => ['That payment did not go through. Nothing has been taken. You can try again below.', 'problem'],
-    'abandoned'   => ['That payment was not completed. Nothing has been taken. You can try again below.', 'problem'],
-    'unavailable' => ['We could not reach the payment provider just now. Your order is saved. Try paying again below.', 'problem'],
-    'missing'     => ['We could not match that payment. If money left your account, send us a message and we will sort it out.', 'problem'],
-];
-$paymentNotice = $paymentNotices[$paymentFlag] ?? null;
-?><!doctype html>
+    ?><!doctype html>
     <html lang="en">
     <head>
       <meta charset="utf-8">
@@ -90,6 +74,22 @@ $trailUrl = OrderTrail::isValidToken($shareToken)
 $shareUrl = $trailUrl !== ''
     ? 'https://wa.me/?text=' . rawurlencode('Follow order ' . $order['order_number'] . ': ' . $trailUrl)
     : '';
+
+// What the customer can still pay online, and what the Paystack return told us.
+// Only ever for the signed-in owner: the public trail shows no money and offers
+// no payment.
+$pendingPayment = $publicTrail ? null : Payments::pendingOnlinePayment((int) $order['id']);
+$paymentFlag    = (string) okv_input('payment', '');
+$paymentNotices = [
+    'paid'        => ['Payment received. Thank you.', 'ok'],
+    'pending'     => ['We are still confirming your payment with the bank. This page updates once it clears.', 'wait'],
+    'review'      => ['Payment received. The amount differs from what we expected, so we are checking it and will be in touch.', 'wait'],
+    'failed'      => ['That payment did not go through. Nothing has been taken. You can try again below.', 'problem'],
+    'abandoned'   => ['That payment was not completed. Nothing has been taken. You can try again below.', 'problem'],
+    'unavailable' => ['We could not reach the payment provider just now. Your order is saved. Try paying again below.', 'problem'],
+    'missing'     => ['We could not match that payment. If money left your account, send us a message and we will sort it out.', 'problem'],
+];
+$paymentNotice = $paymentNotices[$paymentFlag] ?? null;
 
 $pageTitle = 'Order ' . $order['order_number'] . '. OK Veggies';
 ?><!doctype html>

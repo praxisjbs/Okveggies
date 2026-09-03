@@ -107,12 +107,29 @@ t_eq($before, count(audit_rows_for('deposit_percentage_default')), 'saving the s
 
 // --- A whole tab lands together ------------------------------------------------
 
+// Put the whole tab into a known state first, so this assertion counts what
+// this save changed rather than whatever a previous run happened to leave.
+Settings::set('deposit_percentage_default', 30, 'int', $actor);
+Settings::set('delivery_cutoff_time', '18:00', 'string', $actor);
+Settings::set('delivery_min_lead_days', 1, 'int', $actor);
+Settings::set('min_order_subunit', 0, 'int', $actor);
+Settings::set('pay_on_delivery_requires_activation', true, 'bool', $actor);
+Settings::set('cancellation_cutoff_time', '18:00', 'string', $actor);
+Settings::set('cancellation_deposit_forfeit_after_cutoff', true, 'bool', $actor);
+Settings::set('cancellation_customer_allowed', true, 'bool', $actor);
+Settings::flushCache();
+
+// Every field on the Order tab, including the cancellation policy M5 added.
+// Submitting the whole tab is what the screen does, so the test does it too.
 $clean = SettingsEditor::validate('order', [
-    'deposit_percentage_default'          => '25',
-    'delivery_cutoff_time'                => '14:30',
-    'delivery_min_lead_days'              => '3',
-    'min_order_subunit'                   => '2,500',
-    'pay_on_delivery_requires_activation' => '0',
+    'deposit_percentage_default'                => '25',
+    'delivery_cutoff_time'                      => '14:30',
+    'delivery_min_lead_days'                    => '3',
+    'min_order_subunit'                         => '2,500',
+    'pay_on_delivery_requires_activation'       => '0',
+    'cancellation_cutoff_time'                  => '17:00',
+    'cancellation_deposit_forfeit_after_cutoff' => '0',
+    'cancellation_customer_allowed'             => '0',
 ]);
 t_eq([], $clean['errors'], 'the whole order tab validates');
 
@@ -124,7 +141,10 @@ t_eq('14:30', Settings::str('delivery_cutoff_time'), 'the cutoff saved with the 
 t_eq(3, Settings::int('delivery_min_lead_days'), 'the days of notice saved');
 t_eq(250000, Settings::int('min_order_subunit'), 'the smallest order saved in kobo');
 t_eq(false, Settings::bool('pay_on_delivery_requires_activation'), 'the pay-on-delivery gate saved as off');
-t_eq(5, count($applied), 'all five order settings are reported as changed');
+t_eq('17:00', Settings::str('cancellation_cutoff_time'), 'the cancellation cutoff saved');
+t_eq(false, Settings::bool('cancellation_deposit_forfeit_after_cutoff'), 'the deposit forfeit rule saved as off');
+t_eq(false, Settings::bool('cancellation_customer_allowed'), 'customer self cancellation saved as off');
+t_eq(8, count($applied), 'every field on the order tab is reported as changed');
 
 // --- The site tab, and the storefront reading it back --------------------------
 
