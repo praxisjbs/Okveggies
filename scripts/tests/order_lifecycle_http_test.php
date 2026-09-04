@@ -32,6 +32,45 @@ try {
     [$code] = lh_req($jars[0], $base . '/api/v1/orders.php', ['action' => 'transition', 'order_id' => $orderId, 'expected_status' => 'pending', 'target_status' => 'confirmed', 'okv_csrf' => $managerCsrf]); lh_eq(200, $code, 'a permitted transition succeeds');
     [$code] = lh_req($jars[0], $base . '/api/v1/orders.php', ['action' => 'transition', 'order_id' => $orderId, 'expected_status' => 'pending', 'target_status' => 'confirmed', 'okv_csrf' => $managerCsrf]); lh_eq(200, $code, 'a repeated transition is an idempotent success');
     [$code] = lh_req($jars[0], $base . '/api/v1/orders.php', ['action' => 'transition', 'order_id' => $orderId, 'expected_status' => 'packed', 'target_status' => 'dispatched', 'okv_csrf' => $managerCsrf]); lh_eq(409, $code, 'a stale different transition is refused');
+
+    // The orders list and its three filters, loaded as a browser loads them.
+    // The customer filter reused one named placeholder twice, which MySQL
+    // refuses on a native prepared statement, so the screen answered 500 to
+    // every customer search and no test noticed. A filter that is never
+    // requested over HTTP is a filter nobody has tried.
+    [$code, $page] = lh_req($jars[0], $base . '/admin/orders.php');
+    lh_eq(200, $code, 'the orders list loads with no filter');
+    lh_ok(str_contains($page, "ZZ-LH-$suffix"), 'the unfiltered list shows the order');
+
+    [$code, $page] = lh_req($jars[0], $base . '/admin/orders.php?filter_status=confirmed');
+    lh_eq(200, $code, 'the orders list filters by stage');
+    lh_ok(str_contains($page, "ZZ-LH-$suffix"), 'the stage filter finds the confirmed order');
+    [, $page] = lh_req($jars[0], $base . '/admin/orders.php?filter_status=packed');
+    lh_ok(!str_contains($page, "ZZ-LH-$suffix"), 'the stage filter excludes an order at another stage');
+
+    [$code, $page] = lh_req($jars[0], $base . '/admin/orders.php?filter_date=' . date('Y-m-d', strtotime('+6 days')));
+    lh_eq(200, $code, 'the orders list filters by delivery day');
+    lh_ok(str_contains($page, "ZZ-LH-$suffix"), 'the delivery day filter finds the order');
+
+    [$code, $page] = lh_req($jars[0], $base . '/admin/orders.php?filter_customer=' . rawurlencode("ZZ-LH-$suffix"));
+    lh_eq(200, $code, 'the orders list filters by order number without erroring');
+    lh_ok(str_contains($page, "ZZ-LH-$suffix"), 'the customer filter finds an order by its number');
+
+    [$code, $page] = lh_req($jars[0], $base . '/admin/orders.php?filter_customer=' . rawurlencode("life-http-1-$suffix@example.test"));
+    lh_eq(200, $code, 'the orders list filters by the account email without erroring');
+    lh_ok(str_contains($page, "ZZ-LH-$suffix"), 'the customer filter finds an order by its account email');
+
+    [$code, $page] = lh_req($jars[0], $base . '/admin/orders.php?filter_customer=' . rawurlencode("Life Customer"));
+    lh_eq(200, $code, 'the orders list filters by the account name without erroring');
+    lh_ok(str_contains($page, "ZZ-LH-$suffix"), 'the customer filter finds an order by the account name');
+
+    [$code, $page] = lh_req($jars[0], $base . '/admin/orders.php?filter_customer=' . rawurlencode("zzz-no-such-customer"));
+    lh_eq(200, $code, 'a customer search that matches nothing is an empty list, not an error');
+    lh_ok(!str_contains($page, "ZZ-LH-$suffix"), 'a customer search that matches nothing shows no orders');
+
+    [$code, $page] = lh_req($jars[0], $base . '/admin/orders.php?filter_customer=' . rawurlencode("' OR 1=1 -- "));
+    lh_eq(200, $code, 'a quote in the customer search is data, not SQL');
+    lh_ok(!str_contains($page, "ZZ-LH-$suffix"), 'a quote in the customer search matches nothing');
 } finally {
     if ($orderId) { Database::run('DELETE FROM order_status_history WHERE order_id = :id', [':id' => $orderId]); Database::run('DELETE FROM delivery_schedules WHERE order_id = :id', [':id' => $orderId]); Database::run('DELETE FROM orders WHERE id = :id', [':id' => $orderId]); }
     foreach ($users as $id) { Database::run('DELETE FROM user_roles WHERE user_id = :id', [':id' => $id]); Database::run('DELETE FROM users WHERE id = :id', [':id' => $id]); }

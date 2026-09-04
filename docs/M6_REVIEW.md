@@ -104,6 +104,26 @@ surfaced the whole missing pull request in one sentence.
 
 ## 4. Defects found in the code you did write
 
+**The customer filter on the orders screen was broken in every case.**
+`admin/orders.php` built its search as
+`(a.recipient_name LIKE :customer OR o.order_number LIKE :customer)` with one
+bound value. `Database` runs native prepared statements
+(`ATTR_EMULATE_PREPARES` is false), and MySQL will not accept the same named
+placeholder twice in one statement, so every customer search threw
+`SQLSTATE[HY093]: Invalid parameter number` and the screen died. Acceptance item
+1 asks for a list filterable by customer; it never worked once. Every other
+search in this codebase (`Products`, `Catalogue`, `Combos`, three auth lookups)
+names its placeholders separately, so the convention was already there to copy.
+It now uses four placeholders and matches the delivery name, the order number,
+the account email and the account name, and the orders list and all three of its
+filters are loaded over HTTP by `order_lifecycle_http_test.php`. I reverted the
+fix and re-ran that test to confirm it fails on the original code and passes on
+the new one.
+
+The lesson is not about placeholders. Neither of us caught this by reading the
+diff, and no test caught it because no test ever loaded the screen with a filter
+on it. A control you have not clicked is a control nobody has tried.
+
 **A brand colour that does not exist.** `bg-clay-tint` and `border-clay` appear
 in eleven places across `admin/payments.php`, `admin/orders.php` and
 `public/order.php`. `clay` was never in `tailwind.config.js`, so every one of
@@ -211,7 +231,7 @@ only. That file is not yours and is not fixed here, but it will bite someone.
 - Per-zone manifest totals are now tested, both as pure arithmetic and on the
   real path. The guide asks for "manifest grouping and per zone totals"; only
   the grouping half had a test.
-- 164 new unit assertions, 82 new database assertions, 10 new HTTP assertions,
+- 164 new unit assertions, 82 new database assertions, 27 new HTTP assertions,
   and three new routes in `verify.sh`.
 
 ---
@@ -237,7 +257,7 @@ Named here so it is a decision rather than an accident.
 
 ---
 
-## 8. Three habits for M7
+## 8. Four habits for M7
 
 1. **Ask the five questions.** They are cheap and they are in `CLAUDE.md` for a
    reason. The guide for M7 will have its own Section 9. Start there.
@@ -245,3 +265,7 @@ Named here so it is a decision rather than an accident.
    have not run is a hope.
 3. **Grep for your own callers.** Before ticking anything, search the repository
    for the class you built. If the only hits are the tests, it is not wired in.
+4. **Click every control before you tick the line it belongs to.** The broken
+   customer filter, the missing sourcing line and the dead `clay` colour were all
+   invisible in the diff and obvious in the browser. Loading the screen you built
+   and using it is the cheapest test there is.

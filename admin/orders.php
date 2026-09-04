@@ -10,12 +10,31 @@ $validStatuses = ['pending', 'confirmed', 'packed', 'dispatched', 'delivered', '
 $where = []; $params = [];
 if (in_array($statusFilter, $validStatuses, true)) { $where[] = 'o.order_status = :status'; $params[':status'] = $statusFilter; }
 if (Delivery::validDate($dateFilter)) { $where[] = 'o.preferred_delivery_date = :date'; $params[':date'] = $dateFilter; }
-if ($customerFilter !== '') { $where[] = '(a.recipient_name LIKE :customer OR o.order_number LIKE :customer)'; $params[':customer'] = '%' . $customerFilter . '%'; }
+// One placeholder per position. The connection runs native prepared statements
+// (Database sets ATTR_EMULATE_PREPARES to false), and MySQL will not accept the
+// same named placeholder twice in one statement: reusing :customer here threw
+// SQLSTATE[HY093] and turned the customer filter into a 500. Every other search
+// in this codebase names its placeholders separately for the same reason.
+//
+// "Customer" means whoever a staff member is looking for, so this matches the
+// name on the delivery, the order number, and the account's own name or email.
+if ($customerFilter !== '') {
+    $where[] = '(a.recipient_name LIKE :customer_recipient
+                 OR o.order_number LIKE :customer_number
+                 OR u.email LIKE :customer_email
+                 OR TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) LIKE :customer_account)';
+    $like = '%' . $customerFilter . '%';
+    $params[':customer_recipient'] = $like;
+    $params[':customer_number']    = $like;
+    $params[':customer_email']     = $like;
+    $params[':customer_account']   = $like;
+}
 $orders = Database::all(
     'SELECT o.id, o.order_number, o.order_status, o.payment_status, o.order_total_subunit,
             o.preferred_delivery_date, o.created_at, a.recipient_name
        FROM orders o
        LEFT JOIN order_addresses a ON a.order_id = o.id
+       LEFT JOIN users u ON u.id = o.user_id
       ' . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . '
       ORDER BY o.id DESC LIMIT 50',
     $params

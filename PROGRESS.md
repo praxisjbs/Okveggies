@@ -216,7 +216,14 @@ report for the engineer is `docs/M6_REVIEW.md`.
   keys. Running the suite against a real database therefore disabled M6
   acceptance item 13 silently. It now snapshots every setting it writes before
   writing any of them, restores exactly what it found, and asserts that it did.
-- **Seven defects fixed.** `clay` was used by name in eleven places across M5 and
+- **The orders screen could not be searched.** The customer filter on
+  `admin/orders.php` reused one named placeholder twice, which MySQL refuses on
+  a native prepared statement, so every customer search threw
+  `SQLSTATE[HY093]` and the screen died. Acceptance item 1 had never worked. It
+  now uses four placeholders and also matches the account email and name, and
+  the list and all three filters are loaded over HTTP by a test that was
+  confirmed to fail on the old code.
+- **Eight defects fixed.** `clay` was used by name in eleven places across M5 and
   M6 but had never been added to `tailwind.config.js`, so every "needs
   attention" state compiled to no colour at all. The Order Trail showed no
   sourcing line until an order was confirmed, which is exactly when a customer
