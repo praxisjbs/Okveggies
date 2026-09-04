@@ -1,28 +1,9 @@
 <?php
-/**
- * admin/kitchen_runs.php
- * OK Veggies. Quote, approve, convert.
- * Status: scaffold placeholder inside the real admin shell. Build in milestone M7.
- * See docs/PRD.md Section 8. Before writing logic here: read the PRD section, then
- * ask at least five clarifying questions (see CLAUDE.md). No em dash, no
- * jargon, on brand.
- */
 require_once __DIR__ . '/../includes/bootstrap.php';
-require_once __DIR__ . '/../includes/components/admin/placeholder.php';
 Rbac::requirePermission('kitchen_runs.view');
-
-$okv_admin_title = 'Kitchen Runs';
-$okv_admin_note  = 'Kitchen run requests, the quote you send back, and turning an approved quote into an order.';
-require __DIR__ . '/../includes/components/admin/header.php';
-
-okv_admin_placeholder(
-    'M7',
-    'Section 8',
-    'A customer sends a shopping list, priced by us or priced by them, or an open budget they trust us to spend. You quote it, they approve it, and it becomes an order.',
-    [
-        ['label' => 'Set this week\'s prices', 'href' => '/admin/pricing.php'],
-        ['label' => 'Manage the catalogue', 'href' => '/admin/products.php'],
-    ]
-);
-
-require __DIR__ . '/../includes/components/admin/footer.php';
+$okv_admin_title='Kitchen Runs'; $okv_admin_note='Price a list, send the quote, then turn an approved request into an order.';
+$runs=KitchenRuns::allForStaff(); $id=(int)okv_input('request',0); $request=$id?Database::one('SELECT * FROM kitchen_run_requests WHERE id=:id',[':id'=>$id]):null; $lines=$request?KitchenRuns::lines($id):[]; $units=Database::all('SELECT id,name FROM units_of_measurement ORDER BY id'); $zones=Database::all('SELECT id,name FROM delivery_zones WHERE is_active=1 ORDER BY name');
+require __DIR__ . '/../includes/components/admin/header.php'; ?>
+<main class="p-4 lg:p-7"><div class="flex justify-between"><h1 class="font-editorial text-3xl">Kitchen Runs</h1><a class="underline text-forest" href="/kitchen-runs.php">Customer view</a></div><div class="mt-5 bg-white rounded border overflow-auto"><table class="w-full text-left"><thead><tr><th>Request</th><th>Customer</th><th>Status</th><th>Total</th></tr></thead><tbody><?php foreach($runs as $run):?><tr class="border-t"><td class="p-3"><a class="underline text-forest" href="?request=<?=$run['id']?>"><?=okv_e($run['request_number'])?></a></td><td><?=okv_e($run['email'])?></td><td><?=okv_e(ucfirst($run['status']))?></td><td><?= $run['quoted_total_subunit']===null?'Awaiting quote':Money::format((int)$run['quoted_total_subunit']) ?></td></tr><?php endforeach;?></tbody></table></div>
+<?php if($request):?><section class="mt-6 bg-white rounded border p-5"><h2 class="text-xl font-semibold"><?=okv_e($request['request_number'])?>, <?=okv_e(ucfirst($request['status']))?></h2><?php if($request['attachment_url']):?><a class="underline text-forest" href="/public/kitchen_run_attachment.php?request=<?=$request['id']?>">Download original uploaded list</a><?php endif;?><?php if($request['status']==='submitted' && Rbac::can('kitchen_runs.quote')):?><form method="post" action="/api/v1/kitchen_runs.php" class="grid gap-3 mt-4"><?=Csrf::field()?><input name="action" type="hidden" value="quote"><input name="request_id" type="hidden" value="<?=$request['id']?>"><input name="state_version" type="hidden" value="<?=$request['state_version']?>"><?php foreach($lines as $n=>$line):?><fieldset class="border p-3"><input type="hidden" name="items[<?=$n?>][product_id]" value="<?=okv_e($line['product_id'])?>"><label>Item<input class="okv-input" name="items[<?=$n?>][item_name]" value="<?=okv_e($line['item_name'])?>"></label><label>Quantity<input class="okv-input" name="items[<?=$n?>][quantity]" value="<?=okv_e($line['quantity'])?>"></label><label>Unit<select class="okv-input" name="items[<?=$n?>][unit_id]"><?php foreach($units as $unit):?><option value="<?=$unit['id']?>" <?=$line['unit_id']==$unit['id']?'selected':''?>><?=okv_e($unit['name'])?></option><?php endforeach;?></select></label><label>Unit price, kobo<input class="okv-input" name="items[<?=$n?>][unit_price_subunit]" value="<?=okv_e($line['unit_price_subunit'])?>"></label></fieldset><?php endforeach;?><label>Deposit, kobo<input class="okv-input" name="deposit_subunit"></label><label>Delivery date<input class="okv-input" type="date" name="preferred_delivery_date"></label><label>Delivery area<select class="okv-input" name="delivery_zone_id"><?php foreach($zones as $zone):?><option value="<?=$zone['id']?>"><?=okv_e($zone['name'])?></option><?php endforeach;?></select></label><label>Note<textarea class="okv-input" name="admin_note"></textarea></label><button class="okv-btn">Send quote</button></form><?php elseif($request['status']==='approved' && Rbac::can('kitchen_runs.convert')):?><p class="mt-3">Approved quote: <?=Money::format((int)$request['quoted_total_subunit'])?></p><form method="post" action="/api/v1/kitchen_runs.php" class="mt-3"><?=Csrf::field()?><input type="hidden" name="action" value="convert"><input type="hidden" name="request_id" value="<?=$request['id']?>"><input type="hidden" name="state_version" value="<?=$request['state_version']?>"><select class="okv-input" name="payment_option"><option value="deposit">Deposit</option><option value="on_account">Approved business credit</option><option value="pay_in_full">Pay in full</option></select><button class="okv-btn mt-2">Convert to order</button></form><?php elseif($request['status']==='converted'):?><p>Converted to <a class="underline text-forest" href="/admin/orders.php?order=<?=$request['converted_order_id']?>">order #<?=$request['converted_order_id']?></a>.</p><?php endif;?></section><?php endif;?></main>
+<?php require __DIR__ . '/../includes/components/admin/footer.php'; ?>

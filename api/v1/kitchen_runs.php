@@ -1,16 +1,25 @@
 <?php
-/**
- * api/v1/kitchen_runs.php
- * OK Veggies. Submit, quote, approve and convert kitchen runs.
- * Status: scaffold placeholder. Build in milestone M7. See docs/PRD.md Section 8.
- * Before writing logic here: read the PRD section, then ask at least five
- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
- */
 require_once __DIR__ . '/../../includes/bootstrap.php';
-header('Content-Type: application/json; charset=utf-8');
 
-// Mixed. Customer submits; staff quote, approve, convert (kitchen_runs.*).
-// $action = okv_action();
-// switch ($action) { ... }  gate each action with Rbac::requirePermission or a customer auth check
-
-okv_json(['status' => 'error', 'code' => 'not_implemented', 'message' => 'This endpoint is scaffolded and not built yet.'], 501);
+function kr_fetch(): bool { return str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json') || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'fetch'; }
+function kr_guard(): void { if (!okv_is_post()) okv_error('Use POST for this action.',405,'method_not_allowed'); if (!Csrf::validate()) okv_error('Your session expired. Reload the page and try again.',419,'csrf_expired'); }
+function kr_fail(Throwable $e): void {
+    $map=['bad_mode'=>'Choose how you want to send your list.','bad_pricing_mode'=>'Choose who should price this list.','open_budget_pricing'=>'Open-budget runs are priced by OK Veggies.','attachment_required'=>'Attach a JPEG, PNG or PDF list.','no_items'=>'Add at least 1 item to your list.','invalid_line'=>'Check each item name, quantity and price.','invalid_catalogue_item'=>'Choose an available catalogue product.','quantity_unit_required'=>'Add a quantity and unit for every item we should price.','price_required'=>'Add your target price for every item.','budget_not_open'=>'A budget cap is only for an open-budget run.','deposit_required'=>'Set a deposit before this request can proceed.','cap_exceeded'=>'This quote is above the agreed spend cap.','delivery_required'=>'Choose a delivery date and area before sending the quote.','stale'=>'This request changed while you were working. Reload it and try again.','stale_or_not_owned'=>'This request changed or is not yours. Reload the page.','payment_not_allowed'=>'That payment choice is not available for this account.','not_found'=>'That Kitchen Run could not be found.'];
+    $code=$e->getMessage(); okv_error($map[$code] ?? 'We could not save that Kitchen Run. Please try again.', $code==='not_found'?404:(in_array($code,['stale','stale_or_not_owned'],true)?409:422),$code);
+}
+try {
+    $action=okv_action(); kr_guard();
+    if ($action==='submit') {
+        Customer::requireLoginApi(); $attachment=null;
+        if ((string)okv_input('input_mode','')==='upload') { $filename=(string)($_FILES['attachment']['name'] ?? ''); if(!preg_match('/\.(jpe?g|png|pdf)$/i',$filename)) throw new DomainException('attachment_required'); $attachment=Uploads::saveUploadedFile($_FILES['attachment'] ?? [], 'kitchen_runs', ['image/jpeg','image/png','application/pdf']); }
+        $items=$_POST['items'] ?? []; if (!is_array($items)) $items=[]; foreach($items as &$item){if(is_array($item)&&isset($item['unit_price']))$item['unit_price_subunit']=Money::toSubunit($item['unit_price']);} unset($item);
+        $result=KitchenRuns::submit((int)Customer::id(),(string)Customer::type(),['input_mode'=>okv_input('input_mode',''),'pricing_mode'=>okv_input('pricing_mode','by_us'),'is_open_budget'=>okv_input('is_open_budget',''),'spend_cap_subunit'=>okv_input('spend_cap','')===''?null:Money::toSubunit(okv_input('spend_cap','')),'budget_ceiling_subunit'=>null,'customer_note'=>okv_input('customer_note',''),'items'=>$items],$attachment);
+        if (kr_fetch()) okv_json(['status'=>'ok']+$result); okv_redirect('/kitchen-runs.php?submitted='.$result['id'],303);
+    }
+    if ($action==='quote') { Rbac::requirePermission('kitchen_runs.quote'); $items=$_POST['items']??[]; if(!is_array($items))$items=[]; foreach($items as &$item){if(is_array($item)&&isset($item['unit_price']))$item['unit_price_subunit']=Money::toSubunit($item['unit_price']);} unset($item); $result=KitchenRuns::quote((int)okv_input('request_id',0),(int)Rbac::userId(),(int)okv_input('state_version',0),['items'=>$items,'deposit_subunit'=>okv_input('deposit','')===''?null:Money::toSubunit(okv_input('deposit','')),'preferred_delivery_date'=>okv_input('preferred_delivery_date',''),'delivery_zone_id'=>okv_input('delivery_zone_id',0),'admin_note'=>okv_input('admin_note','')]); if(kr_fetch())okv_json(['status'=>'ok']+$result); okv_redirect('/admin/kitchen_runs.php?request='.(int)okv_input('request_id',0).'&quoted=1',303); }
+    if ($action==='approve') { Customer::requireLoginApi(); $result=KitchenRuns::approve((int)okv_input('request_id',0),(int)Customer::id(),(int)okv_input('state_version',0)); if(kr_fetch())okv_json(['status'=>'ok']+$result); okv_redirect('/kitchen-runs.php?request='.(int)okv_input('request_id',0).'&approved=1',303); }
+    if ($action==='cancel') { Customer::requireLoginApi(); $changed=Database::run("UPDATE kitchen_run_requests SET status='cancelled',state_version=state_version+1 WHERE id=:id AND user_id=:user AND status IN ('submitted','quoted') AND state_version=:version",[':id'=>(int)okv_input('request_id',0),':user'=>Customer::id(),':version'=>(int)okv_input('state_version',0)]); if($changed!==1) throw new DomainException('stale_or_not_owned'); if(kr_fetch())okv_json(['status'=>'ok','code'=>'cancelled']); okv_redirect('/kitchen-runs.php?cancelled=1',303); }
+    if ($action==='decline') { Rbac::requirePermission('kitchen_runs.decline'); $changed=Database::run("UPDATE kitchen_run_requests SET status='declined',admin_note=:note,state_version=state_version+1 WHERE id=:id AND status='submitted' AND state_version=:version",[':id'=>(int)okv_input('request_id',0),':version'=>(int)okv_input('state_version',0),':note'=>trim((string)okv_input('admin_note',''))]); if($changed!==1)throw new DomainException('stale'); if(kr_fetch())okv_json(['status'=>'ok','code'=>'declined']); okv_redirect('/admin/kitchen_runs.php?request='.(int)okv_input('request_id',0),303); }
+    if ($action==='convert') { Rbac::requirePermission('kitchen_runs.convert'); $result=KitchenRuns::convertAtomically((int)okv_input('request_id',0),(int)Rbac::userId(),null,(int)okv_input('state_version',0),(string)okv_input('payment_option','')); if(!$result['already_converted']) Notifications::announceOrderPlaced((int)$result['id'],''); if(kr_fetch())okv_json(['status'=>'ok']+$result); okv_redirect('/admin/orders.php?order='.$result['id'],303); }
+    okv_error('That action is not available.',400,'unknown_action');
+} catch (DomainException $e) { kr_fail($e); } catch (Throwable $e) { error_log('kitchen_runs: '.$e->getMessage()); okv_error('We could not save that Kitchen Run. Please try again.',500,'failed'); }
