@@ -76,6 +76,16 @@ $csrf = Csrf::token();
           LIMIT 20',
         [':user' => (int) Customer::id()]
     );
+    // The in-app copy of every email this customer has been sent. Reading the
+    // page marks them read, which is what read_at is for on an in-app row;
+    // email rows never carry it, because open tracking is out of Phase 1.
+    try {
+        $updates = Notifications::inboxFor((int) Customer::id(), 15);
+        Notifications::markInboxRead((int) Customer::id());
+    } catch (Throwable $e) {
+        error_log('account updates: ' . $e->getMessage());
+        $updates = [];
+    }
     $firstName = (string) ($me['first_name'] ?? '');
 ?>
   <!-- ============================ SIGNED-IN HOME ============================ -->
@@ -155,13 +165,40 @@ $csrf = Csrf::token();
                   Delivery <?= okv_e(date('l jS F', strtotime((string) $o['preferred_delivery_date']))) ?>.
                   Status <?= okv_e(ucfirst((string) $o['order_status'])) ?>.
                 </p>
-                <?php if ($owed > 0): ?>
+                <?php if ((string) $o['order_status'] === 'cancelled'): ?>
+                  <p class="mt-2"><span class="okv-badge okv-badge-neutral">Cancelled</span></p>
+                <?php elseif ($owed > 0): ?>
                   <div class="mt-3 flex flex-wrap items-center gap-3">
                     <span class="okv-badge okv-badge-warn"><?= okv_e(Money::format($owed)) ?> still to pay</span>
                     <a class="okv-btn-sm inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>">Pay now</a>
                   </div>
                 <?php else: ?>
                   <p class="mt-2"><span class="okv-badge okv-badge-available">Paid in full</span></p>
+                <?php endif; ?>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
+      </section>
+
+      <!-- Updates. The same words the emails carry, in the app, so a customer
+           who never opens email still sees every step of their own order.
+           Reading the page marks them read; nothing here is another person's. -->
+      <section class="okv-card lg:col-span-3" aria-labelledby="updates-h">
+        <h2 id="updates-h" class="font-editorial text-okv-h6 text-ink">Updates</h2>
+        <?php if (!$updates): ?>
+          <p class="mt-4 text-sm text-ink-60">Nothing to report yet. Every step of an order shows up here as it happens.</p>
+        <?php else: ?>
+          <ul class="mt-4 divide-y divide-mist">
+            <?php foreach ($updates as $update): ?>
+              <li class="py-3">
+                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                  <p class="font-medium text-ink"><?= okv_e((string) $update['title']) ?></p>
+                  <time class="text-xs text-ink-60" datetime="<?= okv_e((string) $update['created_at']) ?>"><?= okv_e(date('j M, H:i', strtotime((string) $update['created_at']))) ?></time>
+                </div>
+                <p class="mt-1 text-sm text-ink-60"><?= nl2br(okv_e((string) $update['body'])) ?></p>
+                <?php if ($update['related_id']): ?>
+                  <a class="okv-btn-text mt-1 inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $update['related_id'] ?>">Open this order</a>
                 <?php endif; ?>
               </li>
             <?php endforeach; ?>

@@ -28,6 +28,7 @@ final class PaymentHealth
             'Paystack'            => self::paystack(),
             'Reaching Paystack'   => self::reachability(),
             'Orders'              => self::orders(),
+            'Email and notices'   => self::notifications(),
         ];
     }
 
@@ -54,10 +55,85 @@ final class PaymentHealth
         ];
     }
 
+    /**
+     * Can this server actually tell a customer anything. Every check is a read:
+     * nothing here sends a message. To prove a real send, use "Send one to me"
+     * on the Notifications tab of the settings screen, which posts through the
+     * real mail server to the signed-in person's own address.
+     */
+    private static function notifications(): array
+    {
+        $out = [];
+        $out[] = self::check('Notifications is loaded', class_exists('Notifications'), class_exists('Notifications') ? '' : 'not required by includes/bootstrap.php');
+        $out[] = self::check(
+            'PHPMailer is installed',
+            class_exists(\PHPMailer\PHPMailer\PHPMailer::class),
+            class_exists(\PHPMailer\PHPMailer\PHPMailer::class) ? '' : 'composer install has not run, so every email is only written to the error log'
+        );
+
+        $host = trim((string) env('SMTP_HOST', ''));
+        $user = trim((string) env('SMTP_USER', ''));
+        $pass = (string) env('SMTP_PASS', '');
+        $out[] = self::check('SMTP host is set', $host !== '', $host !== '' ? $host . ':' . (int) env('SMTP_PORT', 465) : 'SMTP_HOST is empty in .env');
+        $out[] = self::check('SMTP user is set', $user !== '', $user !== '' ? $user : 'SMTP_USER is empty in .env');
+        $out[] = self::check('SMTP password is set', $pass !== '', $pass !== '' ? 'set' : 'SMTP_PASS is empty in .env');
+        $from = trim((string) env('SMTP_FROM_EMAIL', $user));
+        $out[] = self::check('Emails have a from address', $from !== '', $from !== '' ? $from : 'neither SMTP_FROM_EMAIL nor SMTP_USER is set');
+
+        try {
+            $templates = Database::all('SELECT template_key, is_active FROM notification_templates');
+            $active = [];
+            foreach ($templates as $row) {
+                if ((int) $row['is_active'] === 1) {
+                    $active[] = (string) $row['template_key'];
+                }
+            }
+            $missing = [];
+            foreach (Notifications::EVENTS as $definition) {
+                if (!in_array($definition['template'], $active, true)) {
+                    $missing[] = $definition['template'];
+                }
+            }
+            $out[] = self::check(
+                'Every event has words to send',
+                $missing === [],
+                $missing === [] ? count($active) . ' active templates' : 'missing or switched off: ' . implode(', ', $missing)
+            );
+
+            $recent = Database::one(
+                'SELECT COUNT(*) AS n FROM notification_deliveries
+                  WHERE channel = :channel AND status = :status AND queued_at > (NOW() - INTERVAL 7 DAY)',
+                [':channel' => Notifications::CHANNEL_EMAIL, ':status' => Notifications::STATUS_FAILED]
+            );
+            $failed = (int) ($recent['n'] ?? 0);
+            $out[] = self::check(
+                'No email has failed this week',
+                $failed === 0,
+                $failed === 0 ? '' : $failed . ' failed in the last 7 days. Open the order and read the error beside the message.',
+                true
+            );
+
+            $sent = Database::one(
+                'SELECT COUNT(*) AS n FROM notification_deliveries
+                  WHERE channel = :channel AND status = :status AND queued_at > (NOW() - INTERVAL 7 DAY)',
+                [':channel' => Notifications::CHANNEL_EMAIL, ':status' => Notifications::STATUS_SENT]
+            );
+            $out[] = self::check(
+                'Email has gone out this week',
+                (int) ($sent['n'] ?? 0) > 0,
+                (int) ($sent['n'] ?? 0) > 0 ? (int) $sent['n'] . ' sent in the last 7 days' : 'nothing sent yet. Use "Send one to me" on the Notifications settings tab.',
+                true
+            );
+        } catch (Throwable $e) {
+            $out[] = self::check('Notification tables are readable', false, 'the notifications tables could not be read');
+        }
+        return $out;
+    }
+
     private static function classes(): array
     {
         $out = [];
-        foreach (['Paystack', 'Payments', 'ManualPayments', 'Refunds', 'Cancellation', 'OrderDocument'] as $class) {
+        foreach (['Paystack', 'Payments', 'ManualPayments', 'Refunds', 'Cancellation', 'OrderDocument', 'Notifications'] as $class) {
             $out[] = self::check(
                 $class . ' is loaded',
                 class_exists($class),

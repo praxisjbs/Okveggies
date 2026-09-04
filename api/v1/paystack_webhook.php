@@ -141,6 +141,9 @@ try {
         }
 
         $result = Payments::applyVerifiedCharge($reference, $verified['data'], 'webhook', $eventId);
+        if ($result['ok']) {
+            Notifications::announceCharge($result);
+        }
         $status = $result['ok'] ? 'processed' : ($result['code'] === 'unmatched' ? 'unmatched' : 'processed');
         Database::run(
             'UPDATE payment_webhook_events
@@ -163,6 +166,9 @@ try {
     // Paystack, so this holds whatever shape their refund payload takes.
     if (Refunds::statusFromEvent($eventType) !== null) {
         $result = Refunds::applyWebhook($eventType, $data, $eventId);
+        // A refund that landed is the customer's news. One that failed is the
+        // team's, and it is the only alert nobody else will raise.
+        Notifications::announceRefund($result);
         Database::run(
             'UPDATE payment_webhook_events
                 SET processing_status = :status, processed_at = NOW(), error_message = :message

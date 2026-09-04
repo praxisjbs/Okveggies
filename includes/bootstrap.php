@@ -95,6 +95,10 @@ require_once __DIR__ . '/classes/Payments.php';
 require_once __DIR__ . '/classes/ManualPayments.php';
 require_once __DIR__ . '/classes/Refunds.php';
 require_once __DIR__ . '/classes/Cancellation.php';
+require_once __DIR__ . '/classes/OrderCancellation.php';
+require_once __DIR__ . '/classes/OrderLifecycle.php';
+require_once __DIR__ . '/classes/DeliveryManifest.php';
+require_once __DIR__ . '/classes/Notifications.php';
 require_once __DIR__ . '/classes/OrderDocument.php';
 require_once __DIR__ . '/classes/PaymentHealth.php';
 

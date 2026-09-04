@@ -127,6 +127,24 @@ t_ok(str_contains($page, 'okv_head_meta') === false && str_contains($page, 'site
 
 // --- Preview says what a save would do, and writes nothing ------------------------
 
+// Snapshot every setting on every tab before this file posts anything, derived
+// from the tab definitions rather than typed out, and put it all back at the
+// end. Saving a tab over HTTP writes every field on it, and a bool that is not
+// submitted saves as off, so without this a run against a real database leaves
+// customer self service cancellation and the dispatched cancellation rules
+// switched off with nothing to say so.
+$settingsBefore = [];
+foreach (SettingsEditor::groups() as $group) {
+    foreach ($group['fields'] as $key => $field) {
+        $type = (string) ($field['value_type'] ?? 'string');
+        $settingsBefore[$key] = [$type, match ($type) {
+            'int'  => Settings::int($key),
+            'bool' => Settings::bool($key),
+            default => Settings::str($key),
+        }];
+    }
+}
+
 $before = (int) Database::one("SELECT setting_value v FROM site_settings WHERE setting_key = 'deposit_percentage_default'")['v'];
 $token  = csrf_from($jarOwner, $base . '/admin/settings.php');
 
@@ -259,7 +277,130 @@ t_eq('NGN', Settings::str('currency'), 'the currency was not written');
 
 // --- Put the deposit back the way it was --------------------------------------------------
 
+// --- M6 notification templates ---------------------------------------------
+// The words an automated email sends are content an Owner edits, so the gate
+// here is the same shape as the settings gates above: Owner writes, Manager
+// reads, and neither can smuggle an em dash into a customer's inbox.
+$templateBefore = Database::one('SELECT subject_template, body_template FROM notification_templates WHERE template_key = :k', [':k' => 'order_packed']);
+
+[$code, $body] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'preview_template', 'template_key' => 'order_packed',
+    'subject_template' => 'Order {{order_number}} is packed',
+    'body_template' => 'Hi {{customer_name}}, it is packed.',
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+$preview = (string) (json_decode($body, true)['preview'] ?? '');
+t_eq(200, $code, 'an Owner can preview a template');
+t_ok(str_contains($preview, 'OKV26014'), 'the preview fills the tokens with sample values');
+t_ok(!str_contains($preview, '{{'), 'the preview leaves no placeholder on screen');
+t_ok(str_contains($preview, 'lockup-white-720.png'), 'the preview shows the real branded letterhead');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'order_packed',
+    'subject_template' => 'Order {{order_number}} is packed and waiting',
+    'body_template' => "Hi {{customer_name}}, order {{order_number}} is packed.\n\nDelivery is set for {{delivery_day}}.",
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+t_eq(200, $code, 'an Owner can save the words an email sends');
+$stored = Database::one('SELECT subject_template FROM notification_templates WHERE template_key = :k', [':k' => 'order_packed']);
+t_ok(str_contains((string) $stored['subject_template'], 'and waiting'), 'the saved words are the ones the next email will use');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'order_packed',
+    'subject_template' => 'Order {{order_number}} is packed',
+    'body_template' => "Hi {{customer_name}} \u{2014} it is packed.",
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+t_eq(422, $code, 'an em dash is refused before it can reach a customer');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'not_a_template',
+    'subject_template' => 'Hello', 'body_template' => 'Hello',
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+t_eq(422, $code, 'a template key we do not send is refused');
+
+[$code] = req($jarManager, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'order_packed',
+    'subject_template' => 'Manager edit', 'body_template' => 'Manager edit',
+    'okv_csrf' => csrf_from($jarManager, $base . '/admin/settings.php'),
+]);
+t_eq(403, $code, 'a Manager cannot rewrite what a customer is sent');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'save_template', 'template_key' => 'order_packed',
+    'subject_template' => 'No token', 'body_template' => 'No token',
+    'okv_csrf' => 'wrong-token',
+]);
+t_eq(419, $code, 'a template save without a CSRF token is refused');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php?action=save_template&template_key=order_packed', null, 'GET');
+t_eq(405, $code, 'a template cannot be rewritten by a GET');
+
+Database::run(
+    'UPDATE notification_templates SET subject_template = :s, body_template = :b WHERE template_key = :k',
+    [':s' => $templateBefore['subject_template'], ':b' => $templateBefore['body_template'], ':k' => 'order_packed']
+);
+
+// --- Proving that email actually leaves this server -------------------------
+// This one really does post a message through whatever SMTP the environment is
+// pointed at, to the signed-in Owner's own address. That is the point of it: it
+// is the only way a team can confirm mail works without placing an order.
+[$code, $body] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'send_test_email', 'template_key' => 'order_dispatched',
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+t_eq(200, $code, 'an Owner can send themselves a test email');
+t_ok(str_contains($body, 'settings-owner@okveggies.com.ng'), 'the test goes to the Owner own address and says so');
+
+$testRow = Database::one(
+    'SELECT n.event_type, n.related_type, d.recipient_address, d.status
+       FROM notifications n JOIN notification_deliveries d ON d.notification_id = n.id
+      WHERE n.related_type = :type AND d.channel = :channel ORDER BY n.id DESC LIMIT 1',
+    [':type' => 'settings_test', ':channel' => 'email']
+);
+t_ok((bool) $testRow, 'a test send is recorded like any other notification');
+t_eq('settings-owner@okveggies.com.ng', (string) ($testRow['recipient_address'] ?? ''), 'the recorded address is the Owner own, never one from the request');
+t_eq('sent', (string) ($testRow['status'] ?? ''), 'the test email reached the mail server');
+
+[$code] = req($jarManager, $base . '/api/v1/settings.php', [
+    'action' => 'send_test_email', 'template_key' => 'order_dispatched',
+    'okv_csrf' => csrf_from($jarManager, $base . '/admin/settings.php'),
+]);
+t_eq(403, $code, 'a Manager cannot send test email from this platform');
+
+[$code] = req($jarGuest, $base . '/api/v1/settings.php', [
+    'action' => 'send_test_email', 'template_key' => 'order_dispatched', 'okv_csrf' => 'x',
+]);
+t_ok($code === 403 || $code === 401, 'a signed-out visitor cannot send test email');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'send_test_email', 'template_key' => 'not_a_template',
+    'okv_csrf' => csrf_from($jarOwner, $base . '/admin/settings.php'),
+]);
+t_eq(422, $code, 'a template we do not send cannot be test sent');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php', [
+    'action' => 'send_test_email', 'template_key' => 'order_dispatched', 'okv_csrf' => 'wrong-token',
+]);
+t_eq(419, $code, 'a test send without a CSRF token is refused');
+
+[$code] = req($jarOwner, $base . '/api/v1/settings.php?action=send_test_email&template_key=order_dispatched', null, 'GET');
+t_eq(405, $code, 'a test send cannot be triggered by a GET');
+
+Database::run('DELETE FROM notification_deliveries WHERE notification_id IN (SELECT id FROM notifications WHERE related_type = :t)', [':t' => 'settings_test']);
+Database::run('DELETE FROM notifications WHERE related_type = :t', [':t' => 'settings_test']);
+
 Settings::set('deposit_percentage_default', $before, 'int', null);
+
+// Put every setting back exactly as it was found.
+foreach ($settingsBefore as $key => [$type, $value]) {
+    Settings::set($key, $value, $type, null);
+}
+Settings::flushCache();
+foreach (['cancellation_customer_allowed', 'cancellation_after_dispatch_allowed', 'cancellation_dispatched_forfeit_deposit', 'cancellation_deposit_forfeit_after_cutoff'] as $rule) {
+    t_eq($settingsBefore[$rule][1], Settings::bool($rule), "$rule is left exactly as this test found it");
+}
 
 @unlink($jarOwner); @unlink($jarManager); @unlink($jarGuest);
 

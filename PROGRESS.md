@@ -96,12 +96,20 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] Tests: webhook signature and idempotency; deposit and balance maths (71 new assertions in `PaymentsTest.php`)
 
 ### M6. Delivery and the Order Trail
-- [ ] Order cancellation flow and screens. The money rules are already built and tested in M5 (`Cancellation`): who may cancel, the cutoff, and what happens to a deposit. M6 wires them to the order detail screen and does not get to reinvent them. Paid cancellations call the M5 refund engine.
-- [ ] Allowed days, cutoff, lead, zones (admin-managed), exceptions
-- [ ] Order lifecycle and status history
-- [ ] Public Order Trail page by token link (no login), and the "Sourced [day] from [state]" line
-- [ ] Admin delivery-day manifest / packing list, grouped by zone, printable
-- [ ] Tests: order-number generation; status transitions
+- [x] Order cancellation flow and screens. Customer and staff order details read the existing M5 `Cancellation` policy, recheck it under an order row lock at submission, append one cancellation and status-history row, and route Paystack money through `Refunds`. Paid cancellation needs both `orders.cancel` and `payments.refund`; manual money stays visibly due for return. POST, CSRF, ownership, permission, repeat-click and in-flight-payment gates are server enforced.
+- [x] Allowed days, cutoff, lead, zones (admin-managed), exceptions
+- [x] Order lifecycle and status history
+- [x] Public Order Trail page by token link (no login), and the "Sourced [day] from [state]" line
+- [x] Admin delivery-day manifest / packing list, grouped by zone, printable
+- [x] Tests: order-number generation; status transitions; manifest grouping and per-zone totals
+- [x] Notifications on every order and payment event, by email and in the app. `docs/M6_GUIDE.md` Section 1 moved these out of M9 and into M6, because a notification belongs with the event that fires it and PRD 14.2 makes the confirmation email the way a customer reaches the Order Trail. One `Notifications` dispatcher, a row in `notifications` and one in `notification_deliveries` per recipient and channel, and a failed send that is recorded rather than thrown at the caller.
+- [x] The six templates the events had no words for, plus `order_packed`, so a customer hears about every stage rather than three of six (migration `019`).
+- [x] M5's orphaned payment events wired: verified charge, deposit, staff-recorded payment, refund sent, refund failed.
+- [x] Notification template editor behind `settings.notifications.edit`, with the tokens each message accepts and a preview of the real branded email.
+- [x] Order 360 lists every message sent, to which address, when, whether it landed and the error if it did not, with a resend behind `notifications.resend`.
+- [x] Tests: dispatcher rows, a failing send, every template rendering with no `{{placeholder}}` left, the trail link on every customer email.
+- [x] Cancelling an order that has already been dispatched, with the terms that apply to it. Staff may; the customer may not once an order is packed; the deposit is kept whatever the clock says, under its own setting; the person cancelling acknowledges it under the row lock; and the rule is stated at checkout, on the order and in the email (migration `021`).
+- [x] The refund path proved end to end against a stand-in gateway, and a way to prove email on the live server without placing an order.
 
 ### M7. Kitchen Runs
 - [ ] Request flow, four input modes (catalogue, priced-by-us, priced-by-customer, upload)
@@ -116,10 +124,10 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [ ] Tests: credit limit and balance
 
 ### M9. Notifications and contact
-- [ ] Email templates and delivery: placed, payment confirmed, dispatched, delivered, trail link
+- [x] Email templates and delivery: placed, payment confirmed, dispatched, delivered, trail link. **Delivered in M6**, per `docs/M6_GUIDE.md` Section 1: every one of these is fired by a status change M6 builds, so building them apart meant writing every transition twice. Contact stayed here, which is the clean seam.
 - [ ] Floating support widget: WhatsApp click-to-chat and contact form
 - [ ] Contact messages surface in admin
-- [ ] Tests: template render; notification queued on order events
+- [x] Tests: template render; notification queued on order events (**M6**, `NotificationsTest.php` and `notifications_db_test.php`)
 
 ### M10. Trust and Make It Right
 - [ ] Report an issue against an order (category, note, photos)
@@ -170,6 +178,145 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 4 Sep 2026, M6 follow-up: the terms after dispatch, and the two paths nobody had run
+
+Three things the client asked for after the review, and one bug each of the
+first two turned up.
+
+- **A dispatched order can be cancelled, and the terms say so.** The client's
+  call, and it answers question 1 of `docs/M6_GUIDE.md` Section 9. Staff may
+  still cancel an order that is on the van; the deposit is kept whatever the
+  clock says, because the produce is bought and the run has been made. That is
+  its own setting (`cancellation_dispatched_forfeit_deposit`) rather than a
+  silent override of the cutoff rule, because a business that has chosen to
+  always refund in full is entitled to mean it, and a second setting
+  (`cancellation_after_dispatch_allowed`) closes the door entirely for anyone
+  who would rather settle at the gate. Migration `021`. Whoever presses the
+  button acknowledges the consequence, checked under the row lock rather than
+  only in the form. The rule is stated at checkout, on the customer's own order,
+  and in the cancellation email, which now says the deposit was kept because the
+  order had been dispatched rather than because of a cutoff that had nothing to
+  do with it.
+- **Self service now stops when an order is packed.** It did not before. A
+  pay-on-delivery order can be unpaid and already at the customer's gate, and
+  that combination let someone cancel produce that had left the building.
+- **The refund path is proved end to end.** `Paystack::base()` can be pointed at
+  a stand-in gateway (`scripts/tests/fake/paystack.php`) by `PAYSTACK_BASE_URL`,
+  and the override is ignored unless the secret key is a test key, so an
+  environment holding `sk_live_` always talks to the real Paystack and nobody
+  can redirect customer money by editing one variable. A Paystack-paid order on
+  the van is now cancelled, the refund raised, the webhook applied and the
+  customer told, in 24 assertions.
+- **That test found a real M5 bug.** `Refunds::applyWebhook` read the
+  transaction reference as a string, but Paystack sends `transaction` as an
+  object. The cast produced the literal `Array`, so the fallback lookup could
+  never match, which matters exactly when a refund event arrives before the
+  gateway id is stored: the refund is never marked processed and the customer is
+  never told. Fixed, both payload shapes covered.
+- **Email can be proved on the live server without placing an order.** "Send one
+  to me" on the Notifications settings tab posts a real branded message through
+  the real mail server to the signed-in person's own address, recorded like any
+  other notification. The address is read from the staff row and never from the
+  request, so it can never be used to send mail to a stranger. The health check
+  gained an "Email and notices" section: SMTP host, user, password and from
+  address, PHPMailer present, every event having active words, and how many
+  emails have failed or gone out this week.
+- **The settings tests were still leaking, worse than before.** The earlier fix
+  swapped one hand-typed restore list for another, and the two settings added
+  today went straight past it, so a suite run left cancellation after dispatch
+  switched off. Both the database and HTTP settings tests now derive the list
+  from `SettingsEditor::groups()`, and the hard-coded field count in the same
+  file is derived too. Proved by running each twice against a database checked
+  before and after.
+- **Checks.** 1,416 unit, 362 database and 125 HTTP assertions green,
+  `brand-check.sh` green, `php -l` clean, migrations `000` to `021` applied from
+  empty. Still not proved: Paystack itself answering, and real deliverability.
+
+### 3 Sep 2026, M6 senior review: the milestone finished and verified
+
+A senior pass over `M6-pr1-order-cancellation`. The lifecycle, cancellation,
+trail and manifest work was sound and is kept almost whole. Two things were
+not: the milestone's notification half had not been started, and nothing in the
+branch had ever been run against a database. Both are closed here. The full
+report for the engineer is `docs/M6_REVIEW.md`.
+
+- **Verified, not asserted.** MySQL 8.0.46 and a PHP server were stood up and
+  every migration from `000` to `020` applied twice from an empty database, so
+  the idempotency claims are now facts. The three checks the branch listed as
+  never run were run: 310 database assertions, 94 HTTP assertions and
+  `scripts/verify.sh`. Everything the branch already had passed, first time.
+  A local SMTP sink captured real messages, so the branded email is a rendered
+  artefact rather than a belief.
+- **Notifications, the missing half of M6.** New `Notifications` dispatcher:
+  one path in, a `notifications` row and a `notification_deliveries` row per
+  recipient and channel, `Mail::sendTemplate` for the branded HTML and plain
+  text, and a send that is caught and recorded rather than thrown at the caller.
+  Two channels ship, email and in the app. Migration `019` adds the seven
+  templates that did not exist, the `notifications.resend` permission, and the
+  index the in-app inbox reads. Every order stage, every cancellation and all
+  four of M5's orphaned payment events now announce themselves; an order taken
+  end to end sends seven branded emails and writes the matching in-app rows.
+- **The words are content.** A Notifications tab on the settings screen behind
+  `settings.notifications.edit` lists every message, names the tokens it
+  accepts, previews the real branded render in a sandboxed frame, and refuses
+  an em dash before it can reach a customer.
+- **Order 360 finished.** The M5 money ledger (expected, paid, refunded, net,
+  outstanding), links to the invoice, the receipt, the customer's trail and the
+  delivery day, an internal staff note that can never surface on the public
+  trail (migration `020`), and the list of every message sent with a resend on
+  a failed one.
+- **A test that failed a milestone.** `settings_db_test.php` saved the Order tab
+  with customer self service cancellation switched off and restored a hard-coded
+  list of defaults that had never been updated with M5's three cancellation
+  keys. Running the suite against a real database therefore disabled M6
+  acceptance item 13 silently. It now snapshots every setting it writes before
+  writing any of them, restores exactly what it found, and asserts that it did.
+- **The orders screen could not be searched.** The customer filter on
+  `admin/orders.php` reused one named placeholder twice, which MySQL refuses on
+  a native prepared statement, so every customer search threw
+  `SQLSTATE[HY093]` and the screen died. Acceptance item 1 had never worked. It
+  now uses four placeholders and also matches the account email and name, and
+  the list and all three filters are loaded over HTTP by a test that was
+  confirmed to fail on the old code.
+- **Eight defects fixed.** `clay` was used by name in eleven places across M5 and
+  M6 but had never been added to `tailwind.config.js`, so every "needs
+  attention" state compiled to no colour at all. The Order Trail showed no
+  sourcing line until an order was confirmed, which is exactly when a customer
+  is least reassured. The day manifest ran two queries per order, over 180 on a
+  60 order Saturday. Zone totals summed values already rounded to three places.
+  `Cancellation::policyLine` existed and was never shown at checkout. The
+  manifest and Order 360 were dead ends with no link between them.
+- **Not run, and named as such.** No real or sandbox Paystack charge or refund
+  was sent; the M5 test-mode ledger regressions stand in. No production SMTP
+  account was used, so deliverability, SPF and DKIM are unproven. Nothing was
+  printed on paper; the print rules were read off the rendered page. The
+  cancellation and lifecycle row locks are tested for the stale and repeat
+  paths but were not forced under concurrent load.
+
+### 3 Sep 2026, M6 tasks 2 to 5: delivery and the Order Trail
+
+M6 delivery configuration, the staff lifecycle, the public Order Trail and the day manifest are complete on the existing cancellation branch. Migration `018_delivery_order_trail.sql` adds the immutable source-region snapshot and backfills the already-defined `delivery_schedules` table without changing a shipped migration.
+
+- **One delivery rule.** Checkout, the customer date picker and public delivery API continue to use `Delivery`. The exact configured cutoff now closes the date, real calendar dates and 24 hour cutoffs are validated, lead time is bounded from 0 to 30 days, all seven weekdays for both customer types are manageable, unknown zones are refused, and exceptions can be created, updated or explicitly removed. Every write is POST, permission and CSRF protected.
+- **Atomic lifecycle.** New `OrderLifecycle` holds the pure transition map and the single transactional write. Staff may move `pending` to `confirmed`, then `packed`, `dispatched` and `delivered`; cancellation stays on `OrderCancellation`, so M5 money rules cannot be bypassed. The locked reread rejects stale or skipped transitions, a repeat of the same transition succeeds without another row, and status, timestamp, delivery schedule and actor-attributed history are committed together. Confirmation means sourced and snapshots the current source regions.
+- **Customer trail.** The existing SHA-256 token lookup and canonical `/public/order.php?token=...` route remain in place. The page projects only Placed, Sourced, Packed, Dispatched, Delivered and Cancelled, with timestamps, and uses the recorded confirmation time and source snapshot for the sourcing line. Public viewers see no payment choice, amount, address, contact detail, staff note or another order. Refund wording comes from the M5 `Refunds` customer status helper and never promotes a pending refund to complete. Bad tokens retain the branded 404.
+- **Manifest and packing list.** Checkout now creates `delivery_schedules` in the same placement transaction. The permission-gated day manifest reads every non-cancelled scheduled order, including delivered orders on a historical reprint, groups by the order's recorded zone, shows delivery contact and address, expands combo snapshots with basket multiplication, and calculates per-zone packing totals. Its print media removes the admin navigation and every interactive control.
+- **Tests and checks.** Tests were written before production changes. The full unit runner passes 1,183 assertions. New database tests pass 11 lifecycle and 4 manifest assertions; new HTTP tests pass 10 delivery, 9 lifecycle and 7 public-trail assertions. Existing checkout passes 17, delivery passes 10, M5 payments passes 43, cancellation database passes 13 and cancellation HTTP passes 12. All touched PHP files pass `php -l`; `npm run build`, `git diff --check` and `scripts/brand-check.sh` are green. Browser checks at 390px and 1440px found no horizontal overflow on the customer trail, staff order screen or manifest; responsive layouts, 44px actions, zone totals and the five-column desktop trail rendered correctly. The print CSS was read from the rendered page and confirms navigation and controls are removed.
+- **Not run and remaining risk.** No real or sandbox Paystack charge/refund was sent; the existing M5 test-mode ledger and cancellation regressions were used. No physical printer or generated paper copy was available, so print media rules and screen layout were checked rather than a hard-copy output. The row-lock, stale-form and repeat paths are tested, but a multi-process race was not forced under load. `scripts/verify.sh` was not run against staging because this work was verified on localhost only.
+
+### 3 Sep 2026, M6 task 1: order cancellation flow and screens
+
+The first M6 task is complete on `M6-pr1-order-cancellation`. It wires the M5 cancellation policy and refund engine into the existing customer order detail and a focused staff Orders list and detail screen. No cancellation money rule was recreated, no migration was added or changed, and the remaining M6 delivery, lifecycle, trail and manifest tasks were left alone.
+
+- **One orchestration path.** New `OrderCancellation` reads `Cancellation::customerMayCancel`, `staffMayCancel`, `moneyOutcome` and the three existing settings. The submission locks and rereads the order, checks ownership or staff authority, refuses an active or unknown payment attempt, writes `order_cancellations`, moves the order to cancelled and appends `order_status_history` in one transaction. The unique order-cancellation key plus the row lock makes repeats and concurrent clicks return the saved result without another cancellation or refund.
+- **Money stays truthful.** A paid staff cancellation requires both `orders.cancel` and the Owner-only `payments.refund`. Refundable transactions are unwound newest first through `Refunds::request`; late deposit forfeiture therefore leaves the older deposit in place in the normal deposit-then-balance flow. Money recorded outside Paystack is labelled as requiring manual return. Pending, processed, failed and mixed manual states remain distinct, and refund webhooks refresh the cancellation summary. A cancelled order no longer offers or starts another Paystack charge.
+- **Customer screen.** The signed-in owner sees whether cancellation is available, the deadline and consequence, then a required reason, optional note and explicit confirmation. Paid, late or disabled self-service cases explain the restriction and link to WhatsApp. A cancelled order shows each refund using the M5 customer status copy and never says money arrived before Paystack reports `processed`. The public token view still withholds all money and cancellation controls.
+- **Staff screen.** `admin/orders.php` now has a reachable latest-orders list and focused detail without taking on later M6 status-management work. It shows items, paid and total figures, the M5 deposit/refund summary, the permission boundary and the recorded cancellation outcome.
+- **Tests.** The unit runner is green at 1,115 assertions. New pure regression checks cover newest-first multi-transaction allocation, manual and unmatched money, controller POST and CSRF wiring, ownership in the locked query, refund-engine routing, uncertain gateway copy and repeat handling. New database and HTTP integration scripts cover eligible and refused cancellations, ownership, staff refund permission, CSRF, GET refusal, repeat submission, history and manual paid outcomes.
+- **Interface and gates.** `brand-check.sh` is green. A representative render using the shipped stylesheet was checked at 390px and 1440px: no horizontal overflow, responsive columns switch correctly, and the cancellation trigger and submit button are 44px tall. The first pass caught a 24px summary target and corrected it.
+
+Could not run `cancellation_db_test.php` or `cancellation_http_test.php` because this checkout has no `.env` database credentials. `verify.sh` could not run because no base URL is configured. A live Paystack refund was not sent because no test key or scratch database is available; only test-mode payments may be used when those checks run. Run those three checks against the migrated scratch environment before merging.
 
 ### 3 Sep 2026, M5 hotfix: the payment path was dead in production
 

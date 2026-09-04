@@ -200,6 +200,20 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                 <span class="mt-1 block text-sm text-ink-60">The server checks your credit approval before placing the order.</span>
               </label>
             <?php endif; ?>
+
+            <!-- The cancellation rule, said before the money moves rather than
+                 discovered afterwards. Cancellation::policyLine is the same
+                 sentence the order screen and the cancellation email use, so
+                 the promise made here is the one that is kept. -->
+            <p class="okv-note bg-clay-tint">
+              <?= okv_e(Cancellation::policyLine(
+                    Settings::str('cancellation_cutoff_time', '18:00'),
+                    Settings::bool('cancellation_deposit_forfeit_after_cutoff', true),
+                    Settings::bool('cancellation_after_dispatch_allowed', true),
+                    Settings::bool('cancellation_dispatched_forfeit_deposit', true)
+                  )) ?>
+            </p>
+
             <div class="flex justify-between gap-3 pt-2">
               <a class="okv-btn-text px-2" href="/checkout.php?step=3">Back</a>
               <button class="okv-btn px-4">Place order</button>

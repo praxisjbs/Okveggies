@@ -207,7 +207,7 @@ final class Payments
     public static function beginCharge(int $paymentId, string $callbackUrl): array
     {
         $payment = Database::one(
-            'SELECT p.*, o.order_number, o.id AS order_id, u.email
+            'SELECT p.*, o.order_number, o.order_status, o.id AS order_id, u.email
                FROM payments p
                JOIN orders o ON o.id = p.order_id
                LEFT JOIN users u ON u.id = p.user_id
@@ -216,6 +216,9 @@ final class Payments
         );
         if (!$payment) {
             return ['ok' => false, 'code' => 'not_found', 'message' => 'That payment could not be found.'];
+        }
+        if ((string) $payment['order_status'] === 'cancelled') {
+            return ['ok' => false, 'code' => 'order_cancelled', 'message' => 'This order has been cancelled and cannot be paid.'];
         }
         if ($payment['status'] === self::STATUS_PAID) {
             return ['ok' => false, 'code' => 'already_paid', 'message' => 'This payment has already been settled.'];
@@ -578,6 +581,11 @@ final class Payments
             $status = (string) ($verified['data']['status'] ?? '');
             if ($status === 'success') {
                 $result = self::applyVerifiedCharge($reference, $verified['data'], 'sweep');
+                if ($result['ok']) {
+                    // applyVerifiedCharge has already committed, so this is
+                    // outside the transaction the way the controllers do it.
+                    Notifications::announceCharge($result);
+                }
                 if ($result['ok'] || $result['code'] === 'duplicate') {
                     $counts['credited']++;
                 } else {

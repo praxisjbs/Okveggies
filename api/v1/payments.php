@@ -153,6 +153,7 @@ if ($action === 'record_manual') {
     if (!$result['ok']) {
         okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
     }
+    Notifications::announceManualPayment($result, $staffId);
     payments_staff_done($result, 'recorded');
 }
 

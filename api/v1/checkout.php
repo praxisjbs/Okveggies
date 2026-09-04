@@ -120,6 +120,10 @@ try {
     ]);
 
     $result = Checkout::place($input);
+    // The order is committed. Send the customer their copy with the trail link
+    // in it, and raise the staff alert. PRD 14.2 makes that link the way a
+    // customer follows their order, so it has to leave the building here.
+    Notifications::announceOrderPlaced((int) $result['order_id'], (string) ($result['trail_token'] ?? ''));
     $base = rtrim((string) APP_URL, '/');
     $result['confirmation_url'] = $base . $result['confirmation_url'];
     $result['trail_url'] = $result['trail_url'] === '' ? '' : $base . $result['trail_url'];

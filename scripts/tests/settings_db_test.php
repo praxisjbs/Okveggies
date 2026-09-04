@@ -57,6 +57,29 @@ function audit_rows_for(string $key): array
     );
 }
 
+// Snapshot every setting on every tab, before writing any of them, and put it
+// all back at the end.
+//
+// The list is derived from SettingsEditor::groups() rather than typed out here,
+// and that is the whole point. A hand-maintained list was wrong twice: first it
+// had never been updated with the three cancellation keys M5 added, and then it
+// went stale again the moment M6 added two more. Saving a tab writes every
+// field on it, and a bool field that is not submitted saves as off, so a stale
+// restore list silently leaves customer-facing rules switched off on whatever
+// database the suite last ran against. Deriving it means a setting added
+// tomorrow is covered without anyone remembering to come back here.
+$settingsBefore = [];
+foreach (SettingsEditor::groups() as $group) {
+    foreach ($group['fields'] as $key => $field) {
+        $type = (string) ($field['value_type'] ?? 'string');
+        $settingsBefore[$key] = [$type, match ($type) {
+            'int'  => Settings::int($key),
+            'bool' => Settings::bool($key),
+            default => Settings::str($key),
+        }];
+    }
+}
+
 // A known starting point for every value this file touches. Without it the
 // assertions below depend on whatever a previous test run happened to leave
 // behind, and a test that only passes in one order is not a test.
@@ -117,6 +140,8 @@ Settings::set('pay_on_delivery_requires_activation', true, 'bool', $actor);
 Settings::set('cancellation_cutoff_time', '18:00', 'string', $actor);
 Settings::set('cancellation_deposit_forfeit_after_cutoff', true, 'bool', $actor);
 Settings::set('cancellation_customer_allowed', true, 'bool', $actor);
+Settings::set('cancellation_after_dispatch_allowed', true, 'bool', $actor);
+Settings::set('cancellation_dispatched_forfeit_deposit', true, 'bool', $actor);
 Settings::flushCache();
 
 // Every field on the Order tab, including the cancellation policy M5 added.
@@ -130,6 +155,8 @@ $clean = SettingsEditor::validate('order', [
     'cancellation_cutoff_time'                  => '17:00',
     'cancellation_deposit_forfeit_after_cutoff' => '0',
     'cancellation_customer_allowed'             => '0',
+    'cancellation_after_dispatch_allowed'       => '0',
+    'cancellation_dispatched_forfeit_deposit'   => '0',
 ]);
 t_eq([], $clean['errors'], 'the whole order tab validates');
 
@@ -144,7 +171,12 @@ t_eq(false, Settings::bool('pay_on_delivery_requires_activation'), 'the pay-on-d
 t_eq('17:00', Settings::str('cancellation_cutoff_time'), 'the cancellation cutoff saved');
 t_eq(false, Settings::bool('cancellation_deposit_forfeit_after_cutoff'), 'the deposit forfeit rule saved as off');
 t_eq(false, Settings::bool('cancellation_customer_allowed'), 'customer self cancellation saved as off');
-t_eq(8, count($applied), 'every field on the order tab is reported as changed');
+t_eq(false, Settings::bool('cancellation_after_dispatch_allowed'), 'cancelling after dispatch saved as off');
+t_eq(false, Settings::bool('cancellation_dispatched_forfeit_deposit'), 'the dispatched deposit rule saved as off');
+// Counted from the tab definition, not typed. This assertion was hard-coded at
+// 8 and went stale the moment the tab gained a field.
+$orderFieldCount = count(SettingsEditor::groups()['order']['fields']);
+t_eq($orderFieldCount, count($applied), 'every field on the order tab is reported as changed');
 
 // --- The site tab, and the storefront reading it back --------------------------
 
@@ -215,17 +247,41 @@ t_ok(strtotime((string) $recent[0]['created_at']) > 0, 'every history row carrie
 
 // --- Put the seeded values back so a re-run starts from the same place ----------
 
-foreach ([
-    'deposit_percentage_default' => ['30', 'int'],
-    'delivery_cutoff_time'       => ['16:00', 'string'],
-    'delivery_min_lead_days'     => ['1', 'int'],
-    'min_order_subunit'          => ['0', 'int'],
-    'source_day'                 => ['Tuesday', 'string'],
-    'support_whatsapp_number'    => ['2348000000000', 'string'],
-    'pay_on_delivery_requires_activation' => ['true', 'bool'],
-] as $key => [$value, $type]) {
+// Put every setting back exactly as it was found, rather than to a list of
+// defaults that has to be remembered every time a setting joins a tab.
+foreach ($settingsBefore as $key => [$type, $value]) {
     Settings::set($key, $value, $type, null);
 }
+Settings::flushCache();
+t_eq(
+    $settingsBefore['cancellation_customer_allowed'][1],
+    Settings::bool('cancellation_customer_allowed'),
+    'customer self service cancellation is left exactly as this test found it'
+);
+t_eq(
+    $settingsBefore['cancellation_cutoff_time'][1],
+    Settings::str('cancellation_cutoff_time'),
+    'the cancellation cutoff is left exactly as this test found it'
+);
+t_eq(
+    $settingsBefore['deposit_percentage_default'][1],
+    Settings::int('deposit_percentage_default'),
+    'the deposit percentage is left exactly as this test found it'
+);
+t_eq(
+    $settingsBefore['cancellation_after_dispatch_allowed'][1],
+    Settings::bool('cancellation_after_dispatch_allowed'),
+    'cancelling after dispatch is left exactly as this test found it'
+);
+t_eq(
+    $settingsBefore['cancellation_dispatched_forfeit_deposit'][1],
+    Settings::bool('cancellation_dispatched_forfeit_deposit'),
+    'the dispatched deposit rule is left exactly as this test found it'
+);
+t_ok(
+    count($settingsBefore) >= 15,
+    'the restore covers every field on every tab, so a setting added later is covered too'
+);
 
 fwrite(STDOUT, "\n$passed / $tests database assertions passed.\n");
 if ($passed !== $tests) {

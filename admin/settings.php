@@ -31,6 +31,16 @@ foreach ($groups as $groupKey => $group) {
     }
 }
 
+// The notification tab is content rather than settings, so it does not come
+// from SettingsEditor::groups(). It gets its own tab and panel below.
+$canEditTemplates = Rbac::can('settings.notifications.edit');
+try {
+    $templates = SettingsEditor::templates();
+} catch (Throwable $e) {
+    error_log('settings templates: ' . $e->getMessage());
+    $templates = [];
+}
+
 $canEditAny = false;
 foreach ($groups as $group) {
     if (Rbac::can($group['permission'])) {
@@ -98,6 +108,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
               <?= okv_e($group['label']) ?>
             </button>
           <?php $first = false; endforeach; ?>
+            <button type="button" role="tab" id="tab-notifications"
+                    aria-controls="panel-notifications" aria-selected="false"
+                    data-settings-tab="notifications"
+                    class="min-h-[44px] px-4 text-sm font-medium border-b-2 -mb-px border-transparent text-ink-60 hover:text-ink">
+              Notifications
+            </button>
         </div>
       </div>
 
@@ -251,6 +267,87 @@ require __DIR__ . '/../includes/components/admin/header.php';
           </form>
         </div>
       <?php $first = false; endforeach; ?>
+
+      <!-- Notification templates. The words each automated email sends, editable
+           by an Owner without a deploy. The letterhead is deliberately not here:
+           it lives in Mail::brandedHtml() where the brand guard can see it, so a
+           template can never carry a second set of brand values. -->
+      <div class="okv-panel-body hidden" id="panel-notifications" role="tabpanel"
+           aria-labelledby="tab-notifications" data-settings-panel="notifications">
+        <p class="text-sm text-ink-60 max-w-2xl">
+          Every automated email the platform sends. Edit the words. The letterhead, the
+          button and the footer are added around them, so every message looks the same.
+          "Send one to me" posts a real message through the real mail server to your own
+          address, with made-up figures, so you can prove email works without placing an
+          order. It can only ever go to you.
+        </p>
+        <?php if (!$canEditTemplates): ?>
+          <div class="okv-note okv-note-ok mt-4" role="status">You can read every message here. The Owner makes the changes.</div>
+        <?php endif; ?>
+        <?php if (!$templates): ?>
+          <p class="okv-note mt-5 bg-clay-tint">The templates could not be read just now. Reload the page.</p>
+        <?php endif; ?>
+
+        <div class="mt-5 space-y-4">
+          <?php foreach ($templates as $key => $template): ?>
+            <details class="rounded-md border border-mist bg-white">
+              <summary class="flex min-h-[44px] cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <span>
+                  <span class="font-semibold text-ink"><?= okv_e($template['label']) ?></span>
+                  <span class="ml-2 okv-badge <?= $template['audience'] === 'staff' ? 'okv-badge-neutral' : 'okv-badge-available' ?>">
+                    <?= $template['audience'] === 'staff' ? 'To the team' : 'To the customer' ?>
+                  </span>
+                </span>
+                <span class="font-mono text-xs text-ink-60"><?= okv_e($key) ?></span>
+              </summary>
+
+              <?php if ($template['missing']): ?>
+                <p class="okv-note m-4 bg-clay-tint">This message has no template in the database yet. Run the migrations.</p>
+              <?php else: ?>
+                <form action="/api/v1/settings.php" method="POST" class="space-y-4 border-t border-mist p-4"
+                      data-template-form data-key="<?= okv_e($key) ?>" novalidate>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="save_template">
+                  <input type="hidden" name="template_key" value="<?= okv_e($key) ?>">
+
+                  <div>
+                    <label class="okv-label" for="subject-<?= okv_e($key) ?>">Subject</label>
+                    <input class="okv-input mt-1" id="subject-<?= okv_e($key) ?>" name="subject_template"
+                           maxlength="255" value="<?= okv_e($template['subject']) ?>"
+                           <?= $canEditTemplates ? '' : 'disabled' ?>>
+                  </div>
+                  <div>
+                    <label class="okv-label" for="body-<?= okv_e($key) ?>">Message</label>
+                    <textarea class="okv-input mt-1" id="body-<?= okv_e($key) ?>" name="body_template" rows="7"
+                              maxlength="5000" <?= $canEditTemplates ? '' : 'disabled' ?>><?= okv_e($template['body']) ?></textarea>
+                    <p class="mt-1 text-xs text-ink-60">A blank line starts a new paragraph. No em dash.</p>
+                  </div>
+
+                  <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-ink-60">Tokens this message accepts</p>
+                    <ul class="mt-2 flex flex-wrap gap-2">
+                      <?php foreach ($template['tokens'] as $token): ?>
+                        <li class="rounded border border-mist bg-forest-tint px-2 py-1 font-mono text-xs text-ink">{{<?= okv_e($token) ?>}}</li>
+                      <?php endforeach; ?>
+                    </ul>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-3">
+                    <button type="button" class="okv-btn-outline min-h-[44px] px-4" data-template-preview>Preview it</button>
+                    <?php if ($canEditTemplates): ?>
+                      <button class="okv-btn min-h-[44px] px-4">Save these words</button>
+                      <button type="button" class="okv-btn-outline min-h-[44px] px-4" data-template-test>Send one to me</button>
+                    <?php endif; ?>
+                    <span class="text-sm" data-template-message role="status"></span>
+                  </div>
+
+                  <iframe class="hidden mt-1 h-96 w-full rounded-md border border-mist bg-white" title="Preview of <?= okv_e($template['label']) ?>" data-template-frame></iframe>
+                </form>
+              <?php endif; ?>
+            </details>
+          <?php endforeach; ?>
+        </div>
+      </div>
     </div>
 
     <div class="grid gap-6 lg:grid-cols-2 items-start">

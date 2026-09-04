@@ -44,6 +44,18 @@ module.exports = {
           hover:   '#377A41',
           tint:    '#ECF3ED',
         },
+        // Clay Terracotta, the bible's tertiary accent. It was already being
+        // asked for by name in admin/payments.php and across the M6 order
+        // screens, but it had never been added here, so every `border-clay` and
+        // `bg-clay-tint` in the markup compiled to nothing and a payment
+        // problem looked exactly like a neutral note. The tint is mixed to the
+        // same 90% white as tomato and foliage above, so the family stays even.
+        clay: {
+          DEFAULT: '#B85C3E',
+          hover:   '#A45237',
+          tint:    '#F8EFEC',
+          ink:     '#7A3B28',
+        },
         ink: {
           DEFAULT: '#03100A',
           60:      'rgba(3,16,10,0.62)',

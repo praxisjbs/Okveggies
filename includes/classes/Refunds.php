@@ -313,7 +313,7 @@ final class Refunds
         }
 
         $providerId = ($data['id'] ?? null) !== null ? (int) $data['id'] : null;
-        $reference  = trim((string) ($data['transaction_reference'] ?? ($data['transaction'] ?? '')));
+        $reference  = self::referenceFromWebhook($data);
 
         $refund = null;
         if ($providerId !== null) {
@@ -364,8 +364,53 @@ final class Refunds
         if ($status === self::STATUS_PROCESSED) {
             self::applyProcessed($refundId);
         }
+        if (class_exists('OrderCancellation', false)) {
+            OrderCancellation::syncRefundStatus((int) $refund['order_id']);
+        }
 
-        return ['ok' => true, 'code' => $status, 'message' => 'Refund moved to ' . $status . '.'];
+        // The order, the amount and the refund id ride back on the result so the
+        // caller can tell the customer (or staff, on a failure) without going
+        // looking for the row again.
+        return [
+            'ok'             => true,
+            'code'           => $status,
+            'message'        => 'Refund moved to ' . $status . '.',
+            'refund_id'      => $refundId,
+            'order_id'       => (int) $refund['order_id'],
+            'amount_subunit' => (int) $refund['amount_subunit'],
+        ];
+    }
+
+    /**
+     * The transaction reference out of a refund webhook, whatever shape it
+     * arrives in.
+     *
+     * Paystack sends `transaction` as an object carrying its own `reference`,
+     * not as a string. Reading it as a string produced the literal "Array",
+     * which meant the fallback lookup searched for a refund whose reference was
+     * "Array" and never found one. That only shows when the `id` lookup misses,
+     * which is exactly the case the fallback exists for: an event arriving
+     * before we have stored the gateway id. A refund left unmatched there is a
+     * customer whose money is never marked as returned and who is never told.
+     *
+     * Both shapes are read, and anything else is treated as no reference at all
+     * rather than as a string that cannot match.
+     */
+    private static function referenceFromWebhook(array $data): string
+    {
+        foreach ([$data['transaction_reference'] ?? null, $data['reference'] ?? null] as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                return trim($candidate);
+            }
+        }
+        $transaction = $data['transaction'] ?? null;
+        if (is_string($transaction)) {
+            return trim($transaction);
+        }
+        if (is_array($transaction) && is_string($transaction['reference'] ?? null)) {
+            return trim((string) $transaction['reference']);
+        }
+        return '';
     }
 
     /**
