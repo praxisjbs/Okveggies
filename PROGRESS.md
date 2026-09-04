@@ -12,6 +12,10 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
+**Milestone M6, Delivery and the Order Trail. Merged into `main` on 4 September 2026 (pull request 34, merge commit `7c0c0dc`).** The lifecycle spine, cancellation including the terms that apply after dispatch, the public Order Trail, the day manifest, and the notification half that the milestone list had left in M9. Nine defects found and fixed while verifying it, five of them in code that had already been written and two in the test suite itself. The written review is `docs/M6_REVIEW.md`. Pull request 33 carries the same first two commits and is redundant; close it rather than merging it.
+
+Before this ships to production: run the migrations (`018` to `021`), then use "Send one to me" on the Notifications settings tab to prove SMTP, and take one order end to end on staging with a Paystack test key. Those are the two things this milestone could not prove from a development machine. **M7, Kitchen Runs, is next.**
+
 **M0 reopened to build the Settings screen it had claimed and never built (1 Sep 2026).** See the M0 section below for what was missed and why. M1 and M2 are complete, M3 shipped in three PRs.
 
 **Milestone M3, Combos. Shipped, split into three PRs.** M0 through M2 are complete. M3 is being built in three PRs so the domain, the admin builder and the storefront can proceed in parallel without stepping on each other.
@@ -96,6 +100,8 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] Tests: webhook signature and idempotency; deposit and balance maths (71 new assertions in `PaymentsTest.php`)
 
 ### M6. Delivery and the Order Trail
+**Merged into `main` 4 Sep 2026, pull request 34, merge commit `7c0c0dc`.** Built as one branch rather than the four pull requests `docs/M6_GUIDE.md` Section 3 suggests: the first two commits were the lifecycle, cancellation, trail and manifest, and the rest was a senior review that finished the notification half and fixed what the first pass had missed. Migrations `018` to `021`.
+
 - [x] Order cancellation flow and screens. Customer and staff order details read the existing M5 `Cancellation` policy, recheck it under an order row lock at submission, append one cancellation and status-history row, and route Paystack money through `Refunds`. Paid cancellation needs both `orders.cancel` and `payments.refund`; manual money stays visibly due for return. POST, CSRF, ownership, permission, repeat-click and in-flight-payment gates are server enforced.
 - [x] Allowed days, cutoff, lead, zones (admin-managed), exceptions
 - [x] Order lifecycle and status history
@@ -178,6 +184,29 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 4 Sep 2026, M6 merged
+
+Pull request 34 merged into `main` as `7c0c0dc`: 6 commits, 63 files, 5,597 lines
+added and 96 removed. CI green on the merged head. M6 is closed.
+
+- **What is on `main` now.** The order lifecycle and its status history, customer
+  and staff cancellation with the terms that apply after dispatch, the public
+  Order Trail, the delivery day manifest, the notification dispatcher on email
+  and in the app with its template editor, and Order 360.
+- **What has to happen on the server before anyone relies on it.** Run
+  migrations `018` to `021`. Then two things this milestone could not prove from
+  a development machine: press "Send one to me" on the Notifications settings tab
+  to confirm SMTP really delivers, and take one order end to end on staging with
+  a Paystack test key so a real charge and a real refund are seen once. Both are
+  minutes of work and neither should wait for M7.
+- **Pull request 33 is redundant.** Its two commits are in 34 unchanged, so it
+  should be closed rather than merged. A comment on it says so.
+- **Left for whoever picks up M7.** `ok_veggies_schema.sql` at the repository root
+  is stale against `migrations/001_core_schema.sql` and is missing
+  `orders.delivery_zone_id` among other things. Build a test database from
+  `migrations/` only. Loading the root dump first gives a database that looks
+  right and fails at runtime, which cost an hour here.
 
 ### 4 Sep 2026, M6 follow-up: the terms after dispatch, and the two paths nobody had run
 
