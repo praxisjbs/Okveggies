@@ -101,7 +101,7 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] Order lifecycle and status history
 - [x] Public Order Trail page by token link (no login), and the "Sourced [day] from [state]" line
 - [x] Admin delivery-day manifest / packing list, grouped by zone, printable
-- [x] Tests: order-number generation; status transitions
+- [x] Tests: order-number generation; status transitions; manifest grouping and per-zone totals
 - [x] Notifications on every order and payment event, by email and in the app. `docs/M6_GUIDE.md` Section 1 moved these out of M9 and into M6, because a notification belongs with the event that fires it and PRD 14.2 makes the confirmation email the way a customer reaches the Order Trail. One `Notifications` dispatcher, a row in `notifications` and one in `notification_deliveries` per recipient and channel, and a failed send that is recorded rather than thrown at the caller.
 - [x] The six templates the events had no words for, plus `order_packed`, so a customer hears about every stage rather than three of six (migration `019`).
 - [x] M5's orphaned payment events wired: verified charge, deposit, staff-recorded payment, refund sent, refund failed.
@@ -210,7 +210,13 @@ report for the engineer is `docs/M6_REVIEW.md`.
   delivery day, an internal staff note that can never surface on the public
   trail (migration `020`), and the list of every message sent with a resend on
   a failed one.
-- **Six defects fixed.** `clay` was used by name in eleven places across M5 and
+- **A test that failed a milestone.** `settings_db_test.php` saved the Order tab
+  with customer self service cancellation switched off and restored a hard-coded
+  list of defaults that had never been updated with M5's three cancellation
+  keys. Running the suite against a real database therefore disabled M6
+  acceptance item 13 silently. It now snapshots every setting it writes before
+  writing any of them, restores exactly what it found, and asserts that it did.
+- **Seven defects fixed.** `clay` was used by name in eleven places across M5 and
   M6 but had never been added to `tailwind.config.js`, so every "needs
   attention" state compiled to no colour at all. The Order Trail showed no
   sourcing line until an order was confirmed, which is exactly when a customer

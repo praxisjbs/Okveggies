@@ -31,6 +31,15 @@ try {
     $zulu = $manifest['zones'][1]['orders'][0];
     mf_eq('6', $zulu['packing_lines'][0]['quantity'], 'combo snapshots are multiplied into packing quantities');
     mf_eq('Ugu', $zulu['packing_lines'][0]['name'], 'manifest uses the recorded component snapshot');
+
+    // The per-zone totals on the real path, not just the pure one. This is the
+    // figure a packer checks a crate against.
+    $zuluTotals = $manifest['zones'][1]['packing_totals'];
+    mf_eq(1, count($zuluTotals), 'the zone totals one line per product');
+    mf_eq('Ugu', $zuluTotals[0]['name'], 'the zone total names the product');
+    mf_eq('6', $zuluTotals[0]['quantity'], 'the zone total is the combo quantity multiplied out');
+    mf_eq('Bunch', $zuluTotals[0]['unit'], 'the zone total carries the unit');
+    mf_eq([], $manifest['zones'][0]['packing_totals'], 'a zone whose only order has no items totals nothing');
 } finally {
     foreach ($orderIds as $id) {
         Database::run('DELETE FROM order_item_components WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id = :id)', [':id' => $id]);

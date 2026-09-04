@@ -132,6 +132,19 @@ to three decimal places as a string, and `totals` cast those strings back to
 float and added them. Format for display at the last possible moment; add the
 exact values.
 
+**The settings test disabled a customer feature and never put it back.**
+`settings_db_test.php` saves the whole Order tab with
+`cancellation_customer_allowed` set to `0` and the cancellation cutoff moved to
+17:00, and its restore block at the foot of the file was a hard-coded list of
+defaults that had never been updated when M5 added the three cancellation keys
+to that tab. Running the suite against a real database therefore switched off
+customer self service cancellation, which is acceptance item 13 of this
+milestone, and nothing anywhere said so. I found it by trying to cancel an order
+as a customer and being told to ask the team. The file now snapshots every
+setting it writes before it writes any of them and puts back exactly what it
+found, and asserts that it did. Not your code, but it is worth knowing that a
+test can leave a database in a state that fails a milestone.
+
 **`Cancellation::policyLine` was written, tested, and never shown.** The guide's
 PR3 item 7 asks for it at checkout so the deposit rule is never a surprise
 afterwards. Its only callers were the tests. A method with no production caller
@@ -195,7 +208,10 @@ only. That file is not yours and is not fixed here, but it will bite someone.
 - Order 360 completed: the money ledger, the document and trail links, the staff
   note, and every message sent with a resend on a failed one.
 - The six defects in Section 4, all fixed.
-- 155 new unit assertions, 77 new database assertions, 10 new HTTP assertions,
+- Per-zone manifest totals are now tested, both as pure arithmetic and on the
+  real path. The guide asks for "manifest grouping and per zone totals"; only
+  the grouping half had a test.
+- 164 new unit assertions, 82 new database assertions, 10 new HTTP assertions,
   and three new routes in `verify.sh`.
 
 ---

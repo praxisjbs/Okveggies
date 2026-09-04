@@ -57,6 +57,37 @@ function audit_rows_for(string $key): array
     );
 }
 
+// Snapshot every setting this file writes, before it writes any of them, so it
+// can put back exactly what it found. The restore at the foot of this file used
+// to be a hard-coded list of defaults, and it had never been updated with the
+// three cancellation keys M5 added to the Order tab. A run against a real
+// database therefore left customer self service cancellation switched off and
+// the cancellation cutoff moved to 17:00, silently disabling an M6 acceptance
+// criterion, with nothing anywhere to say so.
+$settingsBefore = [];
+foreach ([
+    'deposit_percentage_default'                => 'int',
+    'delivery_cutoff_time'                      => 'string',
+    'delivery_min_lead_days'                    => 'int',
+    'min_order_subunit'                         => 'int',
+    'pay_on_delivery_requires_activation'       => 'bool',
+    'cancellation_cutoff_time'                  => 'string',
+    'cancellation_deposit_forfeit_after_cutoff' => 'bool',
+    'cancellation_customer_allowed'             => 'bool',
+    'business_name'                             => 'string',
+    'business_tagline'                          => 'string',
+    'source_day'                                => 'string',
+    'source_regions'                            => 'string',
+    'support_email'                             => 'string',
+    'support_whatsapp_number'                   => 'string',
+] as $key => $type) {
+    $settingsBefore[$key] = [$type, match ($type) {
+        'int'  => Settings::int($key),
+        'bool' => Settings::bool($key),
+        default => Settings::str($key),
+    }];
+}
+
 // A known starting point for every value this file touches. Without it the
 // assertions below depend on whatever a previous test run happened to leave
 // behind, and a test that only passes in one order is not a test.
@@ -215,17 +246,27 @@ t_ok(strtotime((string) $recent[0]['created_at']) > 0, 'every history row carrie
 
 // --- Put the seeded values back so a re-run starts from the same place ----------
 
-foreach ([
-    'deposit_percentage_default' => ['30', 'int'],
-    'delivery_cutoff_time'       => ['16:00', 'string'],
-    'delivery_min_lead_days'     => ['1', 'int'],
-    'min_order_subunit'          => ['0', 'int'],
-    'source_day'                 => ['Tuesday', 'string'],
-    'support_whatsapp_number'    => ['2348000000000', 'string'],
-    'pay_on_delivery_requires_activation' => ['true', 'bool'],
-] as $key => [$value, $type]) {
+// Put every setting back exactly as it was found, rather than to a list of
+// defaults that has to be remembered every time a setting joins a tab.
+foreach ($settingsBefore as $key => [$type, $value]) {
     Settings::set($key, $value, $type, null);
 }
+Settings::flushCache();
+t_eq(
+    $settingsBefore['cancellation_customer_allowed'][1],
+    Settings::bool('cancellation_customer_allowed'),
+    'customer self service cancellation is left exactly as this test found it'
+);
+t_eq(
+    $settingsBefore['cancellation_cutoff_time'][1],
+    Settings::str('cancellation_cutoff_time'),
+    'the cancellation cutoff is left exactly as this test found it'
+);
+t_eq(
+    $settingsBefore['deposit_percentage_default'][1],
+    Settings::int('deposit_percentage_default'),
+    'the deposit percentage is left exactly as this test found it'
+);
 
 fwrite(STDOUT, "\n$passed / $tests database assertions passed.\n");
 if ($passed !== $tests) {

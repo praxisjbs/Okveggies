@@ -144,7 +144,13 @@ final class DeliveryManifest
         ];
     }
 
-    private static function totals(array $orders): array
+    /**
+     * What one zone has to buy in total, so a packer can check a crate against
+     * a number rather than adding up thirty order lines by hand. Public because
+     * it is pure arithmetic on money-adjacent quantities and is unit tested
+     * alongside groupByZone and packingLines.
+     */
+    public static function totals(array $orders): array
     {
         $totals = [];
         foreach ($orders as $order) {
