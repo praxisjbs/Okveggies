@@ -208,7 +208,9 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
             <p class="okv-note bg-clay-tint">
               <?= okv_e(Cancellation::policyLine(
                     Settings::str('cancellation_cutoff_time', '18:00'),
-                    Settings::bool('cancellation_deposit_forfeit_after_cutoff', true)
+                    Settings::bool('cancellation_deposit_forfeit_after_cutoff', true),
+                    Settings::bool('cancellation_after_dispatch_allowed', true),
+                    Settings::bool('cancellation_dispatched_forfeit_deposit', true)
                   )) ?>
             </p>
 

@@ -113,7 +113,8 @@ if ($action === 'cancel_staff') {
             (int) Rbac::userId(),
             (string) okv_input('reason_code', ''),
             (string) okv_input('reason_text', ''),
-            Rbac::can('payments.refund')
+            Rbac::can('payments.refund'),
+            (bool) okv_input('dispatch_terms', '')
         );
     } catch (Throwable $e) {
         error_log('orders.cancel_staff failed: ' . $e->getMessage());

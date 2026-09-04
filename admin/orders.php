@@ -355,6 +355,14 @@ require __DIR__ . '/../includes/components/admin/header.php';
         <?php else: ?>
           <div class="rounded-md border border-clay bg-clay-tint p-4">
             <h3 class="font-semibold text-ink">Cancel this order</h3>
+            <?php if (!empty($selected['is_dispatched'])): ?>
+              <!-- The produce is on a van. Different terms, said before the
+                   button rather than discovered in the refund figure. -->
+              <p class="mt-2 rounded-md border border-clay bg-white p-3 text-sm text-ink">
+                <strong>This order is already on the way.</strong>
+                <?= okv_e($selected['terms_line']) ?>
+              </p>
+            <?php endif; ?>
             <p class="mt-2 text-sm text-ink-60"><?= okv_e(Cancellation::staffSummary($selected['money_outcome'])) ?></p>
             <?php if ((int) $selected['money_outcome']['refund_subunit'] > 0): ?>
               <p class="mt-1 text-sm text-ink-60">Paystack refunds are raised now but shown as pending until Paystack confirms them. Money recorded by staff is flagged for manual return.</p>
@@ -380,6 +388,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 <input type="checkbox" name="confirmed" value="1" class="mt-1 h-5 w-5" required>
                 <span>I have checked the order, refund and deposit consequences above.</span>
               </label>
+              <?php if (!empty($selected['is_dispatched'])): ?>
+                <label class="flex min-h-[44px] items-start gap-3 text-sm">
+                  <input type="checkbox" name="dispatch_terms" value="1" class="mt-1 h-5 w-5" required>
+                  <span>The order is on the way and I have told the customer what happens to their money. The server checks this too.</span>
+                </label>
+              <?php endif; ?>
               <button type="submit" class="okv-btn-outline min-h-[44px] border-tomato text-tomato justify-center sm:w-fit">Confirm cancellation</button>
             </form>
           </div>

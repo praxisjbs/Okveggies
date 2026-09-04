@@ -236,6 +236,9 @@ $publicStatus = [
           You may cancel before <?= okv_e($cancellation['deadline'] instanceof DateTimeImmutable ? $cancellation['deadline']->format('l jS F, H:i') : 'the cancellation cutoff') ?>.
           Nothing has been paid, so there is no refund to wait for.
         </p>
+        <?php if (!empty($cancellation['terms_line'])): ?>
+          <p class="mt-2 text-sm text-ink-60"><?= okv_e($cancellation['terms_line']) ?></p>
+        <?php endif; ?>
         <details class="mt-4 rounded-md border border-mist p-4">
           <summary class="flex min-h-[44px] cursor-pointer items-center font-semibold text-tomato">Cancel this order</summary>
           <form action="/api/v1/orders.php" method="POST" class="mt-4 space-y-4">
@@ -264,6 +267,9 @@ $publicStatus = [
         </details>
       <?php else: ?>
         <p class="mt-3 text-sm text-ink-60"><?= okv_e($cancellation['restriction']) ?></p>
+        <?php if (!empty($cancellation['terms_line'])): ?>
+          <p class="okv-note mt-3 bg-clay-tint"><?= okv_e($cancellation['terms_line']) ?></p>
+        <?php endif; ?>
         <a href="https://wa.me/<?= okv_e($supportNumber) ?>?text=<?= okv_e($supportText) ?>" class="okv-btn-outline mt-4 min-h-[44px]" rel="noopener">Ask us on WhatsApp</a>
       <?php endif; ?>
     </section>

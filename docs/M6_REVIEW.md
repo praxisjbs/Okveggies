@@ -102,7 +102,18 @@ surfaced the whole missing pull request in one sentence.
 
 ---
 
-## 4. Defects found in the code you did write
+## 4. Defects found
+
+**A refund webhook could never match on its reference.** `Refunds::applyWebhook`
+read the reference as `(string) $data['transaction']`, but Paystack sends
+`transaction` as an object carrying its own `reference`. Casting it produced the
+literal string `Array`, so the fallback lookup searched for a refund whose
+reference was `Array` and never found one, with a PHP warning as the only sign.
+It only bites when the gateway id lookup misses, which is precisely the case the
+fallback exists for: an event arriving before the id is stored. The cost is a
+customer whose refund is never marked as returned and who is never told. This
+is M5 code, not yours, and it had never been exercised because nothing had ever
+driven a real refund through. Fixed, with nine assertions covering both shapes.
 
 **The customer filter on the orders screen was broken in every case.**
 `admin/orders.php` built its search as
@@ -152,7 +163,7 @@ to three decimal places as a string, and `totals` cast those strings back to
 float and added them. Format for display at the last possible moment; add the
 exact values.
 
-**The settings test disabled a customer feature and never put it back.**
+**The settings tests disabled customer features and never put them back.**
 `settings_db_test.php` saves the whole Order tab with
 `cancellation_customer_allowed` set to `0` and the cancellation cutoff moved to
 17:00, and its restore block at the foot of the file was a hard-coded list of
@@ -164,6 +175,19 @@ as a customer and being told to ask the team. The file now snapshots every
 setting it writes before it writes any of them and puts back exactly what it
 found, and asserts that it did. Not your code, but it is worth knowing that a
 test can leave a database in a state that fails a milestone.
+
+That fix was itself not enough, which is the more useful half of the story. It
+replaced one hand-typed list with another, and the moment M6 added two more
+settings to the same tab, the list went stale again and both the database and
+the HTTP settings tests started leaving cancellation after dispatch switched
+off. Saving a tab writes every field on it, and a checkbox that is not submitted
+saves as off. Both tests now derive the list from `SettingsEditor::groups()`, so
+a setting added tomorrow is covered without anyone remembering this page. The
+same file also asserted `count($applied) === 8` for a tab that now has ten
+fields; that count is derived now too.
+
+The general lesson: a list of things that has to be kept in step with another
+list of things will go out of step. Derive it.
 
 **`Cancellation::policyLine` was written, tested, and never shown.** The guide's
 PR3 item 7 asks for it at checkout so the deposit rule is never a surprise
@@ -240,10 +264,16 @@ only. That file is not yours and is not fixed here, but it will bite someone.
 
 Named here so it is a decision rather than an accident.
 
-- No real or sandbox Paystack charge or refund was sent. The M5 test-mode ledger
-  regressions stand in for it.
-- No production SMTP account was used. The branded email is captured and read,
-  but deliverability, SPF and DKIM are unproven.
+- No refund has been raised against the real Paystack. The whole path is now
+  proved end to end against a stand-in gateway
+  (`scripts/tests/fake/paystack.php`), which is what found the refund webhook
+  bug in Section 4. What remains unproven is Paystack itself answering, and that
+  needs a test key on staging.
+- No production SMTP account was used here. The branded email is captured and
+  read, but deliverability, SPF and DKIM are unproven. "Send one to me" on the
+  Notifications settings tab posts a real message through the real mail server
+  to the signed-in person's own address, which is how to close that on staging
+  in one click.
 - Nothing was printed on paper. The print rules were read off the rendered page.
 - The row locks are tested for the stale and repeat paths but were not forced
   under concurrent load.

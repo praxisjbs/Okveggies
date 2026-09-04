@@ -90,15 +90,19 @@ final class OrderCancellation
         return self::cancel($orderId, $userId, 'customer', $reasonCode, $reasonText, false);
     }
 
-    /** Cancel as staff. Paid orders also require the refund permission. */
+    /**
+     * Cancel as staff. Paid orders also require the refund permission, and an
+     * order already on the van needs the terms acknowledged explicitly.
+     */
     public static function cancelForStaff(
         int $orderId,
         int $staffId,
         string $reasonCode,
         string $reasonText,
-        bool $mayRefund
+        bool $mayRefund,
+        bool $dispatchAcknowledged = false
     ): array {
-        return self::cancel($orderId, $staffId, 'staff', $reasonCode, $reasonText, $mayRefund);
+        return self::cancel($orderId, $staffId, 'staff', $reasonCode, $reasonText, $mayRefund, $dispatchAcknowledged);
     }
 
     private static function cancel(
@@ -107,7 +111,8 @@ final class OrderCancellation
         string $actorType,
         string $reasonCode,
         string $reasonText,
-        bool $mayRefund
+        bool $mayRefund,
+        bool $dispatchAcknowledged = false
     ): array {
         $allowedReasons = $actorType === 'customer' ? self::CUSTOMER_REASONS : self::STAFF_REASONS;
         if (!isset($allowedReasons[$reasonCode])) {
@@ -175,19 +180,34 @@ final class OrderCancellation
                     'message' => 'A payment attempt is still being checked. Please wait for its result before cancelling.',
                 ];
             }
+            $stage = (string) $order['order_status'];
+            $afterDispatchAllowed = Settings::bool('cancellation_after_dispatch_allowed', true);
             if ($actorType === 'customer') {
                 $eligible = Cancellation::customerMayCancel(
-                    (string) $order['order_status'],
+                    $stage,
                     (string) $order['payment_status'],
                     $withinCutoff,
                     Settings::bool('cancellation_customer_allowed', true)
                 );
             } else {
-                $eligible = Cancellation::staffMayCancel((string) $order['order_status']);
+                $eligible = Cancellation::staffMayCancel($stage, $afterDispatchAllowed);
             }
             if (!$eligible) {
                 $pdo->rollBack();
                 return ['ok' => false, 'code' => 'not_eligible', 'message' => 'This order can no longer be cancelled this way. Reload it to see the current position.'];
+            }
+
+            // The produce is on a van. The terms that apply are different, and
+            // whoever presses the button says so here rather than finding out
+            // afterwards. Enforced under the lock, not only in the form, so a
+            // stale page cannot skip it and neither can a direct POST.
+            if (Cancellation::isDispatched($stage) && !$dispatchAcknowledged) {
+                $pdo->rollBack();
+                return [
+                    'ok' => false,
+                    'code' => 'dispatch_terms_required',
+                    'message' => 'This order is already on the way. Confirm that you have read what happens to the money before cancelling it.',
+                ];
             }
 
             $paid = max(0, (int) $order['amount_paid_subunit']);
@@ -200,7 +220,9 @@ final class OrderCancellation
                 $paid,
                 (int) ($order['deposit_required_subunit'] ?? 0),
                 $withinCutoff,
-                Settings::bool('cancellation_deposit_forfeit_after_cutoff', true)
+                Settings::bool('cancellation_deposit_forfeit_after_cutoff', true),
+                $stage,
+                Settings::bool('cancellation_dispatched_forfeit_deposit', true)
             );
             $transactions = self::refundableTransactions($orderId);
             $plan = self::refundPlan($transactions, (int) $outcome['refund_subunit']);
@@ -283,6 +305,7 @@ final class OrderCancellation
             'refund_status'     => $refundStatus,
             'refund_subunit'    => (int) $outcome['refund_subunit'],
             'forfeit_subunit'   => (int) $outcome['forfeit_subunit'],
+            'forfeit_reason'    => (string) ($outcome['reason'] ?? ''),
             'manual_subunit'    => (int) $plan['manual_subunit'] + (int) $plan['unmatched_subunit'],
         ];
     }
@@ -424,10 +447,14 @@ final class OrderCancellation
         $cutoff = Settings::str('cancellation_cutoff_time', '18:00');
         $within = Cancellation::isWithinCutoff((string) $order['preferred_delivery_date'], $cutoff);
         $customerAllowed = Settings::bool('cancellation_customer_allowed', true);
+        $forfeitAfterCutoff = Settings::bool('cancellation_deposit_forfeit_after_cutoff', true);
+        $afterDispatchAllowed = Settings::bool('cancellation_after_dispatch_allowed', true);
+        $dispatchedForfeit = Settings::bool('cancellation_dispatched_forfeit_deposit', true);
+        $stage = (string) $order['order_status'];
         $mayCancel = $staff
-            ? Cancellation::staffMayCancel((string) $order['order_status'])
+            ? Cancellation::staffMayCancel($stage, $afterDispatchAllowed)
             : Cancellation::customerMayCancel(
-                (string) $order['order_status'],
+                $stage,
                 (string) $order['payment_status'],
                 $within,
                 $customerAllowed
@@ -436,7 +463,9 @@ final class OrderCancellation
             (int) $order['amount_paid_subunit'],
             (int) ($order['deposit_required_subunit'] ?? 0),
             $within,
-            Settings::bool('cancellation_deposit_forfeit_after_cutoff', true)
+            $forfeitAfterCutoff,
+            $stage,
+            $dispatchedForfeit
         );
 
         $movingPayment = Database::one(
@@ -465,8 +494,16 @@ final class OrderCancellation
                 $restriction = 'Money has been paid on this order, so our team needs to cancel it and arrange the refund.';
             } elseif (!$staff && !$customerAllowed) {
                 $restriction = 'Please ask our team to cancel this order for you.';
+            } elseif (!$staff && !in_array($stage, Cancellation::SELF_SERVICE_STATUSES, true)) {
+                // Packed or on the van. Say which, because "ask our team" with
+                // no reason reads as a brush off.
+                $restriction = Cancellation::isDispatched($stage)
+                    ? 'This order is already on the way to you. Ask our team and we will cancel it and tell you exactly what comes back.'
+                    : 'This order is packed and waiting for the van, so our team cancels it rather than the screen. Ask us and we will tell you what comes back.';
             } elseif (!$staff && !$within) {
                 $restriction = 'The cancellation cutoff has passed because your produce may already have been bought. Please ask our team for help.';
+            } elseif ($staff && !$afterDispatchAllowed && Cancellation::isDispatched($stage)) {
+                $restriction = 'This order is already on the way. Cancelling after dispatch is switched off in Order settings, so it is settled with the driver at the door.';
             }
         }
 
@@ -474,6 +511,8 @@ final class OrderCancellation
         $order['may_cancel'] = $mayCancel && $order['cancellation_id'] === null;
         $order['restriction'] = $restriction;
         $order['money_outcome'] = $outcome;
+        $order['is_dispatched'] = Cancellation::isDispatched($stage);
+        $order['terms_line'] = Cancellation::termsLine($stage, $cutoff, $forfeitAfterCutoff, $afterDispatchAllowed, $dispatchedForfeit);
         $order['deadline'] = Cancellation::deadline((string) $order['preferred_delivery_date'], $cutoff);
         $order['refunds'] = Refunds::forOrder((int) $order['id']);
         return $order;

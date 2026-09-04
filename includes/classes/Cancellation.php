@@ -59,6 +59,27 @@ final class Cancellation
     public const CLOSED_STATUSES = ['delivered', 'cancelled', 'refunded'];
 
     /**
+     * Stages at which a customer may still cancel unaided. Once an order is
+     * packed, a crate has been filled with somebody's name on it and a driver's
+     * round has been built around it, so undoing it stops being a form submit
+     * and becomes a conversation. Before this, the order exists only as a row.
+     */
+    public const SELF_SERVICE_STATUSES = ['pending', 'confirmed'];
+
+    /**
+     * Stages at which the business has spent real money on this specific order:
+     * the produce is bought and, once dispatched, it is on a van. A
+     * cancellation here is allowed and is not free.
+     */
+    public const COMMITTED_STATUSES = ['packed', 'dispatched'];
+
+    /** Whether the produce for this order has already left on the van. */
+    public static function isDispatched(string $orderStatus): bool
+    {
+        return $orderStatus === 'dispatched';
+    }
+
+    /**
      * Whether the customer may cancel this order themselves.
      *
      * Unpaid and before the cutoff has cost the business nothing, so making
@@ -75,7 +96,11 @@ final class Cancellation
         if (!$selfServeAllowed) {
             return false;
         }
-        if (in_array($orderStatus, self::CLOSED_STATUSES, true)) {
+        // A packed or dispatched order is never self service, whatever the
+        // clock says. A pay-on-delivery order can be unpaid and already on the
+        // van, and before this check that combination let a customer cancel
+        // produce that was at their gate.
+        if (!in_array($orderStatus, self::SELF_SERVICE_STATUSES, true)) {
             return false;
         }
         if ($paymentStatus !== Payments::STATUS_UNPAID) {
@@ -84,10 +109,21 @@ final class Cancellation
         return $withinCutoff;
     }
 
-    /** Whether staff may cancel it. Wider, but not unlimited. */
-    public static function staffMayCancel(string $orderStatus): bool
+    /**
+     * Whether staff may cancel it. Wider than self service, and still not
+     * unlimited: a delivered order is history, and a business that has switched
+     * off cancellation after dispatch is saying a van already out is settled at
+     * the door rather than on a screen.
+     */
+    public static function staffMayCancel(string $orderStatus, bool $afterDispatchAllowed = true): bool
     {
-        return !in_array($orderStatus, self::CLOSED_STATUSES, true);
+        if (in_array($orderStatus, self::CLOSED_STATUSES, true)) {
+            return false;
+        }
+        if (!$afterDispatchAllowed && self::isDispatched($orderStatus)) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -104,12 +140,30 @@ final class Cancellation
         int $paidSubunit,
         int $depositSubunit,
         bool $withinCutoff,
-        bool $forfeitAfterCutoff
+        bool $forfeitAfterCutoff,
+        string $orderStatus = 'pending',
+        bool $dispatchedForfeit = true
     ): array {
         $paid = max(0, $paidSubunit);
         if ($paid === 0) {
             return ['refund_subunit' => 0, 'forfeit_subunit' => 0, 'reason' => 'nothing_paid'];
         }
+
+        // Dispatch is a stronger fact than the clock. The cutoff rule is about
+        // when the produce was likely bought; dispatch is about produce that is
+        // demonstrably bought, packed and on the road, so it keeps the deposit
+        // even inside the cutoff. It is its own setting rather than a silent
+        // override, because a business that has chosen to always refund in full
+        // is entitled to mean it.
+        if (self::isDispatched($orderStatus) && $dispatchedForfeit) {
+            $forfeit = min($paid, max(0, $depositSubunit));
+            return [
+                'refund_subunit'  => $paid - $forfeit,
+                'forfeit_subunit' => $forfeit,
+                'reason'          => $forfeit > 0 ? 'deposit_kept_dispatched' : 'full_refund',
+            ];
+        }
+
         if ($withinCutoff || !$forfeitAfterCutoff) {
             return ['refund_subunit' => $paid, 'forfeit_subunit' => 0, 'reason' => 'full_refund'];
         }
@@ -126,13 +180,63 @@ final class Cancellation
      * The line the customer reads at checkout, so the rule is never a surprise
      * afterwards. Numerals, units, no jargon.
      */
-    public static function policyLine(string $cutoffTime, bool $forfeitAfterCutoff): string
-    {
+    public static function policyLine(
+        string $cutoffTime,
+        bool $forfeitAfterCutoff,
+        bool $afterDispatchAllowed = true,
+        bool $dispatchedForfeit = true
+    ): string {
         $when = 'You can cancel free up to ' . $cutoffTime . ' the day before your delivery.';
-        if (!$forfeitAfterCutoff) {
-            return $when . ' After that, ask us and we will still return anything you have paid.';
+        $after = $forfeitAfterCutoff
+            ? ' After that we have already bought your produce, so a deposit is not returned.'
+            : ' After that, ask us and we will still return anything you have paid.';
+
+        // The one people find out about at the door, so it is said here first.
+        if (!$afterDispatchAllowed) {
+            return $when . $after . ' Once your order is on the way it cannot be cancelled here, so please tell the driver.';
         }
-        return $when . ' After that we have already bought your produce, so a deposit is not returned.';
+        $dispatch = $dispatchedForfeit
+            ? ' You can still cancel after it has been dispatched, but the produce has been bought and the van has run, so a deposit is kept.'
+            : ' You can still cancel after it has been dispatched, and we will return anything you have paid.';
+        return $when . $after . $dispatch;
+    }
+
+    /**
+     * The terms for the stage this order has actually reached, said to the
+     * customer on their own order. Shorter than the checkout line because they
+     * are looking at one order rather than deciding a rule.
+     */
+    public static function termsLine(
+        string $orderStatus,
+        string $cutoffTime,
+        bool $forfeitAfterCutoff,
+        bool $afterDispatchAllowed = true,
+        bool $dispatchedForfeit = true
+    ): string {
+        if (in_array($orderStatus, self::CLOSED_STATUSES, true)) {
+            return 'This order is finished, so there is nothing left to cancel.';
+        }
+        if (self::isDispatched($orderStatus)) {
+            if (!$afterDispatchAllowed) {
+                return 'This order is on the way. Tell the driver when they arrive and we will sort it out with you there.';
+            }
+            return $dispatchedForfeit
+                ? 'This order is on the way. We can still cancel it, but the produce has been bought and the van has run, so a deposit is kept.'
+                : 'This order is on the way. We can still cancel it and return anything you have paid.';
+        }
+        if (in_array($orderStatus, self::COMMITTED_STATUSES, true)) {
+            return 'This order is packed and waiting for the van, so our team cancels it rather than the screen. Ask us and we will tell you exactly what comes back.';
+        }
+        return 'You can cancel this order free up to ' . $cutoffTime . ' the day before your delivery.'
+             . ($forfeitAfterCutoff ? ' After that a deposit is kept, because your produce will already have been bought.' : '');
+    }
+
+    /** Why a deposit was kept, in the customer's words, for the email and the screen. */
+    public static function forfeitReason(string $reason): string
+    {
+        return $reason === 'deposit_kept_dispatched'
+            ? 'because the order had already been dispatched and the produce was on its way to you'
+            : 'because the cancellation came after the cutoff and your produce had already been bought from the farmer';
     }
 
     /** The same rule, said to staff, with the figures filled in. */
@@ -140,7 +244,8 @@ final class Cancellation
     {
         if ($outcome['forfeit_subunit'] > 0) {
             return 'Refund ' . Money::format($outcome['refund_subunit'])
-                 . ' and keep ' . Money::format($outcome['forfeit_subunit']) . ' as the deposit.';
+                 . ' and keep ' . Money::format($outcome['forfeit_subunit']) . ' as the deposit'
+                 . (($outcome['reason'] ?? '') === 'deposit_kept_dispatched' ? ', because this order has already been dispatched.' : '.');
         }
         if ($outcome['refund_subunit'] > 0) {
             return 'Refund ' . Money::format($outcome['refund_subunit']) . ' in full.';

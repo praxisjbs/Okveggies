@@ -112,3 +112,49 @@ okv_test_ok(str_contains($settingsApi, 'em_dash'), 'the template editor refuses 
 $dispatcher = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Notifications.php');
 okv_test_ok(str_contains($dispatcher, 'catch (Throwable $e)'), 'a failed send is caught rather than thrown at the caller');
 okv_test_ok(str_contains($dispatcher, 'notification_deliveries'), 'every send records a delivery row');
+
+// --- Proving email works, safely ----------------------------------------------
+// The test send exists so a team can confirm mail leaves the server without
+// placing an order. Its safety property is that the address is read from the
+// signed-in staff row, never from the request: a "send to this address" box
+// would turn this platform into a relay for anyone holding a staff session.
+$dispatcher = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Notifications.php');
+okv_test_ok(str_contains($dispatcher, 'public static function sendTest'), 'there is a way to prove email without placing an order');
+okv_test_ok(
+    str_contains($dispatcher, 'FROM users WHERE id = :id'),
+    'the test send reads its address from the staff row'
+);
+okv_test_ok(
+    !preg_match("/sendTest\\([^)]*\\\$address|sendTest\\([^)]*email/i", $dispatcher),
+    'the test send takes no address from its caller'
+);
+
+$settingsApi = file_get_contents(dirname(__DIR__, 2) . '/api/v1/settings.php');
+okv_test_ok(str_contains($settingsApi, "case 'send_test_email'"), 'the test send has a controller action');
+okv_test_ok(
+    preg_match("/case 'send_test_email':\\s*\\n\\s*settings_guard_write\\('settings.notifications.edit'\\)/", $settingsApi) === 1,
+    'the test send is permission, POST and CSRF gated before anything else happens'
+);
+okv_test_ok(
+    !str_contains($settingsApi, "okv_input('to'") && !str_contains($settingsApi, "okv_input('recipient'"),
+    'the controller never reads a recipient from the request'
+);
+
+// The health check has to be able to say whether email is configured at all,
+// because "it did not arrive" and "it was never configured" are different jobs.
+$health = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/PaymentHealth.php');
+foreach (['SMTP host is set', 'SMTP user is set', 'SMTP password is set', 'Every event has words to send'] as $check) {
+    okv_test_ok(str_contains($health, $check), 'the health check reports: ' . $check);
+}
+okv_test_ok(str_contains($health, 'PHPMailer is installed'), 'the health check notices a missing mailer rather than silently logging every email');
+
+// --- The stand-in gateway guard -----------------------------------------------
+// The refund path can only be proved end to end against a stand-in. The guard
+// on that override is what stops it being a way to redirect real money.
+$paystack = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Paystack.php');
+okv_test_ok(str_contains($paystack, 'PAYSTACK_BASE_URL'), 'the API base can be pointed at a stand-in for testing');
+okv_test_ok(
+    preg_match('/if \(\$override === \'\' \|\| !self::isTestMode\(\)\)/', $paystack) === 1,
+    'the override is ignored on a live key, so real money always goes to Paystack'
+);
+okv_test_ok(str_contains($paystack, "in_array(\$scheme, ['http', 'https'], true)"), 'the override must be a real http or https address');

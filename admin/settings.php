@@ -277,6 +277,9 @@ require __DIR__ . '/../includes/components/admin/header.php';
         <p class="text-sm text-ink-60 max-w-2xl">
           Every automated email the platform sends. Edit the words. The letterhead, the
           button and the footer are added around them, so every message looks the same.
+          "Send one to me" posts a real message through the real mail server to your own
+          address, with made-up figures, so you can prove email works without placing an
+          order. It can only ever go to you.
         </p>
         <?php if (!$canEditTemplates): ?>
           <div class="okv-note okv-note-ok mt-4" role="status">You can read every message here. The Owner makes the changes.</div>
@@ -333,6 +336,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                     <button type="button" class="okv-btn-outline min-h-[44px] px-4" data-template-preview>Preview it</button>
                     <?php if ($canEditTemplates): ?>
                       <button class="okv-btn min-h-[44px] px-4">Save these words</button>
+                      <button type="button" class="okv-btn-outline min-h-[44px] px-4" data-template-test>Send one to me</button>
                     <?php endif; ?>
                     <span class="text-sm" data-template-message role="status"></span>
                   </div>

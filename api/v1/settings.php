@@ -250,6 +250,24 @@ switch ($action) {
         ]);
         break;
 
+    // Prove that email actually leaves this server, without placing an order.
+    // The address is the signed-in person's own, read from the database and
+    // never from the request, so this can never be used to send mail to a
+    // stranger.
+    case 'send_test_email':
+        settings_guard_write('settings.notifications.edit');
+        try {
+            $result = Notifications::sendTest(trim((string) okv_input('template_key', '')), (int) Rbac::userId());
+        } catch (Throwable $e) {
+            settings_fail($e, 'send_test_email');
+            return;
+        }
+        if (!$result['ok']) {
+            okv_error($result['message'], $result['code'] === 'unknown_template' ? 422 : 502, $result['code']);
+        }
+        okv_json(['status' => 'ok', 'message' => $result['message']]);
+        break;
+
     case 'preview_template':
         Rbac::requirePermission('settings.view');
         $key = trim((string) okv_input('template_key', ''));

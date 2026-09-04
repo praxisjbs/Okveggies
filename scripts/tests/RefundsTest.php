@@ -75,3 +75,27 @@ foreach (['requested', 'pending', 'processing', 'processed', 'failed'] as $state
 okv_test_ok(Refunds::needsAttention('failed'),      'a failed refund needs a human');
 okv_test_ok(!Refunds::needsAttention('processed'),  'a processed refund needs nobody');
 okv_test_ok(!Refunds::needsAttention('processing'), 'a refund still moving needs nobody yet');
+
+// --- Reading the transaction reference out of a refund webhook ----------------
+// Paystack sends `transaction` as an object, not a string. Casting it produced
+// the literal "Array", so the fallback lookup searched for a refund whose
+// reference was "Array" and never matched. It only bites when the gateway id
+// lookup misses, which is the one case the fallback exists for.
+$reference = static function (array $payload): string {
+    $method = new ReflectionMethod('Refunds', 'referenceFromWebhook');
+    $method->setAccessible(true);
+    return (string) $method->invoke(null, $payload);
+};
+
+okv_test_eq('OKV123', $reference(['transaction' => ['reference' => 'OKV123']]), 'the reference is read out of the transaction object Paystack actually sends');
+okv_test_eq('OKV123', $reference(['transaction' => 'OKV123']), 'a plain string transaction is still read');
+okv_test_eq('OKV123', $reference(['transaction_reference' => 'OKV123']), 'an explicit transaction_reference wins');
+okv_test_eq('OKV123', $reference(['reference' => 'OKV123']), 'a top level reference is read');
+okv_test_eq('OKV123', $reference(['transaction_reference' => '  OKV123  ']), 'a padded reference is trimmed');
+okv_test_eq('', $reference(['transaction' => ['id' => 42]]), 'a transaction object with no reference yields nothing, not a guess');
+okv_test_eq('', $reference([]), 'an empty payload yields no reference');
+okv_test_eq('', $reference(['transaction' => ['reference' => ['nested']]]), 'a nested array is refused rather than stringified');
+okv_test_ok(
+    $reference(['transaction' => ['reference' => 'OKV123']]) !== 'Array',
+    'the reference is never the string Array'
+);

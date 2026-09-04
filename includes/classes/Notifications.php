@@ -204,6 +204,72 @@ final class Notifications
             : ['ok' => false, 'code' => 'send_failed', 'message' => 'That email still could not be sent. The error is recorded on the order.'];
     }
 
+    /**
+     * Send one template to the person asking for it, with sample values, so a
+     * team can prove that email leaves this server without placing an order.
+     *
+     * The address is never taken from the request: it is the signed-in staff
+     * member's own, read from the database. That is the whole safety property.
+     * A "send a test to this address" box would make this platform a relay for
+     * anyone who got hold of a staff session.
+     */
+    public static function sendTest(string $templateKey, int $staffId): array
+    {
+        if (!isset(self::TOKENS[$templateKey])) {
+            return ['ok' => false, 'code' => 'unknown_template', 'message' => 'That is not a notification we send.'];
+        }
+        $staff = Database::one(
+            'SELECT id, email, TRIM(CONCAT(COALESCE(first_name, \'\'), \' \', COALESCE(last_name, \'\'))) AS name
+               FROM users WHERE id = :id AND status = \'active\'',
+            [':id' => $staffId]
+        );
+        $address = trim((string) ($staff['email'] ?? ''));
+        if ($address === '' || !filter_var($address, FILTER_VALIDATE_EMAIL)) {
+            return ['ok' => false, 'code' => 'no_address', 'message' => 'Your account has no usable email address, so there is nowhere to send it.'];
+        }
+
+        $vars = SettingsEditor::sampleTokens($templateKey);
+        $vars['customer_name'] = trim((string) ($staff['name'] ?? '')) ?: 'there';
+        $id = self::send(
+            self::eventForTemplate($templateKey),
+            $vars,
+            [['email' => $address, 'user_id' => (int) $staff['id']]],
+            'settings_test',
+            null,
+            $staffId
+        );
+        if ($id < 1) {
+            return ['ok' => false, 'code' => 'not_recorded', 'message' => 'That test could not be recorded. Check the error log.'];
+        }
+        $delivery = Database::one(
+            'SELECT status, last_error FROM notification_deliveries WHERE notification_id = :id AND channel = :channel',
+            [':id' => $id, ':channel' => self::CHANNEL_EMAIL]
+        );
+        if ((string) ($delivery['status'] ?? '') !== self::STATUS_SENT) {
+            return [
+                'ok' => false,
+                'code' => 'send_failed',
+                'message' => 'The mail server would not take it. ' . trim((string) ($delivery['last_error'] ?? '')),
+            ];
+        }
+        return [
+            'ok' => true,
+            'code' => 'sent',
+            'message' => 'Sent to ' . $address . '. It is a sample, so the figures in it are made up.',
+        ];
+    }
+
+    /** The event that uses a given template, for a test send. */
+    private static function eventForTemplate(string $templateKey): string
+    {
+        foreach (self::EVENTS as $event => $definition) {
+            if ($definition['template'] === $templateKey) {
+                return $event;
+            }
+        }
+        return $templateKey;
+    }
+
     /** Staff who should hear about an order or a money problem. */
     public static function staffRecipients(): array
     {
@@ -371,7 +437,8 @@ final class Notifications
             $lines[] = 'Part of that money, ' . Money::format($manual) . ', was paid outside our online gateway, so our team returns it by hand and will confirm it with you.';
         }
         if ($forfeit > 0) {
-            $lines[] = 'The deposit of ' . Money::format($forfeit) . ' is kept, because the cancellation came after the cutoff and your produce had already been bought from the farmer.';
+            $lines[] = 'The deposit of ' . Money::format($forfeit) . ' is kept, '
+                     . Cancellation::forfeitReason((string) ($result['forfeit_reason'] ?? '')) . '.';
         }
         return implode(' ', $lines);
     }

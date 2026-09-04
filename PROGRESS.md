@@ -108,6 +108,8 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] Notification template editor behind `settings.notifications.edit`, with the tokens each message accepts and a preview of the real branded email.
 - [x] Order 360 lists every message sent, to which address, when, whether it landed and the error if it did not, with a resend behind `notifications.resend`.
 - [x] Tests: dispatcher rows, a failing send, every template rendering with no `{{placeholder}}` left, the trail link on every customer email.
+- [x] Cancelling an order that has already been dispatched, with the terms that apply to it. Staff may; the customer may not once an order is packed; the deposit is kept whatever the clock says, under its own setting; the person cancelling acknowledges it under the row lock; and the rule is stated at checkout, on the order and in the email (migration `021`).
+- [x] The refund path proved end to end against a stand-in gateway, and a way to prove email on the live server without placing an order.
 
 ### M7. Kitchen Runs
 - [ ] Request flow, four input modes (catalogue, priced-by-us, priced-by-customer, upload)
@@ -176,6 +178,60 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 4 Sep 2026, M6 follow-up: the terms after dispatch, and the two paths nobody had run
+
+Three things the client asked for after the review, and one bug each of the
+first two turned up.
+
+- **A dispatched order can be cancelled, and the terms say so.** The client's
+  call, and it answers question 1 of `docs/M6_GUIDE.md` Section 9. Staff may
+  still cancel an order that is on the van; the deposit is kept whatever the
+  clock says, because the produce is bought and the run has been made. That is
+  its own setting (`cancellation_dispatched_forfeit_deposit`) rather than a
+  silent override of the cutoff rule, because a business that has chosen to
+  always refund in full is entitled to mean it, and a second setting
+  (`cancellation_after_dispatch_allowed`) closes the door entirely for anyone
+  who would rather settle at the gate. Migration `021`. Whoever presses the
+  button acknowledges the consequence, checked under the row lock rather than
+  only in the form. The rule is stated at checkout, on the customer's own order,
+  and in the cancellation email, which now says the deposit was kept because the
+  order had been dispatched rather than because of a cutoff that had nothing to
+  do with it.
+- **Self service now stops when an order is packed.** It did not before. A
+  pay-on-delivery order can be unpaid and already at the customer's gate, and
+  that combination let someone cancel produce that had left the building.
+- **The refund path is proved end to end.** `Paystack::base()` can be pointed at
+  a stand-in gateway (`scripts/tests/fake/paystack.php`) by `PAYSTACK_BASE_URL`,
+  and the override is ignored unless the secret key is a test key, so an
+  environment holding `sk_live_` always talks to the real Paystack and nobody
+  can redirect customer money by editing one variable. A Paystack-paid order on
+  the van is now cancelled, the refund raised, the webhook applied and the
+  customer told, in 24 assertions.
+- **That test found a real M5 bug.** `Refunds::applyWebhook` read the
+  transaction reference as a string, but Paystack sends `transaction` as an
+  object. The cast produced the literal `Array`, so the fallback lookup could
+  never match, which matters exactly when a refund event arrives before the
+  gateway id is stored: the refund is never marked processed and the customer is
+  never told. Fixed, both payload shapes covered.
+- **Email can be proved on the live server without placing an order.** "Send one
+  to me" on the Notifications settings tab posts a real branded message through
+  the real mail server to the signed-in person's own address, recorded like any
+  other notification. The address is read from the staff row and never from the
+  request, so it can never be used to send mail to a stranger. The health check
+  gained an "Email and notices" section: SMTP host, user, password and from
+  address, PHPMailer present, every event having active words, and how many
+  emails have failed or gone out this week.
+- **The settings tests were still leaking, worse than before.** The earlier fix
+  swapped one hand-typed restore list for another, and the two settings added
+  today went straight past it, so a suite run left cancellation after dispatch
+  switched off. Both the database and HTTP settings tests now derive the list
+  from `SettingsEditor::groups()`, and the hard-coded field count in the same
+  file is derived too. Proved by running each twice against a database checked
+  before and after.
+- **Checks.** 1,416 unit, 362 database and 125 HTTP assertions green,
+  `brand-check.sh` green, `php -l` clean, migrations `000` to `021` applied from
+  empty. Still not proved: Paystack itself answering, and real deliverability.
 
 ### 3 Sep 2026, M6 senior review: the milestone finished and verified
 

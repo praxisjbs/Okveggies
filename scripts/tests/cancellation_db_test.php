@@ -20,6 +20,8 @@ $userIds = []; $orderIds = [];
 $oldAllowed = Settings::bool('cancellation_customer_allowed', true);
 $oldCutoff = Settings::str('cancellation_cutoff_time', '18:00');
 $oldForfeit = Settings::bool('cancellation_deposit_forfeit_after_cutoff', true);
+$oldDispatchAllowed = Settings::bool('cancellation_after_dispatch_allowed', true);
+$oldDispatchForfeit = Settings::bool('cancellation_dispatched_forfeit_deposit', true);
 function c_order(int $userId, string $status, string $paymentStatus, int $paid, int $deposit, string $date, string $suffix): int {
     Database::run(
         'INSERT INTO orders
@@ -96,10 +98,54 @@ try {
     c_ok($manualDone['ok'], 'staff may cancel a manually paid order with both permissions');
     c_eq('manual_required', $manualDone['refund_status'], 'manual money is left visibly requiring return');
     c_eq(300000, $manualDone['manual_subunit'], 'the exact manual amount is reported');
+
+    // --- An order already on the van -------------------------------------
+    // The client's rule: a dispatched order can still be cancelled, but the
+    // terms are different and whoever presses the button has to say so.
+    Settings::set('cancellation_after_dispatch_allowed', true, 'bool', null);
+    Settings::set('cancellation_dispatched_forfeit_deposit', true, 'bool', null);
+    Settings::flushCache();
+
+    $dispatched = c_order($userIds[0], 'dispatched', 'paid', 1000000, 300000, date('Y-m-d', strtotime('+3 days')), $suffix . '-d');
+    $orderIds[] = $dispatched;
+
+    $staffView = OrderCancellation::forStaff($dispatched);
+    c_ok($staffView['may_cancel'], 'staff may still cancel an order that is on the way');
+    c_ok($staffView['is_dispatched'], 'the screen knows the order has been dispatched');
+    c_ok(str_contains((string) $staffView['terms_line'], 'on the way'), 'the terms for a dispatched order are stated before the button');
+
+    $customerView = OrderCancellation::forCustomer($dispatched, $userIds[0]);
+    c_ok(!$customerView['may_cancel'], 'a customer cannot self cancel an order that is on the way');
+
+    $refused = OrderCancellation::cancelForStaff($dispatched, $userIds[0], 'customer_requested', 'Changed their mind at the gate.', true, false);
+    c_eq('dispatch_terms_required', $refused['code'], 'cancelling a dispatched order without acknowledging the terms is refused');
+    c_eq('dispatched', (string) Database::one('SELECT order_status FROM orders WHERE id = :id', [':id' => $dispatched])['order_status'], 'a refused dispatch cancellation leaves the order alone');
+    c_eq(0, count(Database::all('SELECT id FROM order_cancellations WHERE order_id = :id', [':id' => $dispatched])), 'a refused dispatch cancellation writes no cancellation row');
+
+    $done = OrderCancellation::cancelForStaff($dispatched, $userIds[0], 'customer_requested', 'Changed their mind at the gate.', true, true);
+    c_ok($done['ok'], 'staff may cancel a dispatched order once the terms are acknowledged');
+    c_eq(700000, (int) $done['refund_subunit'], 'a dispatched cancellation returns everything above the deposit');
+    c_eq(300000, (int) $done['forfeit_subunit'], 'a dispatched cancellation keeps the deposit');
+    c_eq('deposit_kept_dispatched', (string) $done['forfeit_reason'], 'the outcome names dispatch as the reason the deposit was kept');
+    c_eq('dispatched', (string) Database::one('SELECT fulfilment_stage FROM order_cancellations WHERE order_id = :id', [':id' => $dispatched])['fulfilment_stage'], 'the stage the order had reached is recorded');
+    c_ok(
+        str_contains(Notifications::cancellationMoneyLine($done), 'already been dispatched'),
+        'the customer is told the deposit was kept because the order had been dispatched'
+    );
+
+    // Switching the rule off closes the door rather than changing the money.
+    Settings::set('cancellation_after_dispatch_allowed', false, 'bool', null);
+    Settings::flushCache();
+    $closed = c_order($userIds[0], 'dispatched', 'paid', 1000000, 300000, date('Y-m-d', strtotime('+3 days')), $suffix . '-e');
+    $orderIds[] = $closed;
+    c_ok(!OrderCancellation::forStaff($closed)['may_cancel'], 'with the setting off, a dispatched order cannot be cancelled on the screen');
+    c_eq('not_eligible', OrderCancellation::cancelForStaff($closed, $userIds[0], 'customer_requested', '', true, true)['code'], 'with the setting off the server refuses it too, acknowledged or not');
 } finally {
     Settings::set('cancellation_customer_allowed', $oldAllowed, 'bool', null);
     Settings::set('cancellation_cutoff_time', $oldCutoff, 'string', null);
     Settings::set('cancellation_deposit_forfeit_after_cutoff', $oldForfeit, 'bool', null);
+    Settings::set('cancellation_after_dispatch_allowed', $oldDispatchAllowed, 'bool', null);
+    Settings::set('cancellation_dispatched_forfeit_deposit', $oldDispatchForfeit, 'bool', null);
     Settings::flushCache();
     foreach ($orderIds as $id) {
         Database::run('DELETE FROM refund_status_history WHERE refund_id IN (SELECT id FROM refunds WHERE order_id = :id)', [':id' => $id]);

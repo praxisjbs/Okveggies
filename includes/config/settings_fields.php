@@ -96,6 +96,22 @@ $OKV_SETTINGS_GROUPS = [
                 'confirm'    => true,
             ],
 
+            'cancellation_after_dispatch_allowed' => [
+                'label'      => 'Staff may cancel an order after it is dispatched',
+                'help'       => 'On, staff can still cancel an order that is already on the van, and the customer is told what happens to their money. Off, a dispatched order is settled with the driver at the door instead.',
+                'type'       => 'bool',
+                'value_type' => 'bool',
+                'confirm'    => true,
+            ],
+
+            'cancellation_dispatched_forfeit_deposit' => [
+                'label'      => 'Keep the deposit when the order was already dispatched',
+                'help'       => 'On, a deposit is kept when an order is cancelled after it has left on the van, whatever the clock says, because the produce is bought and the run has been made. Separate from the cutoff rule above on purpose. Off, only the cutoff rule applies.',
+                'type'       => 'bool',
+                'value_type' => 'bool',
+                'confirm'    => true,
+            ],
+
             'cancellation_customer_allowed' => [
                 'label'      => 'Customers may cancel their own orders',
                 'help'       => 'On, a customer can cancel an unpaid order themselves before the cutoff. Off, every cancellation goes through staff.',

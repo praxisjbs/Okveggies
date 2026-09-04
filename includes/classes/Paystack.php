@@ -49,6 +49,38 @@ final class Paystack
         return (string) env('PAYSTACK_SECRET_KEY', '');
     }
 
+    /**
+     * Where the API lives. Real Paystack, unless PAYSTACK_BASE_URL names
+     * somewhere else AND the integration is not on a live key.
+     *
+     * The override exists so the refund and charge paths can be exercised end
+     * to end against a stand-in gateway, which is the only way to prove them
+     * without moving real money. The live-key guard is the point of it: an
+     * environment holding sk_live_ always talks to Paystack, so nobody can
+     * point real customer money at another host by editing one variable, and a
+     * production .env carrying a stale override cannot silently swallow a
+     * refund. The override must also be a plain http or https URL.
+     */
+    private static function base(): string
+    {
+        $override = trim((string) env('PAYSTACK_BASE_URL', ''));
+        if ($override === '' || !self::isTestMode()) {
+            return self::BASE;
+        }
+        $scheme = strtolower((string) (parse_url($override, PHP_URL_SCHEME) ?: ''));
+        if (!in_array($scheme, ['http', 'https'], true) || parse_url($override, PHP_URL_HOST) === null) {
+            error_log('Paystack: ignoring an unusable PAYSTACK_BASE_URL override.');
+            return self::BASE;
+        }
+        return rtrim($override, '/');
+    }
+
+    /** Whether this integration is talking to somewhere other than Paystack. */
+    public static function isOverridden(): bool
+    {
+        return self::base() !== self::BASE;
+    }
+
     public static function publicKey(): string
     {
         return (string) env('PAYSTACK_PUBLIC_KEY', '');
@@ -237,7 +269,7 @@ final class Paystack
 
     private static function send(string $method, string $path, ?array $body): array
     {
-        $ch = curl_init(self::BASE . $path);
+        $ch = curl_init(self::base() . $path);
         if ($ch === false) {
             return self::failure('network', 'Payment provider is unreachable right now.', 0, true);
         }

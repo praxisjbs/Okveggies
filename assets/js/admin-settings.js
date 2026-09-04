@@ -301,6 +301,22 @@
       });
     }
 
+    var test = form.querySelector('[data-template-test]');
+    if (test) {
+      test.addEventListener('click', function () {
+        test.disabled = true;
+        say(form, 'Sending one to you.', false);
+        post(templateBody(form, 'send_test_email')).then(function (res) {
+          test.disabled = false;
+          say(form, res.data.message || (res.ok ? 'Sent.' : 'It could not be sent.'), !res.ok);
+          toast(res.data.message || (res.ok ? 'Sent.' : 'It could not be sent.'), res.ok ? 'ok' : 'error');
+        }).catch(function () {
+          test.disabled = false;
+          say(form, 'We could not reach the server.', true);
+        });
+      });
+    }
+
     form.addEventListener('submit', function (event) {
       event.preventDefault();
       say(form, 'Saving.', false);
