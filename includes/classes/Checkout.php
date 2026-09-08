@@ -148,12 +148,6 @@ final class Checkout
         if (!self::paymentAllowed($option, $type, !empty($input['activated']))) {
             throw new DomainException('payment_not_allowed');
         }
-        if ($option === 'on_account') {
-            $credit = Database::one('SELECT credit_status FROM business_customers WHERE user_id = :id', [':id' => $userId]);
-            if (!$credit || $credit['credit_status'] !== 'approved') {
-                throw new DomainException('credit_not_approved');
-            }
-        }
 
         $eligibility = Delivery::isEligible((string) ($input['delivery_date'] ?? ''), $type);
         if (empty($eligibility['eligible'])) {
@@ -273,6 +267,9 @@ final class Checkout
             ]
         );
         $orderId = (int) $pdo->lastInsertId();
+        if ($option === 'on_account') {
+            Credit::drawForOrder($userId, $orderId, $total, $deliveryDate);
+        }
 
         self::writeAddress($orderId, $userId, $customer);
         self::snapshotItems($orderId, $lines);

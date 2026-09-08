@@ -50,3 +50,13 @@ foreach ($proPages as $page) {
     okv_test_ok($outputAt !== false && $gateAt < $outputAt, "$page gates before Pro HTML is emitted");
     okv_test_ok($gateAt < $firstDataAt, "$page gates before business data is read");
 }
+
+$standingOrders = (string) file_get_contents(dirname(__DIR__, 2) . '/pro/standing_orders.php');
+okv_test_ok(str_contains($standingOrders, 'planned for a later phase'), 'Standing Orders states the later-phase boundary plainly');
+okv_test_ok(str_contains($standingOrders, 'Nothing is scheduled from this screen today'), 'Standing Orders does not imply that a schedule is active');
+foreach (['/pro/kitchen_lists.php', '/kitchen-runs.php', '/pro/orders.php', 'wa.me/'] as $workingRoute) {
+    okv_test_ok(str_contains($standingOrders, $workingRoute), "Standing Orders links to the working route: $workingRoute");
+}
+foreach (['<form', '<input', '<select', '<button', 'data-recurrence', 'payment instruction'] as $fakeControl) {
+    okv_test_ok(!str_contains($standingOrders, $fakeControl), "Standing Orders has no fake scheduling control: $fakeControl");
+}

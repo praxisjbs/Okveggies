@@ -70,6 +70,7 @@ try {
         [$businessIds[0], 10000000, '2026-09-05', 'open'],
         [$businessIds[0], 2500000, '2026-09-10', 'open'],
         [$businessIds[0], 8000000, '2026-09-04', 'paid'],
+        [$businessIds[0], -8000000, null, 'posted'],
         [$businessIds[1], 40000000, '2026-09-07', 'open'],
     ] as [$businessId, $amount, $dueDate, $status]) {
         Database::run(
@@ -78,7 +79,7 @@ try {
              VALUES (:business_id, :transaction_type, :amount_subunit, :due_date, :status, :paid_at)',
             [
                 ':business_id' => $businessId,
-                ':transaction_type' => 'charge',
+                ':transaction_type' => $amount < 0 ? 'repayment' : 'charge',
                 ':amount_subunit' => $amount,
                 ':due_date' => $dueDate,
                 ':status' => $status,

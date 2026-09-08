@@ -7,7 +7,8 @@ $approved = [
 ];
 $ledger = [
     'outstanding_subunit' => 12500000,
-    'overdue_subunit' => 2500000,
+    'past_due_charges' => 5000000,
+    'reductions' => -2500000,
     'earliest_due_date' => '2026-09-10',
 ];
 $credit = ProDashboard::creditSnapshot($approved, $ledger);
@@ -26,11 +27,13 @@ $notApproved = ProDashboard::creditSnapshot([
     'credit_limit_subunit' => null,
 ], $ledger);
 okv_test_ok(!$notApproved['approved'], 'a requested credit account does not receive financial cards');
-okv_test_eq(0, $notApproved['outstanding_subunit'], 'an unapproved account implies no displayed outstanding figure');
+okv_test_eq(12500000, $notApproved['outstanding_subunit'], 'facility state never erases the signed journal balance');
+okv_test_eq(0, $notApproved['available_subunit'], 'an unapproved account exposes no available draw');
 
 $overLimit = ProDashboard::creditSnapshot($approved, [
     'outstanding_subunit' => 60000000,
-    'overdue_subunit' => 0,
+    'past_due_charges' => 0,
+    'reductions' => 0,
     'earliest_due_date' => null,
 ]);
 okv_test_eq(0, $overLimit['available_subunit'], 'available credit never displays below zero');

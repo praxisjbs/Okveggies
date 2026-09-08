@@ -268,6 +268,7 @@ final class OrderCancellation
                 'UPDATE delivery_schedules SET status = \'cancelled\', updated_by = :actor WHERE order_id = :order',
                 [':actor' => $actorId, ':order' => $orderId]
             );
+            Credit::adjustCancelledOrder($orderId);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {

@@ -23,24 +23,6 @@ final class ProDashboard
             [':user_id' => $userId]
         );
 
-        $ledger = null;
-        if ($business !== null && (string) $business['credit_status'] === 'approved') {
-            $ledger = Database::one(
-                'SELECT COALESCE(SUM(CASE WHEN status = :open_total THEN amount_subunit ELSE 0 END), 0) AS outstanding_subunit,
-                        MIN(CASE WHEN status = :open_due AND amount_subunit > 0 THEN due_date END) AS earliest_due_date,
-                        COALESCE(SUM(CASE WHEN status = :open_overdue AND amount_subunit > 0 AND due_date < :today THEN amount_subunit ELSE 0 END), 0) AS overdue_subunit
-                   FROM credit_transactions
-                  WHERE business_customer_id = :business_id',
-                [
-                    ':open_total' => 'open',
-                    ':open_due' => 'open',
-                    ':open_overdue' => 'open',
-                    ':today' => $now->format('Y-m-d'),
-                    ':business_id' => (int) $business['id'],
-                ]
-            );
-        }
-
         $orders = Database::all(
             'SELECT id, order_number, order_status, order_total_subunit, preferred_delivery_date, created_at
                FROM orders
@@ -68,7 +50,7 @@ final class ProDashboard
 
         return [
             'business' => $business,
-            'credit' => self::creditSnapshot($business, $ledger),
+            'credit' => $business === null ? self::creditSnapshot(null, null) : Credit::summaryForBusiness($business, $now),
             'orders' => $orders,
             'saved_lists' => $lists,
             'next_delivery' => $deliveryDates[0] ?? null,
@@ -78,12 +60,9 @@ final class ProDashboard
     /** Build the displayed credit figures from integer-subunit database values. */
     public static function creditSnapshot(?array $business, ?array $ledger): array
     {
-        $approved = $business !== null
-            && (string) ($business['credit_status'] ?? '') === 'approved'
-            && $business['credit_limit_subunit'] !== null;
-
-        if (!$approved) {
+        if ($business === null) {
             return [
+                'state' => 'not_requested',
                 'approved' => false,
                 'limit_subunit' => 0,
                 'outstanding_subunit' => 0,
@@ -93,16 +72,6 @@ final class ProDashboard
             ];
         }
 
-        $limit = max(0, (int) $business['credit_limit_subunit']);
-        $outstanding = max(0, (int) ($ledger['outstanding_subunit'] ?? 0));
-
-        return [
-            'approved' => true,
-            'limit_subunit' => $limit,
-            'outstanding_subunit' => $outstanding,
-            'available_subunit' => max(0, $limit - $outstanding),
-            'overdue_subunit' => max(0, (int) ($ledger['overdue_subunit'] ?? 0)),
-            'earliest_due_date' => !empty($ledger['earliest_due_date']) ? (string) $ledger['earliest_due_date'] : null,
-        ];
+        return Credit::snapshot($business, $ledger ?? []);
     }
 }

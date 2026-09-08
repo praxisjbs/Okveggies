@@ -491,11 +491,7 @@ final class KitchenRunWorkflow
                 throw new DomainException('stale');
             }
 
-            $creditRow = Database::one(
-                'SELECT credit_status FROM business_customers WHERE user_id = :id',
-                [':id' => $request['user_id']]
-            );
-            $creditApproved = ($creditRow['credit_status'] ?? '') === 'approved';
+            $creditApproved = $paymentOption === 'on_account';
             if (!KitchenRuns::paymentAllowed($paymentOption, (string) $request['customer_type'], !empty($request['is_open_budget']), $creditApproved)) {
                 throw new DomainException('payment_not_allowed');
             }
@@ -576,6 +572,9 @@ final class KitchenRunWorkflow
                 ]
             );
             $orderId = (int) $pdo->lastInsertId();
+            if ($paymentOption === 'on_account') {
+                Credit::drawForOrder((int) $request['user_id'], $orderId, $total, $date);
+            }
 
             Checkout::writeAddress($orderId, (int) $request['user_id'], $address);
             self::insertOrderLines($pdo, $orderId, $quoted['lines']);
