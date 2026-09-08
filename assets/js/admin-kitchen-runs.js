@@ -5,14 +5,22 @@
  *
  * The quote form is a plain HTML form and posts natively with JavaScript off:
  * the lines the server rendered can still be edited and priced, which is enough
- * for a list that arrived as catalogue or typed items. This file adds the two
- * things transcribing an uploaded list needs, plus the arithmetic a person
- * should not be doing in their head:
+ * for a list that arrived as catalogue or typed items. This file adds what
+ * transcribing an uploaded list needs, plus the arithmetic a person should not
+ * be doing in their head:
  *
  *   1. Add and remove lines, so a photographed list of 14 items becomes 14
  *      lines rather than the one placeholder it arrived as.
- *   2. A running total against the spend cap, so a colleague sees a quote go
+ *   2. Move a line up or down, because a kitchen list has an order to it and a
+ *      transcribed one rarely comes out in the order the customer wrote it.
+ *      sort_order is written from the position in the posted array, so moving
+ *      the rows before the form is submitted is the whole mechanism.
+ *   3. A running total against the spend cap, so a colleague sees a quote go
  *      over the cap before they send it and the server refuses it.
+ *
+ * Without JavaScript the form still posts the lines in the order the server
+ * rendered them, which is the order they are already stored in. Nothing here is
+ * required for a quote to be sent.
  *
  * Values are written with textContent, never innerHTML.
  * -----------------------------------------------------------------------------
@@ -69,12 +77,44 @@
       });
     });
 
-    var removable = rows().length > 1;
-    rows().forEach(function (row) {
+    var all = rows();
+    var removable = all.length > 1;
+    all.forEach(function (row, index) {
       var remove = row.querySelector('[data-kr-admin-remove]');
       if (remove) { remove.hidden = !removable; }
+
+      // The first line cannot move up and the last cannot move down, so those
+      // controls are hidden rather than offered and then refused.
+      var up = row.querySelector('[data-kr-admin-up]');
+      var down = row.querySelector('[data-kr-admin-down]');
+      if (up) { up.hidden = index === 0; }
+      if (down) { down.hidden = index === all.length - 1; }
     });
-    if (addButton) { addButton.hidden = rows().length >= MAX_ROWS; }
+    if (addButton) { addButton.hidden = all.length >= MAX_ROWS; }
+  }
+
+  /**
+   * Move one line past its neighbour and renumber every field, so the array
+   * the server receives is in the order on the screen. Focus follows the line
+   * that moved, otherwise a keyboard user loses their place on every press.
+   */
+  function move(row, direction) {
+    var neighbour = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+    if (!neighbour) { return; }
+    if (direction < 0) {
+      host.insertBefore(row, neighbour);
+    } else {
+      host.insertBefore(neighbour, row);
+    }
+    renumber();
+
+    var button = row.querySelector(direction < 0 ? '[data-kr-admin-up]' : '[data-kr-admin-down]');
+    if (button && !button.hidden) {
+      button.focus();
+      return;
+    }
+    var name = row.querySelector('input[name*="[item_name]"]');
+    if (name) { name.focus(); }
   }
 
   function recalculate() {
@@ -135,6 +175,12 @@
     addButton.addEventListener('click', addRow);
   }
   host.addEventListener('click', function (event) {
+    var up = event.target.closest('[data-kr-admin-up]');
+    if (up) { move(up.closest('[data-kr-admin-row]'), -1); return; }
+
+    var down = event.target.closest('[data-kr-admin-down]');
+    if (down) { move(down.closest('[data-kr-admin-row]'), 1); return; }
+
     var remove = event.target.closest('[data-kr-admin-remove]');
     if (!remove || rows().length <= 1) { return; }
     remove.closest('[data-kr-admin-row]').remove();

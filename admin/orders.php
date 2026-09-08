@@ -107,6 +107,14 @@ try {
     $messages = [];
 }
 
+// The Kitchen Run this order was made from, when it was made from one. PRD 4.4
+// asks for deep links in both directions and names "kitchen run to the order"
+// by name; the way back existed only as a sentence in the status history.
+$kitchenRun = $selected && Rbac::can('kitchen_runs.view') ? Database::one(
+    'SELECT id, request_number FROM kitchen_run_requests WHERE converted_order_id = :id',
+    [':id' => $selectedId]
+) : null;
+
 $canCancel = Rbac::can('orders.cancel');
 $canNote     = Rbac::can('orders.update');
 $canResend   = Rbac::can('notifications.resend');
@@ -195,6 +203,18 @@ require __DIR__ . '/../includes/components/admin/header.php';
           </div>
           <div><dt class="text-ink-60">Order total</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format((int) $selected['order_total_subunit'])) ?></dd></div>
           <div><dt class="text-ink-60">Stage</dt><dd class="mt-1"><?= okv_e(ucfirst((string) $selected['order_status'])) ?></dd></div>
+          <?php if ($kitchenRun): ?>
+            <div>
+              <dt class="text-ink-60">Came from</dt>
+              <dd class="mt-1">
+                <a class="font-mono underline decoration-mist underline-offset-2 hover:text-forest"
+                   href="/admin/kitchen_runs.php?request=<?= (int) $kitchenRun['id'] ?>">
+                  <?= okv_e((string) $kitchenRun['request_number']) ?>
+                </a>
+                <span class="block text-ink-60">Kitchen Run</span>
+              </dd>
+            </div>
+          <?php endif; ?>
         </dl>
 
         <!-- The money, straight from the M5 ledger. Expected is what the

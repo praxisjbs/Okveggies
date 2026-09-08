@@ -10,6 +10,13 @@
  *   $lines          array  its item lines
  *   $history        array  its append-only status trail
  *   $units, $zones, $products, $eligibleDates
+ *   $requestedDate, $requestedStillOpen  the day the customer asked for
+ *   $queryWith      callable  keeps the queue filters on links out of here
+ *
+ * Two notes live on a Kitchen Run and they are not the same thing. admin_note
+ * is written FOR the customer: it is printed on their quote and it is the
+ * sentence they are emailed if we decline. staff_note is the team's own, it is
+ * on this screen and nowhere else, and no customer read path returns it.
  *
  * The state version is carried on every form, so two colleagues working the
  * same request in two tabs cannot silently overwrite one another: the second
@@ -21,6 +28,8 @@ $status    = (string) $request['status'];
 $mayQuote  = Rbac::can('kitchen_runs.quote') && KitchenRuns::mayTransition($status, 'quoted');
 $mayDecline = Rbac::can('kitchen_runs.decline') && KitchenRuns::mayTransition($status, 'declined');
 $mayConvert = Rbac::can('kitchen_runs.convert') && KitchenRuns::mayTransition($status, 'converted');
+$mayApprove = Rbac::can('kitchen_runs.approve') && KitchenRuns::mayTransition($status, 'approved') && empty($request['is_expired']);
+$mayNote    = Rbac::can('kitchen_runs.quote');
 $total     = $request['quoted_total_subunit'] === null ? null : (int) $request['quoted_total_subunit'];
 $deposit   = $request['deposit_subunit'] === null ? null : (int) $request['deposit_subunit'];
 $editable  = $lines ?: [[]];
@@ -41,7 +50,7 @@ $editable  = $lines ?: [[]];
         <?= okv_e(KitchenRuns::pricingLabel((string) $request['pricing_mode'])) ?>.
       </p>
     </div>
-    <a class="okv-btn-text text-sm" href="?<?= okv_e(okv_input('status', '') !== '' ? 'status=' . okv_input('status', '') : '') ?>">Close this request</a>
+    <a class="okv-btn-text text-sm" href="<?= okv_e($queryWith(['request' => ''])) ?>">Close this request</a>
   </div>
 
   <!-- What the customer sent, before anybody touched it. -->
@@ -149,12 +158,33 @@ $editable  = $lines ?: [[]];
                      inputmode="decimal"
                      value="<?= ($line['unit_price_subunit'] ?? null) === null ? '' : okv_e((string) Money::toNaira((int) $line['unit_price_subunit'])) ?>">
             </div>
-            <div class="flex items-end sm:col-span-1">
+            <div class="flex items-end justify-end gap-1 sm:col-span-1">
+              <button type="button" class="okv-btn-text text-sm min-h-[44px] min-w-[44px]" data-kr-admin-up hidden
+                      aria-label="Move this line up" title="Move up">&uarr;</button>
+              <button type="button" class="okv-btn-text text-sm min-h-[44px] min-w-[44px]" data-kr-admin-down hidden
+                      aria-label="Move this line down" title="Move down">&darr;</button>
+            </div>
+
+            <!-- The note the customer reads beside this line on their quote,
+                 for example which market it came from or why the size changed.
+                 It is the only per-line words either side ever sees. -->
+            <div class="sm:col-span-11">
+              <label class="okv-label" for="kr-a-note-<?= (int) $index ?>">Note on this line, the customer sees it</label>
+              <input class="okv-input" id="kr-a-note-<?= (int) $index ?>" name="items[<?= (int) $index ?>][note]"
+                     maxlength="255" placeholder="Soft pomo, cut in the market."
+                     value="<?= okv_e((string) ($line['note'] ?? '')) ?>">
+            </div>
+            <div class="flex items-end justify-end sm:col-span-1">
               <button type="button" class="okv-btn-text text-sm min-h-[44px]" data-kr-admin-remove hidden>Remove</button>
             </div>
           </div>
         <?php endforeach; ?>
       </div>
+      <noscript>
+        <p class="mt-3 text-sm text-ink-60">
+          Lines are saved in the order they appear here. To change the order without JavaScript, retype the items in the order you want.
+        </p>
+      </noscript>
 
       <div class="mt-3 flex flex-wrap items-center gap-4">
         <button type="button" class="okv-btn-outline-sm" data-kr-admin-add hidden>Add a line</button>
@@ -183,6 +213,15 @@ $editable  = $lines ?: [[]];
           </select>
           <?php if (!$eligibleDates): ?>
             <p class="mt-1 text-sm text-tomato">No delivery days are open for this customer type. Fix that in Delivery settings first.</p>
+          <?php elseif ($requestedDate !== '' && !$requestedStillOpen): ?>
+            <p class="mt-1 text-sm text-clay">
+              The customer asked for <?= okv_e(date('l jS F', strtotime($requestedDate))) ?>, which we can no longer run.
+              This starts at the next day we do. Tell them in the note below.
+            </p>
+          <?php elseif ($requestedDate !== ''): ?>
+            <p class="mt-1 text-sm text-ink-60">
+              The customer asked for <?= okv_e(date('l jS F', strtotime($requestedDate))) ?>.
+            </p>
           <?php endif; ?>
         </div>
         <div>
@@ -199,7 +238,11 @@ $editable  = $lines ?: [[]];
 
       <div class="mt-4">
         <label class="okv-label" for="admin_note">A note the customer will read with the quote</label>
-        <textarea class="okv-input" id="admin_note" name="admin_note" rows="2" maxlength="2000"><?= okv_e((string) ($request['admin_note'] ?? '')) ?></textarea>
+        <textarea class="okv-input" id="admin_note" name="admin_note" rows="2" maxlength="2000"
+                  placeholder="Tomatoes are dear this week, so we found you the firmer ones at Mile 12."><?= okv_e((string) ($request['admin_note'] ?? '')) ?></textarea>
+        <p class="mt-1 text-sm text-ink-60">
+          This is published to the customer on their own screen and in the email. For anything the team should keep to itself, use the internal note below.
+        </p>
       </div>
 
       <div class="mt-5">
@@ -242,6 +285,31 @@ $editable  = $lines ?: [[]];
         <?php endif; ?>
       </table>
     </div>
+  <?php endif; ?>
+
+  <!-- Approving for a customer who told us over the phone. The permission
+       kitchen_runs.approve gates it, and the trail records that a colleague
+       pressed it rather than the customer. -->
+  <?php if ($mayApprove): ?>
+    <form method="post" action="/api/v1/kitchen_runs.php" class="mt-6 rounded-lg border border-mist bg-canvas p-4">
+      <?= Csrf::field() ?>
+      <input type="hidden" name="action" value="staff_approve">
+      <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
+      <input type="hidden" name="state_version" value="<?= (int) $request['state_version'] ?>">
+
+      <h3 class="font-display text-lg font-bold text-ink">Approve it for the customer</h3>
+      <p class="mt-1 text-sm text-ink-60">
+        Only when they have told you yes themselves, on the phone or in person. It counts as their approval of
+        <span class="font-mono"><?= $total === null ? 'the quote' : okv_e(Money::format($total)) ?></span>,
+        so write down who said it and how it reached you. Your name and these words go on the record.
+      </p>
+      <div class="mt-3 flex flex-wrap gap-3">
+        <input class="okv-input max-w-xl" id="authorisation" name="authorisation" required maxlength="500"
+               placeholder="Mrs Adeyemi approved it by phone at 09:20, she is the one who sends the lists.">
+        <button class="okv-btn-outline min-h-[44px]" type="submit">Record their approval</button>
+      </div>
+      <label class="sr-only" for="authorisation">Who approved it, and how they told you</label>
+    </form>
   <?php endif; ?>
 
   <!-- The decision this request is waiting for. -->
@@ -316,6 +384,29 @@ $editable  = $lines ?: [[]];
       <p class="mt-1 text-sm text-ink-60">The customer is emailed this sentence, so write it for them to read.</p>
     </form>
   <?php endif; ?>
+
+  <!-- The internal note. It is on this screen and nowhere else: no template
+       renders it, and KitchenRuns::findForCustomer() drops the column before a
+       customer read path ever sees the row. -->
+  <div class="mt-6 border-t border-mist pt-5">
+    <h3 class="font-display text-lg font-bold text-ink">Internal note</h3>
+    <p class="mt-1 text-sm text-ink-60">For the team only. The customer never sees this, on their screen or in any email.</p>
+    <?php if ($mayNote): ?>
+      <form method="post" action="/api/v1/kitchen_runs.php" class="mt-3 space-y-3">
+        <?= Csrf::field() ?>
+        <input type="hidden" name="action" value="save_note">
+        <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
+        <label class="sr-only" for="staff-note">Internal note</label>
+        <textarea class="okv-input" id="staff-note" name="staff_note" rows="3" maxlength="2000"
+                  placeholder="Third late change this month. Price the pomo carefully, last run went over."><?= okv_e((string) ($request['staff_note'] ?? '')) ?></textarea>
+        <button class="okv-btn-outline min-h-[44px] px-4" type="submit">Save the note</button>
+      </form>
+    <?php elseif (trim((string) ($request['staff_note'] ?? '')) !== ''): ?>
+      <p class="mt-2 text-sm"><?= nl2br(okv_e((string) $request['staff_note'])) ?></p>
+    <?php else: ?>
+      <p class="mt-2 text-sm text-ink-60">No note yet.</p>
+    <?php endif; ?>
+  </div>
 
   <!-- The trail. -->
   <?php if ($history): ?>

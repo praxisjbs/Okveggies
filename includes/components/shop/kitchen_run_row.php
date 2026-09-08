@@ -23,12 +23,12 @@ $row      = $row ?? 0;
 $products = $products ?? [];
 $units    = $units ?? [];
 $chosen   = $chosen ?? 'custom';
-$isPriced = $chosen === 'mixed';
+$isPriced = $chosen === 'priced';
 ?>
 <div class="rounded-lg border border-mist p-3" data-kr-row>
   <div class="grid gap-3 sm:grid-cols-12">
 
-    <?php if ($chosen === 'catalogue' || $chosen === 'mixed'): ?>
+    <?php if ($chosen === 'catalogue' || $chosen === 'priced'): ?>
       <div class="sm:col-span-5">
         <label class="okv-label" for="kr-product-<?= (int) $row ?>">From the shop</label>
         <select class="okv-input" id="kr-product-<?= (int) $row ?>" name="items[<?= (int) $row ?>][product_id]" data-kr-product>
@@ -44,7 +44,7 @@ $isPriced = $chosen === 'mixed';
       </div>
     <?php endif; ?>
 
-    <div class="<?= $chosen === 'catalogue' || $chosen === 'mixed' ? 'sm:col-span-7' : 'sm:col-span-5' ?>">
+    <div class="<?= $chosen === 'catalogue' || $chosen === 'priced' ? 'sm:col-span-7' : 'sm:col-span-5' ?>">
       <label class="okv-label" for="kr-name-<?= (int) $row ?>">Item</label>
       <input class="okv-input" id="kr-name-<?= (int) $row ?>" name="items[<?= (int) $row ?>][item_name]"
              maxlength="200" placeholder="Pomo" data-kr-name>

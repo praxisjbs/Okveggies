@@ -164,6 +164,22 @@
     if (text !== '') { errorNote.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
   }
 
+  /**
+   * Where the form posts, read from the attribute rather than the property.
+   *
+   * form.action looks like the obvious way to ask, and it is wrong here: the
+   * form carries <input name="action" value="submit">, and a named control
+   * shadows the form property of the same name, so form.action returns that
+   * input element. fetch() then stringified it and posted the whole list to
+   * /[object HTMLInputElement], which answered with a page rather than JSON,
+   * and every customer with JavaScript on was told "We could not reach the
+   * server" while the server had never been asked. Nothing caught it because
+   * the tests post without a browser, where this line does not run.
+   */
+  function endpoint() {
+    return form.getAttribute('action') || '/api/v1/kitchen_runs.php';
+  }
+
   function submit(event) {
     event.preventDefault();
     showError('');
@@ -171,7 +187,7 @@
     var button = form.querySelector('button[type="submit"]');
     if (button) { button.disabled = true; }
 
-    fetch(form.action, {
+    fetch(endpoint(), {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' },

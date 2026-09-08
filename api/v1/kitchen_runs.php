@@ -121,7 +121,7 @@ $action     = okv_action();
 $requestId  = (int) okv_input('request_id', 0);
 $customerUrl = '/kitchen-runs.php' . ($requestId > 0 ? '?request=' . $requestId : '');
 $adminUrl    = '/admin/kitchen_runs.php' . ($requestId > 0 ? '?request=' . $requestId : '');
-$backTo      = in_array($action, ['quote', 'decline', 'convert'], true) ? $adminUrl : $customerUrl;
+$backTo      = in_array($action, ['quote', 'decline', 'convert', 'staff_approve', 'save_note'], true) ? $adminUrl : $customerUrl;
 
 if (!okv_is_post()) {
     okv_error('Use POST for this action.', 405, 'method_not_allowed');
@@ -152,7 +152,14 @@ try {
                     // only a claim.
                     kr_fail('attachment_rejected', $customerUrl);
                 }
-                $attachment = Uploads::saveUploadedFile($file, 'kitchen_runs', KitchenRuns::UPLOAD_MIME);
+                try {
+                    $attachment = Uploads::saveUploadedFile($file, 'kitchen_runs', KitchenRuns::UPLOAD_MIME);
+                } catch (RuntimeException $e) {
+                    // Uploads refuses with one of these. The customer hears a
+                    // sentence about their file, never the exception text.
+                    error_log('kitchen_runs upload refused: ' . $e->getMessage());
+                    kr_fail('attachment_rejected', $customerUrl);
+                }
             }
 
             $result = KitchenRunWorkflow::submit(
@@ -165,6 +172,8 @@ try {
                     'spend_cap_subunit'     => kr_money_input('spend_cap', 'budget_not_a_number'),
                     'budget_ceiling_subunit' => kr_money_input('budget_ceiling', 'budget_not_a_number'),
                     'customer_note'         => okv_input('customer_note', ''),
+                    'preferred_delivery_date' => okv_input('preferred_delivery_date', ''),
+                    'delivery_zone_id'      => okv_input('delivery_zone_id', 0),
                     'recipient_name'        => okv_input('recipient_name', ''),
                     'recipient_phone'       => okv_input('recipient_phone', ''),
                     'address_line_1'        => okv_input('address_line_1', ''),
@@ -179,6 +188,7 @@ try {
 
             Audit::record('kitchen_run.submit', 'kitchen_run', (int) $result['id'], null, ['request_number' => $result['request_number']], (int) Customer::id());
             Notifications::announceKitchenRunSubmitted((int) $result['id']);
+            Notifications::announceKitchenRunReceived((int) $result['id']);
             kr_ok($result, '/kitchen-runs.php?request=' . $result['id'] . '&submitted=1');
             break;
 
@@ -219,8 +229,41 @@ try {
 
             $result = KitchenRunWorkflow::cancel($requestId, $userId, (int) okv_input('state_version', 0));
 
-            Audit::record('kitchen_run.cancel', 'kitchen_run', $requestId, null, null, $userId);
+            Audit::record('kitchen_run.cancel', 'kitchen_run', $requestId, null, ['from' => $result['from']], $userId);
+            if (($result['from'] ?? '') === 'approved') {
+                // Nothing to refund, but our own cash may already be at the
+                // market against this list. The team hears about that one.
+                Notifications::announceKitchenRunCancelled($requestId, $userId);
+            }
             kr_ok($result, '/kitchen-runs.php?request=' . $requestId . '&cancelled=1');
+            break;
+
+        // --- Staff approve for a customer who told us on the phone -----------
+        case 'staff_approve':
+            Rbac::requirePermission('kitchen_runs.approve');
+            $staffId = (int) Rbac::userId();
+
+            $result = KitchenRunWorkflow::approveForCustomer(
+                $requestId,
+                $staffId,
+                (int) okv_input('state_version', 0),
+                (string) okv_input('authorisation', '')
+            );
+
+            Audit::record('kitchen_run.approve', 'kitchen_run', $requestId, null, ['on_behalf_of_customer' => true], $staffId);
+            Notifications::announceKitchenRunApproved($requestId, $staffId);
+            kr_ok($result, '/admin/kitchen_runs.php?request=' . $requestId . '&approved=1');
+            break;
+
+        // --- The team's own note, which no customer ever reads ---------------
+        case 'save_note':
+            Rbac::requirePermission('kitchen_runs.quote');
+            $staffId = (int) Rbac::userId();
+
+            $result = KitchenRunWorkflow::saveStaffNote($requestId, $staffId, (string) okv_input('staff_note', ''));
+
+            Audit::record('kitchen_run.note.update', 'kitchen_run', $requestId, null, null, $staffId);
+            kr_ok($result, '/admin/kitchen_runs.php?request=' . $requestId . '&note_saved=1');
             break;
 
         // --- Staff turn it down ----------------------------------------------
@@ -264,12 +307,14 @@ try {
     }
 } catch (DomainException $e) {
     kr_fail($e->getMessage(), $backTo);
-} catch (RuntimeException $e) {
-    // Uploads::saveUploadedFile refuses with one of these. The customer hears a
-    // sentence about their file, never the exception text.
-    error_log('kitchen_runs upload refused: ' . $e->getMessage());
-    kr_fail('attachment_rejected', $backTo);
 } catch (Throwable $e) {
+    // Everything else is ours, and it is reported as ours. This block used to
+    // catch RuntimeException first and call it a rejected attachment, which is
+    // true of the upload helper and of nothing else: PDOException extends
+    // RuntimeException, so a database fault while pricing a list told the
+    // colleague their file was not a JPEG. A refusal that names the wrong
+    // cause is worse than no refusal, because it sends somebody looking in the
+    // wrong place. The upload now catches its own exception, beside the upload.
     error_log('kitchen_runs ' . $action . ' failed: ' . $e->getMessage());
     if (kr_wants_json()) {
         okv_error('We could not save that Kitchen Run. Please try again.', 500, 'failed');

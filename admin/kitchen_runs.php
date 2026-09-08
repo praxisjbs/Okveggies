@@ -20,13 +20,20 @@
 require_once __DIR__ . '/../includes/bootstrap.php';
 Rbac::requirePermission('kitchen_runs.view');
 
-$filter  = (string) okv_input('status', '');
-$openId  = (int) okv_input('request', 0);
-$request = $openId > 0 ? KitchenRuns::findForStaff($openId) : null;
-$lines   = $request ? KitchenRuns::lines($openId) : [];
-$history = $request ? KitchenRuns::history($openId) : [];
-$runs    = KitchenRuns::allForStaff($filter);
-$waiting = KitchenRuns::waitingCount();
+$filter   = (string) okv_input('status', '');
+$customer = mb_substr(trim((string) okv_input('customer', '')), 0, 100);
+$openId   = (int) okv_input('request', 0);
+$request  = $openId > 0 ? KitchenRuns::findForStaff($openId) : null;
+$lines    = $request ? KitchenRuns::lines($openId) : [];
+$history  = $request ? KitchenRuns::history($openId) : [];
+$runs     = KitchenRuns::allForStaff($filter, 100, $customer);
+$waiting  = KitchenRuns::waitingCount();
+
+/** Keep both filters on every link out of this screen, so one does not clear the other. */
+$queryWith = static function (array $extra) use ($filter, $customer): string {
+    $query = array_filter(['status' => $filter, 'customer' => $customer] + $extra, static fn($v): bool => (string) $v !== '');
+    return $query ? '?' . http_build_query($query) : '?';
+};
 
 $units    = Database::all('SELECT id, name FROM units_of_measurement ORDER BY id');
 $zones    = Delivery::zonesActive();
@@ -42,6 +49,13 @@ $products = Database::all(
 // a day the shop does not run.
 $eligibleDates = $request ? Delivery::nextEligibleDates((string) $request['customer_type'], 21) : [];
 
+// The day the customer asked for when they sent the list, and whether we can
+// still run it. A request can sit for days waiting on a price, so the day they
+// picked may have passed; the quote form then starts at the next day we do run,
+// and the panel says plainly what they originally asked for.
+$requestedDate      = $request ? trim((string) ($request['preferred_delivery_date'] ?? '')) : '';
+$requestedStillOpen = $requestedDate !== '' && in_array($requestedDate, array_column($eligibleDates, 'date'), true);
+
 $errorCode = trim((string) okv_input('error', ''));
 $notice    = null;
 if ($errorCode !== '') {
@@ -50,6 +64,10 @@ if ($errorCode !== '') {
     $notice = ['tone' => 'good', 'text' => 'Quote sent. The customer has it by email and on their Kitchen Runs page.'];
 } elseif (okv_input('declined', '') !== '') {
     $notice = ['tone' => 'good', 'text' => 'Declined, and the customer has been told why.'];
+} elseif (okv_input('approved', '') !== '') {
+    $notice = ['tone' => 'good', 'text' => 'Approved for the customer, and it is on the record as your approval. Convert it when you are ready.'];
+} elseif (okv_input('note_saved', '') !== '') {
+    $notice = ['tone' => 'good', 'text' => 'The internal note has been saved. The customer never sees it.'];
 }
 
 $okv_admin_title  = 'Kitchen Runs';
@@ -80,16 +98,38 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <nav class="flex flex-wrap gap-2 text-sm" aria-label="Filter by status">
         <?php foreach (array_merge([''], KitchenRuns::STATUSES) as $status): ?>
           <a class="rounded-full border px-3 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center <?= $filter === $status ? 'border-forest bg-foliage-tint text-forest' : 'border-mist text-ink-60 hover:border-forest' ?>"
-             href="?status=<?= okv_e($status) ?>"<?= $filter === $status ? ' aria-current="true"' : '' ?>>
+             href="<?= okv_e($queryWith(['status' => $status])) ?>"<?= $filter === $status ? ' aria-current="true"' : '' ?>>
             <?= $status === '' ? 'All' : okv_e(KitchenRuns::statusLabel($status)) ?>
           </a>
         <?php endforeach; ?>
       </nav>
     </div>
 
+    <!-- Find one customer's runs. Same search a colleague already knows from
+         the orders screen: the name on the account, the email, the phone
+         number on the request, or the request number itself. -->
+    <form method="get" class="mt-4 flex flex-wrap items-end gap-3">
+      <?php if ($filter !== ''): ?>
+        <input type="hidden" name="status" value="<?= okv_e($filter) ?>">
+      <?php endif; ?>
+      <div class="min-w-[16rem] flex-1">
+        <label class="okv-label" for="filter-customer">Customer, phone or request number</label>
+        <input class="okv-input mt-1" id="filter-customer" name="customer" value="<?= okv_e($customer) ?>"
+               maxlength="100" placeholder="Ada, 0803..., or OKR26004">
+      </div>
+      <button class="okv-btn-outline min-h-[44px] px-4" type="submit">Search</button>
+      <?php if ($customer !== ''): ?>
+        <a class="okv-btn-text text-sm min-h-[44px] inline-flex items-center" href="<?= okv_e($queryWith(['customer' => ''])) ?>">Clear</a>
+      <?php endif; ?>
+    </form>
+
     <?php if (!$runs): ?>
       <p class="mt-4 rounded-lg border border-mist bg-canvas px-4 py-6 text-center text-sm text-ink-60">
-        Nothing here<?= $filter === '' ? ' yet' : ' with that status' ?>.
+        <?php if ($customer !== ''): ?>
+          Nothing matches "<?= okv_e($customer) ?>"<?= $filter === '' ? '' : ' with that status' ?>.
+        <?php else: ?>
+          Nothing here<?= $filter === '' ? ' yet' : ' with that status' ?>.
+        <?php endif; ?>
       </p>
     <?php else: ?>
       <div class="mt-4 overflow-x-auto">
@@ -108,7 +148,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
             <?php foreach ($runs as $run): ?>
               <tr class="border-b border-mist/60 <?= $openId === (int) $run['id'] ? 'bg-foliage-tint' : '' ?>">
                 <td class="py-2 pr-3">
-                  <a class="font-mono font-semibold text-forest underline-offset-2 hover:underline" href="?request=<?= (int) $run['id'] ?>">
+                  <a class="font-mono font-semibold text-forest underline-offset-2 hover:underline" href="<?= okv_e($queryWith(['request' => (int) $run['id']])) ?>">
                     <?= okv_e($run['request_number']) ?>
                   </a>
                   <span class="block text-ink-60"><?= okv_e(date('j M', strtotime((string) $run['created_at']))) ?></span>

@@ -12,9 +12,11 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
+**Milestone M7, Kitchen Runs. Follow-up on branch `claude/follow-up-uax2wl`, cut fresh from `main`.** The twelve items the completion pass left open are all done: a signed-out visitor is told rather than redirected, the customer picks their own delivery day and area, the queue filters by customer, lines reorder and carry a note, the team gets an internal note of its own, `kitchen_runs.approve` is a real path, an approved run can be withdrawn, an order links back to its run, the customer hears that we have their list, the Pro Portal screen is real, already-priced is its own mode, and the balance after delivery is proved rather than rebuilt. Verified on MySQL 8.0.46, the production engine, which retires the MariaDB caveat in the review. The authenticated browser journey at 390px and 1440px finally ran, and it found two defects no curl-shaped test could see: the customer's form had never posted with JavaScript on, and pricing a free-text list failed on the database while telling the colleague their file was rejected. Both fixed, both with regression tests. Full account in the session log below.
+
 **Milestone M7, Kitchen Runs. Reviewed and finished on branch `claude/milestone-7-completion-2nlnib`, on top of pull request 36.** A customer sends a list however they have it, we price it, they approve it, it becomes an ordinary order. The first attempt (pull request 36) had the shape of the milestone and one fatal hole: conversion had never once run. It bound the same named placeholder twice in one INSERT, which MySQL refuses on a native prepared statement, and the only conversion test exercised an injected failure that returned before any write. Twenty green database assertions sat on top of a feature that threw on first use. That, six public rules nothing called, a form that took one item, and conversion writing no delivery address and no trail token, are what this branch fixes. The written review is `docs/M7_REVIEW.md`.
 
-Before this ships to production: run migrations `022` to `024`, then take one Kitchen Run end to end on staging, request to quote to approval to order, and check the order reaches the day manifest with a recipient on it. **M8, the Pro Portal and credit, is next.**
+Before this ships to production: run migrations `022` to `026`, then take one Kitchen Run end to end on staging, request to quote to approval to order, and check the order reaches the day manifest with a recipient on it. **M8, the Pro Portal and credit, is next.**
 
 **Milestone M6, Delivery and the Order Trail. Merged into `main` on 4 September 2026 (pull request 34, merge commit `7c0c0dc`).** The lifecycle spine, cancellation including the terms that apply after dispatch, the public Order Trail, the day manifest, and the notification half that the milestone list had left in M9. Nine defects found and fixed while verifying it, five of them in code that had already been written and two in the test suite itself. The written review is `docs/M6_REVIEW.md`. Pull request 33 carries the same first two commits and is redundant; close it rather than merging it.
 
@@ -129,6 +131,162 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] The four notifications: the team on a new list and an approval, the customer on a quote and a decline
 - [x] Append-only lifecycle trail, one transition gate, compare-and-swap on every state change
 - [x] Tests: quote totals; convert-to-order, run end to end against a real database rather than mocked past
+- [x] A signed-out visitor is told what a Kitchen Run is and how to start one, never redirected before reading a word of it
+- [x] The customer chooses the delivery day and area on their own form, checked against the delivery rules on the way in
+- [x] The staff queue filters by customer, phone or request number, one bound placeholder per position
+- [x] Lines can be reordered in the quote editor, and every line carries a note the customer reads
+- [x] A separate internal note for the team, on its own column and never on a customer screen or in an email (migration `025`)
+- [x] `kitchen_runs.approve` is a real path: staff record an approval a customer gave on the phone, with who authorised it, as an admin action
+- [x] A customer may withdraw an approved run, with copy that says to call us, and the team is emailed (migration `026`)
+- [x] An order links back to the Kitchen Run it was made from, both ways as PRD 4.4 asks
+- [x] The customer who sends a list is told we have it (`kitchen_run_received`, migration `026`)
+- [x] The Pro Portal Kitchen Lists screen is a real screen: their runs, their status, and a route into a new one
+- [x] Already-priced is its own input mode, so a report can say "already priced"
+- [x] The balance after delivery proved on the existing path: a deposit conversion's balance row settled through M5's manual payments to a paid order
+- [x] Tests: the unit on a converted line, the method gate on every action, the permission gate on every staff action, a signed-out caller on all of them
+- [x] The authenticated journey exercised in a real browser at 390px and 1440px, request to order, both viewports
+
+### 8 Sep 2026, M7 follow-up: the twelve open items, and two defects only a browser could find
+
+Branch `claude/follow-up-uax2wl`, cut fresh from `main`. The M7 completion pass
+shipped the milestone and left twelve items from the full acceptance list
+unfinished. All twelve are done. Three decisions were taken by the owner before
+the work started and are recorded here so nobody re-litigates them: the Pro
+Portal gets a thin screen now with saved lists staying in M8; the balance after
+delivery keeps the current model and gets a proving test rather than a
+`pay_on_delivery` option; and already-priced becomes its own input mode.
+
+**The two defects the browser found.** Both had been invisible to a green suite
+for the same reason: every test posts with curl, and neither line of code runs
+without a browser.
+
+1. **The customer's own form had never worked with JavaScript on.**
+   `assets/js/kitchen-runs.js` posted to `form.action`, and the form carries
+   `<input name="action" value="submit">`. A named control shadows the form
+   property of the same name, so `form.action` returned that input element,
+   `fetch()` stringified it, and every submission went to
+   `/[object HTMLInputElement]`. That answered with a page rather than JSON, so
+   `response.json()` threw and the customer read "We could not reach the
+   server" while the server had never been asked. The fix reads the attribute.
+2. **Pricing a free-text list on the admin screen failed on the database.** A
+   browser posts every field it renders, so the hidden `product_id` on a
+   free-text line arrives as `''`, not as an absent key, and MySQL refuses
+   `Incorrect integer value: ''` for a BIGINT column. Every curl-shaped test
+   omits the key entirely, which is why nothing caught it.
+   `KitchenRuns::quoteLines()` is the one place posted lines become storable
+   lines, so it now decides what an empty optional field means: nothing.
+
+   The colleague was told about it in the worst possible way, which was the
+   third defect: the controller caught `RuntimeException` and reported every
+   one as `attachment_rejected`. `PDOException` extends `RuntimeException`, so a
+   database fault while pricing a list said "That file is not a JPEG, PNG or
+   PDF under 5MB." The upload now catches its own exception, beside the upload.
+
+**What was built.**
+
+- **A signed-out visitor is told, not redirected.** `kitchen-runs.php` called
+  `Customer::requireLogin()`, so nobody who had not already joined could read
+  what the service is. New `shop/kitchen_run_intro.php` renders the
+  explanation, how it works, the four ways in, why an account is needed, and
+  both routes to one. The form is not rendered at all rather than rendered
+  disabled. The server is still the gate: `requireLoginApi()` on submit is
+  unchanged, and the HTTP test proves a signed-out caller holding a valid token
+  is still refused with a 401.
+- **The customer picks the delivery day and area** on their own form, using the
+  existing `okv_delivery_picker()` and `Delivery::zonesActive()`. `submit()`
+  stores both and runs `assertDeliverable()` on the way in, so nobody can ask
+  for a day the shop does not run. The address is validated first, so a list
+  with nowhere to go still says so. The picker pre-fills the day the customer's
+  last run asked for when we still run it. Staff keep both fields at quote
+  time, and the panel now says what the customer originally asked for and
+  whether that day has passed.
+- **The staff queue filters by customer**, matching the account name, the
+  email, the phone on the request and the request number, one named placeholder
+  per position. That is the mistake that shipped twice, in M6's orders filter
+  and in M7's conversion, so the HTTP test requests the filter with six terms
+  including an injection attempt.
+- **Lines reorder, and every line has a note.** `sort_order` is the position in
+  the posted array, so moving rows before submit is the whole mechanism; the
+  no-JavaScript path still posts the order the server rendered, and says so.
+- **Two notes, and only one is the customer's.** `admin_note` was described in
+  the code as internal and was published to the customer on their screen and in
+  the decline email, so a colleague writing something frank was publishing it.
+  It keeps its job and its label now says so. `kitchen_run_requests.staff_note`
+  (migration `025`, guarded against `information_schema` the MySQL 8 way) is
+  the team's own, with its own `save_note` action. `findForCustomer()` and
+  `allForCustomer()` drop the column before a customer read path sees it, so a
+  screen built on those reads later cannot leak it by accident.
+- **`kitchen_runs.approve` is a real path.** It was seeded in `002`, declared in
+  `permissions.php` and called by nothing. Staff can now record an approval a
+  customer gave them on the phone: gated on the permission, refusing to proceed
+  without who authorised it in writing, and written to the trail as an admin
+  action with the colleague named.
+- **A customer may withdraw an approved run** (PRD 8.3, "before it is
+  converted"). There is no money to reverse, since the deposit is only taken at
+  conversion, but the produce may already be bought, so the copy asks them to
+  call and `admin_kitchen_run_cancelled` (migration `026`) tells the team. An
+  ordinary withdrawal from Submitted or Quoted raises nothing.
+- **An order links back to its Kitchen Run** on `admin/orders.php`, which PRD
+  4.4 names explicitly and which existed only as a sentence in the history.
+- **The customer hears that we have their list.** Four events fired after M7 and
+  only the team heard any of them. `kitchen_run_received` (migration `026`)
+  confirms what we received, how many items, the day they asked for, and that a
+  price is coming, and carries `request_url`.
+- **The Pro Portal screen is a screen.** `pro/kitchen_lists.php` shows a
+  business customer their own runs, status and totals, each linking to the
+  storefront detail, plus the way into a new one. It reuses
+  `KitchenRuns::allForCustomer()` and writes no new domain code. Saved,
+  reusable lists stay in M8 and the screen says so; `kitchen_run_templates` is
+  untouched. A household account is told plainly and sent to the storefront.
+- **Already-priced is its own input mode.** `'priced'` joins `MODES` with its
+  own label. It behaves exactly like `mixed` everywhere it is read; existing
+  rows keep `mixed`, which is still legal.
+
+**The balance after delivery: proved, not built.** No `pay_on_delivery` was
+added to `KitchenRuns::PAYMENT_OPTIONS`, and the reason is that a Kitchen Run is
+produce we buy at the market with our own cash against a list before anybody has
+paid. The database test now converts on a deposit, finds the balance row through
+the same query the payments screen runs, records the deposit and then the
+balance through `ManualPayments`, and asserts the order reaches paid with
+nothing outstanding. It passed on the first run, so PRD 8.2 was already
+satisfied and nothing new was built for it.
+
+**Verification.** MySQL 8.0.46 this time, the production engine, not the MariaDB
+stand-in the review had to use, so the caveat in `docs/M7_REVIEW.md` section 8
+is retired: all 27 migrations apply clean on MySQL 8. `025` and `026` were
+applied to an empty database and then re-applied, leaving one column, six
+Kitchen Run templates and one setting, so both are idempotent.
+
+- `php scripts/tests/run.php`: 1,835 / 1,835, including the wired-rules guard.
+- `kitchen_runs_db_test.php`: 157 / 157, against a database built only from
+  migrations. `kitchen_runs_http_test.php`: 130 / 130 over the real routes.
+- Every other suite green on the same database: notifications 101 / 101,
+  payments 43 / 43, settings 45 / 45, checkout, lifecycle, manifest, delivery,
+  combos, basket, pricing, cancellation, auth. `refund_cancellation_db_test.php`
+  declines to run without a Paystack test key, which is its own guard.
+- `php -l` on every touched file, `bash scripts/brand-check.sh` green,
+  `git diff --check` clean, `npm run build`.
+
+**The open item this milestone had failed twice is closed.** The authenticated
+journey ran in a real browser (Chromium, Playwright) at 390px and 1440px, on a
+scratch database built from migrations with disposable accounts: signed-out
+screen, sign in, send a list, staff filter the queue by customer, reorder a
+line, write a line note, price and send the quote, save an internal note,
+customer reads the quote and sees the line note but not the internal one,
+approves, staff convert, and the order links back to the run. 74 / 74 checks at
+both widths, no horizontal overflow on any screen, and no control under 44px on
+mobile. That run is what found the two defects above.
+
+**One thing found outside this scope and fixed.** `settings_db_test.php` was red
+on `main`: its whole-tab payload posted 10 fields while the Order tab has had 11
+since M7 added the quote window, and the count assertion reads the tab
+definition. The payload now carries `kitchen_run_quote_days` and the known-state
+block sets it, so the test is repeatable rather than passing once.
+
+**Noted, not changed.** The storefront header logo link is 36px tall at 390px,
+below the 44px rule. It is M1 chrome on every storefront page rather than
+anything in this milestone, so it is written down here rather than fixed on a
+Kitchen Runs branch.
 
 ### 8 Sep 2026, M7 senior review: the milestone finished, and the conversion that had never run
 

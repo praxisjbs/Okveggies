@@ -79,6 +79,28 @@ $alreadyPriced = KitchenRuns::validateSubmission('mixed', 'already_priced', [
 ]);
 okv_test_ok($alreadyPriced['ok'], 'an already-priced line is complete and we are only confirming it');
 
+// PRD 8.1 names four ways in, and "already priced" is the fourth. It used to
+// be recorded as 'mixed' with pricing_mode 'already_priced', which priced the
+// list correctly and left a report grouping by input mode unable to say
+// "already priced" at all. It behaves exactly like a mixed list everywhere it
+// is read; what it buys is an honest name on the row.
+okv_test_ok(in_array('priced', KitchenRuns::MODES, true), 'already priced is one of the ways a list arrives, not a shade of another one');
+okv_test_ok(KitchenRuns::validateSubmission('priced', 'already_priced', [
+    ['item_name' => 'Pomo', 'quantity' => '10.000', 'unit_id' => 1, 'unit_price_subunit' => 400000],
+])['ok'], 'a priced list validates as itself');
+okv_test_ok(KitchenRuns::validateSubmission('priced', 'already_priced', [
+    ['product_id' => 7, 'quantity' => '2.000'],
+    ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1, 'unit_price_subunit' => 400000],
+])['ok'], 'a priced list may still carry a shop item, the way a mixed one does');
+okv_test_eq('price_required', KitchenRuns::validateSubmission('priced', 'already_priced', [
+    ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1],
+])['error'], 'a priced line with no price on it is refused, whatever the mode is called');
+okv_test_ok(in_array('mixed', KitchenRuns::MODES, true), 'rows written before the new mode existed are still legal');
+
+foreach (KitchenRuns::MODES as $mode) {
+    okv_test_ok(KitchenRuns::modeLabel($mode) !== $mode, "the $mode mode has words a person can read, not a key");
+}
+
 $mixed = KitchenRuns::validateSubmission('mixed', 'by_us', [
     ['product_id' => 7, 'quantity' => '2.000'],
     ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1],
@@ -132,6 +154,7 @@ $legal = [
     ['submitted', 'quoted'], ['submitted', 'declined'], ['submitted', 'cancelled'],
     ['quoted', 'quoted'], ['quoted', 'approved'], ['quoted', 'declined'],
     ['quoted', 'cancelled'], ['quoted', 'submitted'], ['approved', 'converted'],
+    ['approved', 'cancelled'],
 ];
 foreach ($legal as [$from, $to]) {
     okv_test_ok(KitchenRuns::mayTransition($from, $to), "$from to $to is a move the lifecycle allows");
@@ -170,7 +193,13 @@ foreach (['quoted', 'approved', 'converted', 'declined', 'cancelled'] as $status
 }
 okv_test_ok(KitchenRuns::canCustomerCancel('submitted'), 'a customer may withdraw a list nobody has priced');
 okv_test_ok(KitchenRuns::canCustomerCancel('quoted'), 'a customer may withdraw after reading the price');
-foreach (['approved', 'converted', 'declined', 'cancelled'] as $status) {
+// PRD 8.3 says a request may be cancelled before it is converted, and approved
+// is before it is converted. There is no money to reverse at that point: the
+// deposit is only taken at conversion. What there may be is produce already
+// bought, which is why the screen asks them to call and the team is emailed.
+okv_test_ok(KitchenRuns::canCustomerCancel('approved'), 'a customer may withdraw an approved run, because it is not an order yet');
+okv_test_ok(KitchenRuns::mayTransition('approved', 'cancelled'), 'the state map allows the withdrawal the screen offers');
+foreach (['converted', 'declined', 'cancelled'] as $status) {
     okv_test_ok(!KitchenRuns::canCustomerCancel($status), "a $status run is past the point a customer withdraws it");
 }
 
@@ -261,6 +290,39 @@ foreach (['abc', '1e3', '-5', '10.999', '4.0.0', '0x10'] as $bad) {
     okv_test_eq(false, KitchenRuns::nairaToKobo($bad), var_export($bad, true) . ' is refused rather than read as some other number');
 }
 
+// A browser posts every field it renders. An empty hidden product_id arrives
+// as '' rather than as an absent key, and bound into a BIGINT column that is
+// "Incorrect integer value: ''". quoteLines() is the one place posted lines
+// become storable lines, so it is the place that decides an empty optional
+// field means nothing.
+$posted = KitchenRuns::quoteLines([[
+    'product_id' => '', 'unit_id' => '', 'unit_label' => '', 'note' => '',
+    'item_name' => 'Ata rodo', 'quantity' => '4.000', 'unit_price_subunit' => 180000,
+]]);
+okv_test_eq(null, $posted['lines'][0]['product_id'], 'an empty product id from a form is nothing, not an empty string headed for an integer column');
+okv_test_eq(null, $posted['lines'][0]['unit_id'], 'an empty unit id from a form is nothing');
+okv_test_eq(null, $posted['lines'][0]['unit_label'], 'an empty unit label is nothing');
+okv_test_eq(null, $posted['lines'][0]['note'], 'an empty line note is nothing');
+$kept = KitchenRuns::quoteLines([[
+    'product_id' => '7', 'unit_id' => '3', 'note' => 'Cut in the market.',
+    'item_name' => 'Pomo', 'quantity' => '1.000', 'unit_price_subunit' => 400000,
+]]);
+okv_test_eq(7, $kept['lines'][0]['product_id'], 'a product id a select posted as a string is kept as the number it is');
+okv_test_eq(3, $kept['lines'][0]['unit_id'], 'so is the unit');
+okv_test_eq('Cut in the market.', $kept['lines'][0]['note'], 'and the note staff typed on the line is kept');
+okv_test_ok(mb_strlen((string) KitchenRuns::quoteLines([[
+    'item_name' => 'Pomo', 'quantity' => '1.000', 'unit_price_subunit' => 400000, 'note' => str_repeat('x', 400),
+]])['lines'][0]['note']) <= 255, 'a note longer than the column is cut to fit, because a long note is not a reason to refuse a quote');
+
+// The upload refusal belongs to the upload. PDOException extends
+// RuntimeException, so a catch-all on RuntimeException in the controller told
+// a colleague their file was rejected when the real fault was a database one.
+$controllerSource = (string) file_get_contents($okvRoot . '/api/v1/kitchen_runs.php');
+okv_test_eq(1, substr_count($controllerSource, 'catch (RuntimeException'), 'exactly one place catches a RuntimeException, and it is the upload');
+$uploadCatch = strpos($controllerSource, 'catch (RuntimeException');
+$saveCall = strpos($controllerSource, 'Uploads::saveUploadedFile(');
+okv_test_ok($saveCall !== false && $uploadCatch !== false && $uploadCatch > $saveCall && $uploadCatch - $saveCall < 400, 'the upload catch sits beside the upload rather than around the whole controller');
+
 // ---------------------------------------------------------------------------
 // 8. The words. Every refusal has a sentence, and it is a sentence.
 // ---------------------------------------------------------------------------
@@ -272,7 +334,7 @@ $codes = [
     'note_too_long', 'deposit_required', 'deposit_above_total', 'cap_exceeded', 'delivery_required',
     'delivery_unavailable', 'zone_unavailable', 'quote_expired', 'total_moved', 'reason_required',
     'stale', 'stale_or_not_owned', 'illegal_transition', 'payment_not_allowed', 'not_found',
-    'budget_not_a_number', 'deposit_not_a_number',
+    'budget_not_a_number', 'deposit_not_a_number', 'authorisation_required', 'not_quoted',
 ];
 foreach ($codes as $code) {
     $message = KitchenRuns::message($code);
@@ -300,9 +362,40 @@ okv_test_ok(method_exists(Notifications::class, 'announceKitchenRunSubmitted'), 
 okv_test_ok(method_exists(Notifications::class, 'announceKitchenRunQuoted'), 'a quote reaches the customer');
 okv_test_ok(method_exists(Notifications::class, 'announceKitchenRunApproved'), 'an approval tells the team to convert it');
 okv_test_ok(method_exists(Notifications::class, 'announceKitchenRunDeclined'), 'a decline reaches the customer with its reason');
-foreach (['kitchen_run_quoted', 'kitchen_run_declined', 'admin_new_kitchen_run', 'admin_kitchen_run_approved'] as $event) {
+okv_test_ok(method_exists(Notifications::class, 'announceKitchenRunReceived'), 'the customer who just sent a list hears that we have it');
+okv_test_ok(method_exists(Notifications::class, 'announceKitchenRunCancelled'), 'the team hears when an approved run is withdrawn');
+foreach ([
+    'kitchen_run_received', 'kitchen_run_quoted', 'kitchen_run_declined',
+    'admin_new_kitchen_run', 'admin_kitchen_run_approved', 'admin_kitchen_run_cancelled',
+] as $event) {
     okv_test_ok(isset(Notifications::EVENTS[$event]), "$event is a registered notification event, not a template nothing can send");
 }
+
+// The controller is where an announcement becomes an email. A registered event
+// nothing calls is exactly the defect this milestone was reviewed for.
+$controller = (string) file_get_contents($okvRoot . '/api/v1/kitchen_runs.php');
+okv_test_ok(str_contains($controller, 'Notifications::announceKitchenRunReceived('), 'submitting a list emails the customer who sent it');
+okv_test_ok(str_contains($controller, 'Notifications::announceKitchenRunCancelled('), 'withdrawing an approved run emails the team');
+okv_test_ok(str_contains($controller, "\$result['from'] ?? ''") && str_contains($controller, "=== 'approved'"), 'only a withdrawal from approved raises the alarm, so the team is not emailed about every change of mind');
+
+// Both new templates ship in a migration, and the customer one links back.
+$migration = (string) file_get_contents($okvRoot . '/migrations/026_kitchen_run_received_and_cancelled.sql');
+foreach (['kitchen_run_received', 'admin_kitchen_run_cancelled'] as $key) {
+    okv_test_ok(str_contains($migration, "('" . $key . "', 'email',"), "migration 026 carries the $key template");
+}
+okv_test_ok(str_contains($migration, 'ON DUPLICATE KEY UPDATE'), 'migration 026 is idempotent on the template key');
+okv_test_ok(str_contains($migration, '{{request_url}}'), 'the received email carries the way back to the request it is about');
+
+// The internal note is a column added the MySQL 8 way, guarded rather than
+// declared with a syntax MySQL 8 does not have.
+$noteMigration = (string) file_get_contents($okvRoot . '/migrations/025_kitchen_run_staff_note.sql');
+okv_test_ok(str_contains($noteMigration, 'information_schema.COLUMNS'), 'migration 025 guards the column against information_schema');
+$noteStatements = implode("\n", array_filter(
+    explode("\n", $noteMigration),
+    static fn(string $line): bool => !str_starts_with(ltrim($line), '--')
+));
+okv_test_ok(!str_contains($noteStatements, 'IF NOT EXISTS'), 'migration 025 uses no MariaDB-only syntax, because production is MySQL 8');
+okv_test_ok(str_contains($noteMigration, 'PREPARE'), 'migration 025 runs its ALTER through a prepared statement, the way 011, 013 and 020 do');
 
 // ---------------------------------------------------------------------------
 // 10. The writes live in one class, and it is the only one that writes.
@@ -311,6 +404,33 @@ foreach (['kitchen_run_quoted', 'kitchen_run_declined', 'admin_new_kitchen_run',
 okv_test_ok(class_exists(KitchenRunWorkflow::class), 'the write path is its own class, as Settings and SettingsEditor are');
 foreach (['submit', 'quote', 'approve', 'decline', 'cancel', 'convert'] as $write) {
     okv_test_ok(method_exists(KitchenRunWorkflow::class, $write), "KitchenRunWorkflow::$write() is the way a request is $write" . 'd');
+}
+
+// kitchen_runs.approve was seeded in 002 and used by nothing at all. It is a
+// real path now: staff record an approval a customer gave them on the phone,
+// it demands who gave it in writing, and the trail shows it as an admin action
+// rather than pretending the customer pressed the button.
+okv_test_ok(method_exists(KitchenRunWorkflow::class, 'approveForCustomer'), 'staff can record an approval a customer gave on the phone');
+okv_test_ok(method_exists(KitchenRunWorkflow::class, 'saveStaffNote'), 'the internal note has a writer of its own');
+okv_test_ok(str_contains($okvShipped, "Rbac::requirePermission('kitchen_runs.approve')"), 'the approve permission gates the approve action on the server');
+
+// It is declared, it is seeded, and now it is used. Any two of those without
+// the third is the state this item was raised about.
+require $okvRoot . '/includes/config/permissions.php';
+okv_test_ok(isset($OKV_PERMISSIONS['kitchen_runs']['kitchen_runs.approve']), 'the approve permission is declared where the role editor reads it');
+okv_test_ok(str_contains((string) file_get_contents($okvRoot . '/migrations/002_rbac_seed.sql'), 'kitchen_runs.approve'), 'the approve permission is seeded, so a role can actually be granted it');
+
+// The frank note never leaves the admin screen. The customer read path drops
+// the column, so a new screen built on it cannot print the note by accident.
+$rulesSource = (string) file_get_contents($okvRoot . '/includes/classes/KitchenRuns.php');
+okv_test_ok(str_contains($rulesSource, "unset(\$row['staff_note'])"), 'the customer read path drops the internal note before anything can render it');
+$detail = (string) file_get_contents($okvRoot . '/includes/components/shop/kitchen_run_detail.php');
+okv_test_ok(!str_contains($detail, 'staff_note'), 'the customer detail screen does not name the internal note at all');
+foreach (glob($okvRoot . '/migrations/*.sql') ?: [] as $file) {
+    $sql = (string) file_get_contents($file);
+    if (str_contains($sql, 'notification_templates')) {
+        okv_test_ok(!str_contains($sql, '{{staff_note}}'), basename($file) . ' puts no internal note in an email');
+    }
 }
 foreach (['submit', 'quote', 'approve', 'decline', 'cancel', 'convert'] as $write) {
     okv_test_ok(!method_exists(KitchenRuns::class, $write), "KitchenRuns has no $write(), so there is one way in and not two");

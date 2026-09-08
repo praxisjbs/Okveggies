@@ -174,6 +174,14 @@ $deposit = $request['deposit_subunit'] === null ? null : (int) $request['deposit
     </p>
   <?php endif; ?>
 
+  <!-- Approved, and waiting on us to make the order. -->
+  <?php if ($request['status'] === 'approved'): ?>
+    <p class="mt-6 rounded-lg border border-forest bg-foliage-tint p-4 text-sm">
+      You have approved this at <span class="font-mono"><?= okv_e(Money::format((int) $total)) ?></span>.
+      We are turning it into an order and we will be in touch about the deposit.
+    </p>
+  <?php endif; ?>
+
   <!-- Withdrawing it, while there is still time. -->
   <?php if (!empty($request['may_cancel'])): ?>
     <form action="/api/v1/kitchen_runs.php" method="post" class="mt-4 border-t border-mist pt-4">
@@ -182,7 +190,13 @@ $deposit = $request['deposit_subunit'] === null ? null : (int) $request['deposit
       <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
       <input type="hidden" name="state_version" value="<?= (int) $request['state_version'] ?>">
       <button class="okv-btn-text text-sm min-h-[44px]" type="submit">Withdraw this Kitchen Run</button>
-      <span class="text-sm text-ink-60">Nothing is charged, and you can send a new list any time.</span>
+      <?php if ($request['status'] === 'approved'): ?>
+        <span class="text-sm text-ink-60">
+          Nothing has been charged. We may already be at the market for this list, so please call us as well if you need it stopped today.
+        </span>
+      <?php else: ?>
+        <span class="text-sm text-ink-60">Nothing is charged, and you can send a new list any time.</span>
+      <?php endif; ?>
     </form>
   <?php endif; ?>
 
