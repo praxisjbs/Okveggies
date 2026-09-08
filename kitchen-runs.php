@@ -1,23 +1,18 @@
 <?php
-/**
- * kitchen-runs.php
- * OK Veggies. Submit a list, we price it, you approve.
- * Status: scaffold placeholder. Build in milestone M7. See docs/PRD.md Section 8.
- * Before writing logic here: read the PRD section, then ask at least five
- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
- */
 require_once __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/includes/components/shop/header.php';
+require_once __DIR__ . '/includes/components/shop/footer.php';
+Customer::requireLogin();
+$products=Database::all('SELECT p.id,p.name,p.current_price_subunit,u.name AS unit_name FROM products p JOIN units_of_measurement u ON u.id=p.unit_id WHERE p.is_active=1 AND p.current_price_subunit IS NOT NULL ORDER BY p.name');
+$units=Database::all('SELECT id,name FROM units_of_measurement ORDER BY id');
+$runs=KitchenRuns::allForCustomer((int)Customer::id()); $selected=(int)okv_input('request',0); $request=$selected?KitchenRuns::findForCustomer($selected,(int)Customer::id()):null; $lines=$request?KitchenRuns::lines($selected):[];
 ?>
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kitchen Runs . OK Veggies</title>
-<?php okv_head_meta(); ?>
-  <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
-<body class="bg-forest-tint min-h-screen">
-<div class="okv-container py-16">
-  <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
-  <h1 class="font-display font-extrabold text-3xl text-ink mt-2">Kitchen Runs</h1>
-  <p class="text-ink-60 mt-3 max-w-xl">This screen is scaffolded and waiting to be built in milestone M7. The plan for it is in docs/PRD.md Section 8.</p>
-  <a href="/" class="okv-btn mt-6">Back to the shop</a>
-</div>
-</body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kitchen Runs . OK Veggies</title><?php okv_head_meta(); ?><link rel="stylesheet" href="<?=okv_e(okv_asset('/assets/css/tailwind.css'))?>"></head>
+<body class="bg-forest-tint min-h-screen"><?php okv_shop_header('kitchen-runs'); ?>
+<main class="okv-container py-8 max-w-5xl"><a class="text-forest underline" href="/shop.php">Back to the shop</a><h1 class="font-editorial text-4xl text-ink mt-4">Your Kitchen Runs</h1><p class="text-ink-60 mt-2">Send your list. We will price it, then you approve it before it becomes an order.</p>
+<?php if((int)okv_input('submitted',0)>0): ?><p class="mt-4 okv-alert-success">Your Kitchen Run is with the team. We will send your quote here.</p><?php endif; ?>
+<section class="bg-white rounded-xl p-5 mt-6 shadow-sm"><h2 class="font-semibold text-xl">Start a Kitchen Run</h2><form action="/api/v1/kitchen_runs.php" method="post" enctype="multipart/form-data" class="grid gap-4 mt-4"><?=Csrf::field()?><input type="hidden" name="action" value="submit"><label>How are you sending the list?<select name="input_mode" class="okv-input"><option value="catalogue">Pick from the catalogue</option><option value="custom">Type a custom list</option><option value="upload">Upload a JPEG, PNG or PDF</option></select></label><label>Who should price it?<select name="pricing_mode" class="okv-input"><option value="by_us">OK Veggies prices it</option><option value="by_customer">I have target prices</option></select></label>
+<fieldset class="border rounded p-3"><legend class="px-1">One item, add more by submitting another request if needed</legend><label>Catalogue product<select name="items[0][product_id]" class="okv-input"><option value="">Choose a product</option><?php foreach($products as $p):?><option value="<?=$p['id']?>"><?=okv_e($p['name'])?>, <?=okv_e($p['unit_name'])?>, <?=Money::format((int)$p['current_price_subunit'])?></option><?php endforeach;?></select></label><label>Item name<input class="okv-input" name="items[0][item_name]" maxlength="200"></label><label>Quantity<input class="okv-input" name="items[0][quantity]" inputmode="decimal"></label><label>Unit<select class="okv-input" name="items[0][unit_id]"><option value="">Choose a unit</option><?php foreach($units as $u):?><option value="<?=$u['id']?>"><?=okv_e($u['name'])?></option><?php endforeach;?></select></label><label>Your target price, in kobo<input class="okv-input" name="items[0][unit_price_subunit]" inputmode="numeric"></label></fieldset>
+<label>Upload list<input type="file" name="attachment" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"></label><label><input type="checkbox" name="is_open_budget" value="1"> Open budget. Source it for me, within the cap below if I set one.</label><label>Optional spend cap, naira<input class="okv-input" name="spend_cap" inputmode="decimal"></label><label>Notes for the team<textarea class="okv-input" name="customer_note" maxlength="2000"></textarea></label><button class="okv-btn" type="submit">Send Kitchen Run</button></form></section>
+<section class="mt-8"><h2 class="font-semibold text-xl">Your requests</h2><?php foreach($runs as $run):?><article class="bg-white p-4 mt-3 rounded border"><a class="font-mono text-forest underline" href="/kitchen-runs.php?request=<?=$run['id']?>"><?=okv_e($run['request_number'])?></a><span class="ml-3"><?=okv_e(ucfirst($run['status']))?></span><?php if($run['quoted_total_subunit']!==null):?><span class="ml-3"><?=Money::format((int)$run['quoted_total_subunit'])?></span><?php endif;?></article><?php endforeach;?></section>
+<?php if($request):?><section class="bg-white p-5 mt-6 rounded"><h2 class="font-semibold text-xl"><?=okv_e($request['request_number'])?></h2><?php foreach($lines as $line):?><p><?=okv_e($line['item_name'])?>, <?=okv_e((string)$line['quantity'])?> <?=okv_e($line['unit_name']??$line['unit_label'])?><?php if($line['line_total_subunit']!==null):?>, <?=Money::format((int)$line['line_total_subunit'])?><?php endif;?></p><?php endforeach;?><?php if($request['attachment_url']):?><a class="underline text-forest" href="/public/kitchen_run_attachment.php?request=<?=$request['id']?>">Download your original list</a><?php endif;?><?php if($request['status']==='quoted'):?><p class="mt-3">Quote: <?=Money::format((int)$request['quoted_total_subunit'])?>. Deposit: <?=Money::format((int)$request['deposit_subunit'])?>. Balance: <?=Money::format(KitchenRuns::remainingBalance((int)$request['quoted_total_subunit'],(int)$request['deposit_subunit']))?></p><form method="post" action="/api/v1/kitchen_runs.php" class="mt-3"><?=Csrf::field()?><input type="hidden" name="action" value="approve"><input type="hidden" name="request_id" value="<?=$request['id']?>"><input type="hidden" name="state_version" value="<?=$request['state_version']?>"><button class="okv-btn">Approve this quote</button></form><?php endif;?></section><?php endif;?></main><?php okv_shop_footer(); ?></body></html>

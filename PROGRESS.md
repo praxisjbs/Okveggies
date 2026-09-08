@@ -118,10 +118,21 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] The refund path proved end to end against a stand-in gateway, and a way to prove email on the live server without placing an order.
 
 ### M7. Kitchen Runs
-- [ ] Request flow, four input modes (catalogue, priced-by-us, priced-by-customer, upload)
-- [ ] Already-priced confirm path; open-budget trust mode with admin deposit and optional cap
-- [ ] Admin quote workflow; convert to order
-- [ ] Tests: quote totals; convert-to-order
+- [x] Request flow, four input modes (catalogue, priced-by-us, priced-by-customer, upload)
+- [x] Already-priced confirm path; open-budget trust mode with admin deposit and optional cap
+- [x] Admin quote workflow; convert to order
+- [x] Tests: quote totals; convert-to-order
+
+### 4 Sep 2026, M7 Kitchen Runs complete
+
+- Added the initial Kitchen Run domain service, customer and staff routes, a private attachment download route, unit tests for state transitions, quote totals, caps, balances and payment eligibility, and migration `022_kitchen_run_audit_and_locking.sql` for the preserved submission JSON and compare-and-swap version.
+- Recorded the approved decisions: unavailable uploads wait for staff transcription; customer target prices may change only through a new customer approval; a cap refuses an over-cap quote; open-budget uses deposit or approved business credit; customer cancellation is limited to Submitted and Quoted.
+- Ran `php scripts/tests/run.php`: 1,475 / 1,475 assertions passed after the M7 contract rules were wired. Ran `php -l` on the five new or changed M7 PHP entry points, `npm run build`, `bash scripts/brand-check.sh` and `git diff --check` successfully.
+- Follow-up local verification used a disposable MariaDB 10.11 container on `127.0.0.1:3308`, database `okv_m7_scratch`, built only with migrations. Migrations `000` through `022` applied once and the second run reported nothing pending. `kitchen_runs_db_test.php` passed 20/20, `kitchen_runs_http_test.php` 5/5, lifecycle DB 11/11, manifest DB 9/9, lifecycle HTTP 26/26, public trail HTTP 7/7 and cancellation DB 28/28.
+- SMTP-success verification: ran `notifications_db_test.php` against the scratch database and disposable local Mailpit with `SMTP_HOST=127.0.0.1`, port `1025`, a test-only sender and local test credentials. It passed 77/77. Mailpit visually showed both captured test messages; the suite's deliberately unreachable-port case still logged a failed delivery without throwing, then its resend was marked sent.
+- Browser verification: the Kitchen Runs entry route correctly redirects an anonymous customer to sign-in. In a real browser at 390px and 1440px, that entry screen had no horizontal overflow (390/390 and 1440/1440 document widths; form widths 310px and 384px). The authenticated customer and staff Kitchen Run journeys remain to be visually exercised with an explicitly authorised disposable signed-in account; their route, ownership, CSRF and RBAC behaviour is covered by the HTTP contract test above.
+- Final authenticated visual attempt: a disposable household account and Owner account were created only in a fresh local scratch database. The signed-in customer form rendered at requested 390px and 1440px without horizontal overflow, and its submit control was visible at both widths. Chrome blocked every actual POST to `/api/v1/kitchen_runs.php` before the local application received it (`ERR_BLOCKED_BY_CLIENT`), including a catalogue submission attempted twice; a direct scratch-database read confirmed that no request was written. Consequently the request, quote, approval, conversion and two-way-link journeys could not be completed visually in this browser environment. This is an external browser/client blocker, not an application assertion failure: the same routes remain covered by the green HTTP test (5/5) and M7 DB contract (20/20).
+- Remaining release check: repeat the authenticated visual Kitchen Run journeys in a browser profile that permits local `/api/v1/*` POSTs. Use only disposable accounts and the migration-built scratch database, then exercise request, quote, approval, conversion and the two-way related-record links at 390px and 1440px.
 
 ### M8. Pro Portal and credit
 - [ ] Pro dashboard, saved kitchen lists, standing-order placeholder
