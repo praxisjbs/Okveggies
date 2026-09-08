@@ -120,7 +120,11 @@
         tabs[j].classList.toggle('shadow-okv-1', active);
         tabs[j].classList.toggle('text-ink-60', !active);
       }
-      try { history.replaceState(null, '', '?mode=' + mode); } catch (err) {}
+      try {
+        var url = new URL(window.location.href);
+        url.searchParams.set('mode', mode);
+        history.replaceState(null, '', url.pathname + '?' + url.searchParams.toString());
+      } catch (err) {}
     }
     for (var k = 0; k < tabs.length; k++) {
       tabs[k].addEventListener('click', function (e) {

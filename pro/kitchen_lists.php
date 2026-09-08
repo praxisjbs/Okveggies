@@ -21,15 +21,13 @@
  */
 
 require_once __DIR__ . '/../includes/bootstrap.php';
-
-Customer::requireLogin();
+require_business_customer();
 
 $okv_pro_title  = 'My Kitchen Lists';
 $okv_pro_note   = 'Every list you have sent us, what it is doing now, and the way to send another.';
 $okv_pro_active = '/pro/kitchen_lists.php';
 
-$isBusiness = Customer::isBusiness();
-$runs       = $isBusiness ? KitchenRuns::allForCustomer((int) Customer::id()) : [];
+$runs = KitchenRuns::allForCustomer((int) Customer::id());
 
 /** Waiting on us first, because those are the ones a kitchen is chasing. */
 $waiting = 0;
@@ -41,26 +39,6 @@ foreach ($runs as $run) {
 
 require __DIR__ . '/../includes/components/pro/header.php';
 ?>
-
-<?php if (!$isBusiness): ?>
-  <div class="okv-panel max-w-3xl">
-    <div class="okv-panel-body">
-      <p class="okv-eyebrow">Business accounts</p>
-      <p class="mt-3 text-ink">
-        The Pro Portal is for business accounts: restaurants, canteens, hotels and caterers.
-        Kitchen Runs work on your account already, from the storefront.
-      </p>
-      <div class="mt-6 flex flex-wrap gap-2">
-        <a href="/kitchen-runs.php" class="okv-btn px-5 min-h-[44px] inline-flex items-center">Send a Kitchen Run</a>
-        <a href="/account.php" class="okv-btn-outline px-5 min-h-[44px] inline-flex items-center">Your account</a>
-      </div>
-      <p class="mt-4 text-sm text-ink-60">
-        Cooking for a business? Tell us and we will move your account over, with credit terms and delivery days to match.
-      </p>
-    </div>
-  </div>
-
-<?php else: ?>
 
   <div class="space-y-6">
 
@@ -148,11 +126,9 @@ require __DIR__ . '/../includes/components/pro/header.php';
 
     <p class="text-sm text-ink-60">
       Looking for what you owe or what is on the way?
-      <a class="text-forest underline underline-offset-2" href="/pro/orders.php">Orders and invoices</a> has it.
+      <a class="inline-flex min-h-[44px] items-center text-forest underline underline-offset-2" href="/pro/orders.php">Orders and invoices</a> has it.
     </p>
 
   </div>
-
-<?php endif; ?>
 
 <?php require __DIR__ . '/../includes/components/pro/footer.php'; ?>

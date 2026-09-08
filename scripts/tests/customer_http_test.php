@@ -51,7 +51,7 @@ function t_eq($expected, $actual, string $label): void {
     t_ok($ok, $label);
 }
 
-/** One HTTP call with a per-jar cookie file. Returns [status, decoded-or-body]. */
+/** One HTTP call with a per-jar cookie file. Returns [status, decoded-or-body, redirect]. */
 function http(string $method, string $path, ?array $fields, string $jar, bool $json = true): array {
     $ch = curl_init(BASE . $path);
     curl_setopt_array($ch, [
@@ -70,10 +70,11 @@ function http(string $method, string $path, ?array $fields, string $jar, bool $j
     if ($headers) { curl_setopt($ch, CURLOPT_HTTPHEADER, $headers); }
     $resp  = curl_exec($ch);
     $code  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $redirect = (string) curl_getinfo($ch, CURLINFO_REDIRECT_URL);
     $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
     curl_close($ch);
     $body = $resp === false ? '' : substr($resp, $hsize);
-    return [$code, $json ? (json_decode($body, true) ?? []) : $body];
+    return [$code, $json ? (json_decode($body, true) ?? []) : $body, $redirect];
 }
 
 /** Fetch a fresh CSRF token for a jar by loading a page it can see. */
@@ -159,7 +160,44 @@ try {
     t_eq('Bola Kitchen', $bizProfile['business_name'] ?? '', 'the business name is saved');
     t_eq('requested', $bizProfile['credit_status'] ?? '', 'an opt-in credit request is recorded');
 
-    // ---- 4. Sign in by email and by phone, land in the right place --------
+    // ---- 4. Every Pro page uses the same customer account gate ------------
+    $proRoutes = [
+        '/pro/' => 'Dashboard',
+        '/pro/index.php' => 'Dashboard',
+        '/pro/kitchen_lists.php' => 'My Kitchen Lists',
+        '/pro/standing_orders.php' => 'Standing Orders',
+        '/pro/orders.php' => 'Orders and Invoices',
+        '/pro/credit.php' => 'Credit',
+        '/pro/account.php' => 'Account and Branches',
+    ];
+    $jarGuest = tempnam($jarDir, 'okvgs');
+    foreach ($proRoutes as $route => $title) {
+        [$guestCode, , $guestTo] = http('GET', $route, null, $jarGuest, false);
+        t_eq(302, $guestCode, "a guest is redirected from $route");
+        t_eq('/account.php?mode=signin&return=' . rawurlencode($route), parse_url($guestTo, PHP_URL_PATH) . '?' . parse_url($guestTo, PHP_URL_QUERY), "the guest return path is safe for $route");
+
+        [$houseCode, , $houseTo] = http('GET', $route, null, $jarHH, false);
+        $housePath = $route === '/pro/kitchen_lists.php'
+            ? '/kitchen-runs.php?notice=pro_business'
+            : '/account.php?notice=pro_business';
+        t_eq(302, $houseCode, "a household is redirected from $route");
+        t_eq($housePath, parse_url($houseTo, PHP_URL_PATH) . '?' . parse_url($houseTo, PHP_URL_QUERY), "the household gets a useful destination for $route");
+
+        [$businessCode, $businessBody] = http('GET', $route, null, $jarBiz, false);
+        t_eq(200, $businessCode, "a business reaches $route");
+        t_ok(strpos((string) $businessBody, '<h1 class="okv-page-title">' . $title . '</h1>') !== false, "$route renders its real screen title");
+        t_ok(strpos((string) $businessBody, 'aria-current="page"') !== false, "$route marks its current navigation path");
+        t_ok(strpos((string) $businessBody, 'Coming soon') === false, "$route has no misleading scaffold notice");
+    }
+
+    [, $signInBody] = http('GET', '/account.php?mode=signin&return=%2Fpro%2Fcredit.php', null, $jarGuest, false);
+    t_ok(strpos((string) $signInBody, 'name="return" value="/pro/credit.php"') !== false, 'the customer sign-in form keeps the safe Credit return path');
+    [, $houseAccount] = http('GET', '/account.php?notice=pro_business', null, $jarHH, false);
+    t_ok(strpos((string) $houseAccount, 'Pro screens are for business accounts') !== false, 'the household account destination explains the Pro boundary');
+    [, $houseRuns] = http('GET', '/kitchen-runs.php?notice=pro_business', null, $jarHH, false);
+    t_ok(strpos((string) $houseRuns, 'Your household Kitchen Runs are all available here') !== false, 'the household Kitchen Runs destination explains the Pro boundary');
+
+    // ---- 5. Sign in by email and by phone, land in the right place --------
     [$code, $res] = http('POST', '/api/v1/auth.php', ['action' => 'login', 'context' => 'storefront', 'okv_csrf' => token($jarLog), 'identifier' => $hhEmail, 'password' => $pw], $jarLog);
     t_eq(200, $code, 'sign in by email works');
     t_eq('/', $res['redirect'] ?? '', 'a household lands on the shop');
@@ -173,10 +211,14 @@ try {
     t_eq(401, $code, 'a wrong password is refused');
 
     $jarBizLog = tempnam($jarDir, 'okvbl');
-    [$code, $res] = http('POST', '/api/v1/auth.php', ['action' => 'login', 'context' => 'storefront', 'okv_csrf' => token($jarBizLog), 'identifier' => $bizEmail, 'password' => $pw], $jarBizLog);
-    t_eq('/pro', $res['redirect'] ?? '', 'a business lands on the Pro Portal');
+    [$code, $res] = http('POST', '/api/v1/auth.php', ['action' => 'login', 'context' => 'storefront', 'return' => '/pro/credit.php?account=someone-else', 'okv_csrf' => token($jarBizLog), 'identifier' => $bizEmail, 'password' => $pw], $jarBizLog);
+    t_eq('/pro/credit.php', $res['redirect'] ?? '', 'a business returns to the requested Pro path without its query string');
 
-    // ---- 5. Activation, and a code cannot be used twice -------------------
+    $jarUnsafe = tempnam($jarDir, 'okvus');
+    [$code, $res] = http('POST', '/api/v1/auth.php', ['action' => 'login', 'context' => 'storefront', 'return' => 'https://example.test/pro/credit.php', 'okv_csrf' => token($jarUnsafe), 'identifier' => $bizEmail, 'password' => $pw], $jarUnsafe);
+    t_eq('/pro', $res['redirect'] ?? '', 'an unsafe sign-in return is ignored');
+
+    // ---- 6. Activation, and a code cannot be used twice -------------------
     // jarHH is still signed in from registration. Issue a known code, then verify it.
     $activationCode = Otp::issue($hhEmail, 'email', 'account_activation', (int) $hh['id']);
     [$code, $res] = http('POST', '/api/v1/otp.php', ['action' => 'verify', 'okv_csrf' => token($jarHH), 'code' => $activationCode], $jarHH);
@@ -192,7 +234,7 @@ try {
     t_eq(200, $code, 're-posting after activation is idempotent, not an error');
     t_ok(($res['activated'] ?? false) === true, 'the account stays active on a repeat verify');
 
-    // ---- 6. Password reset by code ----------------------------------------
+    // ---- 7. Password reset by code ----------------------------------------
     $jarReset = tempnam($jarDir, 'okvrs');
     [$code, $res] = http('POST', '/api/v1/auth.php', ['action' => 'forgot_password', 'okv_csrf' => token($jarReset), 'email' => $hhEmail], $jarReset);
     t_eq(200, $code, 'asking for a reset code answers the same either way');

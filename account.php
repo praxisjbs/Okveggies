@@ -16,6 +16,7 @@ require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/brand.php';
 
 $signedIn = Customer::isLoggedIn();
+$proReturn = okv_pro_safe_return_path((string) okv_input('return', '')) ?? '';
 
 // The no-JS post paths land back here with ?error=<code>. Map each to a plain
 // message. Anything unexpected falls back to the general one.
@@ -107,6 +108,12 @@ $csrf = Csrf::token();
   </header>
 
   <main class="okv-container py-8 md:py-12">
+    <?php if (okv_input('notice', '') === 'pro_business'): ?>
+      <div class="mb-6 rounded-md border border-mist bg-white px-4 py-3 text-sm text-ink" role="status">
+        Pro screens are for business accounts. You can manage this household account here or
+        <a href="/kitchen-runs.php" class="inline-flex min-h-[44px] items-center text-forest underline underline-offset-2">send a Kitchen Run</a>.
+      </div>
+    <?php endif; ?>
     <p class="okv-eyebrow">Your account</p>
     <h1 class="mt-3 font-editorial text-okv-h5 text-ink md:text-okv-h4">
       Hello, <?= okv_e($firstName !== '' ? $firstName : 'there') ?>
@@ -312,11 +319,11 @@ $csrf = Csrf::token();
       <div class="bg-white rounded-lg shadow-okv-3 p-6 sm:p-8 animate-okv-rise">
         <!-- Tabs -->
         <div class="grid grid-cols-2 gap-1 p-1 rounded-md bg-forest-tint mb-6" role="tablist">
-          <a href="?mode=signin" role="tab" data-okv-tab="signin"
-             class="text-center min-h-[40px] inline-flex items-center justify-center rounded-md text-sm font-medium <?= $mode === 'signin' ? 'bg-white text-forest shadow-okv-1' : 'text-ink-60' ?>"
+          <a href="?mode=signin<?= $proReturn !== '' ? '&amp;return=' . rawurlencode($proReturn) : '' ?>" role="tab" data-okv-tab="signin"
+             class="text-center min-h-[44px] inline-flex items-center justify-center rounded-md text-sm font-medium <?= $mode === 'signin' ? 'bg-white text-forest shadow-okv-1' : 'text-ink-60' ?>"
              aria-selected="<?= $mode === 'signin' ? 'true' : 'false' ?>">Sign in</a>
-          <a href="?mode=register" role="tab" data-okv-tab="register"
-             class="text-center min-h-[40px] inline-flex items-center justify-center rounded-md text-sm font-medium <?= $mode === 'register' ? 'bg-white text-forest shadow-okv-1' : 'text-ink-60' ?>"
+          <a href="?mode=register<?= $proReturn !== '' ? '&amp;return=' . rawurlencode($proReturn) : '' ?>" role="tab" data-okv-tab="register"
+             class="text-center min-h-[44px] inline-flex items-center justify-center rounded-md text-sm font-medium <?= $mode === 'register' ? 'bg-white text-forest shadow-okv-1' : 'text-ink-60' ?>"
              aria-selected="<?= $mode === 'register' ? 'true' : 'false' ?>">Create account</a>
         </div>
 
@@ -330,6 +337,7 @@ $csrf = Csrf::token();
             <?= Csrf::field() ?>
             <input type="hidden" name="action" value="login">
             <input type="hidden" name="context" value="storefront">
+            <?php if ($proReturn !== ''): ?><input type="hidden" name="return" value="<?= okv_e($proReturn) ?>"><?php endif; ?>
             <div data-okv-error role="alert" aria-live="polite" class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3"<?= ($errorText !== '' && $mode === 'signin') ? '' : ' hidden' ?>><?= okv_e($mode === 'signin' ? $errorText : '') ?></div>
             <div>
               <label for="si_identifier" class="okv-label">Phone number or email</label>

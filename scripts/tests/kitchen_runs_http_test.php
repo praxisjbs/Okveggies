@@ -88,10 +88,11 @@ $jars = [
     tempnam(sys_get_temp_dir(), 'okv-krh-a-'),
     tempnam(sys_get_temp_dir(), 'okv-krh-b-'),
     tempnam(sys_get_temp_dir(), 'okv-krh-g-'),
+    tempnam(sys_get_temp_dir(), 'okv-krh-p-'),
 ];
 
 try {
-    foreach ([['staff', 'Manager'], ['household', 'Owner'], ['household', 'Stranger']] as $index => [$type, $last]) {
+    foreach ([['staff', 'Manager'], ['household', 'Owner'], ['household', 'Stranger'], ['business', 'Business']] as $index => [$type, $last]) {
         Database::run(
             'INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status, email_verified_at)
              VALUES (\'Kitchen\', :last, :email, :phone, :hash, :type, \'active\', NOW())',
@@ -147,8 +148,9 @@ try {
     $managerCsrf = krh_login($jars[0], $base, '/admin/login.php', "kr-http-0-$suffix@example.test", $password, '/admin/kitchen_runs.php');
     $ownerCsrf = krh_login($jars[1], $base, '/account.php', "kr-http-1-$suffix@example.test", $password, '/kitchen-runs.php');
     $strangerCsrf = krh_login($jars[2], $base, '/account.php', "kr-http-2-$suffix@example.test", $password, '/kitchen-runs.php');
+    $businessCsrf = krh_login($jars[4], $base, '/account.php', "kr-http-3-$suffix@example.test", $password, '/kitchen-runs.php');
 
-    krh_ok($managerCsrf !== '' && $ownerCsrf !== '' && $strangerCsrf !== '', 'every screen hands out a CSRF token');
+    krh_ok($managerCsrf !== '' && $ownerCsrf !== '' && $strangerCsrf !== '' && $businessCsrf !== '', 'every screen hands out a CSRF token');
 
     // A customer cannot do a staff job, whatever they post. Every staff action,
     // with a real session and a real token, so what refuses them is the
@@ -390,15 +392,26 @@ try {
     [, $body] = krh_req($jars[1], $base . '/kitchen-runs.php', null, false);
     krh_ok(!str_contains($body, 'INTERNAL ' . $suffix), 'nor on their list of runs');
 
-    // --- 9. The Pro Portal screen is a screen now, not a placeholder (item 40)
-    [$code, $body] = krh_req($jars[1], $base . '/pro/kitchen_lists.php', null, false);
-    krh_eq(200, $code, 'the Pro Portal Kitchen Lists screen loads for a signed-in customer');
+    // --- 9. The M7 Pro history remains available to business customers ------
+    $businessDate = (string) Delivery::nextEligibleDates('business', 3)[0]['date'];
+    $businessRun = KitchenRunWorkflow::submit($users[3], 'business', [
+        'recipient_name' => 'Business Kitchen', 'recipient_phone' => '08031234568',
+        'address_line_1' => '6 Bourdillon Road', 'city' => 'Lagos', 'state' => 'Lagos',
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'preferred_delivery_date' => $businessDate, 'delivery_zone_id' => $zoneId,
+        'items' => [['item_name' => 'Stock fish', 'quantity' => '2.000', 'unit_id' => $unitId]],
+    ]);
+    $requestIds[] = (int) $businessRun['id'];
+
+    [$code, $body] = krh_req($jars[4], $base . '/pro/kitchen_lists.php', null, false);
+    krh_eq(200, $code, 'the Pro Portal Kitchen Lists screen loads for a business customer');
     krh_ok(!str_contains($body, 'Coming soon'), 'and is no longer the placeholder that named a milestone');
     krh_ok(str_contains($body, '/kitchen-runs.php'), 'with a route into starting a run');
+    krh_ok(str_contains($body, (string) $businessRun['request_number']), 'with that business customer\'s own Kitchen Run history');
+    krh_ok(!str_contains($body, $ownedNumber), 'without another customer\'s Kitchen Run');
 
-    [$code, $body] = krh_req($jars[2], $base . '/pro/kitchen_lists.php', null, false);
-    krh_eq(200, $code, 'another customer also reaches the screen');
-    krh_ok(!str_contains($body, $ownedNumber), 'and never sees somebody else\'s Kitchen Run on it');
+    [$code] = krh_req($jars[1], $base . '/pro/kitchen_lists.php', null, false);
+    krh_eq(302, $code, 'a household customer is sent to the storefront Kitchen Runs screen');
 } finally {
     foreach ($requestIds as $id) {
         $orderRow = Database::one('SELECT converted_order_id FROM kitchen_run_requests WHERE id = :id', [':id' => $id]);

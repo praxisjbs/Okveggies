@@ -450,6 +450,7 @@ is the whole lesson, and it is written up for the engineer in `docs/M7_REVIEW.md
 - Remaining release check: repeat the authenticated visual Kitchen Run journeys in a browser profile that permits local `/api/v1/*` POSTs. Use only disposable accounts and the migration-built scratch database, then exercise request, quote, approval, conversion and the two-way related-record links at 390px and 1440px.
 
 ### M8. Pro Portal and credit
+- [x] **Task A, shared Pro access and screen shells.** All 6 Pro pages call one customer account-type gate before data reads or HTML. Guests keep a path-only return through customer sign-in, households go to Account or Kitchen Runs with a plain explanation, and business customers reach the requested screen. The M7 Kitchen Runs history is preserved. Navigation labels, active states, breadcrumbs and back paths now agree. Dashboard, Standing Orders, Orders and Invoices, and Credit use honest availability shells. Account and Branches shows only supported account details and links to existing address management. No branch-management behaviour was added.
 - [ ] Pro dashboard, saved kitchen lists, standing-order placeholder
 - [ ] Credit: self-serve application, admin approval, manual grant and limit
 - [ ] Credit orders draw on limit; outstanding / aging view
@@ -510,6 +511,16 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 8 Sep 2026, M8 Task A: one Pro gate and honest screen shells
+
+- Added `require_business_customer()` under `includes/functions/` and loaded it from the shared bootstrap. Its allowlist comes from the shared Pro navigation. Return values keep only a known Pro path and discard query strings. Staff RBAC does not grant customer portal access.
+- Applied the gate immediately after bootstrap on all 6 Pro routes. `pro/kitchen_lists.php` still reads its history through `KitchenRuns::allForCustomer()` after the gate. No branch records, branch controls, credit figures, order figures or standing-order behaviour were invented.
+- Added contextual household notices to `/account.php` and `/kitchen-runs.php`. Updated the customer sign-in form and controller so `/pro/credit.php` returns a business customer to Credit, while an unsafe return is ignored.
+- Replaced the promise-heavy placeholder copy with accessible shells and useful working links. Pro navigation now uses the full PRD labels, current-page semantics, consistent breadcrumbs and back routes. It is fixed to the bottom on narrow screens and returns to the header flow on wider screens. Visible controls are at least 44px and the shared gold focus rule remains active.
+- Tests: `php scripts/tests/run.php` passed 1,868 assertions. `customer_http_test.php` passed 91 assertions against a fresh MySQL 8 database. `kitchen_runs_db_test.php` passed 157 assertions and `kitchen_runs_http_test.php` passed 132 assertions. The Kitchen Runs HTTP fixture now uses a real business customer for the Pro history assertion and confirms a household receives a redirect. `scripts/brand-check.sh` passed. Every touched PHP file passed `php -l`.
+- Browser checks covered all 6 routes at 390px and 1440px. There was no page-level horizontal overflow, every active navigation label matched its screen, all visible controls measured at least 44px, and the mobile and desktop navigation positions matched the intended layouts.
+- `bash scripts/verify.sh https://okveggies.com.ng` reached the live site and passed 12 checks, but its `/migrations/` and `/docs/` denial checks received 200. This is a pre-existing deployment verification issue outside Task A and remains open. The generic staff `scripts/smoke_roles.sh` could not run because the workspace has no `.env` or MySQL command-line client; the new customer account-type role smoke ran against MySQL 8 instead.
 
 ### 4 Sep 2026, M6 merged
 

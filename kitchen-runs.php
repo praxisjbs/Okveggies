@@ -94,6 +94,8 @@ $errorCode = trim((string) okv_input('error', ''));
 $notice    = null;
 if ($errorCode !== '') {
     $notice = ['tone' => 'bad', 'text' => KitchenRuns::message($errorCode)];
+} elseif (okv_input('notice', '') === 'pro_business') {
+    $notice = ['tone' => 'neutral', 'text' => 'Pro screens are for business accounts. Your household Kitchen Runs are all available here.'];
 } elseif (okv_input('submitted', '') !== '') {
     $notice = ['tone' => 'good', 'text' => 'Your list is with the team. We will price it and send the quote here.'];
 } elseif (okv_input('approved', '') !== '') {
@@ -173,7 +175,12 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
   </header>
 
   <?php if ($notice): ?>
-    <p class="mt-6 rounded-md border px-4 py-3 text-sm <?= $notice['tone'] === 'good' ? 'border-foliage bg-foliage-tint text-forest' : 'border-tomato bg-tomato-tint text-tomato' ?>" role="status">
+    <?php
+      $noticeClass = $notice['tone'] === 'good'
+          ? 'border-foliage bg-foliage-tint text-forest'
+          : ($notice['tone'] === 'bad' ? 'border-tomato bg-tomato-tint text-tomato' : 'border-mist bg-white text-ink');
+    ?>
+    <p class="mt-6 rounded-md border px-4 py-3 text-sm <?= $noticeClass ?>" role="status">
       <?= okv_e($notice['text']) ?>
     </p>
   <?php endif; ?>
