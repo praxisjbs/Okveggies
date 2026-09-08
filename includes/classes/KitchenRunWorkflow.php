@@ -82,6 +82,19 @@ final class KitchenRunWorkflow
         }
 
         $address  = self::validateAddress($input);
+
+        // The day and the area are the customer's choice now, not something
+        // staff fill in later on their behalf (PRD 8.3, and PRD 9.4 for the
+        // picker itself). Checked here on the way in, the same way checkout
+        // checks it, so nobody can ask for a day the shop does not run. Staff
+        // may still change both at quote time, because a day can pass while a
+        // request waits for a price.
+        $date = trim((string) ($input['preferred_delivery_date'] ?? ''));
+        $zone = KitchenRuns::positiveInt($input['delivery_zone_id'] ?? null);
+        if ($date === '' || $zone === null) {
+            throw new DomainException('delivery_required');
+        }
+        self::assertDeliverable($date, $customerType, $zone);
         $customer = Database::one(
             'SELECT first_name, last_name, email, phone FROM users WHERE id = :id AND status = \'active\'',
             [':id' => $userId]
@@ -101,6 +114,7 @@ final class KitchenRunWorkflow
                      delivery_address_line_2, delivery_city, delivery_state, delivery_landmark,
                      input_mode, pricing_mode, status, is_open_budget,
                      budget_ceiling_subunit, spend_cap_subunit, attachment_url,
+                     preferred_delivery_date, delivery_zone_id,
                      original_submission_json, customer_note, created_by)
                  VALUES
                     (:number, :user_id, :type, :contact_name, :contact_phone, :contact_email,
@@ -108,6 +122,7 @@ final class KitchenRunWorkflow
                      :line2, :city, :state, :landmark,
                      :mode, :pricing, \'submitted\', :open,
                      :budget, :cap, :attachment,
+                     :date, :zone,
                      :original, :note, :created_by)',
                 [
                     ':number'         => $number,
@@ -129,6 +144,8 @@ final class KitchenRunWorkflow
                     ':budget'         => $budget,
                     ':cap'            => $cap,
                     ':attachment'     => $attachment,
+                    ':date'           => $date,
+                    ':zone'           => $zone,
                     ':original'       => json_encode(self::auditable($input), JSON_THROW_ON_ERROR),
                     ':note'           => KitchenRuns::note($input['customer_note'] ?? ''),
                     ':created_by'     => $userId,
@@ -257,15 +274,57 @@ final class KitchenRunWorkflow
      */
     public static function approve(int $requestId, int $userId, int $version): array
     {
+        return self::applyApproval($requestId, $version, 'customer', $userId, $userId, 'Customer approved the quote.');
+    }
+
+    /**
+     * Staff say yes on the customer's behalf, because the customer said yes on
+     * the phone. This is a real thing in this business: a restaurant manager
+     * standing over a pot rings us rather than opening a laptop, and refusing
+     * to record that would only push it into a WhatsApp message nobody can
+     * audit later.
+     *
+     * So it is gated on kitchen_runs.approve, it demands in writing who gave
+     * the approval and how it reached us, and the trail records it as an admin
+     * action with the colleague named. A reader of the history can always tell
+     * an approval the customer made from one we made for them.
+     */
+    public static function approveForCustomer(int $requestId, int $staffId, int $version, string $authorisation): array
+    {
+        $note = KitchenRuns::note($authorisation);
+        if ($note === null) {
+            throw new DomainException('authorisation_required');
+        }
+        return self::applyApproval($requestId, $version, 'admin', $staffId, null, 'Approved for the customer by staff. ' . $note);
+    }
+
+    /**
+     * One approval, whoever pressed it. The expiry rule is the same for both,
+     * because it is a money rule: a quote nobody honours any more cannot be
+     * approved over the phone either.
+     *
+     * $ownerId is the customer whose request this must be, or null when a
+     * colleague with the permission is approving it for them.
+     */
+    private static function applyApproval(int $requestId, int $version, string $source, ?int $actorId, ?int $ownerId, string $note): array
+    {
         $pdo = Database::getInstance()->getConnection();
         $pdo->beginTransaction();
         try {
             $request = self::lockRequest($pdo, $requestId);
-            if ((int) $request['user_id'] !== $userId) {
-                throw new DomainException('stale_or_not_owned');
-            }
-            if ((int) $request['state_version'] !== $version || $request['status'] !== 'quoted') {
-                throw new DomainException('stale_or_not_owned');
+
+            if ($ownerId !== null) {
+                if ((int) $request['user_id'] !== $ownerId) {
+                    throw new DomainException('stale_or_not_owned');
+                }
+                if ((int) $request['state_version'] !== $version || $request['status'] !== 'quoted') {
+                    throw new DomainException('stale_or_not_owned');
+                }
+            } else {
+                self::assertVersion($request, $version);
+                if ($request['status'] !== 'quoted') {
+                    throw new DomainException('not_quoted');
+                }
             }
 
             $quotedAt = (string) ($request['quoted_at'] ?? '');
@@ -276,7 +335,7 @@ final class KitchenRunWorkflow
             }
 
             Database::run('UPDATE kitchen_run_requests SET approved_at = NOW() WHERE id = :id', [':id' => $requestId]);
-            self::transition($requestId, 'quoted', 'approved', 'customer', $userId, 'Customer approved the quote.');
+            self::transition($requestId, 'quoted', 'approved', $source, $actorId, $note);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -319,9 +378,17 @@ final class KitchenRunWorkflow
         return ['id' => $requestId, 'status' => 'declined', 'version' => $version + 1];
     }
 
-    /** The customer withdraws their own list, until we have started buying. */
+    /**
+     * The customer withdraws their own list, any time before it is an order.
+     *
+     * The state it was withdrawn from comes back with the result, because
+     * withdrawing an approved run is not the same event as withdrawing one
+     * nobody has priced: our own cash may already be at the market against it,
+     * so the controller emails the team on that one.
+     */
     public static function cancel(int $requestId, int $userId, int $version): array
     {
+        $from = '';
         $pdo = Database::getInstance()->getConnection();
         $pdo->beginTransaction();
         try {
@@ -337,7 +404,9 @@ final class KitchenRunWorkflow
                 throw new DomainException('stale_or_not_owned');
             }
 
-            self::transition($requestId, $from, 'cancelled', 'customer', $userId, 'Customer withdrew the request.');
+            self::transition($requestId, $from, 'cancelled', 'customer', $userId, $from === 'approved'
+                ? 'Customer withdrew the request after approving it. Check whether anything has been bought for it.'
+                : 'Customer withdrew the request.');
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -346,7 +415,34 @@ final class KitchenRunWorkflow
             throw $e;
         }
 
-        return ['id' => $requestId, 'status' => 'cancelled', 'version' => $version + 1];
+        return ['id' => $requestId, 'status' => 'cancelled', 'from' => $from, 'version' => $version + 1];
+    }
+
+    /**
+     * The internal note, for the team only (item 22 of the M7 review).
+     *
+     * admin_note is written for the customer: it is printed on their quote and
+     * it is the sentence they are emailed when we decline. This one is the
+     * other kind of note, the frank one, and it goes in its own column exactly
+     * the way orders.staff_note does. Nothing renders it outside the admin
+     * panel and no API a customer can reach returns it.
+     *
+     * It is not a state change, so it does not go through transition(): the
+     * request has not moved, and a note is not a lifecycle event.
+     */
+    public static function saveStaffNote(int $requestId, int $staffId, string $note): array
+    {
+        $clean = KitchenRuns::note($note);
+        if ($requestId < 1 || !Database::one('SELECT id FROM kitchen_run_requests WHERE id = :id', [':id' => $requestId])) {
+            throw new DomainException('not_found');
+        }
+
+        Database::run(
+            'UPDATE kitchen_run_requests SET staff_note = :note WHERE id = :id',
+            [':note' => $clean, ':id' => $requestId]
+        );
+
+        return ['id' => $requestId, 'saved' => true, 'staff_id' => $staffId];
     }
 
     /**

@@ -30,8 +30,16 @@ require_once __DIR__ . '/includes/components/shop/activation_banner.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
+require_once __DIR__ . '/includes/components/shop/delivery_picker.php';
 
-Customer::requireLogin();
+// A signed-out visitor is told what a Kitchen Run is and how to start one,
+// never bounced to a sign-in form before they have read a word of it. The
+// server is still the gate: api/v1/kitchen_runs.php calls requireLoginApi() on
+// submit, so nothing below this line loosens anything.
+if (!Customer::isLoggedIn()) {
+    require __DIR__ . '/includes/components/shop/kitchen_run_intro.php';
+    return;
+}
 
 $userId       = (int) Customer::id();
 $customerType = Customer::type() ?? 'household';
@@ -52,6 +60,21 @@ $products = Database::all(
       ORDER BY p.name'
 );
 $units = Database::all('SELECT id, name FROM units_of_measurement ORDER BY id');
+$zones = Delivery::zonesActive();
+
+// The day this customer's last run asked for, when it is still a day we run,
+// so a kitchen that always orders for Thursday does not re-pick Thursday every
+// week. Otherwise the picker's own first eligible day.
+$prefillDate = '';
+$lastDay = Database::one(
+    'SELECT preferred_delivery_date FROM kitchen_run_requests
+      WHERE user_id = :user AND preferred_delivery_date IS NOT NULL
+      ORDER BY id DESC LIMIT 1',
+    [':user' => $userId]
+);
+if ($lastDay && !empty(Delivery::isEligible((string) $lastDay['preferred_delivery_date'], $customerType)['eligible'])) {
+    $prefillDate = (string) $lastDay['preferred_delivery_date'];
+}
 
 // The address we already know about, so nobody types their street twice.
 $saved = Database::one(
@@ -96,7 +119,7 @@ $starts = [
         'blurb' => 'A photo or a PDF of your list. We read it, type it up and price it.',
         'pricing' => 'by_us',
     ],
-    'mixed' => [
+    'priced' => [
         'title' => 'Already priced',
         'blurb' => 'Your list with your own prices on it. We only confirm and get moving.',
         'pricing' => 'already_priced',
@@ -240,7 +263,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
       <?php endif; ?>
 
       <!-- Open budget. PRD 8.2: trust, with a cap that protects both sides. -->
-      <?php if ($chosen !== 'mixed'): ?>
+      <?php if ($chosen !== 'priced'): ?>
         <div class="mt-5 rounded-lg border border-mist bg-canvas p-4">
           <label class="flex items-start gap-3 min-h-[44px]">
             <input type="checkbox" name="is_open_budget" value="1" class="mt-1" data-kr-open>
@@ -258,6 +281,36 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
           </div>
         </div>
       <?php endif; ?>
+
+      <!-- When it goes. The customer's choice, not something we decide for
+           them later, and the picker only offers days we can actually run. -->
+      <fieldset class="mt-6 border-t border-mist pt-5">
+        <legend class="font-semibold text-ink">When should we bring it?</legend>
+        <p class="mt-1 text-sm text-ink-60">
+          Pick the day that suits your kitchen. If we cannot price the list in time for it, we will say so and agree another day with you.
+        </p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <?php okv_delivery_picker($customerType, 'preferred_delivery_date', $prefillDate); ?>
+          </div>
+          <div>
+            <label class="okv-label" for="delivery_zone_id">Delivery area</label>
+            <?php if (!$zones): ?>
+              <p class="rounded-md border border-mist bg-white px-4 py-3 text-sm text-ink-60">
+                We have no delivery areas open right now. Message support and we will sort it out with you.
+              </p>
+              <input type="hidden" name="delivery_zone_id" value="">
+            <?php else: ?>
+              <select class="okv-input" id="delivery_zone_id" name="delivery_zone_id" required>
+                <?php foreach ($zones as $zone): ?>
+                  <option value="<?= (int) $zone['id'] ?>"><?= okv_e($zone['name']) ?></option>
+                <?php endforeach; ?>
+              </select>
+              <p class="mt-2 text-sm text-ink-60">The delivery fee for your area is settled with you separately.</p>
+            <?php endif; ?>
+          </div>
+        </div>
+      </fieldset>
 
       <!-- Where it goes. Captured now, because this becomes a real order. -->
       <fieldset class="mt-6 border-t border-mist pt-5">

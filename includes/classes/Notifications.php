@@ -57,10 +57,12 @@ final class Notifications
         'refund_failed'     => ['template' => 'refund_failed',     'label' => 'Refund failed',           'audience' => 'staff'],
         'admin_new_order'   => ['template' => 'admin_new_order',   'label' => 'New order, for staff',    'audience' => 'staff'],
 
+        'kitchen_run_received' => ['template' => 'kitchen_run_received', 'label' => 'Kitchen Run received',      'audience' => 'customer'],
         'kitchen_run_quoted'   => ['template' => 'kitchen_run_quoted',   'label' => 'Kitchen Run priced',        'audience' => 'customer'],
         'kitchen_run_declined' => ['template' => 'kitchen_run_declined', 'label' => 'Kitchen Run declined',      'audience' => 'customer'],
         'admin_new_kitchen_run'      => ['template' => 'admin_new_kitchen_run',      'label' => 'New Kitchen Run, for staff',      'audience' => 'staff'],
         'admin_kitchen_run_approved' => ['template' => 'admin_kitchen_run_approved', 'label' => 'Kitchen Run approved, for staff', 'audience' => 'staff'],
+        'admin_kitchen_run_cancelled' => ['template' => 'admin_kitchen_run_cancelled', 'label' => 'Kitchen Run withdrawn after approval, for staff', 'audience' => 'staff'],
     ];
 
     /** The tokens each template may use, so the editor can list them honestly. */
@@ -78,10 +80,12 @@ final class Notifications
         'refund_failed'     => ['order_number', 'amount', 'reason', 'admin_url'],
         'admin_new_order'   => ['customer_name', 'order_number', 'order_total', 'delivery_day', 'zone_name', 'payment_choice', 'admin_url'],
 
+        'kitchen_run_received' => ['customer_name', 'request_number', 'line_count', 'delivery_day', 'request_url'],
         'kitchen_run_quoted'   => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'quote_expiry', 'request_url'],
         'kitchen_run_declined' => ['customer_name', 'request_number', 'decline_reason', 'request_url'],
         'admin_new_kitchen_run'      => ['customer_name', 'request_number', 'line_count', 'input_mode_label', 'pricing_mode_label', 'budget_line', 'admin_url'],
         'admin_kitchen_run_approved' => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'admin_url'],
+        'admin_kitchen_run_cancelled' => ['customer_name', 'request_number', 'quote_total', 'admin_url'],
     ];
 
     /** Which lifecycle stage announces itself, and with which event. */
@@ -450,10 +454,22 @@ final class Notifications
                 'input_mode_label'   => KitchenRuns::modeLabel((string) $request['input_mode']),
                 'pricing_mode_label' => KitchenRuns::pricingLabel((string) $request['pricing_mode']),
                 'budget_line'        => self::kitchenRunBudgetLine($request),
+                'delivery_day'       => self::kitchenRunDeliveryDay($request['preferred_delivery_date'] ?? null),
                 'request_url'        => $base . '/kitchen-runs.php?request=' . $requestId,
                 'admin_url'          => $base . '/admin/kitchen_runs.php?request=' . $requestId,
             ],
         ];
+    }
+
+    /** The day the customer asked for, in words. Empty when there is not one. */
+    private static function kitchenRunDeliveryDay($date): string
+    {
+        $day = trim((string) ($date ?? ''));
+        if ($day === '') {
+            return '';
+        }
+        $stamp = strtotime($day);
+        return $stamp === false ? '' : date('l jS F', $stamp);
     }
 
     private static function kitchenRunDepositLine(?int $total, ?int $deposit): string
@@ -495,6 +511,20 @@ final class Notifications
         self::send('admin_new_kitchen_run', $context['vars'], self::staffRecipients(), 'kitchen_run', $requestId);
     }
 
+    /**
+     * The customer has just sent a list, so tell them we have it (item 33 of
+     * the M7 review). Four events fired after M7 and only the team heard any
+     * of them; the person who pressed the button heard nothing at all.
+     */
+    public static function announceKitchenRunReceived(int $requestId): void
+    {
+        $context = self::kitchenRunContext($requestId);
+        if ($context === null) {
+            return;
+        }
+        self::send('kitchen_run_received', $context['vars'], $context['recipients'], 'kitchen_run', $requestId);
+    }
+
     /** The customer's prices, and how long they stand. */
     public static function announceKitchenRunQuoted(int $requestId, ?int $actorId = null): void
     {
@@ -513,6 +543,20 @@ final class Notifications
             return;
         }
         self::send('admin_kitchen_run_approved', $context['vars'], self::staffRecipients(), 'kitchen_run', $requestId, $actorId);
+    }
+
+    /**
+     * A customer withdrew a run they had already approved. There is no money to
+     * reverse, because the deposit is only taken at conversion, but the produce
+     * may already be bought, so the team hears about it straight away.
+     */
+    public static function announceKitchenRunCancelled(int $requestId, ?int $actorId = null): void
+    {
+        $context = self::kitchenRunContext($requestId);
+        if ($context === null) {
+            return;
+        }
+        self::send('admin_kitchen_run_cancelled', $context['vars'], self::staffRecipients(), 'kitchen_run', $requestId, $actorId);
     }
 
     /** We are not taking this one on, and the customer is told why. */

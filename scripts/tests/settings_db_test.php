@@ -135,6 +135,7 @@ t_eq($before, count(audit_rows_for('deposit_percentage_default')), 'saving the s
 Settings::set('deposit_percentage_default', 30, 'int', $actor);
 Settings::set('delivery_cutoff_time', '18:00', 'string', $actor);
 Settings::set('delivery_min_lead_days', 1, 'int', $actor);
+Settings::set('kitchen_run_quote_days', 21, 'int', $actor);
 Settings::set('min_order_subunit', 0, 'int', $actor);
 Settings::set('pay_on_delivery_requires_activation', true, 'bool', $actor);
 Settings::set('cancellation_cutoff_time', '18:00', 'string', $actor);
@@ -144,12 +145,16 @@ Settings::set('cancellation_after_dispatch_allowed', true, 'bool', $actor);
 Settings::set('cancellation_dispatched_forfeit_deposit', true, 'bool', $actor);
 Settings::flushCache();
 
-// Every field on the Order tab, including the cancellation policy M5 added.
-// Submitting the whole tab is what the screen does, so the test does it too.
+// Every field on the Order tab: the cancellation policy M5 added, and the
+// Kitchen Run quote window M7 added. Submitting the whole tab is what the
+// screen does, so the test does it too. The count assertion below reads the tab
+// definition rather than a number typed here, and it went red when M7 added its
+// field without adding it to this payload.
 $clean = SettingsEditor::validate('order', [
     'deposit_percentage_default'                => '25',
     'delivery_cutoff_time'                      => '14:30',
     'delivery_min_lead_days'                    => '3',
+    'kitchen_run_quote_days'                    => '10',
     'min_order_subunit'                         => '2,500',
     'pay_on_delivery_requires_activation'       => '0',
     'cancellation_cutoff_time'                  => '17:00',
@@ -166,6 +171,7 @@ Settings::flushCache();
 t_eq(25, Settings::int('deposit_percentage_default'), 'the deposit saved with the rest of the tab');
 t_eq('14:30', Settings::str('delivery_cutoff_time'), 'the cutoff saved with the rest of the tab');
 t_eq(3, Settings::int('delivery_min_lead_days'), 'the days of notice saved');
+t_eq(10, Settings::int('kitchen_run_quote_days'), 'the Kitchen Run quote window saved with the rest of the tab');
 t_eq(250000, Settings::int('min_order_subunit'), 'the smallest order saved in kobo');
 t_eq(false, Settings::bool('pay_on_delivery_requires_activation'), 'the pay-on-delivery gate saved as off');
 t_eq('17:00', Settings::str('cancellation_cutoff_time'), 'the cancellation cutoff saved');

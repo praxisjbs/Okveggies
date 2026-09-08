@@ -29,8 +29,14 @@
 
 final class KitchenRuns
 {
-    /** How the list arrived (PRD 8.1). */
-    public const MODES = ['catalogue', 'custom', 'upload', 'mixed'];
+    /**
+     * How the list arrived (PRD 8.1). 'priced' is the fourth way in, a list
+     * that already carries its own prices. It behaves exactly like 'mixed'
+     * everywhere it is read, and it exists as its own mode so a report can say
+     * "already priced" rather than inferring it from the pricing mode. Rows
+     * written before it existed keep 'mixed', which is still a legal mode.
+     */
+    public const MODES = ['catalogue', 'custom', 'upload', 'mixed', 'priced'];
 
     /** Who put the prices on it (PRD 8.1). */
     public const PRICING_MODES = ['by_us', 'by_customer', 'already_priced'];
@@ -65,6 +71,7 @@ final class KitchenRuns
         ['quoted', 'cancelled'],
         ['quoted', 'submitted'],   // the quote expired, so it is open again
         ['approved', 'converted'],
+        ['approved', 'cancelled'], // withdrawn before it is an order (PRD 8.3)
     ];
 
     // -------------------------------------------------------------------------
@@ -84,6 +91,15 @@ final class KitchenRuns
      * time it gets here: a name, a positive quantity and a price in kobo. The
      * returned lines carry their own line totals so nothing downstream has to
      * multiply money a second time.
+     *
+     * The optional fields are normalised here as well, and that is not tidying.
+     * A browser posts every field it renders, so an empty hidden product_id
+     * arrives as '' rather than as an absent key. Bound straight into a BIGINT
+     * column, MySQL refuses it with "Incorrect integer value: ''", and a
+     * colleague pricing an ordinary free-text list is told the request failed.
+     * The tests never saw it because a curl caller simply omits the key. So the
+     * one function that turns posted lines into storable lines is the place to
+     * decide what an empty optional field means: nothing.
      */
     public static function quoteLines(array $lines): array
     {
@@ -108,6 +124,10 @@ final class KitchenRuns
             $line['quantity']           = $quantity;
             $line['unit_price_subunit'] = $price;
             $line['line_total_subunit'] = Money::lineTotal($quantity, $price);
+            $line['product_id']         = self::positiveInt($line['product_id'] ?? null);
+            $line['unit_id']            = self::positiveInt($line['unit_id'] ?? null);
+            $line['unit_label']         = self::shortNote($line['unit_label'] ?? null);
+            $line['note']               = self::shortNote($line['note'] ?? null);
 
             $priced[] = $line;
             $total   += $line['line_total_subunit'];
@@ -259,10 +279,18 @@ final class KitchenRuns
         return $status === 'submitted';
     }
 
-    /** A customer may withdraw their own request until we have started buying. */
+    /**
+     * A customer may withdraw their own request until it is an order. PRD 8.3
+     * says "before it is converted", and approved is before it is converted.
+     *
+     * There is no money to reverse at this point: the deposit is only taken at
+     * conversion. What an approved run may already have is produce bought for
+     * it at the market, so the screen asks the customer to call us when that is
+     * possible, and staff are emailed the moment one is withdrawn.
+     */
     public static function canCustomerCancel(string $status): bool
     {
-        return in_array($status, ['submitted', 'quoted'], true);
+        return in_array($status, ['submitted', 'quoted', 'approved'], true);
     }
 
     public static function modeLabel(string $mode): string
@@ -272,6 +300,7 @@ final class KitchenRuns
             'custom'    => 'Typed list',
             'upload'    => 'Uploaded list',
             'mixed'     => 'Shop items and a typed list',
+            'priced'    => 'Already priced by the customer',
         ][$mode] ?? $mode;
     }
 
@@ -332,6 +361,8 @@ final class KitchenRuns
             'quote_expired'          => 'This quote has expired, so we have sent it back for fresh prices.',
             'total_moved'            => 'The lines changed after this was quoted. Price it again before converting it.',
             'reason_required'        => 'Say why you are declining it. The customer is told.',
+            'authorisation_required' => 'Say who approved it and how they told you. It goes on the record.',
+            'not_quoted'             => 'Only a request with a quote on it can be approved.',
             'stale'                  => 'This request changed while you were working on it. Reload it and try again.',
             'stale_or_not_owned'     => 'This request changed, or it is not yours. Reload the page.',
             'illegal_transition'     => 'That is not something this request can do right now.',
@@ -393,7 +424,14 @@ final class KitchenRuns
               WHERE r.id = :id AND r.user_id = :user',
             [':id' => $id, ':user' => $userId]
         );
-        return $row === null ? null : self::decorate($row);
+        if ($row === null) {
+            return null;
+        }
+        // The team's own note never leaves the admin panel. Dropping it here
+        // rather than trusting every template not to print it means a new
+        // screen built on this read cannot leak it by accident.
+        unset($row['staff_note']);
+        return self::decorate($row);
     }
 
     public static function findForStaff(int $id): ?array
@@ -426,22 +464,50 @@ final class KitchenRuns
               LIMIT ' . $limit,
             [':user' => $userId]
         );
-        return array_map([self::class, 'decorate'], $rows);
+        return array_map(static function (array $row): array {
+            unset($row['staff_note']);
+            return self::decorate($row);
+        }, $rows);
     }
 
     /**
      * The staff queue. Waiting-for-a-price first, because that is the only
      * column where a customer is waiting on us, then newest.
+     *
+     * The customer filter matches whoever a colleague is looking for: the
+     * account name, the email, the phone number on the request and the request
+     * number itself, because a customer on the phone reads out the number.
+     *
+     * One named placeholder per position. The connection runs native prepared
+     * statements, so MySQL refuses the same name twice in one statement; that
+     * mistake shipped once on the orders filter (M6) and once in conversion
+     * (M7), and both were a 500 in front of a colleague trying to work.
      */
-    public static function allForStaff(string $status = '', int $limit = 100): array
+    public static function allForStaff(string $status = '', int $limit = 100, string $customer = ''): array
     {
-        $limit  = max(1, min(200, $limit));
-        $where  = '';
-        $params = [];
+        $limit    = max(1, min(200, $limit));
+        $where    = [];
+        $params   = [];
+        $customer = mb_substr(trim($customer), 0, 100);
+
         if ($status !== '' && in_array($status, self::STATUSES, true)) {
-            $where = ' WHERE r.status = :status';
+            $where[] = 'r.status = :status';
             $params[':status'] = $status;
         }
+        if ($customer !== '') {
+            $where[] = '(u.email LIKE :customer_email
+                         OR r.request_number LIKE :customer_number
+                         OR r.contact_phone LIKE :customer_phone
+                         OR r.contact_name LIKE :customer_contact
+                         OR TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) LIKE :customer_account)';
+            $like = '%' . $customer . '%';
+            $params[':customer_email']   = $like;
+            $params[':customer_number']  = $like;
+            $params[':customer_phone']   = $like;
+            $params[':customer_contact'] = $like;
+            $params[':customer_account'] = $like;
+        }
+        $where = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 
         $rows = Database::all(
             'SELECT r.*, COUNT(i.id) AS line_count,
