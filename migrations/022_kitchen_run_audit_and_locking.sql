@@ -1,10 +1,23 @@
 -- =============================================================================
 -- 022_kitchen_run_audit_and_locking.sql
--- Kitchen Run submissions are retained exactly as received. The version column
--- makes quote, approval and conversion compare-and-swap operations.
+-- OK Veggies. Two columns a Kitchen Run cannot work without.
+--
+--   original_submission_json
+--     What the customer actually sent, kept verbatim. A Kitchen Run is priced
+--     by hand and approved by a person, so a later disagreement about what was
+--     asked for is settled by the record rather than by memory.
+--
+--   state_version
+--     Makes quoting, approving and converting compare-and-swap operations. Two
+--     colleagues working the same request in two tabs is normal, and without
+--     this the second save silently overwrites the first.
+--
+-- Idempotent and MySQL 8 compatible: MySQL 8 has no ADD COLUMN IF NOT EXISTS,
+-- so each column is guarded against information_schema.COLUMNS and applied
+-- through a prepared statement. There is deliberately no transaction here:
+-- MySQL commits implicitly on DDL, so START TRANSACTION around an ALTER reads
+-- like a safety net that does not exist. 020_order_staff_note.sql says the same.
 -- =============================================================================
-
-START TRANSACTION;
 
 SET @db_name = DATABASE();
 SET @has_submission = (SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -22,8 +35,6 @@ SET @sql = IF(@has_version = 0,
   'ALTER TABLE kitchen_run_requests ADD COLUMN state_version INT UNSIGNED NOT NULL DEFAULT 1 AFTER approved_at',
   'SELECT 1');
 PREPARE statement FROM @sql; EXECUTE statement; DEALLOCATE PREPARE statement;
-
-COMMIT;
 
 -- Verification:
 -- SELECT column_name FROM information_schema.columns

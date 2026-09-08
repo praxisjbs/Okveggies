@@ -58,6 +58,7 @@ require_once $appRoot . '/includes/classes/OrderLifecycle.php';
 require_once $appRoot . '/includes/classes/DeliveryManifest.php';
 require_once $appRoot . '/includes/classes/Notifications.php';
 require_once $appRoot . '/includes/classes/KitchenRuns.php';
+require_once $appRoot . '/includes/classes/KitchenRunWorkflow.php';
 require_once $appRoot . '/includes/functions/helpers.php';
 
 foreach (glob(__DIR__ . '/*Test.php') as $file) {

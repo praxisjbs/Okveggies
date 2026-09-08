@@ -19,6 +19,8 @@ const sources = [
   'assets/js/admin-combos.js',
   'assets/js/admin-settings.js',
   'assets/js/admin-payments.js',
+  'assets/js/kitchen-runs.js',
+  'assets/js/admin-kitchen-runs.js',
 ].filter(existsSync);
 
 if (sources.length === 0) {

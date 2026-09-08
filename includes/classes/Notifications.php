@@ -56,6 +56,11 @@ final class Notifications
         'refund_processed'  => ['template' => 'refund_processed',  'label' => 'Refund sent',             'audience' => 'customer'],
         'refund_failed'     => ['template' => 'refund_failed',     'label' => 'Refund failed',           'audience' => 'staff'],
         'admin_new_order'   => ['template' => 'admin_new_order',   'label' => 'New order, for staff',    'audience' => 'staff'],
+
+        'kitchen_run_quoted'   => ['template' => 'kitchen_run_quoted',   'label' => 'Kitchen Run priced',        'audience' => 'customer'],
+        'kitchen_run_declined' => ['template' => 'kitchen_run_declined', 'label' => 'Kitchen Run declined',      'audience' => 'customer'],
+        'admin_new_kitchen_run'      => ['template' => 'admin_new_kitchen_run',      'label' => 'New Kitchen Run, for staff',      'audience' => 'staff'],
+        'admin_kitchen_run_approved' => ['template' => 'admin_kitchen_run_approved', 'label' => 'Kitchen Run approved, for staff', 'audience' => 'staff'],
     ];
 
     /** The tokens each template may use, so the editor can list them honestly. */
@@ -72,6 +77,11 @@ final class Notifications
         'refund_processed'  => ['customer_name', 'order_number', 'amount', 'order_trail_url'],
         'refund_failed'     => ['order_number', 'amount', 'reason', 'admin_url'],
         'admin_new_order'   => ['customer_name', 'order_number', 'order_total', 'delivery_day', 'zone_name', 'payment_choice', 'admin_url'],
+
+        'kitchen_run_quoted'   => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'quote_expiry', 'request_url'],
+        'kitchen_run_declined' => ['customer_name', 'request_number', 'decline_reason', 'request_url'],
+        'admin_new_kitchen_run'      => ['customer_name', 'request_number', 'line_count', 'input_mode_label', 'pricing_mode_label', 'budget_line', 'admin_url'],
+        'admin_kitchen_run_approved' => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'admin_url'],
     ];
 
     /** Which lifecycle stage announces itself, and with which event. */
@@ -389,6 +399,130 @@ final class Notifications
         $staffVars = $context['vars'];
         unset($staffVars['order_trail_url']);
         self::send('admin_new_order', $staffVars, self::staffRecipients(), 'order', $orderId);
+    }
+
+    // --- Kitchen Runs (PRD Section 8) ----------------------------------------
+
+    /**
+     * The facts every Kitchen Run email needs, gathered once. Returns null when
+     * the request is gone, so a caller sends nothing rather than an email full
+     * of blanks. Deliberately the superset of what the four templates use: an
+     * unfilled token renders as nothing, and one context is easier to keep
+     * honest than four.
+     */
+    public static function kitchenRunContext(int $requestId): ?array
+    {
+        $request = Database::one(
+            'SELECT r.*, COUNT(i.id) AS line_count,
+                    u.email AS user_email,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
+               FROM kitchen_run_requests r
+               LEFT JOIN kitchen_run_items i ON i.request_id = r.id
+               LEFT JOIN users u ON u.id = r.user_id
+              WHERE r.id = :id
+              GROUP BY r.id',
+            [':id' => $requestId]
+        );
+        if (!$request) {
+            return null;
+        }
+
+        $base    = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $name    = trim((string) ($request['user_name'] ?? '')) ?: trim((string) ($request['contact_name'] ?? ''));
+        $total   = $request['quoted_total_subunit'] === null ? null : (int) $request['quoted_total_subunit'];
+        $deposit = $request['deposit_subunit'] === null ? null : (int) $request['deposit_subunit'];
+        $count   = (int) $request['line_count'];
+
+        return [
+            'request_id' => $requestId,
+            'recipients' => self::customerRecipients([
+                'user_email' => $request['user_email'] ?? $request['contact_email'],
+                'user_id'    => $request['user_id'],
+            ]),
+            'vars' => [
+                'customer_name'      => $name ?: 'there',
+                'request_number'     => (string) $request['request_number'],
+                'quote_total'        => $total === null ? '' : Money::format($total),
+                'deposit_line'       => self::kitchenRunDepositLine($total, $deposit),
+                'quote_expiry'       => self::kitchenRunExpiryLine($request['quoted_at'] ?? null),
+                'decline_reason'     => trim((string) ($request['admin_note'] ?? '')) ?: 'We have not been able to source this list at a price we can stand behind.',
+                'line_count'         => $count . ' ' . ($count === 1 ? 'item' : 'items'),
+                'input_mode_label'   => KitchenRuns::modeLabel((string) $request['input_mode']),
+                'pricing_mode_label' => KitchenRuns::pricingLabel((string) $request['pricing_mode']),
+                'budget_line'        => self::kitchenRunBudgetLine($request),
+                'request_url'        => $base . '/kitchen-runs.php?request=' . $requestId,
+                'admin_url'          => $base . '/admin/kitchen_runs.php?request=' . $requestId,
+            ],
+        ];
+    }
+
+    private static function kitchenRunDepositLine(?int $total, ?int $deposit): string
+    {
+        if ($total === null || $deposit === null || $deposit < 1) {
+            return 'Nothing is due until we have agreed the list.';
+        }
+        return 'Deposit to start: ' . Money::format($deposit)
+            . '. Balance on delivery: ' . Money::format(Money::balance($total, $deposit)) . '.';
+    }
+
+    private static function kitchenRunExpiryLine($quotedAt): string
+    {
+        $quoted = trim((string) ($quotedAt ?? ''));
+        if ($quoted === '') {
+            return '';
+        }
+        return date('l jS F', (int) strtotime('+' . KitchenRuns::quoteDays() . ' days', (int) strtotime($quoted)));
+    }
+
+    private static function kitchenRunBudgetLine(array $request): string
+    {
+        if (empty($request['is_open_budget'])) {
+            return 'Standard request, priced line by line.';
+        }
+        $cap = $request['spend_cap_subunit'] === null ? null : (int) $request['spend_cap_subunit'];
+        return 'Open budget. ' . ($cap === null
+            ? 'No spend cap agreed, so set a deposit you are comfortable with.'
+            : 'Agreed spend cap: ' . Money::format($cap) . '.');
+    }
+
+    /** A list has come in and somebody has to price it (PRD Section 14). */
+    public static function announceKitchenRunSubmitted(int $requestId): void
+    {
+        $context = self::kitchenRunContext($requestId);
+        if ($context === null) {
+            return;
+        }
+        self::send('admin_new_kitchen_run', $context['vars'], self::staffRecipients(), 'kitchen_run', $requestId);
+    }
+
+    /** The customer's prices, and how long they stand. */
+    public static function announceKitchenRunQuoted(int $requestId, ?int $actorId = null): void
+    {
+        $context = self::kitchenRunContext($requestId);
+        if ($context === null) {
+            return;
+        }
+        self::send('kitchen_run_quoted', $context['vars'], $context['recipients'], 'kitchen_run', $requestId, $actorId);
+    }
+
+    /** The customer said yes. Somebody has to turn it into an order. */
+    public static function announceKitchenRunApproved(int $requestId, ?int $actorId = null): void
+    {
+        $context = self::kitchenRunContext($requestId);
+        if ($context === null) {
+            return;
+        }
+        self::send('admin_kitchen_run_approved', $context['vars'], self::staffRecipients(), 'kitchen_run', $requestId, $actorId);
+    }
+
+    /** We are not taking this one on, and the customer is told why. */
+    public static function announceKitchenRunDeclined(int $requestId, ?int $actorId = null): void
+    {
+        $context = self::kitchenRunContext($requestId);
+        if ($context === null) {
+            return;
+        }
+        self::send('kitchen_run_declined', $context['vars'], $context['recipients'], 'kitchen_run', $requestId, $actorId);
     }
 
     /** A lifecycle stage the customer should hear about. */

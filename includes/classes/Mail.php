@@ -39,6 +39,11 @@ final class Mail
             } elseif ($enc === 'ssl') {
                 $mailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
             }
+            // PHPMailer waits 300 seconds by default. A customer pressing "Send
+            // my list" must never sit on a connection to a mail host that is not
+            // answering, so the wait is short and configurable, and a failure
+            // becomes a logged line rather than a frozen page.
+            $mailer->Timeout = max(2, (int) env('SMTP_TIMEOUT', 10));
             $mailer->CharSet = 'UTF-8';
             $mailer->setFrom($fromEmail, $fromName);
             $mailer->addAddress($to);
@@ -113,6 +118,7 @@ final class Mail
             'reset_url'       => 'Set a new password',
             'invoice_url'     => 'View the invoice',
             'receipt_url'     => 'View the receipt',
+            'request_url'     => 'Open your Kitchen Run',
         ];
         foreach ($labels as $key => $label) {
             if (!empty($vars[$key])) {
