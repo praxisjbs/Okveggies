@@ -13,15 +13,19 @@ foreach (Notifications::EVENTS as $event => $definition) {
     okv_test_ok(!empty(Notifications::TOKENS[$definition['template']]), "$event declares the tokens it accepts");
 }
 
-// Every customer email carries the trail link, because PRD 14.2 makes that link
-// the way a customer follows their order.
+// Every customer email carries a way back to the thing it is about, because
+// PRD 14.2 makes that link the way a customer follows their own business with
+// us. For an order that is the Order Trail; for a Kitchen Run, which is not an
+// order yet, it is the request itself. An email with no way on is a dead end,
+// and PRD Section 2 says we do not build those.
 foreach (Notifications::EVENTS as $event => $definition) {
     if ($definition['audience'] !== 'customer') {
         continue;
     }
+    $tokens = Notifications::TOKENS[$definition['template']];
     okv_test_ok(
-        in_array('order_trail_url', Notifications::TOKENS[$definition['template']], true),
-        "the customer email for $event carries the Order Trail link"
+        in_array('order_trail_url', $tokens, true) || in_array('request_url', $tokens, true),
+        "the customer email for $event carries a link back to what it is about"
     );
 }
 

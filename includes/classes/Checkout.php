@@ -294,8 +294,14 @@ final class Checkout
         return self::placedResult($orderId, $orderNumber, $token);
     }
 
-    /** The immutable delivery-address snapshot, plus a saved address for next time. */
-    private static function writeAddress(int $orderId, int $userId, array $customer): void
+    /**
+     * The immutable delivery-address snapshot, plus a saved address for next time.
+     * Public because KitchenRuns::convert() writes the same snapshot from the
+     * address a Kitchen Run captured with its list. One implementation, so the
+     * day manifest, the packing list and the order emails cannot find an
+     * address on a checkout order and nothing on a converted Kitchen Run.
+     */
+    public static function writeAddress(int $orderId, int $userId, array $customer): void
     {
         Database::run(
             'INSERT INTO order_addresses
@@ -426,7 +432,12 @@ final class Checkout
      * row impossible. Part payments are transactions against a row, never
      * extra rows.
      */
-    private static function writePayments(int $orderId, int $userId, string $orderNumber, string $option, int $total, int $due, string $deliveryDate): void
+    /**
+     * The unpaid payment rows an order starts life with. Public for the same
+     * reason as writeAddress(): a Kitchen Run converts into an ordinary order
+     * and its money rows have to be shaped exactly like every other order's.
+     */
+    public static function writePayments(int $orderId, int $userId, string $orderNumber, string $option, int $total, int $due, string $deliveryDate): void
     {
         $rows = [[
             'number'   => 'PAY-' . $orderNumber,
@@ -480,8 +491,8 @@ final class Checkout
         return 'paystack';
     }
 
-    /** A trail token whose hash is not already taken. */
-    private static function freshTrailToken(): string
+    /** A trail token whose hash is not already taken. Shared with KitchenRuns. */
+    public static function freshTrailToken(): string
     {
         for ($attempt = 0; $attempt < 5; $attempt++) {
             $candidate = self::newToken();
@@ -497,7 +508,8 @@ final class Checkout
         return OrderTrail::newToken();
     }
 
-    private static function hashToken(string $token): string
+    /** Shared with KitchenRuns, which stores the same hash on a converted order. */
+    public static function hashToken(string $token): string
     {
         return OrderTrail::hashToken($token);
     }

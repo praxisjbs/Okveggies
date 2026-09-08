@@ -70,6 +70,16 @@ $OKV_SETTINGS_GROUPS = [
                 'confirm'    => true,
             ],
 
+            'kitchen_run_quote_days' => [
+                'label'      => 'How long a Kitchen Run quote stands',
+                'help'       => 'Days a priced Kitchen Run can still be approved before the customer has to ask for fresh prices. Produce prices move, so this is deliberately short. 7 is the default.',
+                'type'       => 'days',
+                'value_type' => 'int',
+                'min'        => 1,
+                'cap'        => 90,
+                'confirm'    => true,
+            ],
+
             'min_order_subunit' => [
                 'label'      => 'Smallest order we accept',
                 'help'       => 'A basket below this cannot check out. Set it to 0 to accept any basket.',
