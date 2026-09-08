@@ -12,11 +12,13 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M7, Kitchen Runs. Follow-up on branch `claude/follow-up-uax2wl`, cut fresh from `main`.** The twelve items the completion pass left open are all done: a signed-out visitor is told rather than redirected, the customer picks their own delivery day and area, the queue filters by customer, lines reorder and carry a note, the team gets an internal note of its own, `kitchen_runs.approve` is a real path, an approved run can be withdrawn, an order links back to its run, the customer hears that we have their list, the Pro Portal screen is real, already-priced is its own mode, and the balance after delivery is proved rather than rebuilt. Verified on MySQL 8.0.46, the production engine, which retires the MariaDB caveat in the review. The authenticated browser journey at 390px and 1440px finally ran, and it found two defects no curl-shaped test could see: the customer's form had never posted with JavaScript on, and pricing a free-text list failed on the database while telling the colleague their file was rejected. Both fixed, both with regression tests. Full account in the session log below.
+**Milestone M7, Kitchen Runs. Follow-up merged into `main` on 8 September 2026 (pull request 38, merge commit `0fc0a2e`), and deployed.** The twelve items the completion pass left open are all done: a signed-out visitor is told rather than redirected, the customer picks their own delivery day and area, the queue filters by customer, lines reorder and carry a note, the team gets an internal note of its own, `kitchen_runs.approve` is a real path, an approved run can be withdrawn, an order links back to its run, the customer hears that we have their list, the Pro Portal screen is real, already-priced is its own mode, and the balance after delivery is proved rather than rebuilt. Verified on MySQL 8.0.46, the production engine, which retires the MariaDB caveat in the review. The authenticated browser journey at 390px and 1440px finally ran, and it found two defects no curl-shaped test could see: the customer's form had never posted with JavaScript on, and pricing a free-text list failed on the database while telling the colleague their file was rejected. Both fixed, both with regression tests. Full account in the session log below.
 
 **Milestone M7, Kitchen Runs. Reviewed and finished on branch `claude/milestone-7-completion-2nlnib`, on top of pull request 36.** A customer sends a list however they have it, we price it, they approve it, it becomes an ordinary order. The first attempt (pull request 36) had the shape of the milestone and one fatal hole: conversion had never once run. It bound the same named placeholder twice in one INSERT, which MySQL refuses on a native prepared statement, and the only conversion test exercised an injected failure that returned before any write. Twenty green database assertions sat on top of a feature that threw on first use. That, six public rules nothing called, a form that took one item, and conversion writing no delivery address and no trail token, are what this branch fixes. The written review is `docs/M7_REVIEW.md`.
 
-Before this ships to production: run migrations `022` to `026`, then take one Kitchen Run end to end on staging, request to quote to approval to order, and check the order reaches the day manifest with a recipient on it. **M8, the Pro Portal and credit, is next.**
+**Migrations are applied by the deploy, not by hand.** A merge to `main` triggers `.github/workflows/deploy.yml`, which uploads the tree over SFTP and then calls `public/migrate.php` on the server; the run fails unless that answers `MIGRATE OK`. Migrations `022` to `024` went up with pull request 37, and `025` and `026` with pull request 38, whose deploy reported both as applied. Nobody needs to run a migration for a merged branch, and an entry here that says otherwise is wrong. What the pipeline does not do is run the tests: `deploy.yml` checks the brand and nothing else, so the suites are the pull request's gate in `ci.yml`, before the merge.
+
+Left on the live site for a person, since no pipeline can do it: take one Kitchen Run end to end, request to quote to approval to order, and check the order reaches the day manifest with a recipient on it. Check as well that the delivery day and area selects on `/kitchen-runs.php` both offer options, because the customer's own form now requires both and refuses a submission without them, where before staff filled them in later. **M8, the Pro Portal and credit, is next.**
 
 **Milestone M6, Delivery and the Order Trail. Merged into `main` on 4 September 2026 (pull request 34, merge commit `7c0c0dc`).** The lifecycle spine, cancellation including the terms that apply after dispatch, the public Order Trail, the day manifest, and the notification half that the milestone list had left in M9. Nine defects found and fixed while verifying it, five of them in code that had already been written and two in the test suite itself. The written review is `docs/M6_REVIEW.md`. Pull request 33 carries the same first two commits and is redundant; close it rather than merging it.
 
@@ -287,6 +289,17 @@ block sets it, so the test is repeatable rather than passing once.
 below the 44px rule. It is M1 chrome on every storefront page rather than
 anything in this milestone, so it is written down here rather than fixed on a
 Kitchen Runs branch.
+
+**Merged and deployed.** Pull request 38, merge commit `0fc0a2e`, CI green on
+the head commit and no conflicts with `main`. The deploy fired on the merge and
+its migration step reported `025` and `026` applied, then `MIGRATE OK`. Two
+sentences in the pull request description, which was written in the UI rather
+than from the diff, describe things this branch does not do: there is no
+`orders.kitchen_run_id` column, because the link back is a lookup on
+`converted_order_id`, and `order_items.unit_name` already existed and was
+already written at conversion, so what this branch added there is the test that
+asserts it. The commit message and this entry describe the diff; the pull
+request description overstates it.
 
 ### 8 Sep 2026, M7 senior review: the milestone finished, and the conversion that had never run
 
