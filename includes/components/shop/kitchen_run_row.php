@@ -23,6 +23,7 @@ $row      = $row ?? 0;
 $products = $products ?? [];
 $units    = $units ?? [];
 $chosen   = $chosen ?? 'custom';
+$prefillLine = $prefillLine ?? [];
 $isPriced = $chosen === 'priced';
 ?>
 <div class="rounded-lg border border-mist p-3" data-kr-row>
@@ -34,7 +35,7 @@ $isPriced = $chosen === 'priced';
         <select class="okv-input" id="kr-product-<?= (int) $row ?>" name="items[<?= (int) $row ?>][product_id]" data-kr-product>
           <option value="">Not from the shop</option>
           <?php foreach ($products as $product): ?>
-            <option value="<?= (int) $product['id'] ?>"
+            <option value="<?= (int) $product['id'] ?>" <?= (int) ($prefillLine['product_id'] ?? 0) === (int) $product['id'] ? 'selected' : '' ?>
                     data-price="<?= (int) $product['current_price_subunit'] ?>">
               <?= okv_e($product['name']) ?>,
               <?= okv_e(Money::format((int) $product['current_price_subunit'])) ?> per <?= okv_e($product['unit_name']) ?>
@@ -47,13 +48,13 @@ $isPriced = $chosen === 'priced';
     <div class="<?= $chosen === 'catalogue' || $chosen === 'priced' ? 'sm:col-span-7' : 'sm:col-span-5' ?>">
       <label class="okv-label" for="kr-name-<?= (int) $row ?>">Item</label>
       <input class="okv-input" id="kr-name-<?= (int) $row ?>" name="items[<?= (int) $row ?>][item_name]"
-             maxlength="200" placeholder="Pomo" data-kr-name>
+             maxlength="200" placeholder="Pomo" value="<?= okv_e((string) ($prefillLine['item_name'] ?? '')) ?>" data-kr-name>
     </div>
 
     <div class="sm:col-span-3">
       <label class="okv-label" for="kr-qty-<?= (int) $row ?>">How much</label>
       <input class="okv-input" id="kr-qty-<?= (int) $row ?>" name="items[<?= (int) $row ?>][quantity]"
-             inputmode="decimal" placeholder="10" data-kr-qty>
+             inputmode="decimal" placeholder="10" value="<?= okv_e((string) ($prefillLine['quantity'] ?? '')) ?>" data-kr-qty>
     </div>
 
     <div class="sm:col-span-4">
@@ -61,7 +62,7 @@ $isPriced = $chosen === 'priced';
       <select class="okv-input" id="kr-unit-<?= (int) $row ?>" name="items[<?= (int) $row ?>][unit_id]" data-kr-unit>
         <option value="">Choose</option>
         <?php foreach ($units as $unit): ?>
-          <option value="<?= (int) $unit['id'] ?>"><?= okv_e($unit['name']) ?></option>
+          <option value="<?= (int) $unit['id'] ?>" <?= (int) ($prefillLine['unit_id'] ?? 0) === (int) $unit['id'] ? 'selected' : '' ?>><?= okv_e($unit['name']) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
@@ -77,6 +78,12 @@ $isPriced = $chosen === 'priced';
       </div>
     </div>
 
+  </div>
+
+  <div class="mt-3">
+    <label class="okv-label" for="kr-note-<?= (int) $row ?>">Item note, optional</label>
+    <input class="okv-input" id="kr-note-<?= (int) $row ?>" name="items[<?= (int) $row ?>][note]"
+           maxlength="255" placeholder="Firm, not very ripe" value="<?= okv_e((string) ($prefillLine['note'] ?? '')) ?>">
   </div>
 
   <div class="mt-2 flex justify-end">

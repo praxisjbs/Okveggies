@@ -42,6 +42,7 @@ foreach ($proPages as $page) {
         strpos($source, 'Database::one', $gateAt),
         strpos($source, 'Database::all', $gateAt),
         strpos($source, 'Customer::current', $gateAt),
+        strpos($source, 'ProDashboard::overview', $gateAt),
     ], static fn($position) => $position !== false);
     $firstDataAt = $dataReads ? min($dataReads) : PHP_INT_MAX;
 

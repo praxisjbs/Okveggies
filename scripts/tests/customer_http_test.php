@@ -106,6 +106,7 @@ $pw       = 'weekend-basket-88';
 
 $cleanup = static function (PDO $pdo, array $emails): void {
     $in = implode(', ', array_fill(0, count($emails), '?'));
+    $pdo->prepare("DELETE a FROM audit_logs a JOIN users u ON u.id = a.actor_user_id WHERE u.email IN ($in)")->execute($emails);
     $pdo->prepare("DELETE bc FROM business_customers bc JOIN users u ON u.id = bc.user_id WHERE u.email IN ($in)")->execute($emails);
     $pdo->prepare("DELETE FROM users WHERE email IN ($in)")->execute($emails);
 };
@@ -196,6 +197,49 @@ try {
     t_ok(strpos((string) $houseAccount, 'Pro screens are for business accounts') !== false, 'the household account destination explains the Pro boundary');
     [, $houseRuns] = http('GET', '/kitchen-runs.php?notice=pro_business', null, $jarHH, false);
     t_ok(strpos((string) $houseRuns, 'Your household Kitchen Runs are all available here') !== false, 'the household Kitchen Runs destination explains the Pro boundary');
+    [, $dashboardBody] = http('GET', '/pro/', null, $jarBiz, false);
+    t_ok(strpos((string) $dashboardBody, 'Bola Kitchen') !== false, 'the Pro dashboard names the signed-in business');
+    t_ok(strpos((string) $dashboardBody, 'Credit has not been approved for this account') !== false, 'a business without approved credit gets the plain application route');
+    t_ok(strpos((string) $dashboardBody, 'No orders on this business account yet') !== false, 'a business without orders gets useful ordering paths');
+    t_ok(strpos((string) $dashboardBody, $hhEmail) === false, 'the Pro dashboard contains no household account detail');
+
+    // ---- Saved Kitchen Lists are business-only CRUD -----------------------
+    $listProduct = Database::one('SELECT id, unit_id, name FROM products WHERE is_active = 1 ORDER BY id LIMIT 1');
+    $listUnit = (int) $listProduct['unit_id'];
+    $listFields = [
+        'action' => 'create', 'name' => 'HTTP Tuesday list', 'note' => 'Main kitchen',
+        'items' => [
+            ['product_id' => $listProduct['id'], 'quantity' => '2', 'note' => 'Firm only'],
+            ['item_name' => 'Pomo', 'quantity' => '5', 'unit_id' => $listUnit, 'note' => 'Soft cuts'],
+        ],
+    ];
+    [$guestListCode] = http('POST', '/api/v1/kitchen_lists.php', $listFields + ['okv_csrf' => token($jarGuest)], $jarGuest);
+    t_eq(401, $guestListCode, 'a guest cannot create a saved Kitchen List');
+    [$houseListCode] = http('POST', '/api/v1/kitchen_lists.php', $listFields + ['okv_csrf' => token($jarHH)], $jarHH);
+    t_eq(403, $houseListCode, 'a household cannot create a saved Kitchen List');
+    [$listCode, $listResult] = http('POST', '/api/v1/kitchen_lists.php', $listFields + ['okv_csrf' => token($jarBiz)], $jarBiz);
+    t_eq(200, $listCode, 'a business creates a saved Kitchen List');
+    $savedListId = (int) ($listResult['id'] ?? 0);
+    t_ok($savedListId > 0, 'the saved-list create returns its own id');
+
+    [$startCode, $startResult] = http('POST', '/api/v1/kitchen_lists.php', [
+        'action' => 'start_run', 'list_id' => $savedListId, 'okv_csrf' => token($jarBiz),
+    ], $jarBiz);
+    t_eq(200, $startCode, 'a business starts the review path from its saved list');
+    t_eq('/kitchen-runs.php?start=catalogue&saved_list=' . $savedListId, $startResult['redirect'] ?? '', 'starting a list opens the existing Kitchen Run form');
+    [, $prefilledRun] = http('GET', '/kitchen-runs.php?start=catalogue&saved_list=' . $savedListId, null, $jarBiz, false);
+    t_ok(strpos((string) $prefilledRun, 'value="Pomo"') !== false, 'the free-text line is prefilled for review');
+    t_ok(strpos((string) $prefilledRun, 'value="Soft cuts"') !== false, 'the line note is prefilled for review');
+    t_ok(strpos((string) $prefilledRun, '>Main kitchen</textarea>') !== false, 'the overall list note is prefilled for review');
+
+    [$unconfirmedDelete] = http('POST', '/api/v1/kitchen_lists.php', [
+        'action' => 'delete', 'list_id' => $savedListId, 'okv_csrf' => token($jarBiz),
+    ], $jarBiz);
+    t_eq(422, $unconfirmedDelete, 'deleting a saved list requires explicit confirmation');
+    [$deleteCode] = http('POST', '/api/v1/kitchen_lists.php', [
+        'action' => 'delete', 'list_id' => $savedListId, 'confirm_delete' => '1', 'okv_csrf' => token($jarBiz),
+    ], $jarBiz);
+    t_eq(200, $deleteCode, 'a business deletes its confirmed saved list');
 
     // ---- 5. Sign in by email and by phone, land in the right place --------
     [$code, $res] = http('POST', '/api/v1/auth.php', ['action' => 'login', 'context' => 'storefront', 'okv_csrf' => token($jarLog), 'identifier' => $hhEmail, 'password' => $pw], $jarLog);

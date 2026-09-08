@@ -103,6 +103,8 @@ require_once __DIR__ . '/classes/OrderDocument.php';
 require_once __DIR__ . '/classes/PaymentHealth.php';
 require_once __DIR__ . '/classes/KitchenRuns.php';
 require_once __DIR__ . '/classes/KitchenRunWorkflow.php';
+require_once __DIR__ . '/classes/ProDashboard.php';
+require_once __DIR__ . '/classes/KitchenLists.php';
 
 // 7. Warm the RBAC cache from the session (no DB hit unless a user is loaded).
 Rbac::init();

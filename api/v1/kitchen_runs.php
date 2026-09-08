@@ -94,7 +94,7 @@ function kr_posted_items(): array
 
 function kr_row_is_blank(array $item): bool
 {
-    foreach (['product_id', 'item_name', 'quantity', 'unit_price', 'unit_price_subunit', 'target_price', 'target_price_subunit'] as $key) {
+    foreach (['product_id', 'item_name', 'quantity', 'unit_price', 'unit_price_subunit', 'target_price', 'target_price_subunit', 'note'] as $key) {
         if (trim((string) ($item[$key] ?? '')) !== '') {
             return false;
         }

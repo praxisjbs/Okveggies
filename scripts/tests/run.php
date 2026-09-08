@@ -59,6 +59,8 @@ require_once $appRoot . '/includes/classes/DeliveryManifest.php';
 require_once $appRoot . '/includes/classes/Notifications.php';
 require_once $appRoot . '/includes/classes/KitchenRuns.php';
 require_once $appRoot . '/includes/classes/KitchenRunWorkflow.php';
+require_once $appRoot . '/includes/classes/ProDashboard.php';
+require_once $appRoot . '/includes/classes/KitchenLists.php';
 require_once $appRoot . '/includes/functions/helpers.php';
 require_once $appRoot . '/includes/functions/pro_access.php';
 
