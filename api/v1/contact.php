@@ -1,5 +1,18 @@
 <?php
-/** Public contact-form submission controller. */
+/**
+ * api/v1/contact.php
+ * -----------------------------------------------------------------------------
+ * OK Veggies. The one public write on the platform, plus the staff actions that
+ * answer it. PRD Sections 4.1 and 15.
+ *
+ * Public submit: POST only, CSRF validated, rate limited by IP, honeypot
+ * checked, every length capped. It answers JSON to the widget's fetch and a 303
+ * redirect to a plain form post, so the page works with JavaScript switched off.
+ * No exception message ever reaches the sender.
+ *
+ * Staff actions (save_note, handle, reopen): gated on `messages.handle`.
+ * -----------------------------------------------------------------------------
+ */
 require_once __DIR__ . '/../../includes/bootstrap.php';
 
 function contact_wants_json(): bool
@@ -98,20 +111,19 @@ try {
 }
 
 if (empty($result['ok'])) {
-    $status = ($result['code'] ?? '') === 'rate_limited' ? 429
-        : (($result['code'] ?? '') === 'duplicate' ? 409 : 422);
-    contact_fail($result, $status);
+    contact_fail($result, ($result['code'] ?? '') === 'rate_limited' ? 429 : 422);
 }
 
-// The row and its audit record are committed. A mail failure is recorded by
-// Notifications and cannot remove the message the team needs to answer.
+// The row and its audit record are committed. Both notices go out after that,
+// so a mail server that is down is recorded as a failed delivery and cannot
+// take a customer's message with it.
 Notifications::announceContactMessage((int) $result['message_id']);
 
 if (contact_wants_json()) {
     okv_json([
         'status' => 'ok',
         'code' => 'submitted',
-        'message' => 'We have your message. A member of our team will reply using the details you provided.',
+        'message' => 'We have your message. We reply within 1 working day, Monday to Saturday, using the details you gave us.',
         'message_id' => (int) $result['message_id'],
     ], 201);
 }

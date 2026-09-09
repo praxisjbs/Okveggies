@@ -27,7 +27,10 @@ foreach (Notifications::EVENTS as $event => $definition) {
         in_array('order_trail_url', $tokens, true)
         || in_array('request_url', $tokens, true)
         || in_array('pay_url', $tokens, true)
-        || in_array('credit_url', $tokens, true),
+        || in_array('credit_url', $tokens, true)
+        // The contact acknowledgement has no order or request to point at. Its
+        // next step is the other half of the support offer, so WhatsApp counts.
+        || in_array('whatsapp_url', $tokens, true),
         "the customer email for $event carries a link back to what it is about"
     );
 }

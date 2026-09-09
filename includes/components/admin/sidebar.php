@@ -61,6 +61,14 @@ $okv_sb_me   = Database::one('SELECT first_name, last_name FROM users WHERE id =
 $okv_sb_name = trim(((string) ($okv_sb_me['first_name'] ?? '')) . ' ' . ((string) ($okv_sb_me['last_name'] ?? '')));
 if ($okv_sb_name === '') { $okv_sb_name = 'Signed in'; }
 $okv_sb_role = in_array('owner', Rbac::roles(), true) ? 'Owner' : (in_array('manager', Rbac::roles(), true) ? 'Manager' : 'Staff');
+
+// Counters a nav item can carry. Resolved once per render, and only when the
+// user can actually open the screen, so nothing here is a query a reader of
+// that screen is not already allowed to run.
+$okv_sb_counts = [];
+if (Rbac::can('messages.view')) {
+    $okv_sb_counts['messages.new'] = ContactMessages::countNew();
+}
 ?>
 <aside id="okv-admin-sidebar"
        class="hidden md:flex md:flex-col md:w-64 md:shrink-0 bg-forest text-white md:min-h-screen">
@@ -84,6 +92,12 @@ $okv_sb_role = in_array('owner', Rbac::roles(), true) ? 'Owner' : (in_array('man
            <?= $active ? 'aria-current="page"' : '' ?>>
           <?= okv_admin_nav_icon($item['icon']) ?>
           <span><?= okv_e($item['label']) ?></span>
+          <?php $count = (int) ($okv_sb_counts[$item['count'] ?? ''] ?? 0); ?>
+          <?php if ($count > 0): ?>
+            <span class="ml-auto inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-white px-2 py-0.5 font-mono text-[11px] font-semibold leading-none text-forest">
+              <?= $count > 99 ? '99+' : $count ?><span class="sr-only"> new, unanswered</span>
+            </span>
+          <?php endif; ?>
         </a>
       <?php endforeach; ?>
     <?php endforeach; ?>

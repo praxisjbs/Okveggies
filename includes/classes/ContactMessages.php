@@ -1,5 +1,14 @@
 <?php
-/** Storefront contact submissions and their one-time form tokens. */
+/**
+ * includes/classes/ContactMessages.php
+ * -----------------------------------------------------------------------------
+ * OK Veggies. Storefront contact submissions: the one public write on the
+ * platform, and the staff workspace that answers it. PRD Sections 4.1 and 15.
+ *
+ * The row is written and committed before any mail is attempted, so a mail
+ * server having a bad afternoon can never lose a customer's message.
+ * -----------------------------------------------------------------------------
+ */
 final class ContactMessages
 {
     public const PER_PAGE = 25;
@@ -10,30 +19,18 @@ final class ContactMessages
     public const SUBJECT_MAX = 200;
     public const MESSAGE_MAX = 5000;
 
-    private const TOKEN_SESSION_KEY = 'okv_contact_submission_tokens';
-    private const TOKEN_MAX_AGE = 7200;
-    private const MINIMUM_FORM_SECONDS = 2;
+    /** Messages one connection may store in 15 minutes, and one person in a day. */
+    public const IP_LIMIT = 3;
+    public const IP_WINDOW = 900;
+    public const IDENTITY_LIMIT = 10;
+    public const IDENTITY_WINDOW = 86400;
 
-    public static function newSubmissionToken(): string
-    {
-        $now = time();
-        $tokens = is_array($_SESSION[self::TOKEN_SESSION_KEY] ?? null)
-            ? $_SESSION[self::TOKEN_SESSION_KEY]
-            : [];
-        foreach ($tokens as $hash => $issuedAt) {
-            if (!is_int($issuedAt) || $issuedAt < $now - self::TOKEN_MAX_AGE) {
-                unset($tokens[$hash]);
-            }
-        }
-        if (count($tokens) >= 20) {
-            asort($tokens);
-            $tokens = array_slice($tokens, -19, null, true);
-        }
-        $token = bin2hex(random_bytes(32));
-        $tokens[hash('sha256', $token)] = $now;
-        $_SESSION[self::TOKEN_SESSION_KEY] = $tokens;
-        return $token;
-    }
+    /** Where a message came from, and what a person should be told it was. */
+    public const SOURCES = [
+        'support_widget' => 'the support widget',
+        'contact_page'   => 'the contact page',
+        'storefront_contact_form' => 'the storefront',
+    ];
 
     /** Validate and normalise public fields without trusting browser constraints. */
     public static function validateFields(array $input): array
@@ -80,21 +77,25 @@ final class ContactMessages
         ];
     }
 
-    /** Insert exactly one message. Notification delivery belongs to the caller. */
+    /**
+     * Insert exactly one message. Notification delivery belongs to the caller,
+     * so the row is committed before anything is mailed.
+     *
+     * The two allowances are checked before the work and only spent on a
+     * message that is actually stored. A person who mistypes their email twice
+     * has not used up the only support channel there is, and a flood still
+     * cannot put more than 3 rows in the table in 15 minutes.
+     */
     public static function submit(array $input, ?int $customerId = null): array
     {
         $ip = self::clientIp();
         $ipBucket = 'contact:ip:' . hash('sha256', $ip ?? 'unknown');
-        if (!RateLimiter::hit($ipBucket, 3, 15 * 60)) {
+        if (RateLimiter::isLocked($ipBucket, self::IP_LIMIT)) {
             return self::failure('rate_limited', 'Too many messages were sent from this connection. Wait 15 minutes and try again.');
         }
 
-        $token = trim((string) ($input['submission_token'] ?? ''));
-        $tokenHash = preg_match('/^[a-f0-9]{64}$/', $token) === 1 ? hash('sha256', $token) : '';
-        $issuedAt = $tokenHash !== '' ? self::tokenIssuedAt($tokenHash) : null;
-        if ($issuedAt === null) {
-            return self::failure('invalid_submission', 'This form is no longer valid. Reload the page and try again.');
-        }
+        // The honeypot. A person never sees this field, so anything in it came
+        // from something filling every input on the page.
         if (trim((string) ($input['website'] ?? '')) !== '') {
             return self::failure('spam_rejected', 'We could not accept that message. Reload the page and try again.');
         }
@@ -102,16 +103,13 @@ final class ContactMessages
         if (empty($clean['ok'])) {
             return $clean;
         }
-        if (time() - $issuedAt < self::MINIMUM_FORM_SECONDS) {
-            return self::failure('too_fast', 'Please check your message, then send it again.');
-        }
         $identity = (string) ($clean['email'] ?? $clean['phone'] ?? '');
         $identityBucket = 'contact:id:' . hash('sha256', mb_strtolower($identity));
-        if (!RateLimiter::hit($identityBucket, 10, 24 * 60 * 60)) {
+        if (RateLimiter::isLocked($identityBucket, self::IDENTITY_LIMIT)) {
             return self::failure('rate_limited', 'Too many messages were sent with these contact details. Try again tomorrow.');
         }
 
-        $source = in_array((string) ($input['source'] ?? ''), ['support_widget', 'contact_page'], true)
+        $source = isset(self::SOURCES[(string) ($input['source'] ?? '')])
             ? (string) $input['source']
             : 'storefront_contact_form';
         $pdo = Database::getInstance()->getConnection();
@@ -119,8 +117,8 @@ final class ContactMessages
         try {
             Database::run(
                 'INSERT INTO contact_messages
-                    (name, email, phone, subject, message, source, status, ip_address, submission_token_hash)
-                 VALUES (:name, :email, :phone, :subject, :message, :source, :status, :ip, :token)',
+                    (name, email, phone, subject, message, source, status, ip_address)
+                 VALUES (:name, :email, :phone, :subject, :message, :source, :status, :ip)',
                 [
                     ':name' => $clean['name'],
                     ':email' => $clean['email'],
@@ -130,7 +128,6 @@ final class ContactMessages
                     ':source' => $source,
                     ':status' => 'new',
                     ':ip' => $ip,
-                    ':token' => $tokenHash,
                 ]
             );
             $messageId = (int) $pdo->lastInsertId();
@@ -143,16 +140,6 @@ final class ContactMessages
                 $customerId
             );
             $pdo->commit();
-        } catch (PDOException $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $driverError = (int) ($e->errorInfo[1] ?? 0);
-            if ((string) $e->getCode() === '23000' && $driverError === 1062) {
-                self::consumeToken($tokenHash);
-                return self::failure('duplicate', 'That message was already received.');
-            }
-            throw $e;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -160,8 +147,24 @@ final class ContactMessages
             throw $e;
         }
 
-        self::consumeToken($tokenHash);
+        // Stored, so now it counts against both allowances.
+        RateLimiter::hit($ipBucket, self::IP_LIMIT, self::IP_WINDOW);
+        RateLimiter::hit($identityBucket, self::IDENTITY_LIMIT, self::IDENTITY_WINDOW);
+
         return ['ok' => true, 'code' => 'submitted', 'message_id' => $messageId];
+    }
+
+    /** How a message is described in a staff alert. */
+    public static function sourceLabel(string $source): string
+    {
+        return self::SOURCES[$source] ?? 'the storefront';
+    }
+
+    /** Unanswered messages, for the count staff carry on every admin screen. */
+    public static function countNew(): int
+    {
+        $row = Database::one("SELECT COUNT(*) AS n FROM contact_messages WHERE status = 'new'");
+        return (int) ($row['n'] ?? 0);
     }
 
     public static function clientIp(): ?string
@@ -385,21 +388,6 @@ final class ContactMessages
             $params[':date_to'] = $to . ' 00:00:00';
         }
         return [$where, $params];
-    }
-
-    private static function tokenIssuedAt(string $hash): ?int
-    {
-        $tokens = $_SESSION[self::TOKEN_SESSION_KEY] ?? [];
-        return is_array($tokens) && isset($tokens[$hash]) && is_int($tokens[$hash])
-            ? $tokens[$hash]
-            : null;
-    }
-
-    private static function consumeToken(string $hash): void
-    {
-        if (isset($_SESSION[self::TOKEN_SESSION_KEY]) && is_array($_SESSION[self::TOKEN_SESSION_KEY])) {
-            unset($_SESSION[self::TOKEN_SESSION_KEY][$hash]);
-        }
     }
 
     private static function failure(string $code, string $message, ?string $field = null): array

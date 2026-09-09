@@ -48,13 +48,15 @@ $suffix = substr(bin2hex(random_bytes(5)), 0, 10);
 $password = 'messages-http-88';
 $managerEmail = "messages-manager-$suffix@example.test";
 $readerEmail = "messages-reader-$suffix@example.test";
-$managerId = 0; $readerId = 0; $readerRoleId = 0; $messageIds = [];
+$outsiderEmail = "messages-outsider-$suffix@example.test";
+$managerId = 0; $readerId = 0; $outsiderId = 0; $readerRoleId = 0; $outsiderRoleId = 0; $messageIds = [];
 $managerJar = tempnam(sys_get_temp_dir(), 'okv-msg-manager-');
 $readerJar = tempnam(sys_get_temp_dir(), 'okv-msg-reader-');
 $guestJar = tempnam(sys_get_temp_dir(), 'okv-msg-guest-');
+$outsiderJar = tempnam(sys_get_temp_dir(), 'okv-msg-outsider-');
 
 try {
-    foreach ([['Manager', $managerEmail], ['Reader', $readerEmail]] as [$first, $email]) {
+    foreach ([['Manager', $managerEmail], ['Reader', $readerEmail], ['Outsider', $outsiderEmail]] as [$first, $email]) {
         Database::run(
             'INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status)
              VALUES (:first, :last, :email, :phone, :hash, :type, :status)',
@@ -62,8 +64,10 @@ try {
              ':phone' => '+23480' . random_int(10000000, 99999999), ':hash' => password_hash($password, PASSWORD_BCRYPT),
              ':type' => 'staff', ':status' => 'active']
         );
-        if ($first === 'Manager') { $managerId = (int) Database::getInstance()->getConnection()->lastInsertId(); }
-        else { $readerId = (int) Database::getInstance()->getConnection()->lastInsertId(); }
+        $newId = (int) Database::getInstance()->getConnection()->lastInsertId();
+        if ($first === 'Manager') { $managerId = $newId; }
+        elseif ($first === 'Reader') { $readerId = $newId; }
+        else { $outsiderId = $newId; }
     }
     Database::run('INSERT INTO user_roles (user_id, role_id) SELECT :user, id FROM roles WHERE name = :role', [':user' => $managerId, ':role' => 'manager']);
     Database::run('INSERT INTO roles (name, description) VALUES (:name, :description)', [':name' => 'message_reader_' . $suffix, ':description' => 'M9 view-only test role']);
@@ -71,10 +75,17 @@ try {
     Database::run('INSERT INTO role_permissions (role_id, permission_id) SELECT :role, id FROM permissions WHERE `key` = :permission', [':role' => $readerRoleId, ':permission' => 'messages.view']);
     Database::run('INSERT INTO user_roles (user_id, role_id) VALUES (:user, :role)', [':user' => $readerId, ':role' => $readerRoleId]);
 
+    // Staff with neither messages permission: they can reach the panel, but the
+    // messages screen and every message action are closed to them.
+    Database::run('INSERT INTO roles (name, description) VALUES (:name, :description)', [':name' => 'message_outsider_' . $suffix, ':description' => 'M9 no-messages test role']);
+    $outsiderRoleId = (int) Database::getInstance()->getConnection()->lastInsertId();
+    Database::run('INSERT INTO role_permissions (role_id, permission_id) SELECT :role, id FROM permissions WHERE `key` = :permission', [':role' => $outsiderRoleId, ':permission' => 'dashboard.view']);
+    Database::run('INSERT INTO user_roles (user_id, role_id) VALUES (:user, :role)', [':user' => $outsiderId, ':role' => $outsiderRoleId]);
+
     for ($i = 1; $i <= 27; $i++) {
         Database::run(
-            'INSERT INTO contact_messages (name, email, phone, subject, message, source, status, created_at, submission_token_hash)
-             VALUES (:name, :email, :phone, :subject, :message, :source, :status, :created, :token)',
+            'INSERT INTO contact_messages (name, email, phone, subject, message, source, status, created_at)
+             VALUES (:name, :email, :phone, :subject, :message, :source, :status, :created)',
             [
                 ':name' => 'HTTP Contact ' . $suffix . ' ' . $i,
                 ':email' => $i === 1 ? null : "http-sender-$i-$suffix@example.test",
@@ -83,7 +94,6 @@ try {
                 ':message' => $i === 1 ? '<script>alert("unsafe")</script>' : 'HTTP message ' . $i,
                 ':source' => 'contact_page', ':status' => 'new',
                 ':created' => date('Y-m-d H:i:s', strtotime('-' . $i . ' minutes')),
-                ':token' => hash('sha256', 'http-admin:' . $suffix . ':' . $i),
             ]
         );
         $messageIds[] = (int) Database::getInstance()->getConnection()->lastInsertId();
@@ -136,6 +146,24 @@ try {
     cah_eq(403, $status, 'a direct handle request without messages.handle is refused');
     cah_eq('new', (string) Database::one('SELECT status FROM contact_messages WHERE id = :id', [':id' => $target])['status'], 'the unauthorised request changes nothing');
 
+    // 38, second half. Someone with neither permission sees nothing.
+    $outsiderCsrf = cah_login($base, $outsiderJar, $outsiderEmail, $password);
+    [$status, $outsiderPage] = cah_req($base, $outsiderJar, 'GET', '/admin/content.php?message=' . $target);
+    cah_ok($status === 403 || $status === 302, 'a staff member with neither messages permission cannot open the workspace');
+    cah_ok(!str_contains((string) $outsiderPage, 'Special filter subject'), 'and no message text reaches them');
+    [$status, $outsiderDash] = cah_req($base, $outsiderJar, 'GET', '/admin/');
+    cah_ok(!str_contains((string) $outsiderDash, 'href="/admin/content.php"'), 'the Messages link is not even in their sidebar');
+    [$status] = cah_req($base, $outsiderJar, 'POST', '/api/v1/contact.php', [
+        'action' => 'save_note', 'message_id' => $target, 'expected_note' => 'Call after the market run.',
+        'admin_note' => 'Should never land.', 'okv_csrf' => $outsiderCsrf,
+    ], true);
+    cah_eq(403, $status, 'and a direct note write from them is refused');
+    cah_eq('Call after the market run.', (string) Database::one('SELECT admin_note FROM contact_messages WHERE id = :id', [':id' => $target])['admin_note'], 'the note they tried to overwrite is untouched');
+
+    // 21. The unanswered count is on the chrome staff always have open.
+    [, $badgePage] = cah_req($base, $managerJar, 'GET', '/admin/');
+    cah_ok(preg_match('/new, unanswered/', (string) $badgePage) === 1, 'a Manager carries the unanswered count on every admin screen');
+
     [$status] = cah_req($base, $managerJar, 'POST', '/api/v1/contact.php', [
         'action' => 'handle', 'message_id' => $target, 'expected_status' => 'new', 'okv_csrf' => $managerCsrf,
     ], true);
@@ -165,12 +193,14 @@ try {
         Database::run('DELETE FROM audit_logs WHERE entity_type = :type AND entity_id = :id', [':type' => 'contact_message', ':id' => $id]);
         Database::run('DELETE FROM contact_messages WHERE id = :id', [':id' => $id]);
     }
-    foreach ([$managerId, $readerId] as $userId) {
+    foreach ([$managerId, $readerId, $outsiderId] as $userId) {
         if ($userId > 0) { Database::run('DELETE FROM users WHERE id = :id', [':id' => $userId]); }
     }
-    if ($readerRoleId > 0) { Database::run('DELETE FROM roles WHERE id = :id', [':id' => $readerRoleId]); }
+    foreach ([$readerRoleId, $outsiderRoleId] as $roleId) {
+        if ($roleId > 0) { Database::run('DELETE FROM roles WHERE id = :id', [':id' => $roleId]); }
+    }
     Database::run("DELETE FROM rate_limits WHERE bucket LIKE 'login:%'");
-    foreach ([$managerJar, $readerJar, $guestJar] as $jar) { if (is_file($jar)) { unlink($jar); } }
+    foreach ([$managerJar, $readerJar, $guestJar, $outsiderJar] as $jar) { if (is_file($jar)) { unlink($jar); } }
     proc_terminate($server);
     proc_close($server);
 }

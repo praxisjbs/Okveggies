@@ -1,5 +1,12 @@
 <?php
-/** No-JavaScript contact route and full-page support form. */
+/**
+ * contact.php
+ * -----------------------------------------------------------------------------
+ * OK Veggies. The contact page (PRD 4.1). It carries the same form as the
+ * support widget and is where a plain form post lands, so the whole thing works
+ * with JavaScript switched off. Reached from the footer and from the widget.
+ * -----------------------------------------------------------------------------
+ */
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
@@ -13,12 +20,11 @@ $errors = [
     'subject_too_long' => 'Keep the subject to 200 characters or fewer.',
     'message_required' => 'Tell us how we can help.',
     'message_too_long' => 'Keep your message to 5,000 characters or fewer.',
-    'rate_limited' => 'Too many messages were sent. Wait a while and try again.',
-    'invalid_submission' => 'This form is no longer valid. Reload the page and try again.',
+    'rate_limited' => 'Too many messages were sent from this connection. Wait 15 minutes and try again.',
     'spam_rejected' => 'We could not accept that message. Reload the page and try again.',
-    'too_fast' => 'Please check your message, then send it again.',
     'csrf_expired' => 'Your session expired. Reload the page and try again.',
-    'duplicate' => 'That message was already received.',
+    'method_not_allowed' => 'Use the form below to send us a message.',
+    'unknown_action' => 'That contact action is not available.',
     'failed' => 'We could not save your message. Please try again.',
 ];
 $errorCode = trim((string) okv_input('error', ''));
@@ -39,7 +45,7 @@ $sent = okv_input('sent', '') === '1';
     <a href="/" class="okv-btn-text"><span aria-hidden="true">&larr;</span> Back to the shop</a>
     <p class="okv-eyebrow mt-6">Support</p>
     <h1 class="mt-2 font-editorial text-okv-h4 text-ink">Contact us</h1>
-    <p class="mt-3 text-ink-60">Send us a message here, or open WhatsApp if that is easier.</p>
+    <p class="mt-3 text-ink-60">Send us a message here, or open WhatsApp if that is easier. We reply within 1 working day, Monday to Saturday.</p>
     <a href="<?= okv_e(okv_support_whatsapp_url()) ?>" class="okv-btn-outline mt-5" target="_blank" rel="noopener">Chat on WhatsApp</a>
 
     <section class="okv-panel mt-6 p-5 md:p-8" aria-labelledby="contact-form-heading">
@@ -50,7 +56,7 @@ $sent = okv_input('sent', '') === '1';
       <?php if ($sent): ?>
         <section class="mt-4 rounded-md bg-foliage-tint p-5 text-center" role="status">
           <h3 class="font-editorial text-okv-h6 text-ink">We have your message</h3>
-          <p class="mt-2 text-sm text-ink-60">Thank you. A member of our team will reply using the details you provided.</p>
+          <p class="mt-2 text-sm text-ink-60">Thank you. We reply within 1 working day, Monday to Saturday, using the details you gave us.</p>
           <a href="/shop.php" class="okv-btn-outline mt-4">Back to the shop</a>
         </section>
       <?php else: ?>

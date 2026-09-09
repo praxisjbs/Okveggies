@@ -76,6 +76,7 @@ final class Notifications
         'refund_failed'     => ['template' => 'refund_failed',     'label' => 'Refund failed',           'audience' => 'staff'],
         'admin_new_order'   => ['template' => 'admin_new_order',   'label' => 'New order, for staff',    'audience' => 'staff'],
         'admin_new_contact' => ['template' => 'admin_new_contact', 'label' => 'New contact message, for staff', 'audience' => 'staff'],
+        'contact_acknowledgement' => ['template' => 'contact_acknowledgement', 'label' => 'We have your message',  'audience' => 'customer'],
 
         'kitchen_run_received' => ['template' => 'kitchen_run_received', 'label' => 'Kitchen Run received',      'audience' => 'customer'],
         'kitchen_run_quoted'   => ['template' => 'kitchen_run_quoted',   'label' => 'Kitchen Run priced',        'audience' => 'customer'],
@@ -105,7 +106,8 @@ final class Notifications
         'refund_processed'  => ['customer_name', 'order_number', 'amount', 'order_trail_url'],
         'refund_failed'     => ['order_number', 'amount', 'reason', 'admin_url'],
         'admin_new_order'   => ['customer_name', 'order_number', 'order_total', 'delivery_day', 'zone_name', 'payment_choice', 'admin_url'],
-        'admin_new_contact' => ['contact_name', 'contact_method', 'subject', 'message_preview', 'admin_url'],
+        'admin_new_contact' => ['contact_name', 'contact_method', 'source_label', 'subject', 'message_preview', 'admin_url'],
+        'contact_acknowledgement' => ['customer_name', 'received_at', 'whatsapp_url'],
 
         'kitchen_run_received' => ['customer_name', 'request_number', 'line_count', 'delivery_day', 'request_url'],
         'kitchen_run_quoted'   => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'quote_expiry', 'request_url'],
@@ -784,11 +786,21 @@ final class Notifications
         self::queueAt('order_payment_pending', $sendAt, $vars, $context['recipients'], 'order', $orderId);
     }
 
-    /** A committed contact message that needs a staff response. */
+    /**
+     * A committed contact message. Two notices go out, both through the
+     * dispatcher so each delivery is recorded: the staff alert PRD Section 15
+     * asks for, and an acknowledgement to the sender when they left an email,
+     * so the message does not vanish into silence.
+     *
+     * Called after the row is committed. Nothing here can fail the submission:
+     * a send that does not arrive is recorded in `notification_deliveries` and
+     * the message is still on the team's list.
+     */
     public static function announceContactMessage(int $messageId): void
     {
         $message = Database::one(
-            'SELECT id, name, email, phone, subject, message FROM contact_messages WHERE id = :id',
+            'SELECT id, name, email, phone, subject, message, source, created_at
+               FROM contact_messages WHERE id = :id',
             [':id' => $messageId]
         );
         if (!$message) {
@@ -799,16 +811,40 @@ final class Notifications
             $method = Phone::display((string) ($message['phone'] ?? ''));
         }
         $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+
         self::send(
             'admin_new_contact',
             [
-                'contact_name' => (string) $message['name'],
-                'contact_method' => $method,
-                'subject' => trim((string) ($message['subject'] ?? '')) ?: 'No subject',
+                'contact_name'    => (string) $message['name'],
+                'contact_method'  => $method,
+                'source_label'    => ContactMessages::sourceLabel((string) $message['source']),
+                'subject'         => trim((string) ($message['subject'] ?? '')) ?: 'No subject',
                 'message_preview' => mb_substr(trim((string) $message['message']), 0, 300),
-                'admin_url' => $base . '/admin/content.php?message=' . $messageId,
+                'admin_url'       => $base . '/admin/content.php?message=' . $messageId,
             ],
             self::staffRecipients(),
+            'contact_message',
+            $messageId
+        );
+
+        // Nobody has proved they own this address, so the acknowledgement
+        // repeats nothing the sender typed. It says only that a message
+        // arrived, which is useless to anyone trying to carry words to a
+        // stranger, and is what the sender actually needs to hear.
+        $email = trim((string) ($message['email'] ?? ''));
+        if ($email === '') {
+            return;
+        }
+        $firstName = trim((string) $message['name']);
+        $firstName = $firstName !== '' ? (explode(' ', $firstName)[0] ?: 'there') : 'there';
+        self::send(
+            'contact_acknowledgement',
+            [
+                'customer_name' => $firstName,
+                'received_at'   => date('l jS F', strtotime((string) $message['created_at'])),
+                'whatsapp_url'  => okv_support_whatsapp_url(),
+            ],
+            [['email' => $email, 'name' => (string) $message['name']]],
             'contact_message',
             $messageId
         );

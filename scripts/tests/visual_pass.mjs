@@ -62,16 +62,29 @@ function report(ok, label, detail = '') {
   console.log(`  ${mark} ${label}${detail ? ' ' + detail : ''}`);
 }
 
-/** Sign in through the real form, so the session is a real session. */
+/**
+ * Sign in through the real form, so the session is a real session.
+ *
+ * The post goes through the page's own fetch rather than page.request. The
+ * session cookie is marked Secure, and over plain http Playwright's API request
+ * context will not send it, while a browser does because 127.0.0.1 counts as a
+ * trustworthy origin. Driving it from inside the page is what a customer's
+ * browser actually does, and it is the only way this signs in at all.
+ */
 async function signIn(page, path, identifier, password) {
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
   const csrf = await page.getAttribute('input[name="okv_csrf"]', 'value');
-  const res = await page.request.post(BASE + '/api/v1/auth.php', {
-    headers: { 'X-Requested-With': 'fetch' },
-    form: { action: 'login', identifier, password, okv_csrf: csrf,
-            context: path.startsWith('/admin') ? 'admin' : 'storefront' },
-  });
-  if (!res.ok()) { throw new Error(`sign in failed for ${identifier}: ${res.status()} ${await res.text()}`); }
+  const [status, body] = await page.evaluate(async ([base, form]) => {
+    const res = await fetch(base + '/api/v1/auth.php', {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'fetch' },
+      credentials: 'same-origin',
+      body: new URLSearchParams(form),
+    });
+    return [res.status, await res.text()];
+  }, [BASE, { action: 'login', identifier, password, okv_csrf: csrf,
+              context: path.startsWith('/admin') ? 'admin' : 'storefront' }]);
+  if (status !== 200) { throw new Error(`sign in failed for ${identifier}: ${status} ${body}`); }
 }
 
 /** The three things that go wrong on a narrow screen. */
@@ -215,6 +228,151 @@ try {
     report(!blocked.url().includes('/pro/'), 'a household is sent away from the Pro Portal',
       `(landed on ${blocked.url().replace(BASE, '')})`);
     await houseContext.close();
+
+    // ---- M9: the support widget and the contact form ----------------------
+    // PRD 4.1 puts this on every storefront page, and PRD 2 sets the rules it
+    // has to keep: a slide-up sheet on mobile and a panel on desktop, keyboard
+    // reachable, focus trapped, Escape closes it and gives the button back,
+    // 44px targets, and never sitting on top of the mobile tab bar.
+    const shopContext = await browser.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      hasTouch: viewport.touch,
+      isMobile: viewport.touch,
+    });
+    const shopPage = await shopContext.newPage();
+    shopPage.on('pageerror', (err) => report(false, `JavaScript error: ${err.message}`));
+
+    for (const path of ['/', '/shop.php', '/combos.php', '/kitchen-runs.php', '/cart.php',
+                        '/checkout.php', '/account.php', '/contact.php', '/page.php?slug=about']) {
+      await shopPage.goto(BASE + path, { waitUntil: 'domcontentloaded' });
+      const triggers = await shopPage.locator('[data-support-trigger]').count();
+      report(triggers === 1, `${path} carries exactly one support trigger`, `(${triggers})`);
+    }
+
+    await shopPage.goto(BASE + '/shop.php', { waitUntil: 'networkidle' });
+    const trigger = shopPage.locator('[data-support-trigger]');
+    const triggerBox = await trigger.boundingBox();
+    report(triggerBox && triggerBox.width >= 44 && triggerBox.height >= 44,
+      'the support trigger meets the 44px touch target',
+      `(${Math.round(triggerBox?.width || 0)}x${Math.round(triggerBox?.height || 0)})`);
+
+    // It must never cover the fixed mobile tab bar.
+    const tabBar = shopPage.locator('nav[aria-label="Mobile navigation"]');
+    if (viewport.touch && await tabBar.count() > 0) {
+      const barBox = await tabBar.boundingBox();
+      report(barBox && triggerBox && (triggerBox.y + triggerBox.height) <= barBox.y + 1,
+        'the support trigger sits clear of the mobile tab bar',
+        `(trigger ends ${Math.round((triggerBox?.y || 0) + (triggerBox?.height || 0))}, bar starts ${Math.round(barBox?.y || 0)})`);
+    }
+
+    // Keyboard reachable, and it opens. The ring is :focus-visible, so focus
+    // has to arrive by Tab: a programmatic focus leaves Chromium in pointer
+    // modality and paints nothing, which would say something about this script
+    // rather than about the page.
+    await shopPage.evaluate(() => { document.body.setAttribute('tabindex', '-1'); document.body.focus(); });
+    let reached = false;
+    for (let i = 0; i < 120 && !reached; i++) {
+      await shopPage.keyboard.press('Tab');
+      reached = await shopPage.evaluate(() => document.activeElement?.hasAttribute('data-support-trigger') === true);
+    }
+    report(reached, 'the support trigger is reachable by keyboard alone');
+    const ring = await shopPage.evaluate(() => {
+      const el = document.activeElement;
+      const s = window.getComputedStyle(el);
+      return { style: s.outlineStyle, width: s.outlineWidth, colour: s.outlineColor, shadow: s.boxShadow };
+    });
+    report((ring.style !== 'none' && parseFloat(ring.width) > 0) || (ring.shadow && ring.shadow !== 'none'),
+      'the focused trigger shows a visible focus ring', `(${ring.style} ${ring.width} ${ring.colour})`);
+
+    await shopPage.keyboard.press('Enter');
+    await shopPage.waitForTimeout(200);
+    const dialog = shopPage.locator('[data-support-dialog]');
+    report(await dialog.isVisible(), 'the support sheet opens from the keyboard');
+    report(await shopPage.locator('[data-support-panel][role="dialog"][aria-modal="true"]').count() === 1,
+      'the sheet is announced as a modal dialog');
+
+    // Mobile: a sheet anchored to the bottom of the screen. Desktop: a panel
+    // anchored to the trigger, not covering the page.
+    const panelBox = await shopPage.locator('[data-support-panel]').boundingBox();
+    if (viewport.touch) {
+      report(panelBox && Math.abs((panelBox.y + panelBox.height) - viewport.height) < 2,
+        'on mobile it slides up from the bottom edge',
+        `(panel ends ${Math.round((panelBox?.y || 0) + (panelBox?.height || 0))} of ${viewport.height})`);
+    } else {
+      report(panelBox && panelBox.width < viewport.width * 0.6,
+        'on desktop it is a panel beside the button, not a full-width sheet',
+        `(${Math.round(panelBox?.width || 0)} of ${viewport.width})`);
+    }
+
+    // Both choices, then the form.
+    report(await shopPage.locator('[data-support-choices] a[href^="https://wa.me/"]').count() === 1,
+      'the sheet offers WhatsApp');
+    report(await shopPage.locator('[data-support-contact]').count() === 1, 'and offers to send a message here');
+    await shopPage.locator('[data-support-contact]').click();
+    await shopPage.waitForTimeout(150);
+    report(await shopPage.locator('[data-support-form] form[novalidate]').isVisible(),
+      'the contact form opens inside the sheet, with the browser bubble switched off');
+
+    // Focus is trapped: tab past the last control and it comes back inside.
+    const trapped = await shopPage.evaluate(() => {
+      const dialog = document.querySelector('[data-support-dialog]');
+      const items = Array.from(dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), textarea, select'))
+        .filter((el) => !el.hidden && el.offsetParent !== null);
+      items[items.length - 1].focus();
+      return items.length > 0;
+    });
+    report(trapped, 'the sheet has focusable controls to trap');
+    await shopPage.keyboard.press('Tab');
+    report(await shopPage.evaluate(() => document.querySelector('[data-support-dialog]').contains(document.activeElement)),
+      'tab from the last control stays inside the sheet');
+    await shopPage.keyboard.press('Shift+Tab');
+    report(await shopPage.evaluate(() => document.querySelector('[data-support-dialog]').contains(document.activeElement)),
+      'and shift-tab does too');
+
+    // Every visible control in the sheet is a real touch target.
+    if (viewport.touch) {
+      const smallInSheet = await shopPage.evaluate(() => {
+        const out = [];
+        document.querySelectorAll('[data-support-dialog] a, [data-support-dialog] button, [data-support-dialog] input:not([type=hidden]), [data-support-dialog] textarea').forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 && r.height === 0) { return; }
+          if (el.closest('.sr-only')) { return; }
+          if (r.height < 44) { out.push(`${el.tagName.toLowerCase()} ${Math.round(r.height)}px`); }
+        });
+        return out;
+      });
+      report(smallInSheet.length === 0, 'every visible control in the sheet is at least 44px tall',
+        smallInSheet.length ? `(${smallInSheet.join(', ')})` : '');
+    }
+
+    // Escape closes it and hands focus back to the button that opened it.
+    await shopPage.keyboard.press('Escape');
+    await shopPage.waitForTimeout(200);
+    report(!(await dialog.isVisible()), 'Escape closes the sheet');
+    report(await shopPage.evaluate(() => document.activeElement?.hasAttribute('data-support-trigger')),
+      'and focus goes back to the trigger');
+
+    await shopContext.close();
+
+    // Reduced motion: the same page, with the preference set.
+    const calmContext = await browser.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      reducedMotion: 'reduce',
+    });
+    const calmPage = await calmContext.newPage();
+    await calmPage.goto(BASE + '/shop.php', { waitUntil: 'domcontentloaded' });
+    await calmPage.locator('[data-support-trigger]').click();
+    await calmPage.waitForTimeout(150);
+    const motion = await calmPage.evaluate(() => {
+      const el = document.querySelector('[data-support-panel]');
+      const s = getComputedStyle(el);
+      return { transition: s.transitionDuration, animation: s.animationDuration, visible: !document.querySelector('[data-support-dialog]').hidden };
+    });
+    report(motion.visible, 'the sheet still opens with reduced motion asked for');
+    report(parseFloat(motion.transition) < 0.01 && parseFloat(motion.animation) < 0.01,
+      'and it does not animate when a person asks for less motion',
+      `(transition ${motion.transition}, animation ${motion.animation})`);
+    await calmContext.close();
 
     // ---- The Owner, on the two admin screens ------------------------------
     const adminContext = await browser.newContext({

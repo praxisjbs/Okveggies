@@ -1,8 +1,65 @@
 <?php
-/** Staff contact-message list, detail and handling workspace. */
+/**
+ * admin/content.php
+ * -----------------------------------------------------------------------------
+ * OK Veggies. Content and Messages (PRD 4.3 and Section 18). Two tabs.
+ *
+ * Messages, built in M9: the contact submissions from the widget and the
+ * contact page, read under `messages.view` and acted on under `messages.handle`.
+ *
+ * Page copy, which M12 builds: Our Story, How It Works, the questions and the
+ * legal pages. M9 does not touch it. The tab is here so the screen matches the
+ * nav and the PRD, and so M12 has somewhere to land without moving anything.
+ * -----------------------------------------------------------------------------
+ */
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/components/pagination.php';
 Rbac::requirePermission('messages.view');
+
+$tab = okv_input('tab', '') === 'page-copy' ? 'page-copy' : 'messages';
+
+/** The tab strip both halves of this screen render. */
+function okv_content_tabs(string $tab, int $newCount): void
+{
+    $tabs = [
+        'messages'  => 'Messages' . ($newCount > 0 ? ' (' . $newCount . ' new)' : ''),
+        'page-copy' => 'Page copy',
+    ];
+    ?>
+    <nav class="mb-5 flex flex-wrap gap-2 border-b border-mist" aria-label="Content and Messages sections">
+      <?php foreach ($tabs as $key => $label): ?>
+        <a href="<?= okv_e($key === 'messages' ? '/admin/content.php' : '/admin/content.php?tab=page-copy') ?>"
+           class="-mb-px inline-flex min-h-[44px] items-center border-b-2 px-4 text-sm font-medium <?= $tab === $key ? 'border-forest text-forest' : 'border-transparent text-ink-60 hover:text-ink' ?>"
+           <?= $tab === $key ? 'aria-current="page"' : '' ?>><?= okv_e($label) ?></a>
+      <?php endforeach; ?>
+    </nav>
+    <?php
+}
+
+if ($tab === 'page-copy') {
+    $okv_admin_title = 'Content and Messages';
+    $okv_admin_note  = 'The messages customers send you, and the page copy they read.';
+    require __DIR__ . '/../includes/components/admin/header.php';
+    okv_content_tabs($tab, ContactMessages::countNew());
+    ?>
+  <section class="okv-panel okv-panel-body" aria-labelledby="page-copy-heading">
+    <h2 id="page-copy-heading" class="okv-panel-title">Page copy</h2>
+    <p class="mt-2 max-w-2xl text-sm text-ink-60">
+      Our Story, How It Works, the questions and answers and the legal pages are
+      edited here rather than in code. That half of this screen is built in
+      milestone M12, which owns the storefront pages it feeds. Nothing on the
+      Messages tab depends on it, and M12 can land here without moving anything.
+    </p>
+    <p class="mt-3 max-w-2xl text-sm text-ink-60">The plan for it is in <code>docs/PRD.md</code> Section 18.</p>
+    <div class="mt-5 flex flex-wrap gap-3">
+      <a class="okv-btn-outline" href="/admin/content.php">Read the messages</a>
+      <a class="okv-btn-text min-h-[44px]" href="/">See the shop as a customer does</a>
+    </div>
+  </section>
+    <?php
+    require __DIR__ . '/../includes/components/admin/footer.php';
+    return;
+}
 
 $search = mb_substr(trim((string) okv_input('search', '')), 0, 100);
 $status = in_array((string) okv_input('status', ''), ContactMessages::STATUSES, true)
@@ -45,10 +102,13 @@ $errors = [
     'failed' => 'We could not update that message. Please try again.',
 ];
 
-$okv_admin_title = 'Messages';
-$okv_admin_note = 'Read contact messages, record an internal note and show who is handling each one.';
+$okv_admin_title = 'Content and Messages';
+$okv_admin_note = 'The messages customers send you, and the page copy they read.';
 require __DIR__ . '/../includes/components/admin/header.php';
+
+okv_content_tabs($tab, ContactMessages::countNew());
 ?>
+
 
 <?php if ($noticeCode !== ''): ?>
   <p class="okv-note okv-note-ok mb-5" role="status"><?= okv_e($notices[$noticeCode] ?? 'The message was updated.') ?></p>

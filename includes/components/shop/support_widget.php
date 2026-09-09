@@ -1,5 +1,16 @@
 <?php
-/** Shared support chooser and contact form for every customer-facing route. */
+/**
+ * includes/components/shop/support_widget.php
+ * -----------------------------------------------------------------------------
+ * OK Veggies. The floating support control that sits bottom-right on every
+ * storefront page (PRD 4.1), and the contact form it shares with contact.php.
+ *
+ * Two choices, not one: message us on WhatsApp, or send a message here. The
+ * form is `novalidate` on purpose. Every rule it enforces is enforced again on
+ * the server, and the server's wording is ours, so a person meets one error
+ * path in our own words rather than a browser bubble in the browser's.
+ * -----------------------------------------------------------------------------
+ */
 
 if (!function_exists('okv_contact_prefill')) {
     function okv_contact_prefill(): array
@@ -17,14 +28,12 @@ if (!function_exists('okv_contact_form')) {
     function okv_contact_form(string $context = 'contact_page'): void
     {
         $prefill = okv_contact_prefill();
-        $token = ContactMessages::newSubmissionToken();
         $prefix = $context === 'support_widget' ? 'support' : 'contact';
         ?>
-        <form action="/api/v1/contact.php" method="post" class="space-y-4" data-contact-form data-contact-context="<?= okv_e($context) ?>">
+        <form action="/api/v1/contact.php" method="post" class="space-y-4" novalidate data-contact-form data-contact-context="<?= okv_e($context) ?>">
           <?= Csrf::field() ?>
           <input type="hidden" name="action" value="submit">
           <input type="hidden" name="source" value="<?= okv_e($context) ?>">
-          <input type="hidden" name="submission_token" value="<?= okv_e($token) ?>">
           <div class="sr-only" aria-hidden="true">
             <label for="<?= $prefix ?>-website">Leave this empty</label>
             <input id="<?= $prefix ?>-website" name="website" type="text" tabindex="-1" autocomplete="off">
@@ -32,32 +41,32 @@ if (!function_exists('okv_contact_form')) {
           <div class="okv-note bg-clay-tint text-sm" role="alert" aria-live="assertive" tabindex="-1" data-contact-error hidden></div>
           <div>
             <label class="okv-label" for="<?= $prefix ?>-name">Name</label>
-            <input class="okv-input" id="<?= $prefix ?>-name" name="name" autocomplete="name" maxlength="150" value="<?= okv_e($prefill['name']) ?>" required>
+            <input class="okv-input" id="<?= $prefix ?>-name" name="name" autocomplete="name" maxlength="150" value="<?= okv_e($prefill['name']) ?>">
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
               <label class="okv-label" for="<?= $prefix ?>-email">Email address</label>
-              <input class="okv-input" id="<?= $prefix ?>-email" name="email" type="email" autocomplete="email" maxlength="254" value="<?= okv_e($prefill['email']) ?>" aria-describedby="<?= $prefix ?>-contact-help">
+              <input class="okv-input" id="<?= $prefix ?>-email" name="email" inputmode="email" autocomplete="email" maxlength="254" value="<?= okv_e($prefill['email']) ?>" aria-describedby="<?= $prefix ?>-contact-help">
             </div>
             <div>
               <label class="okv-label" for="<?= $prefix ?>-phone">Phone number</label>
               <input class="okv-input" id="<?= $prefix ?>-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" value="<?= okv_e($prefill['phone']) ?>" aria-describedby="<?= $prefix ?>-contact-help">
             </div>
           </div>
-          <p id="<?= $prefix ?>-contact-help" class="text-xs text-ink-60">Enter at least 1 way for us to reply.</p>
+          <p id="<?= $prefix ?>-contact-help" class="text-xs text-ink-60">Enter at least 1 way for us to reply, an email address or a phone number.</p>
           <div>
             <label class="okv-label" for="<?= $prefix ?>-subject">Subject <span class="font-normal text-ink-60">(optional)</span></label>
             <input class="okv-input" id="<?= $prefix ?>-subject" name="subject" maxlength="200">
           </div>
           <div>
             <label class="okv-label" for="<?= $prefix ?>-message">How can we help?</label>
-            <textarea class="okv-input min-h-32 py-3" id="<?= $prefix ?>-message" name="message" maxlength="5000" required></textarea>
+            <textarea class="okv-input min-h-32 py-3" id="<?= $prefix ?>-message" name="message" maxlength="5000"></textarea>
           </div>
           <button class="okv-btn w-full justify-center" type="submit" data-contact-submit>Send message</button>
         </form>
         <section class="rounded-md bg-foliage-tint p-5 text-center" role="status" aria-live="polite" tabindex="-1" data-contact-success hidden>
           <h3 class="font-editorial text-okv-h6 text-ink">We have your message</h3>
-          <p class="mt-2 text-sm text-ink-60">Thank you. A member of our team will reply using the details you provided.</p>
+          <p class="mt-2 text-sm text-ink-60">Thank you. We reply within 1 working day, Monday to Saturday, using the details you gave us.</p>
           <?php if ($context === 'support_widget'): ?>
             <button type="button" class="okv-btn-outline mt-4" data-support-close>Done</button>
           <?php else: ?>
@@ -65,19 +74,6 @@ if (!function_exists('okv_contact_form')) {
           <?php endif; ?>
         </section>
         <?php
-    }
-}
-
-if (!function_exists('okv_support_whatsapp_url')) {
-    function okv_support_whatsapp_url(): string
-    {
-        $configured = Settings::str('support_whatsapp_number', '2348000000000');
-        $normalised = Phone::normalize($configured);
-        $number = $normalised !== null
-            ? substr($normalised, 1)
-            : (preg_replace('/\D+/', '', $configured) ?: '2348000000000');
-        $message = 'Hello OK Veggies, I need help with an order or produce question.';
-        return 'https://wa.me/' . rawurlencode($number) . '?text=' . rawurlencode($message);
     }
 }
 

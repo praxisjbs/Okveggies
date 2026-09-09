@@ -22,8 +22,8 @@ try {
     for ($i = 1; $i <= 28; $i++) {
         Database::run(
             'INSERT INTO contact_messages
-                (name, email, phone, subject, message, source, status, created_at, submission_token_hash)
-             VALUES (:name, :email, :phone, :subject, :message, :source, :status, :created, :token)',
+                (name, email, phone, subject, message, source, status, created_at)
+             VALUES (:name, :email, :phone, :subject, :message, :source, :status, :created)',
             [
                 ':name' => 'Contact ' . $suffix . ' ' . $i,
                 ':email' => $i === 1 ? null : "sender-$i-$suffix@example.test",
@@ -33,7 +33,6 @@ try {
                 ':source' => 'contact_page',
                 ':status' => $i % 2 === 0 ? 'handled' : 'new',
                 ':created' => date('Y-m-d H:i:s', strtotime('-' . $i . ' hours')),
-                ':token' => hash('sha256', $suffix . ':' . $i),
             ]
         );
         $ids[] = (int) Database::getInstance()->getConnection()->lastInsertId();
