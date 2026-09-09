@@ -60,7 +60,13 @@ require_once $appRoot . '/includes/classes/Notifications.php';
 require_once $appRoot . '/includes/classes/KitchenRuns.php';
 require_once $appRoot . '/includes/classes/KitchenRunWorkflow.php';
 require_once $appRoot . '/includes/classes/Cron.php';
+require_once $appRoot . '/includes/classes/ProDashboard.php';
+require_once $appRoot . '/includes/classes/KitchenLists.php';
+require_once $appRoot . '/includes/classes/ProOrders.php';
+require_once $appRoot . '/includes/classes/Credit.php';
+require_once $appRoot . '/includes/classes/Customers.php';
 require_once $appRoot . '/includes/functions/helpers.php';
+require_once $appRoot . '/includes/functions/pro_access.php';
 
 foreach (glob(__DIR__ . '/*Test.php') as $file) {
     fwrite(STDOUT, "[test] " . basename($file) . "\n");

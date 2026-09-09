@@ -381,26 +381,48 @@ final class SettingsEditor
     {
         $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
         $all = [
-            'customer_name'  => 'Ada',
-            'order_number'   => 'OKV26014',
-            'delivery_day'   => 'Thursday 24th September',
-            'order_total'    => Money::format(1250000),
-            'amount'         => Money::format(500000),
-            'zone_name'      => 'Ikeja',
-            'payment_choice' => 'Deposit online, balance on delivery',
-            'source_line'    => okv_sourced_line(Settings::str('source_regions', 'Ogun State'), Settings::str('source_day', 'Tuesday')),
-            'balance_line'   => 'There is still ' . Money::format(750000) . ' to settle on this order.',
-            'money_line'     => 'We are sending ' . Money::format(500000) . ' back to you.',
-            'reason'         => 'The customer bank account could not be reached.',
-            'amount_due'     => Money::format(750000),
+            'customer_name'   => 'Ada',
+            'business_name'   => 'Mama Chidi Kitchen',
+            'order_number'    => 'OKV26014',
+            'delivery_day'    => 'Thursday 24th September',
+            'order_total'     => Money::format(1250000),
+            'amount'          => Money::format(500000),
+            'zone_name'       => 'Ikeja',
+            'payment_choice'  => 'Deposit online, balance on delivery',
+            'source_line'     => okv_sourced_line(Settings::str('source_regions', 'Ogun State'), Settings::str('source_day', 'Tuesday')),
+            'balance_line'    => 'There is still ' . Money::format(750000) . ' to settle on this order.',
+            'money_line'      => 'We are sending ' . Money::format(500000) . ' back to you.',
+            'reason'          => 'The customer bank account could not be reached.',
+            'declined_reason' => 'We need a longer trading history before we can set this limit.',
+            'credit_limit'    => Money::format(50000000),
+            'credit_days'     => '10 days',
+            'requested_limit' => Money::format(50000000),
+            'requested_days'  => '10 days',
+            'due_date'        => date('l jS F', strtotime('+10 days')),
+            'amount_due'      => Money::format(750000),
             'order_trail_url' => $base . '/public/order.php?token=sample',
-            'pay_url'        => $base . '/public/order.php?token=sample',
-            'admin_url'      => $base . '/admin/orders.php?order=1',
+            'pay_url'         => $base . '/public/order.php?token=sample',
+            'admin_url'       => $base . '/admin/orders.php?order=1',
+            'credit_url'      => $base . '/pro/credit.php',
+            'request_number'  => 'KR26014',
+            'line_count'      => '6 items',
+            'quote_total'     => Money::format(1250000),
         ];
         $tokens = Notifications::TOKENS[$templateKey] ?? [];
         $sample = [];
         foreach ($tokens as $token) {
             $sample[$token] = $all[$token] ?? '';
+        }
+        if ($templateKey === 'admin_new_credit_application') {
+            if (isset($sample['admin_url'])) {
+                $sample['admin_url'] = $base . '/admin/credit.php?application=12';
+            }
+            if (isset($sample['reason'])) {
+                $sample['reason'] = 'Weekly market buying for five restaurants. We need steady supply without paying cash on each delivery.';
+            }
+        }
+        if ($templateKey === 'credit_charge_posted' && isset($sample['order_trail_url'])) {
+            $sample['order_trail_url'] = $base . '/public/order.php?order=14';
         }
         return $sample;
     }

@@ -66,7 +66,7 @@ $foundOrder  = null;
 $orderPayments = [];
 if ($search !== '') {
     $foundOrder = Database::one(
-        'SELECT id, order_number, order_total_subunit, amount_paid_subunit,
+        'SELECT id, user_id, order_number, order_total_subunit, amount_paid_subunit,
                 balance_due_subunit, payment_status, customer_type
            FROM orders WHERE order_number = :n',
         [':n' => $search]
@@ -328,7 +328,15 @@ require __DIR__ . '/../includes/components/admin/header.php';
 
     <?php if ($foundOrder): ?>
       <div class="mt-5 rounded-lg border border-mist p-4">
-        <p class="font-semibold text-ink">Order <?= okv_e($foundOrder['order_number']) ?></p>
+        <p class="font-semibold text-ink">
+          Order <?= okv_e($foundOrder['order_number']) ?>
+          <a class="ml-2 text-sm font-normal underline decoration-mist underline-offset-2 hover:text-forest"
+             href="/admin/orders.php?order=<?= (int) $foundOrder['id'] ?>">Open the order</a>
+          <?php if (Rbac::can('customers.view') && !empty($foundOrder['user_id'])): ?>
+            <a class="ml-2 text-sm font-normal underline decoration-mist underline-offset-2 hover:text-forest"
+               href="/admin/customers.php?customer=<?= (int) $foundOrder['user_id'] ?>">Open the customer</a>
+          <?php endif; ?>
+        </p>
         <p class="mt-1 text-sm text-ink-60">
           Total <?= okv_e(Money::format((int) $foundOrder['order_total_subunit'])) ?>.
           Paid <?= okv_e(Money::format((int) $foundOrder['amount_paid_subunit'])) ?>.

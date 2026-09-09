@@ -25,6 +25,12 @@ final class OrderLifecycle
         return in_array($to, self::MAP[$from] ?? [], true);
     }
 
+    /** The plain order stage shown to a customer. */
+    public static function customerLabel(string $status): string
+    {
+        return self::PUBLIC_LABELS[$status] ?? 'Order update';
+    }
+
     /** Cancellation remains on the dedicated M5/M6 cancellation path. */
     public static function staffTargets(string $status): array
     {
@@ -45,7 +51,7 @@ final class OrderLifecycle
             }
             $trail[] = [
                 'status' => $status === 'confirmed' ? 'sourced' : $status,
-                'label' => self::PUBLIC_LABELS[$status],
+                'label' => self::customerLabel($status),
                 'created_at' => (string) ($event['created_at'] ?? ''),
             ];
         }

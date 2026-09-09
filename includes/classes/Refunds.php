@@ -445,6 +445,7 @@ final class Refunds
               WHERE id = :txn',
             [':amount2' => (int) $refund['amount_subunit'], ':txn' => (int) $refund['payment_transaction_id']]
         );
+        Credit::adjustRefund((int) $refund['order_id'], $refundId, (int) $refund['amount_subunit']);
 
         // Deliberately does NOT restore balance_due. The order was paid; a
         // refund is compensation or the unwinding of a cancellation, not an

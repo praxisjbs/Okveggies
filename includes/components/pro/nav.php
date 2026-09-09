@@ -7,8 +7,8 @@
  * customer can reach. The Pro Portal is the utilitarian, denser surface of the
  * one brand (bible 1.9): same seal, same promise, more information per screen.
  *
- * Navigation only. Every Pro screen still decides its own access on the server
- * when its milestone (M8) is built.
+ * Navigation only. Every Pro screen calls the shared server gate before this
+ * component can render.
  * -----------------------------------------------------------------------------
  */
 
@@ -22,7 +22,7 @@ if (!function_exists('okv_pro_nav')) {
         $OKV_PRO_NAV = [];
         require __DIR__ . '/../../config/nav.php';
         ?>
-        <nav class="border-b border-mist bg-white" aria-label="Pro Portal">
+        <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-mist bg-white md:static md:border-t-0 md:border-b" aria-label="Pro Portal">
           <div class="okv-container flex gap-1 overflow-x-auto">
             <?php foreach ($OKV_PRO_NAV as $item):
                 $isActive = $item['href'] === $active;

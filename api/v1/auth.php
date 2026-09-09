@@ -69,9 +69,19 @@ if (!function_exists('auth_respond')) {
     }
 }
 
+if (!function_exists('auth_login_back')) {
+    /** Keep a safe Pro return path through a failed storefront sign-in. */
+    function auth_login_back(string $returnPath): string
+    {
+        $back = '/account.php?mode=signin';
+        return $returnPath === '' ? $back : $back . '&return=' . rawurlencode($returnPath);
+    }
+}
+
 $action     = okv_action();
 $context    = (string) okv_input('context', '');
 $storefront = ($context === 'storefront');
+$proReturn  = okv_pro_safe_return_path((string) okv_input('return', '')) ?? '';
 
 // Only these actions exist here, and every one is a state change.
 $allowed = ['login', 'logout', 'register', 'change_password', 'forgot_password', 'reset_password', 'staff_forgot_password', 'staff_reset_password'];
@@ -89,7 +99,7 @@ if (!Csrf::validate()) {
         case 'reset_password':                  $back = '/public/auth/password_reset.php'; break;
         case 'staff_forgot_password':
         case 'staff_reset_password':            $back = '/admin/password_reset.php'; break;
-        case 'login':                           $back = $storefront ? '/account.php?mode=signin' : '/admin/login.php'; break;
+        case 'login':                           $back = $storefront ? auth_login_back($proReturn) : '/admin/login.php'; break;
         default:                                $back = $storefront ? '/account.php' : '/admin/login.php';
     }
     auth_respond(false, 'Your session expired. Reload the page and try again.', 419, 'csrf_expired', $back);
@@ -100,7 +110,7 @@ switch ($action) {
     case 'login': {
         $identifier = trim((string) okv_input('identifier', ''));
         $password   = (string) okv_input('password', '');
-        $loginBack  = $storefront ? '/account.php?mode=signin' : '/admin/login.php';
+        $loginBack  = $storefront ? auth_login_back($proReturn) : '/admin/login.php';
 
         if ($identifier === '' || $password === '') {
             auth_respond(false, 'Enter your phone or email and your password.', 422, 'missing_fields', $loginBack);
@@ -155,6 +165,14 @@ switch ($action) {
         }
 
         $dest = Auth::landingPath($user);
+        if ($proReturn !== '') {
+            $userType = (string) ($user['user_type'] ?? '');
+            if ($userType === 'business') {
+                $dest = $proReturn;
+            } elseif ($userType === 'household') {
+                $dest = okv_pro_household_destination($proReturn);
+            }
+        }
         auth_respond(true, 'Signed in.', 200, '', $dest, ['redirect' => $dest]);
         break;
     }
