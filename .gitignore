@@ -8,6 +8,7 @@ package-lock.json
 # Real uploads (keep the folders and their .htaccess, ignore the content).
 uploads/*/*
 !uploads/*/.gitkeep
+!uploads/*/.htaccess
 
 # Logs and OS cruft.
 *.log
