@@ -76,7 +76,7 @@ okv_test_ok(str_contains($photoRoute, 'Customer::isLoggedIn()'), 'the private ph
 okv_test_ok(str_contains(file_get_contents(dirname(__DIR__, 2) . '/uploads/issues/.htaccess'), 'Require all denied'), 'Apache direct access to issue evidence is denied');
 
 $admin = file_get_contents(dirname(__DIR__, 2) . '/admin/make_it_right.php');
-okv_test_ok(str_contains($admin, 'photoPreviewForStaff'), 'the issues.view admin screen loads its authorised photo preview through the domain service');
+okv_test_ok(str_contains($admin, 'IssueReports::findForStaff'), 'the issues.view admin screen loads its authorised full detail through the domain service');
 okv_test_ok(str_contains($admin, 'loading="lazy"'), 'admin issue thumbnails use lazy loading');
 
 $controller = file_get_contents(dirname(__DIR__, 2) . '/api/v1/make_it_right.php');

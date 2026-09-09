@@ -251,6 +251,7 @@ try {
         Database::run('DELETE FROM notification_deliveries WHERE notification_id IN (SELECT id FROM notifications WHERE related_type = :type AND related_id = :id)', [':type' => 'issue_report', ':id' => $issueId]);
         Database::run('DELETE FROM notifications WHERE related_type = :type AND related_id = :id', [':type' => 'issue_report', ':id' => $issueId]);
         Database::run('DELETE FROM audit_logs WHERE entity_type = :type AND entity_id = :id', [':type' => 'issue_report', ':id' => $issueId]);
+        Database::run('DELETE FROM issue_report_history WHERE issue_id = :id', [':id' => $issueId]);
     }
     foreach ($orderIds as $orderId) {
         Database::run('DELETE FROM issue_reports WHERE order_id = :id', [':id' => $orderId]);

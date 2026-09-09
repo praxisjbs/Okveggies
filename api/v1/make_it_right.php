@@ -63,6 +63,7 @@ if (!okv_is_post()) {
 $action = okv_action();
 $staffActions = ['take', 'decline'];
 if (in_array($action, $staffActions, true)) {
+    Rbac::requirePermission('issues.view');
     Rbac::requirePermission('issues.resolve');
     $issueId = (int) okv_input('issue_id', 0);
     $returnTo = okv_safe_path(

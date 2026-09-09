@@ -1,5 +1,5 @@
 <?php
-/** Pure Task C workflowC workflow contract checks. */
+/** Pure Task C workflow contract checks. */
 
 okv_test_eq(['open', 'in_progress', 'resolved', 'declined'], IssueReports::STATUSES, 'issue lifecycle names are fixed');
 okv_test_eq('Open', IssueReports::statusLabel('open'), 'open has an approved staff label');
@@ -23,6 +23,7 @@ okv_test_ok(str_contains($admin, 'name="expected_status"'), 'staff action forms 
 okv_test_ok(str_contains($admin, 'Csrf::field()'), 'every staff action form carries CSRF');
 
 $api = file_get_contents(dirname(__DIR__, 2) . '/api/v1/make_it_right.php');
+okv_test_ok(str_contains($api, "Rbac::requirePermission('issues.view')"), 'every workflow write also requires issues.view');
 okv_test_ok(str_contains($api, "Rbac::requirePermission('issues.resolve')"), 'every workflow write requires issues.resolve');
 okv_test_ok(str_contains($api, 'Notifications::announceIssueReportResolved'), 'a committed decline tells the customer after the write');
 

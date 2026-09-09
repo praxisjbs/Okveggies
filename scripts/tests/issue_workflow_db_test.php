@@ -63,11 +63,12 @@ try {
         'SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :name',
         [':name' => 'issue_report_history']
     ) !== null, 'migration 046 creates issue_report_history');
-    iwdb_eq('datetime', (string) (Database::one(
+    $handledAtColumn = Database::one(
         'SELECT data_type FROM information_schema.columns
           WHERE table_schema = DATABASE() AND table_name = :table_name AND column_name = :column_name',
         [':table_name' => 'issue_reports', ':column_name' => 'handled_at']
-    )['data_type'] ?? ''), 'migration 046 records when a report was taken');
+    );
+    iwdb_eq('datetime', strtolower((string) ($handledAtColumn['data_type'] ?? $handledAtColumn['DATA_TYPE'] ?? '')), 'migration 046 records when a report was taken');
 
     $customerId = $makeUser('Customer');
     $handlerId = $makeUser('Handler', 'staff');
