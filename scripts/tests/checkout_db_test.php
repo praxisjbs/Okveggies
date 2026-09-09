@@ -30,7 +30,9 @@ require_once $root . '/includes/classes/Combos.php';
 require_once $root . '/includes/classes/Customer.php';
 require_once $root . '/includes/classes/Basket.php';
 require_once $root . '/includes/classes/Delivery.php';
+require_once $root . '/includes/classes/OrderLifecycle.php';
 require_once $root . '/includes/classes/OrderTrail.php';
+require_once $root . '/includes/classes/Credit.php';
 require_once $root . '/includes/classes/Checkout.php';
 require_once $root . '/includes/functions/helpers.php';
 
@@ -183,6 +185,15 @@ try {
         'a guest has no account, so nothing is saved to one for next time'
     );
 
+    // A guest who shops again straight after checking out. Their session token
+    // is still on the basket the order converted, and session_token is unique,
+    // so a second basket has to mint a fresh one rather than fall over.
+    Basket::addProduct($productId);
+    $secondGuestState = Basket::state();
+    $secondGuestCartId = $secondGuestState['cart_id'] === null ? 0 : (int) $secondGuestState['cart_id'];
+    t_ok($secondGuestCartId > 0, 'a guest can start a new basket after checking out');
+    t_ok($secondGuestCartId !== $guestCartId, 'and it is a new basket, not the one their order converted');
+
     // The trail link is the credential, so it has to find the order.
     t_ok(OrderTrail::findByToken((string) $guestResult['trail_token']) !== null, 'the trail token opens the guest order');
     t_eq(
@@ -192,6 +203,10 @@ try {
     );
 } finally {
     // --- Teardown ------------------------------------------------------------
+    if (!empty($secondGuestCartId)) {
+        Database::run('DELETE FROM cart_items WHERE cart_id = :id', [':id' => $secondGuestCartId]);
+        Database::run('DELETE FROM shopping_carts WHERE id = :id', [':id' => $secondGuestCartId]);
+    }
     foreach (array_filter([$orderId ?? 0, $guestOrderId ?? 0]) as $o) {
         Database::run('DELETE FROM order_item_components WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id = :o)', [':o' => $o]);
         Database::run('DELETE FROM order_items WHERE order_id = :o', [':o' => $o]);

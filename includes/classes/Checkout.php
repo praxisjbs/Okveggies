@@ -148,10 +148,18 @@ final class Checkout
         if (!self::paymentAllowed($option, $type, !empty($input['activated']))) {
             throw new DomainException('payment_not_allowed');
         }
+
+        // On account is refused here, before a transaction is opened and before
+        // any row is written. The authoritative check runs again under a lock
+        // inside Credit::drawForOrder, because the limit can move between the
+        // two moments.
         if ($option === 'on_account') {
-            $credit = Database::one('SELECT credit_status FROM business_customers WHERE user_id = :id', [':id' => $userId]);
-            if (!$credit || $credit['credit_status'] !== 'approved') {
-                throw new DomainException('credit_not_approved');
+            $refusal = Credit::drawRefusal(
+                Credit::facilityForUser($userId),
+                (int) $basket['subtotal_subunit']
+            );
+            if ($refusal !== '') {
+                throw new DomainException($refusal);
             }
         }
 
@@ -308,6 +316,9 @@ final class Checkout
             ]
         );
         $orderId = (int) $pdo->lastInsertId();
+        if ($option === 'on_account') {
+            Credit::drawForOrder($userId, $orderId, $total, $deliveryDate);
+        }
 
         self::writeAddress($orderId, $userId, $customer);
         self::snapshotItems($orderId, $lines);

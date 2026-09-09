@@ -62,7 +62,50 @@ final class OrderTrail
         if (!self::isValidToken($token)) {
             return null;
         }
-        return self::find('o.order_trail_token_hash = :value', self::hashToken($token));
+        $hash = self::hashToken($token);
+        $order = self::find('o.order_trail_token_hash = :value', $hash);
+        if ($order !== null) {
+            return $order;
+        }
+        try {
+            $share = Database::one(
+                'SELECT order_id FROM order_trail_share_links WHERE token_hash = :token_hash LIMIT 1',
+                [':token_hash' => $hash]
+            );
+        } catch (Throwable $e) {
+            error_log('order trail share lookup failed: ' . $e->getMessage());
+            return null;
+        }
+        return $share === null ? null : self::find('o.id = :value', (int) $share['order_id']);
+    }
+
+    /** Issue another share token for an owned order without replacing earlier links. */
+    public static function issueForCustomer(int $orderId, int $userId): ?string
+    {
+        if (self::findForCustomer($orderId, $userId) === null) {
+            return null;
+        }
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $token = self::newToken();
+            $hash = self::hashToken($token);
+            $exists = Database::one(
+                'SELECT id FROM orders WHERE order_trail_token_hash = :order_hash
+                 UNION ALL
+                 SELECT id FROM order_trail_share_links WHERE token_hash = :share_hash
+                 LIMIT 1',
+                [':order_hash' => $hash, ':share_hash' => $hash]
+            );
+            if ($exists !== null) {
+                continue;
+            }
+            Database::run(
+                'INSERT INTO order_trail_share_links (order_id, token_hash, created_by)
+                 VALUES (:order_id, :token_hash, :created_by)',
+                [':order_id' => $orderId, ':token_hash' => $hash, ':created_by' => $userId]
+            );
+            return $token;
+        }
+        throw new RuntimeException('trail_token_collision');
     }
 
     /** The order for its signed-in owner, or null when it is not theirs. */

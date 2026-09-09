@@ -29,9 +29,22 @@ final class OrderDocument
     public static function load(): ?array
     {
         $order = self::resolve();
-        if (!$order) {
+        return $order ? self::loadResolved($order) : null;
+    }
+
+    /** Load an order snapshot only when it belongs to this customer. */
+    public static function loadForCustomer(int $orderId, int $userId): ?array
+    {
+        $owned = OrderTrail::findForCustomer($orderId, $userId);
+        if ($owned === null) {
             return null;
         }
+        $order = self::readOrder($orderId);
+        return $order ? self::loadResolved($order) : null;
+    }
+
+    private static function loadResolved(array $order): array
+    {
         $orderId = (int) $order['id'];
 
         $address = Database::one(

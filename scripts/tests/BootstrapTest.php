@@ -80,13 +80,18 @@ foreach (glob($appRoot . '/includes/classes/*.php') ?: [] as $classFile) {
 
 $entryPoints = [
     'admin/payments.php',
+    'admin/customers.php',
+    'admin/credit.php',
+    'api/v1/customers.php',
     'api/v1/payments.php',
     'api/v1/paystack_webhook.php',
+    'api/v1/credit.php',
+    'api/v1/checkout.php',
+    'api/v1/kitchen_runs.php',
     'public/payment/callback.php',
     'public/documents/invoice.php',
     'public/documents/receipt.php',
     'public/order.php',
-    'api/v1/checkout.php',
     'scripts/payment_sweep.php',
 ];
 $languageWords = ['PHP_EOL', 'STR_PAD_LEFT', 'self', 'static', 'parent', 'PHP_SAPI'];
