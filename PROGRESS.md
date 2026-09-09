@@ -12,7 +12,7 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M10, Make It Right, workflow in progress on branch `M9-issue-report-make-it-right`.** Customer reporting, private photos, the staff queue, the three terminal outcomes and the signed-in customer outcome history are complete. Refunds delegate to M5, account credit appends through M8 for an approved business, and replacement links an existing manual order for the same customer. Selected order lines cap every money outcome, each result has a durable relationship, the assigned handler finishes it, and the Owner can explicitly take over. Customer outcomes stay off the public token trail, while the authenticated owner sees every report and its current result. Migration `047` is applied on MySQL 8. The trust-signal pass and final role matrix remain open.
+**Milestone M10, Make It Right, workflow in progress on branch `M9-issue-report-make-it-right`.** Customer reporting, private photos, the staff queue, the three terminal outcomes, the signed-in customer outcome history and the storefront trust-signal pass are complete. Refunds delegate to M5, account credit appends through M8 for an approved business, and replacement links an existing manual order for the same customer. Customer outcomes stay off the public token trail, while the authenticated owner sees every report and its current result. Checkout now names Paystack and its payment methods, explains the private Order Trail and links to the Make It Right section of the Delivery Policy. Migration `047` is applied on MySQL 8. The final lifecycle test and role matrix remain open.
 
 **Manual back-office operations, on branch `claude/admin-manual-operations-xhysmn`.** The admin panel could move work along and could not start any of it: no order could be created by hand, no kitchen list typed in, no delivery zone added, and the payments screen found an order only by its exact number. All four are built. `admin/order_new.php` takes an order over the phone, `admin/kitchen_run_new.php` types in a list that arrived on WhatsApp, the Delivery screen adds and renames zones, and the Payments screen searches by name, phone, email, order number or Paystack reference, with the customer name and the date on every result and on Recent payments. Migration `041` adds `orders.create`, `kitchen_runs.create` and `customers.create` to both roles. Full account in the session log below. **This needs migration `041`, which the deploy applies.** It was written as `027` and renumbered when M8 and M9 landed on `main`, because `027_guest_checkout_and_payment_reminder` already owns that number.
 
@@ -643,7 +643,8 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 - [x] Admin resolves (refund, credit, replacement) and customer sees the outcome
 - [x] **Task D, the three resolutions:** full or partial refund through M5, approved-business account credit through M8, or a linked manual replacement order. Each outcome is durable, capped by the selected order lines and protected against terminal replay.
 - [x] **Task E, private customer outcomes:** the signed-in order shows every report newest first, with the latest expanded, plain status and next-step copy, the exact customer-facing note, amount and live refund status where relevant. Eligible businesses can open Pro Credit, replacement order numbers open the authenticated order view, terminal reports no longer block a fresh report inside the window, and none of this appears on the public token trail.
-- [ ] Trust signals on storefront and checkout
+- [x] Trust signals on storefront and checkout
+- [x] **Task F, trust signals:** checkout shows the Paystack mark and card, bank-transfer and USSD labels immediately after the online-payment choices, followed by plain Order Trail and Make It Right reassurance. The policy link lands on a usable Delivery Policy section that reads the managed reporting window. Product and combo buying pages retain the shared sourcing line, and customer-facing produce-photo alt text uses every available name, unit and source field without inventing a missing value.
 - [ ] Tests: issue lifecycle
 
 ### M11. Admin dashboard and analytics
@@ -689,6 +690,13 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 10 Sep 2026, M10 Task F: storefront and checkout trust signals
+
+- Added a 3-part trust panel directly below the Paystack payment choices. It carries the Paystack mark, names card, bank transfer and USSD, explains that OK Veggies does not receive card details, points to the private Order Trail, and links Make It Right wording to the Delivery Policy before the customer places the order.
+- Replaced the content-page placeholder with a safe published-page reader so the existing Delivery Policy link is no longer a dead end. Its Make It Right section explains eligible delivery problems, the current managed `make_it_right_reporting_window_days` value, optional-photo limit, possible outcomes and public-token privacy. Other published page copy still comes from `content_pages`; full admin editing and the richer marketing-page treatment remain M12.
+- Confirmed that product cards, product detail, combo cards, combo detail and combo spreads already use the shared `okv_sourced_note()` wording. Added `okv_produce_alt()` and used it on product detail, cards, combo contents and basket produce so missing source or unit data is omitted cleanly rather than producing a broken sentence. Combo basket photographs retain truthful basket-specific descriptions.
+- Verification: the full unit runner passed 2,948/2,948 assertions, including the new Task F contract tests. All touched PHP files passed `php -l`, the CSS and JavaScript builds completed, the 8-part brand check passed, and `git diff --check` was clean. Live HTTP checks returned 200 for the Delivery Policy, its managed 7-day guidance and its Make It Right anchor, and 404 for an unpublished slug. The local smoke verifier passed 21 route, asset and access checks; its 2 Apache-only protected-directory checks fail under PHP's built-in server because it does not apply `.htaccess`. Browser checks at 390px and 1440px found the checkout trust panel and policy target with no horizontal overflow; every visible main link or button met the 44px touch target, with native radio controls carried by their larger clickable labels. No commit or other Git history change was made.
 
 ### 9 Sep 2026, M10 Task E: private customer outcomes
 

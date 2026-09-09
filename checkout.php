@@ -228,6 +228,23 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
               <strong>Pay a <?= okv_e(rtrim(rtrim(number_format(Settings::depositPercentage(), 2), '0'), '.')) ?>% deposit</strong>
               <span class="mt-1 block text-sm text-ink-60">Pay <?= okv_e(Money::format($deposit)) ?> now through Paystack. The rest is settled on delivery.</span>
             </label>
+
+            <section class="rounded-md border border-forest/20 bg-forest-tint p-4" aria-labelledby="checkout-trust-heading">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h3 id="checkout-trust-heading" class="font-display text-lg font-bold text-ink">Your payment and order stay clear</h3>
+                <img src="<?= okv_e(okv_asset('/assets/img/payments/paystack.svg')) ?>" alt="Paystack" width="116" height="25" class="h-6 w-auto">
+              </div>
+              <ul class="mt-4 grid gap-3 text-sm text-ink-60 sm:grid-cols-3">
+                <li><strong class="block text-ink">Secure Paystack payment</strong><span class="mt-1 block">Pay by card, bank transfer or USSD on Paystack. OK Veggies does not receive your card details.</span></li>
+                <li><strong class="block text-ink">Follow every order</strong><span class="mt-1 block">Your private Order Trail shows when your basket is sourced, packed, dispatched and delivered.</span></li>
+                <li>
+                  <strong class="block text-ink">We make it right</strong>
+                  <span class="mt-1 block">If delivered produce is not as described, report it from your order and see the outcome there.</span>
+                  <a class="mt-2 inline-flex min-h-[44px] items-center font-semibold text-forest underline underline-offset-2" href="/page.php?slug=delivery-policy#make-it-right">Read the Delivery Policy</a>
+                </li>
+              </ul>
+              <p class="mt-3 text-xs font-semibold uppercase tracking-wider text-ink-60">Card · Bank transfer · USSD</p>
+            </section>
             <label class="block rounded-md border border-mist p-4 <?= Customer::isActivated() ? '' : 'opacity-60' ?>">
               <input type="radio" name="payment_option" value="pay_on_delivery" <?= $payment === 'pay_on_delivery' ? 'checked' : '' ?> <?= Customer::isActivated() ? '' : 'disabled' ?>>
               <strong>Pay on delivery</strong>

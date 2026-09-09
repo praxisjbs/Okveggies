@@ -49,6 +49,8 @@ expect "$BASE/site.webmanifest"                             "200" "web manifest"
 expect "$BASE/assets/img/brand/lockup.svg"                  "200" "logo lockup"
 expect "$BASE/assets/img/brand/icons/apple-touch-icon.png" "200" "apple touch icon"
 expect "$BASE/assets/fonts/hanken-grotesk-latin.woff2"      "200" "brand font (Hanken Grotesk)"
+expect "$BASE/assets/img/payments/paystack.svg"             "200" "Paystack checkout mark"
+expect "$BASE/page.php?slug=delivery-policy#make-it-right" "200" "Delivery Policy and Make It Right guidance"
 # M6 routes. A staff screen must send a signed-out visitor to the login rather
 # than answering, and a trail token that does not exist must be a clean 404
 # rather than a 500. expect_login is separate from expect_deny on purpose: an

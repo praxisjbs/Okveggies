@@ -15,6 +15,7 @@ require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
 
 $basket = Basket::state();
+$sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
 $notice = (string) okv_input('basket', '');
 $notices = [
     'added'    => 'Added to your basket.',
@@ -88,7 +89,11 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
           <article class="rounded-lg bg-white p-4 shadow-okv-1 sm:flex sm:items-start sm:gap-5">
             <div class="hidden h-20 w-20 flex-none overflow-hidden rounded-md bg-forest-tint sm:block">
               <?php if ($line['image_url'] !== ''): ?>
-                <img src="<?= okv_e($line['image_url']) ?>" alt="<?= okv_e($line['name']) ?>" width="80" height="80" class="h-full w-full object-cover" loading="lazy">
+                <img src="<?= okv_e($line['image_url']) ?>"
+                     alt="<?= okv_e($combo
+                       ? (string) $line['name'] . ', ready basket'
+                       : okv_produce_alt((string) $line['name'], (string) $line['unit'], $sourceRegions)) ?>"
+                     width="80" height="80" class="h-full w-full object-cover" loading="lazy">
               <?php endif; ?>
             </div>
             <div class="min-w-0 flex-1">
