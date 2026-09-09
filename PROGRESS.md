@@ -12,6 +12,8 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
+**Milestone 6/7 reported bugs. Fixed on branch `claude/milestone-6-7-bugs-297v81` (9 September 2026).** Four defects off the live site: the Kitchen Runs queue tabs never applied their filter, checkout demanded an account before it would take an order, the cancellation note read as if a customer paying in full lost everything, and an order confirmation went out before the payment. Migration `027` ships with it. Two things need a person: run the database and HTTP suites (this container has neither), and set up the cPanel cron job in `docs/DEPLOYMENT.md`, because until it exists the payment sweep and the new reminder are written and never sent. One open question for the owner is in the session log: a pay in full order records no deposit, so cancelling after the cutoff refunds it in full while a deposit customer forfeits.
+
 **Milestone M7, Kitchen Runs. Follow-up merged into `main` on 8 September 2026 (pull request 38, merge commit `0fc0a2e`), and deployed.** The twelve items the completion pass left open are all done: a signed-out visitor is told rather than redirected, the customer picks their own delivery day and area, the queue filters by customer, lines reorder and carry a note, the team gets an internal note of its own, `kitchen_runs.approve` is a real path, an approved run can be withdrawn, an order links back to its run, the customer hears that we have their list, the Pro Portal screen is real, already-priced is its own mode, and the balance after delivery is proved rather than rebuilt. Verified on MySQL 8.0.46, the production engine, which retires the MariaDB caveat in the review. The authenticated browser journey at 390px and 1440px finally ran, and it found two defects no curl-shaped test could see: the customer's form had never posted with JavaScript on, and pricing a free-text list failed on the database while telling the colleague their file was rejected. Both fixed, both with regression tests. Full account in the session log below.
 
 **Milestone M7, Kitchen Runs. Reviewed and finished on branch `claude/milestone-7-completion-2nlnib`, on top of pull request 36.** A customer sends a list however they have it, we price it, they approve it, it becomes an ordinary order. The first attempt (pull request 36) had the shape of the milestone and one fatal hole: conversion had never once run. It bound the same named placeholder twice in one INSERT, which MySQL refuses on a native prepared statement, and the only conversion test exercised an injected failure that returned before any write. Twenty green database assertions sat on top of a feature that threw on first use. That, six public rules nothing called, a form that took one item, and conversion writing no delivery address and no trail token, are what this branch fixes. The written review is `docs/M7_REVIEW.md`.
@@ -147,6 +149,127 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] The balance after delivery proved on the existing path: a deposit conversion's balance row settled through M5's manual payments to a paid order
 - [x] Tests: the unit on a converted line, the method gate on every action, the permission gate on every staff action, a signed-out caller on all of them
 - [x] The authenticated journey exercised in a real browser at 390px and 1440px, request to order, both viewports
+
+### 9 Sep 2026, Milestone 6/7 bug fixes: the queue filter, the mandatory account, the cancellation words, and an email sent before the money
+
+Branch `claude/milestone-6-7-bugs-297v81`. Four defects reported off the live
+site after M7. Five decisions were taken by the owner before any code was
+written: an expired quote gets its own tab, a guest checkout is genuinely
+optional with the account offered rather than demanded, the cancellation note
+is rewritten simply and names the real date, only a pay in full order holds its
+email until the money lands, and the scheduled work runs from a token-guarded
+URL so a host with no shell can still run it.
+
+**1. The Kitchen Runs queue never filtered.** Not a query bug. The tab links
+were built with PHP's array union, and the union keeps the LEFT operand for a
+repeated key. The current filter was on the left, so the status a colleague
+clicked was thrown away and every tab handed back the filter already in the
+URL: from All, "Quote sent" linked to All. The list under it was correct for the
+filter it was given, which is why it looked like the list was broken rather than
+the link. One character of ordering fixes it, and `KitchenRunsTest` now pins the
+link builder itself so it cannot regress silently.
+
+While in there: every tab carries its count, and an expired quote has its own
+tab. A quote past its window used to sit among live ones labelled "Quote
+expired" on its row, which is exactly where a job nobody is chasing goes to
+hide. `KitchenRuns::FILTERS` is now the one list the tabs, the counts and the
+query all read, and `Quote sent` means a live quote only.
+
+**2. Checkout demanded an account.** The consent tick carried `required`, and
+`api/v1/checkout.php` created a light account for every signed-out customer
+whether or not they wanted one, refusing the order with `consent_required` if
+the box was clear. A visitor who wanted to pay in full and leave had to open an
+account first. PRD 9.2 allows a guest checkout, so now the page offers and never
+demands: tick it and you get the account and a set-your-password link, leave it
+and you place a real guest order tracked by the Order Trail link in your email.
+Pay on delivery still needs a verified account, which is PRD 10.2 and unchanged.
+
+A guest order has no `users` row, so three things had to give. `orders` carries
+a `contact_email` (migration 027, written for every order, backfilled for the
+old ones), because otherwise there is nowhere to send the confirmation. Every
+write path in `Checkout` takes a null user, and the saved-address-for-next-time
+write is skipped rather than orphaned. And the guest needs a way back to their
+own order: the trail link is their only credential, so the trail page takes the
+payment while one is owed, `api/v1/payments.php` accepts that token in place of
+a sign in (refused the moment the order has an account behind it), and the
+WhatsApp share button is withheld until the order is paid, so nobody is invited
+to hand out a link that can spend money for them.
+
+**3. The cancellation note at checkout.** Rewritten shorter and more direct, and
+it now names the actual evening: "Cancel free until 18:00 on Wednesday 9th, the
+day before your delivery." It also says what comes back, which the old line
+never did: it mentioned only that a deposit is not returned, so a customer
+paying in full read it as losing everything.
+
+**Discovered while writing that copy, and left alone deliberately.** A pay in
+full order records no `deposit_required_subunit`, and `Cancellation::moneyOutcome`
+caps the forfeit at that column. So a customer who paid in full and cancels
+after the cutoff is refunded in full today, while a deposit customer loses their
+deposit. The new copy is accurate about what the code does. Whether that
+asymmetry is the intended policy is a decision for the owner, not a bug to fix
+quietly, and it is the one open question from this session.
+
+**4. An order confirmation arrived before the payment.** `announceOrderPlaced`
+fired for every order the instant it was placed, before the customer had even
+reached Paystack, so a pay in full customer read "we have your order and we are
+sourcing it now" for an order nobody had been paid for. What each mode does now:
+
+| Mode | At placement | When the money lands |
+|---|---|---|
+| Pay in full | nothing to the customer | the receipt, with the order details and the trail link |
+| Deposit | the receipt, as before | the deposit acknowledged |
+| Pay on delivery | the receipt | nothing owed online |
+| On account | the receipt | the credit line is the payment |
+
+Staff still hear about every order the moment it is placed, paid or not.
+
+The hard part was the Order Trail link. The token exists in plain text for one
+request and is stored only as a hash, so an email rendered after the fact cannot
+carry one, and PRD 14.2 makes that link the way a customer follows their order.
+So the pay in full receipt is **rendered at checkout, while the token is in
+hand, and held**: `notifications` grew `cta_url` and `cta_label` to remember its
+button, and `Notifications::release` sends the stored copy when Paystack
+confirms. Nothing is re-rendered, so nothing can quietly lose the link.
+
+**And the one reminder.** An order that chose to pay online and did not pay gets
+exactly one email 30 minutes later, with a link back to the payment rather than
+to the trail. It is a single queued row, so "once" is structural rather than a
+flag somebody has to remember to set. It is cancelled when the money lands by
+any route, when staff record cash at the counter, and when the order is
+cancelled; and the flush asks the order one more time before sending, so a
+customer can never be chased for money they have already paid. `Notifications::resend`
+now refuses a held or queued email outright: resend is for one that failed, not
+a way to fire "payment received" before the payment. The Order 360 screen labels
+them honestly, "Waiting on the payment" and "Scheduled for 9 Sep 2026, 18:30",
+with no resend button on either.
+
+**5. Nothing was running the scheduled work.** `scripts/payment_sweep.php` was
+written in M5 for a cron that `docs/DEPLOYMENT.md` never set up, on a host with
+no shell. So a payment made in a closed tab has been waiting for the customer to
+come back rather than being reconciled. New `Cron` class runs the sweep and the
+due notifications in one pass, driven by `scripts/cron.php` for a shell and
+`public/cron.php` for a URL, the second fails closed on `MIGRATE_TOKEN` exactly
+like `public/migrate.php` and `public/healthcheck.php`. `docs/DEPLOYMENT.md` now
+carries the cPanel steps: one job, every five minutes, one curl line. The delay
+before the reminder is `payment_reminder_minutes` in Order settings, 30 by
+default, not a constant.
+
+**Verified.** 1,943 unit assertions green, up from 1,864, with new coverage on
+the link builder, the guest checkout shape, the dated cancellation copy, the
+per-mode announcement, the reminder's last-moment re-check and the cron
+endpoint's token guard. `php -l` clean across all 118 PHP files.
+`scripts/brand-check.sh` green on all eight checks. The stylesheet was rebuilt
+(one new utility class) and the minified JavaScript with it.
+
+**Not verified here, and it needs a person.** This container has no database and
+no `.env`, so the database and HTTP suites could not run, the same limit the M1
+entry above records. New assertions were added to `checkout_db_test.php` (a
+guest order writes a whole order with no account, and its trail token opens it)
+and `kitchen_runs_db_test.php` (each tab returns only its own status, expired
+quotes list and count apart from live ones, and the counts match the lists), and
+they have not been executed. Run both, plus one guest checkout end to end on
+staging with a Paystack test key, and set up the cron job in cPanel: until that
+job exists, the reminder is written and never sent.
 
 ### 8 Sep 2026, M7 follow-up: the twelve open items, and two defects only a browser could find
 

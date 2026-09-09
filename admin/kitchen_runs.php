@@ -28,10 +28,16 @@ $lines    = $request ? KitchenRuns::lines($openId) : [];
 $history  = $request ? KitchenRuns::history($openId) : [];
 $runs     = KitchenRuns::allForStaff($filter, 100, $customer);
 $waiting  = KitchenRuns::waitingCount();
+$counts   = KitchenRuns::statusCounts($customer);
 
-/** Keep both filters on every link out of this screen, so one does not clear the other. */
+/**
+ * Keep both filters on every link out of this screen, so one does not clear the
+ * other. The union has to put $extra on the left: PHP's array union keeps the
+ * left operand for a repeated key, so the other way round every status tab
+ * silently handed back the filter already in the URL and nothing ever filtered.
+ */
 $queryWith = static function (array $extra) use ($filter, $customer): string {
-    $query = array_filter(['status' => $filter, 'customer' => $customer] + $extra, static fn($v): bool => (string) $v !== '');
+    $query = array_filter($extra + ['status' => $filter, 'customer' => $customer], static fn($v): bool => (string) $v !== '');
     return $query ? '?' . http_build_query($query) : '?';
 };
 
@@ -96,10 +102,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
         <?php endif; ?>
       </h2>
       <nav class="flex flex-wrap gap-2 text-sm" aria-label="Filter by status">
-        <?php foreach (array_merge([''], KitchenRuns::STATUSES) as $status): ?>
-          <a class="rounded-full border px-3 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center <?= $filter === $status ? 'border-forest bg-foliage-tint text-forest' : 'border-mist text-ink-60 hover:border-forest' ?>"
+        <?php foreach (KitchenRuns::FILTERS as $status): ?>
+          <?php $count = (int) ($counts[$status] ?? 0); ?>
+          <a class="rounded-full border px-3 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center gap-2 <?= $filter === $status ? 'border-forest bg-foliage-tint text-forest' : 'border-mist text-ink-60 hover:border-forest' ?>"
              href="<?= okv_e($queryWith(['status' => $status])) ?>"<?= $filter === $status ? ' aria-current="true"' : '' ?>>
-            <?= $status === '' ? 'All' : okv_e(KitchenRuns::statusLabel($status)) ?>
+            <?= okv_e(KitchenRuns::filterLabel($status)) ?>
+            <span class="font-mono text-xs <?= $filter === $status ? 'text-forest' : 'text-ink-60' ?>"><?= $count ?></span>
           </a>
         <?php endforeach; ?>
       </nav>

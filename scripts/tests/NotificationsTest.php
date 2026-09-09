@@ -24,7 +24,9 @@ foreach (Notifications::EVENTS as $event => $definition) {
     }
     $tokens = Notifications::TOKENS[$definition['template']];
     okv_test_ok(
-        in_array('order_trail_url', $tokens, true) || in_array('request_url', $tokens, true),
+        in_array('order_trail_url', $tokens, true)
+        || in_array('request_url', $tokens, true)
+        || in_array('pay_url', $tokens, true),
         "the customer email for $event carries a link back to what it is about"
     );
 }
@@ -162,3 +164,131 @@ okv_test_ok(
     'the override is ignored on a live key, so real money always goes to Paystack'
 );
 okv_test_ok(str_contains($paystack, "in_array(\$scheme, ['http', 'https'], true)"), 'the override must be a real http or https address');
+
+// ---------------------------------------------------------------------------
+// Payment mode decides what a placed order says (Milestone 6/7 bug)
+//
+// Every order sent "we have your order and we are sourcing it now" the instant
+// it was placed, before the customer had reached Paystack. A customer paying in
+// full read a confirmation for an order nobody had been paid for. Now:
+//
+//   pay in full       nothing at placement. The receipt is written there, held,
+//                     and released when the money lands.
+//   deposit           the receipt at placement, as before, and the deposit is
+//                     acknowledged separately when it lands.
+//   pay on delivery   the receipt at placement. Nothing is owed online.
+//   on account        the receipt at placement. The credit line is the payment.
+//
+// Either online mode also queues exactly one reminder for an unpaid order.
+// ---------------------------------------------------------------------------
+
+$notifications = (string) file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Notifications.php');
+
+okv_test_ok(
+    str_contains($notifications, "if (\$option === 'pay_in_full') {"),
+    'a placed order asks what the customer chose to do about the money before it says anything'
+);
+okv_test_ok(
+    str_contains($notifications, "self::hold(\n                'payment_confirmed',"),
+    'a pay in full order holds its receipt instead of sending it before the payment'
+);
+okv_test_ok(
+    str_contains($notifications, "self::queuePaymentReminder"),
+    'an unpaid online order gets a reminder queued'
+);
+okv_test_ok(
+    str_contains($notifications, "self::cancelPending('order', \$orderId, ['order_payment_pending'])"),
+    'and the reminder is cancelled the moment the money lands'
+);
+okv_test_ok(
+    str_contains($notifications, "self::cancelPending('order', \$orderId, ['order_payment_pending', 'payment_confirmed'])"),
+    'a cancelled order sends neither its reminder nor a receipt for a payment that will never come'
+);
+okv_test_ok(
+    str_contains($notifications, "self::send('admin_new_order'"),
+    'staff still hear about every order the moment it is placed, paid or not'
+);
+
+// The reminder is one email, not a nag: it exists as a single queued row, and
+// the only things that touch it are the flush that sends it and the cancel.
+okv_test_ok(str_contains($notifications, 'public static function flushDue'), 'something sends what is due');
+okv_test_ok(str_contains($notifications, 'public static function release'), 'and something releases what was held');
+okv_test_ok(str_contains($notifications, 'public static function cancelPending'), 'and something stops what should not go');
+
+// A held notification is rendered when it is written, because that is the only
+// moment the Order Trail token exists in plain text (PRD 14.2, and the token is
+// stored only as a hash). The sender must therefore read the stored copy.
+okv_test_ok(str_contains($notifications, 'cta_url'), 'a held email remembers its button, not just its words');
+okv_test_ok(
+    str_contains($notifications, "'SELECT id, title, body, cta_url, cta_label, status FROM notifications WHERE id = :id'"),
+    'and the sender reads the copy that was written, rather than rendering it again without the token'
+);
+
+foreach (['order_payment_pending'] as $event) {
+    okv_test_ok(isset(Notifications::EVENTS[$event]), "$event is a real event");
+    okv_test_ok(!empty(Notifications::TOKENS[$event]), "$event declares its tokens");
+}
+okv_test_ok(
+    in_array('pay_url', Notifications::TOKENS['order_payment_pending'], true),
+    'the reminder links back to the payment, not to the trail, because finishing the payment is the point of it'
+);
+okv_test_ok(
+    in_array('delivery_day', Notifications::TOKENS['payment_confirmed'], true),
+    'the pay in full receipt carries the order details, because it is now the only email that order gets'
+);
+
+// The scheduled pass that sends a queued reminder has to be reachable two ways:
+// this host has no shell, so a cron job calls the URL.
+$cron = (string) file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Cron.php');
+okv_test_ok(str_contains($cron, 'Notifications::flushDue'), 'the cron pass sends what is due');
+okv_test_ok(str_contains($cron, 'Payments::sweep'), 'and reconciles payments left hanging, which nothing was running before');
+okv_test_ok(is_readable(dirname(__DIR__, 2) . '/scripts/cron.php'), 'there is a cron runner for a shell');
+okv_test_ok(is_readable(dirname(__DIR__, 2) . '/public/cron.php'), 'and one for a host without one');
+
+$webCron = (string) file_get_contents(dirname(__DIR__, 2) . '/public/cron.php');
+okv_test_ok(str_contains($webCron, 'hash_equals'), 'the web cron runner compares its token in constant time');
+okv_test_ok(str_contains($webCron, "http_response_code(404)"), 'and fails closed, the way the migration runner does');
+okv_test_ok(str_contains($webCron, "X-Robots-Tag"), 'and is never indexed');
+
+// A held or scheduled email is shown for what it is, and staff cannot push it
+// out early: "payment received" before the payment, or a reminder to pay for an
+// order that is already paid, are both worse than no email at all.
+$held = Notifications::deliveryState(['status' => 'held', 'delivery_status' => 'queued', 'channel' => 'email']);
+okv_test_eq('Waiting on the payment', $held['label'], 'a held receipt says it is waiting');
+okv_test_ok(!$held['may_resend'], 'and cannot be sent by hand before the payment arrives');
+
+$queued = Notifications::deliveryState(['status' => 'queued', 'delivery_status' => 'queued', 'channel' => 'email', 'scheduled_at' => '2026-09-09 18:30:00']);
+okv_test_ok(str_contains($queued['label'], 'Scheduled'), 'a queued reminder says it is scheduled');
+okv_test_ok(str_contains($queued['label'], '18:30'), 'and says when it goes');
+okv_test_ok(!$queued['may_resend'], 'and is not something staff push early');
+
+$cancelled = Notifications::deliveryState(['status' => 'cancelled', 'delivery_status' => 'cancelled', 'channel' => 'email']);
+okv_test_eq('Cancelled', $cancelled['label'], 'a cancelled email says so');
+okv_test_ok(!$cancelled['may_resend'], 'and is never sent afterwards');
+
+$failed = Notifications::deliveryState(['status' => 'failed', 'delivery_status' => 'failed', 'channel' => 'email']);
+okv_test_eq('Not sent', $failed['label'], 'an email that failed still reads as not sent');
+okv_test_ok($failed['may_resend'], 'and that is exactly what the resend button is for');
+
+$sent = Notifications::deliveryState(['status' => 'sent', 'delivery_status' => 'sent', 'channel' => 'email']);
+okv_test_eq('Sent', $sent['label'], 'a sent email reads as sent');
+okv_test_ok(!$sent['may_resend'], 'and is not offered again');
+
+okv_test_ok(
+    !Notifications::deliveryState(['status' => 'failed', 'delivery_status' => 'failed', 'channel' => 'in_app'])['may_resend'],
+    'only an email can be sent again'
+);
+
+// The reminder is asked again at the last moment, so a payment that arrived by
+// any route at all, including cash at the counter, stops it. Nothing has to
+// remember to cancel it for the customer to be spared a chase for money they
+// have already paid.
+okv_test_ok(str_contains($notifications, 'private static function stillWanted'), 'a queued reminder is re-checked before it is sent');
+okv_test_ok(
+    str_contains($notifications, "if ((string) \$notification['event_type'] !== 'order_payment_pending') {"),
+    'and only the reminder is re-checked, because only it can go stale'
+);
+okv_test_ok(
+    str_contains($notifications, "public static function announceManualPayment") && substr_count($notifications, "self::cancelPending('order', \$orderId, ['order_payment_pending'])") >= 2,
+    'a payment recorded by staff stops the reminder, the same as one through Paystack'
+);

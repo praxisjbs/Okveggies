@@ -39,6 +39,24 @@ final class Notifications
     public const STATUS_FAILED = 'failed';
 
     /**
+     * A notification written now and sent later.
+     *
+     *   held    Rendered and waiting on an event, not a clock. The pay in full
+     *           receipt is held at checkout and released when Paystack confirms,
+     *           which is the only way it can still carry the Order Trail token:
+     *           the token exists in plain text for one request and is stored
+     *           only as a hash, so an email rendered after the fact cannot have
+     *           it. See PRD 14.2.
+     *   queued  Rendered and due at scheduled_at. The single pending payment
+     *           reminder is queued this way and sent by the cron pass.
+     *   cancelled  Never to be sent. The reminder is cancelled the moment the
+     *           payment lands or the order is cancelled.
+     */
+    public const STATUS_HELD      = 'held';
+    public const STATUS_QUEUED    = 'queued';
+    public const STATUS_CANCELLED = 'cancelled';
+
+    /**
      * Every event this platform can announce, and the words it uses. Keeping the
      * catalogue here rather than at each call site means the template editor and
      * the order screen can both name an event without guessing.
@@ -51,6 +69,7 @@ final class Notifications
         'order_delivered'   => ['template' => 'order_delivered',   'label' => 'Order delivered',         'audience' => 'customer'],
         'order_cancelled'   => ['template' => 'order_cancelled',   'label' => 'Order cancelled',         'audience' => 'customer'],
         'payment_confirmed' => ['template' => 'payment_confirmed', 'label' => 'Payment confirmed',       'audience' => 'customer'],
+        'order_payment_pending' => ['template' => 'order_payment_pending', 'label' => 'Payment still pending', 'audience' => 'customer'],
         'deposit_received'  => ['template' => 'deposit_received',  'label' => 'Deposit received',        'audience' => 'customer'],
         'payment_recorded'  => ['template' => 'payment_recorded',  'label' => 'Payment recorded by staff', 'audience' => 'customer'],
         'refund_processed'  => ['template' => 'refund_processed',  'label' => 'Refund sent',             'audience' => 'customer'],
@@ -73,7 +92,8 @@ final class Notifications
         'order_dispatched'  => ['customer_name', 'order_number', 'delivery_day', 'order_trail_url'],
         'order_delivered'   => ['customer_name', 'order_number', 'delivery_day', 'order_trail_url'],
         'order_cancelled'   => ['customer_name', 'order_number', 'money_line', 'order_trail_url'],
-        'payment_confirmed' => ['customer_name', 'order_number', 'amount', 'order_trail_url'],
+        'payment_confirmed' => ['customer_name', 'order_number', 'amount', 'delivery_day', 'source_line', 'order_trail_url'],
+        'order_payment_pending' => ['customer_name', 'order_number', 'amount_due', 'delivery_day', 'pay_url'],
         'deposit_received'  => ['customer_name', 'order_number', 'amount', 'balance_line', 'order_trail_url'],
         'payment_recorded'  => ['customer_name', 'order_number', 'amount', 'balance_line', 'order_trail_url'],
         'refund_processed'  => ['customer_name', 'order_number', 'amount', 'order_trail_url'],
@@ -121,12 +141,232 @@ final class Notifications
         }
     }
 
+    /**
+     * Render an event now and hold it until something releases it. Nothing is
+     * sent here. Returns the notification id, or 0 when nothing was written.
+     */
+    public static function hold(
+        string $event,
+        array $vars,
+        array $recipients,
+        ?string $relatedType = null,
+        ?int $relatedId = null
+    ): int {
+        try {
+            return self::dispatch($event, $vars, $recipients, $relatedType, $relatedId, null, self::STATUS_HELD, null);
+        } catch (Throwable $e) {
+            error_log('Notifications::hold failed for ' . $event . ': ' . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /** Render an event now and send it at $sendAt, a 'Y-m-d H:i:s' timestamp. */
+    public static function queueAt(
+        string $event,
+        string $sendAt,
+        array $vars,
+        array $recipients,
+        ?string $relatedType = null,
+        ?int $relatedId = null
+    ): int {
+        try {
+            return self::dispatch($event, $vars, $recipients, $relatedType, $relatedId, null, self::STATUS_QUEUED, $sendAt);
+        } catch (Throwable $e) {
+            error_log('Notifications::queueAt failed for ' . $event . ': ' . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Send a held notification for one record now. Returns how many were sent,
+     * so a caller can fall back to sending a fresh one when nothing was held
+     * (an order placed before this seam existed has nothing waiting).
+     */
+    public static function release(string $relatedType, int $relatedId, string $event): int
+    {
+        $rows = Database::all(
+            'SELECT id FROM notifications
+              WHERE event_type = :event AND related_type = :type AND related_id = :id AND status = :status
+              ORDER BY id',
+            [':event' => $event, ':type' => $relatedType, ':id' => $relatedId, ':status' => self::STATUS_HELD]
+        );
+        $sent = 0;
+        foreach ($rows as $row) {
+            $sent += self::deliver((int) $row['id']) ? 1 : 0;
+        }
+        return $sent;
+    }
+
+    /**
+     * Stop notifications that have not gone out yet. Used when the reason for
+     * one disappears: the payment landed, or the order was cancelled.
+     *
+     * @param array<int, string> $events
+     */
+    public static function cancelPending(string $relatedType, int $relatedId, array $events): int
+    {
+        if (!$events) {
+            return 0;
+        }
+        // One named placeholder per position, values bound and never inlined,
+        // the same rule the Kitchen Run queue learned the hard way.
+        $params = [
+            ':type'   => $relatedType,
+            ':id'     => $relatedId,
+            ':held'   => self::STATUS_HELD,
+            ':queued' => self::STATUS_QUEUED,
+        ];
+        $names = [];
+        foreach (array_values($events) as $i => $event) {
+            $names[] = ':event' . $i;
+            $params[':event' . $i] = $event;
+        }
+
+        $rows = Database::all(
+            'SELECT id FROM notifications
+              WHERE related_type = :type AND related_id = :id
+                AND event_type IN (' . implode(', ', $names) . ')
+                AND status IN (:held, :queued)',
+            $params
+        );
+        foreach ($rows as $row) {
+            Database::run(
+                'UPDATE notifications SET status = :status WHERE id = :id',
+                [':status' => self::STATUS_CANCELLED, ':id' => (int) $row['id']]
+            );
+            Database::run(
+                'UPDATE notification_deliveries SET status = :status
+                  WHERE notification_id = :id AND status = :waiting',
+                [':status' => self::STATUS_CANCELLED, ':id' => (int) $row['id'], ':waiting' => 'queued']
+            );
+        }
+        return count($rows);
+    }
+
+    /**
+     * Send every queued notification whose time has come. This is the cron half
+     * of the seam: scripts/cron.php and public/cron.php both call it.
+     *
+     * @return array{due: int, sent: int, failed: int}
+     */
+    public static function flushDue(int $limit = 50): array
+    {
+        $limit = max(1, min(200, $limit));
+        $rows = Database::all(
+            'SELECT id, event_type, related_type, related_id FROM notifications
+              WHERE status = :status AND scheduled_at IS NOT NULL AND scheduled_at <= :now
+              ORDER BY scheduled_at, id
+              LIMIT ' . $limit,
+            [':status' => self::STATUS_QUEUED, ':now' => date('Y-m-d H:i:s')]
+        );
+
+        $counts = ['due' => count($rows), 'sent' => 0, 'skipped' => 0, 'failed' => 0];
+        foreach ($rows as $row) {
+            // Asked again at the last moment, so no payment path has to
+            // remember to cancel this and no customer is ever chased for money
+            // they have already paid.
+            if (!self::stillWanted($row)) {
+                self::cancelPending((string) $row['related_type'], (int) $row['related_id'], [(string) $row['event_type']]);
+                $counts['skipped']++;
+                continue;
+            }
+            if (self::deliver((int) $row['id'])) {
+                $counts['sent']++;
+            } else {
+                $counts['failed']++;
+            }
+        }
+        return $counts;
+    }
+
+    /**
+     * Whether a queued notification is still true. Only the payment reminder
+     * can go stale between being written and being due: the order may have been
+     * paid by any route, or cancelled, in the half hour it waited.
+     */
+    private static function stillWanted(array $notification): bool
+    {
+        if ((string) $notification['event_type'] !== 'order_payment_pending') {
+            return true;
+        }
+        $order = Database::one(
+            'SELECT order_status, payment_status FROM orders WHERE id = :id',
+            [':id' => (int) $notification['related_id']]
+        );
+        if (!$order || (string) $order['order_status'] === 'cancelled' || (string) $order['payment_status'] === 'paid') {
+            return false;
+        }
+        return Database::one(
+            'SELECT id FROM payments
+              WHERE order_id = :id AND provider = \'paystack\' AND status <> \'paid\'
+                AND expected_amount_subunit > paid_amount_subunit
+              LIMIT 1',
+            [':id' => (int) $notification['related_id']]
+        ) !== null;
+    }
+
+    /**
+     * Send one already-rendered notification. The body, the subject and the
+     * button were all worked out when it was written, so this asks nothing of
+     * the order it came from and cannot change its mind about the words.
+     */
+    private static function deliver(int $notificationId): bool
+    {
+        $notification = Database::one(
+            'SELECT id, title, body, cta_url, cta_label, status FROM notifications WHERE id = :id',
+            [':id' => $notificationId]
+        );
+        if (!$notification || !in_array((string) $notification['status'], [self::STATUS_HELD, self::STATUS_QUEUED], true)) {
+            return false;
+        }
+
+        $cta = trim((string) ($notification['cta_url'] ?? '')) === ''
+            ? null
+            : ['label' => (string) ($notification['cta_label'] ?? 'Open this in your browser'), 'url' => (string) $notification['cta_url']];
+        $subject = (string) $notification['title'];
+        $body    = (string) $notification['body'];
+
+        $deliveries = Database::all(
+            'SELECT id, channel, recipient_address, attempt_count FROM notification_deliveries
+              WHERE notification_id = :id AND status = :status',
+            [':id' => $notificationId, ':status' => 'queued']
+        );
+
+        $anySent = false;
+        foreach ($deliveries as $delivery) {
+            if ((string) $delivery['channel'] !== self::CHANNEL_EMAIL) {
+                self::recordAttempt((int) $delivery['id'], 1 + (int) $delivery['attempt_count'], true, '');
+                $anySent = true;
+                continue;
+            }
+            $sent = false;
+            try {
+                $sent = Mail::send(
+                    (string) $delivery['recipient_address'],
+                    $subject,
+                    Mail::brandedHtml($subject, $body, $cta),
+                    Mail::plainText($subject, $body, $cta)
+                );
+            } catch (Throwable $e) {
+                error_log('Notifications::deliver threw for notification ' . $notificationId . ': ' . $e->getMessage());
+            }
+            self::recordAttempt((int) $delivery['id'], 1 + (int) $delivery['attempt_count'], $sent, 'The mail server would not take the message.');
+            $anySent = $anySent || $sent;
+        }
+
+        Database::run(
+            'UPDATE notifications SET status = :status, scheduled_at = COALESCE(scheduled_at, :now) WHERE id = :id',
+            [':status' => $anySent ? self::STATUS_SENT : self::STATUS_FAILED, ':now' => date('Y-m-d H:i:s'), ':id' => $notificationId]
+        );
+        return $anySent;
+    }
+
     /** Everything sent about one order, newest first, for the Order 360 screen. */
     public static function forOrder(int $orderId, int $limit = 50): array
     {
         $limit = max(1, min(200, $limit));
         return Database::all(
-            'SELECT n.id, n.event_type, n.title, n.body, n.status, n.created_at,
+            'SELECT n.id, n.event_type, n.title, n.body, n.status, n.scheduled_at, n.created_at,
                     d.id AS delivery_id, d.channel, d.recipient_address, d.status AS delivery_status,
                     d.attempt_count, d.sent_at, d.last_error
                FROM notifications n
@@ -136,6 +376,36 @@ final class Notifications
               LIMIT ' . $limit,
             [':type' => 'order', ':id' => $orderId]
         );
+    }
+
+    /**
+     * What a message on the Order 360 screen is actually doing, in words, and
+     * whether staff may send it again. A held or queued email has not gone out
+     * yet and must not be pushed early: it would tell the customer something
+     * that is not true of their order yet.
+     *
+     * @return array{label: string, tone: string, may_resend: bool}
+     */
+    public static function deliveryState(array $message): array
+    {
+        $notification = (string) ($message['status'] ?? '');
+        $delivery     = (string) ($message['delivery_status'] ?? '');
+
+        if ($delivery === self::STATUS_SENT) {
+            return ['label' => 'Sent', 'tone' => 'good', 'may_resend' => false];
+        }
+        if ($notification === self::STATUS_HELD) {
+            return ['label' => 'Waiting on the payment', 'tone' => 'wait', 'may_resend' => false];
+        }
+        if ($notification === self::STATUS_QUEUED) {
+            $when = trim((string) ($message['scheduled_at'] ?? ''));
+            $at   = $when === '' ? '' : ' for ' . date('j M Y, H:i', (int) strtotime($when));
+            return ['label' => 'Scheduled' . $at, 'tone' => 'wait', 'may_resend' => false];
+        }
+        if ($notification === self::STATUS_CANCELLED) {
+            return ['label' => 'Cancelled', 'tone' => 'wait', 'may_resend' => false];
+        }
+        return ['label' => 'Not sent', 'tone' => 'bad', 'may_resend' => (string) ($message['channel'] ?? '') === self::CHANNEL_EMAIL];
     }
 
     /** One person's in-app updates, newest first. */
@@ -182,7 +452,7 @@ final class Notifications
     {
         $delivery = Database::one(
             'SELECT d.id, d.channel, d.recipient_address, d.attempt_count, d.status,
-                    n.title, n.body, n.event_type
+                    n.title, n.body, n.cta_url, n.cta_label, n.event_type, n.status AS notification_status
                FROM notification_deliveries d
                JOIN notifications n ON n.id = d.notification_id
               WHERE d.id = :id',
@@ -197,6 +467,20 @@ final class Notifications
         if ((string) $delivery['status'] === self::STATUS_SENT) {
             return ['ok' => false, 'code' => 'already_sent', 'message' => 'That email already went out.'];
         }
+        // Resend is for an email that failed, never a way to fire one early. A
+        // held receipt says the payment has arrived, and a queued reminder says
+        // it has not, so sending either before its moment tells the customer
+        // something untrue.
+        $waiting = (string) $delivery['notification_status'];
+        if ($waiting === self::STATUS_HELD || $waiting === self::STATUS_QUEUED) {
+            return ['ok' => false, 'code' => 'not_due', 'message' => 'This email has not been sent yet. It goes out on its own when the order reaches that point.'];
+        }
+        if ($waiting === self::STATUS_CANCELLED) {
+            return ['ok' => false, 'code' => 'cancelled', 'message' => 'This email was cancelled, because what it was about no longer applies.'];
+        }
+        $cta = trim((string) ($delivery['cta_url'] ?? '')) === ''
+            ? null
+            : ['label' => (string) ($delivery['cta_label'] ?? 'Open this in your browser'), 'url' => (string) $delivery['cta_url']];
 
         $sent = false;
         $error = '';
@@ -204,8 +488,8 @@ final class Notifications
             $sent = Mail::send(
                 (string) $delivery['recipient_address'],
                 (string) $delivery['title'],
-                Mail::brandedHtml((string) $delivery['title'], (string) $delivery['body']),
-                Mail::plainText((string) $delivery['title'], (string) $delivery['body'])
+                Mail::brandedHtml((string) $delivery['title'], (string) $delivery['body'], $cta),
+                Mail::plainText((string) $delivery['title'], (string) $delivery['body'], $cta)
             );
         } catch (Throwable $e) {
             error_log('Notifications::resend failed: ' . $e->getMessage());
@@ -317,7 +601,7 @@ final class Notifications
         $order = Database::one(
             'SELECT o.id, o.order_number, o.order_status, o.payment_option, o.payment_status,
                     o.order_total_subunit, o.amount_paid_subunit, o.balance_due_subunit,
-                    o.preferred_delivery_date, o.source_regions_snapshot, o.user_id,
+                    o.preferred_delivery_date, o.source_regions_snapshot, o.user_id, o.contact_email,
                     a.recipient_name, z.name AS zone_name,
                     u.email AS user_email,
                     TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
@@ -336,8 +620,28 @@ final class Notifications
         $regions = trim((string) ($order['source_regions_snapshot'] ?? '')) ?: Settings::str('source_regions', '');
         $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
 
+        // What is still owed online, and the page that can take it. A guest has
+        // no account to sign in to, so their way back is the trail link they
+        // were emailed; an account holder signs in and pays from their order.
+        $pending = Database::one(
+            'SELECT expected_amount_subunit, paid_amount_subunit FROM payments
+              WHERE order_id = :id AND provider = \'paystack\' AND status <> \'paid\'
+                AND expected_amount_subunit > paid_amount_subunit
+              ORDER BY id LIMIT 1',
+            [':id' => $orderId]
+        );
+        $amountDue = $pending
+            ? Money::balance((int) $pending['expected_amount_subunit'], (int) $pending['paid_amount_subunit'])
+            : 0;
+        $trailUrl = $trailToken !== null && OrderTrail::isValidToken($trailToken)
+            ? $base . '/public/order.php?token=' . rawurlencode($trailToken)
+            : $base . '/public/order.php?order=' . (int) $order['id'];
+
         return [
-            'order_id'   => (int) $order['id'],
+            'order_id'           => (int) $order['id'],
+            'payment_option'     => (string) $order['payment_option'],
+            'amount_due_subunit' => $amountDue,
+            'pay_url'            => $trailUrl,
             'recipients' => self::customerRecipients($order),
             'vars'       => [
                 'customer_name'  => $name ?: 'there',
@@ -348,18 +652,21 @@ final class Notifications
                 'payment_choice' => self::paymentChoiceLabel((string) $order['payment_option']),
                 'source_line'    => okv_sourced_line($regions, Settings::str('source_day', '')),
                 'balance_line'   => self::balanceLine((int) $order['balance_due_subunit']),
-                'order_trail_url' => $trailToken !== null && OrderTrail::isValidToken($trailToken)
-                    ? $base . '/public/order.php?token=' . rawurlencode($trailToken)
-                    : $base . '/public/order.php?order=' . (int) $order['id'],
+                'order_trail_url' => $trailUrl,
                 'admin_url'      => $base . '/admin/orders.php?order=' . (int) $order['id'],
             ],
         ];
     }
 
+    /**
+     * Who hears about this order. The account's address when there is an
+     * account, otherwise the one typed at checkout, which is all a guest order
+     * has (PRD 9.2).
+     */
     private static function customerRecipients(array $order): array
     {
-        $email = trim((string) ($order['user_email'] ?? ''));
-        $userId = $order['user_id'] !== null ? (int) $order['user_id'] : null;
+        $email = trim((string) ($order['user_email'] ?? '')) ?: trim((string) ($order['contact_email'] ?? ''));
+        $userId = ($order['user_id'] ?? null) !== null ? (int) $order['user_id'] : null;
         if ($email === '' && $userId === null) {
             return [];
         }
@@ -391,18 +698,78 @@ final class Notifications
     // second copy of an email, never a changed order.
     // -------------------------------------------------------------------------
 
-    /** A new order: the customer's receipt of it, and the staff alert. */
+    /**
+     * A new order: the customer's receipt of it, and the staff alert.
+     *
+     * What the customer hears depends on what they chose to do about the money,
+     * because "we have your order and we are sourcing it now" is not true of an
+     * order that has not been paid for yet:
+     *
+     *   pay in full       Nothing now. The receipt is rendered here, while the
+     *                     Order Trail token is still in hand, and held until
+     *                     Paystack confirms the money. One email, and it is
+     *                     true when it arrives.
+     *   deposit           The receipt now, as before. The order is real: they
+     *                     are paying 30% and settling the rest on delivery, and
+     *                     the deposit is acknowledged separately when it lands.
+     *   pay on delivery   The receipt now. Nothing is owed online.
+     *   on account        The receipt now. The credit line is the payment.
+     *
+     * Either online option also queues one reminder, once, for the customer who
+     * closed the Paystack tab and walked away. Staff hear about every order the
+     * moment it is placed, paid or not, so nothing is invisible to the team.
+     */
     public static function announceOrderPlaced(int $orderId, string $trailToken = ''): void
     {
         $context = self::orderContext($orderId, $trailToken !== '' ? $trailToken : null);
         if ($context === null) {
             return;
         }
-        self::send('order_placed', $context['vars'], $context['recipients'], 'order', $orderId);
+        $option = (string) $context['payment_option'];
+
+        if ($option === 'pay_in_full') {
+            self::hold(
+                'payment_confirmed',
+                $context['vars'] + ['amount' => $context['vars']['order_total']],
+                $context['recipients'],
+                'order',
+                $orderId
+            );
+        } else {
+            self::send('order_placed', $context['vars'], $context['recipients'], 'order', $orderId);
+        }
+
+        if (in_array($option, ['pay_in_full', 'deposit'], true)) {
+            self::queuePaymentReminder($orderId, $context);
+        }
 
         $staffVars = $context['vars'];
         unset($staffVars['order_trail_url']);
         self::send('admin_new_order', $staffVars, self::staffRecipients(), 'order', $orderId);
+    }
+
+    /**
+     * The one reminder an unpaid online order gets. Queued at placement so it
+     * carries a link that still works when it is sent, and cancelled the moment
+     * the money lands or the order is cancelled, so a paid order never nags.
+     */
+    private static function queuePaymentReminder(int $orderId, array $context): void
+    {
+        $due = (int) $context['amount_due_subunit'];
+        if ($due < 1) {
+            return;
+        }
+        $minutes = max(5, min(1440, Settings::int('payment_reminder_minutes', 30)));
+        $sendAt  = date('Y-m-d H:i:s', strtotime('+' . $minutes . ' minutes'));
+
+        // The button on this one is the way back to the payment, not the trail,
+        // so the trail link is left out and Mail::ctaFromVars picks pay_url.
+        $vars = $context['vars'];
+        unset($vars['order_trail_url']);
+        $vars['amount_due'] = Money::format($due);
+        $vars['pay_url']    = (string) $context['pay_url'];
+
+        self::queueAt('order_payment_pending', $sendAt, $vars, $context['recipients'], 'order', $orderId);
     }
 
     // --- Kitchen Runs (PRD Section 8) ----------------------------------------
@@ -590,6 +957,11 @@ final class Notifications
         if ($context === null) {
             return;
         }
+        // Nothing that was waiting on this order should still go out: no
+        // reminder to pay for it, and no receipt held for a payment that will
+        // now never be made.
+        self::cancelPending('order', $orderId, ['order_payment_pending', 'payment_confirmed']);
+
         $vars = $context['vars'] + ['money_line' => self::cancellationMoneyLine($result)];
         self::send('order_cancelled', $vars, $context['recipients'], 'order', $orderId, $actorId);
     }
@@ -636,9 +1008,23 @@ final class Notifications
         if ($context === null) {
             return;
         }
+        // The money is in, so nothing is pending any more.
+        self::cancelPending('order', $orderId, ['order_payment_pending']);
+
         $vars = $context['vars'] + ['amount' => Money::format((int) ($result['credited'] ?? 0))];
-        $event = (string) ($payment['payment_type'] ?? '') === 'deposit' ? 'deposit_received' : 'payment_confirmed';
-        self::send($event, $vars, $context['recipients'], 'order', $orderId);
+        if ((string) ($payment['payment_type'] ?? '') === 'deposit') {
+            self::send('deposit_received', $vars, $context['recipients'], 'order', $orderId);
+            return;
+        }
+
+        // A pay in full order had its receipt written at checkout and held for
+        // this moment, because only that copy carries a working Order Trail
+        // link. Send a fresh one when nothing was waiting: an order placed
+        // before this seam existed, or a balance settled online later.
+        if (self::release('order', $orderId, 'payment_confirmed') > 0) {
+            return;
+        }
+        self::send('payment_confirmed', $vars, $context['recipients'], 'order', $orderId);
     }
 
     /** Cash or a transfer recorded by staff. */
@@ -652,6 +1038,10 @@ final class Notifications
         if ($context === null) {
             return;
         }
+        // Money is money. An order settled at the counter is not waiting for a
+        // payment either, so the reminder goes with it.
+        self::cancelPending('order', $orderId, ['order_payment_pending']);
+
         $vars = $context['vars'] + ['amount' => Money::format((int) ($result['amount_subunit'] ?? 0))];
         self::send('payment_recorded', $vars, $context['recipients'], 'order', $orderId, $staffId);
     }
@@ -687,7 +1077,9 @@ final class Notifications
         array $recipients,
         ?string $relatedType,
         ?int $relatedId,
-        ?int $actorId
+        ?int $actorId,
+        string $disposition = 'now',
+        ?string $sendAt = null
     ): int {
         $definition = self::EVENTS[$event] ?? null;
         if ($definition === null) {
@@ -711,13 +1103,47 @@ final class Notifications
         }
 
         [$subject, $body] = self::render($template, $vars);
+        $cta = Mail::ctaFromVars($vars);
 
-        $notificationId = self::writeNotification($event, $subject, $body, (int) $template['id'], $relatedType, $relatedId, $actorId);
+        $notificationId = self::writeNotification(
+            $event,
+            $subject,
+            $body,
+            (int) $template['id'],
+            $relatedType,
+            $relatedId,
+            $actorId,
+            $disposition === 'now' ? 'queued' : $disposition,
+            $disposition === self::STATUS_QUEUED ? $sendAt : null,
+            $cta
+        );
         if ($notificationId < 1) {
             return 0;
         }
 
-        $cta = Mail::ctaFromVars($vars);
+        // Written, not sent. Something else releases a held notification, and
+        // the cron pass sends a queued one when its time comes.
+        if ($disposition !== 'now') {
+            foreach ($recipients as $recipient) {
+                if (!empty($recipient['user_id'])) {
+                    self::writeDelivery($notificationId, (int) $recipient['user_id'], self::CHANNEL_IN_APP, 'in-app', 'queued', 0, null);
+                }
+                if (empty($recipient['email'])) {
+                    continue;
+                }
+                self::writeDelivery(
+                    $notificationId,
+                    $recipient['user_id'] ?? null,
+                    self::CHANNEL_EMAIL,
+                    (string) $recipient['email'],
+                    'queued',
+                    0,
+                    null
+                );
+            }
+            return $notificationId;
+        }
+
         $anySent = false;
         foreach ($recipients as $recipient) {
             if (!empty($recipient['user_id'])) {
@@ -780,20 +1206,29 @@ final class Notifications
         int $templateId,
         ?string $relatedType,
         ?int $relatedId,
-        ?int $actorId
+        ?int $actorId,
+        string $status = 'queued',
+        ?string $sendAt = null,
+        ?array $cta = null
     ): int {
         Database::run(
-            'INSERT INTO notifications (event_type, related_type, related_id, template_id, title, body, status, created_by)
-             VALUES (:event, :type, :related, :template, :title, :body, :status, :actor)',
+            'INSERT INTO notifications
+                (event_type, related_type, related_id, template_id, title, body,
+                 cta_url, cta_label, status, scheduled_at, created_by)
+             VALUES (:event, :type, :related, :template, :title, :body,
+                     :cta_url, :cta_label, :status, :send_at, :actor)',
             [
-                ':event'    => mb_substr($event, 0, 100),
-                ':type'     => $relatedType,
-                ':related'  => $relatedId,
-                ':template' => $templateId,
-                ':title'    => mb_substr($subject, 0, 255),
-                ':body'     => $body,
-                ':status'   => 'queued',
-                ':actor'    => $actorId,
+                ':event'     => mb_substr($event, 0, 100),
+                ':type'      => $relatedType,
+                ':related'   => $relatedId,
+                ':template'  => $templateId,
+                ':title'     => mb_substr($subject, 0, 255),
+                ':body'      => $body,
+                ':cta_url'   => $cta === null ? null : mb_substr((string) $cta['url'], 0, 500),
+                ':cta_label' => $cta === null ? null : mb_substr((string) $cta['label'], 0, 80),
+                ':status'    => $status,
+                ':send_at'   => $sendAt,
+                ':actor'     => $actorId,
             ]
         );
         return (int) Database::getInstance()->getConnection()->lastInsertId();

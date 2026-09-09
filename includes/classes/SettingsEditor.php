@@ -392,7 +392,9 @@ final class SettingsEditor
             'balance_line'   => 'There is still ' . Money::format(750000) . ' to settle on this order.',
             'money_line'     => 'We are sending ' . Money::format(500000) . ' back to you.',
             'reason'         => 'The customer bank account could not be reached.',
+            'amount_due'     => Money::format(750000),
             'order_trail_url' => $base . '/public/order.php?token=sample',
+            'pay_url'        => $base . '/public/order.php?token=sample',
             'admin_url'      => $base . '/admin/orders.php?order=1',
         ];
         $tokens = Notifications::TOKENS[$templateKey] ?? [];

@@ -34,3 +34,34 @@ $bag = ['placed' => ['order_id' => 7], 'placed_cart_id' => 42];
 okv_test_ok(Checkout::placedMatchesBasket($bag, 42), 'a placed order is recognised for its own basket');
 okv_test_ok(!Checkout::placedMatchesBasket($bag, 43), 'a placed order does not match a different basket');
 okv_test_ok(!Checkout::placedMatchesBasket([], 42), 'an empty bag has placed nothing');
+
+// --- Guest checkout (Milestone 6/7 bug: the account tick was mandatory). ------
+//
+// PRD 9.2 allows a guest checkout. The tick that offered an account carried
+// `required`, and the controller made one whether or not it was wanted, so a
+// visitor who only wanted to pay in full had to open an account first. These
+// pin the shape of the fix: the page offers, and never demands.
+
+$checkoutPage = (string) file_get_contents(dirname(__DIR__, 2) . '/checkout.php');
+okv_test_ok(str_contains($checkoutPage, 'name="create_account"'), 'the account offer is still on the page');
+okv_test_ok(
+    !preg_match('/name="create_account"[^>]*\srequired/', $checkoutPage),
+    'and it is no longer required, so a guest can place an order without one'
+);
+okv_test_ok(str_contains($checkoutPage, 'Order as a guest'), 'the page says plainly that an account is optional');
+
+$checkoutApi = (string) file_get_contents(dirname(__DIR__, 2) . '/api/v1/checkout.php');
+okv_test_ok(
+    str_contains($checkoutApi, "!Customer::isLoggedIn() && !empty(\$customer['create_account'])"),
+    'the controller only opens an account when it was asked for'
+);
+okv_test_ok(!str_contains($checkoutApi, 'consent_required'), 'refusing a checkout for want of a tick is gone');
+okv_test_ok(str_contains($checkoutApi, 'OrderTrail::remember'), 'a guest order is remembered, so Paystack can send them back to it');
+
+// A guest order has no account behind it, so the order carries the address its
+// email goes to. Every write path has to admit a null user.
+$checkoutClass = (string) file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Checkout.php');
+foreach (['writeOrder(PDO $pdo, ?int $userId', 'writeAddress(int $orderId, ?int $userId', 'writePayments(int $orderId, ?int $userId'] as $signature) {
+    okv_test_ok(str_contains($checkoutClass, $signature), 'a guest order can be written: ' . $signature);
+}
+okv_test_ok(str_contains($checkoutClass, 'contact_email'), 'the order keeps the email address it was placed with');

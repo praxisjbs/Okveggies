@@ -512,7 +512,7 @@ final class OrderCancellation
         $order['restriction'] = $restriction;
         $order['money_outcome'] = $outcome;
         $order['is_dispatched'] = Cancellation::isDispatched($stage);
-        $order['terms_line'] = Cancellation::termsLine($stage, $cutoff, $forfeitAfterCutoff, $afterDispatchAllowed, $dispatchedForfeit);
+        $order['terms_line'] = Cancellation::termsLine($stage, $cutoff, $forfeitAfterCutoff, $afterDispatchAllowed, $dispatchedForfeit, (string) ($order['preferred_delivery_date'] ?? ''));
         $order['deadline'] = Cancellation::deadline((string) $order['preferred_delivery_date'], $cutoff);
         $order['refunds'] = Refunds::forOrder((int) $order['id']);
         return $order;

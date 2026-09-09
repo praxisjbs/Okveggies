@@ -52,6 +52,11 @@ expect "$BASE/public/order.php?token=not-a-real-token" "404" "public Order Trail
 expect_login "$BASE/admin/delivery-manifest.php" "the day manifest"
 expect_login "$BASE/admin/orders.php"            "the orders screen"
 
+# The scheduled pass runs the payment sweep and sends due reminders, so it has
+# to be reachable by the cron job and refuse everybody else. No token, 404.
+expect "$BASE/public/cron.php"                   "404" "the cron endpoint fails closed without a token"
+expect "$BASE/public/cron.php?token=not-a-real-token" "404" "and refuses a wrong token without admitting it exists"
+
 expect_deny "$BASE/.env"                 ".env"
 expect_deny "$BASE/includes/config/db.php" "includes/"
 expect_deny "$BASE/migrations/001_core_schema.sql" "migrations/"

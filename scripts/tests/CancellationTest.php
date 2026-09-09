@@ -94,8 +94,19 @@ $strict = Cancellation::policyLine('18:00', true);
 okv_test_ok(str_contains($strict, '18:00'),           'the checkout line names the cutoff time');
 okv_test_ok(str_contains($strict, 'not returned'),    'the checkout line says a deposit is kept, before the customer pays');
 
+okv_test_ok(str_contains($strict, 'comes back to you'), 'the checkout line says what does come back, so pay in full is not read as losing everything');
+
 $soft = Cancellation::policyLine('18:00', false);
-okv_test_ok(str_contains($soft, 'still return'),      'with forfeiting off the copy promises the money back');
+okv_test_ok(str_contains($soft, 'return everything you have paid'), 'with forfeiting off the copy promises the money back');
+
+// The deadline in the customer's own week. Delivery on Thursday 10th means the
+// deadline is 18:00 on Wednesday 9th, and the line has to say so rather than
+// leaving them to work it out.
+$dated = Cancellation::policyLine('18:00', true, true, true, '2026-09-10');
+okv_test_ok(str_contains($dated, 'until 18:00 on Wednesday 9th'), 'with a delivery day chosen the line names the actual deadline');
+okv_test_ok(str_contains($dated, 'the day before your delivery'), 'and still says which day that is, in words');
+okv_test_ok(!str_contains(Cancellation::policyLine('18:00', true), 'until 18:00 on'), 'with no delivery day chosen no date is invented');
+okv_test_ok(str_contains(Cancellation::policyLine('18:00', true, true, true, 'not-a-date'), 'until 18:00,'), 'an unreadable delivery date falls back to the plain rule');
 
 okv_test_ok(str_contains(Cancellation::staffSummary($after), 'keep'),        'the staff summary says what is kept');
 okv_test_ok(str_contains(Cancellation::staffSummary($before), 'in full'),    'the staff summary says when it is a full refund');
@@ -169,6 +180,8 @@ okv_test_ok(str_contains($terms, 'on the way'), 'the dispatched terms say the or
 okv_test_ok(str_contains($terms, 'deposit is kept'), 'the dispatched terms say the deposit is kept');
 okv_test_ok(!str_contains($terms, "\u{2014}"), 'the dispatched terms carry no em dash');
 
+okv_test_ok(str_contains(Cancellation::termsLine('pending', '18:00', true, true, true, '2026-09-10'), 'on Wednesday 9th'), 'a pending order names its own deadline day');
+
 $termsGenerous = Cancellation::termsLine('dispatched', '18:00', true, true, false);
 okv_test_ok(str_contains($termsGenerous, 'return anything you have paid'), 'with the dispatch rule off the terms promise the money back');
 
@@ -182,9 +195,9 @@ okv_test_ok(str_contains(Cancellation::termsLine('pending', '18:00', true), '18:
 // The checkout line has to carry the dispatch rule too, or the first a customer
 // hears of it is the refund figure.
 $checkout = Cancellation::policyLine('18:00', true, true, true);
-okv_test_ok(str_contains($checkout, 'dispatched'), 'the checkout policy line covers a cancellation after dispatch');
-okv_test_ok(str_contains($checkout, 'deposit is kept'), 'the checkout policy line says the deposit is kept after dispatch');
-okv_test_ok(str_contains(Cancellation::policyLine('18:00', true, false, true), 'cannot be cancelled here'), 'with dispatch cancellation off, checkout says so');
+okv_test_ok(str_contains($checkout, 'once it is on the way'), 'the checkout policy line covers a cancellation after dispatch');
+okv_test_ok(str_contains($checkout, 'on the same terms'), 'the checkout policy line says the deposit rule still applies after dispatch');
+okv_test_ok(str_contains(Cancellation::policyLine('18:00', true, false, true), 'tell the driver'), 'with dispatch cancellation off, checkout points at the driver');
 okv_test_ok(!str_contains($checkout, "\u{2014}"), 'the checkout policy line carries no em dash');
 
 // Why the deposit was kept, in the customer's words.
