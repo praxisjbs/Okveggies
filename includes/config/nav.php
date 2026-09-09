@@ -60,9 +60,9 @@ $OKV_PRO_NAV = [
     ['label' => 'Dashboard',       'href' => '/pro/',                 'icon' => 'home'],
     ['label' => 'My Kitchen Lists','href' => '/pro/kitchen_lists.php','icon' => 'list'],
     ['label' => 'Standing Orders', 'href' => '/pro/standing_orders.php','icon' => 'repeat'],
-    ['label' => 'Orders',          'href' => '/pro/orders.php',       'icon' => 'clipboard'],
+    ['label' => 'Orders and Invoices', 'href' => '/pro/orders.php',   'icon' => 'clipboard'],
     ['label' => 'Credit',          'href' => '/pro/credit.php',       'icon' => 'scale'],
-    ['label' => 'Account',         'href' => '/pro/account.php',      'icon' => 'user'],
+    ['label' => 'Account and Branches', 'href' => '/pro/account.php', 'icon' => 'user'],
 ];
 
 // Storefront (/), primary navigation ------------------------------------------

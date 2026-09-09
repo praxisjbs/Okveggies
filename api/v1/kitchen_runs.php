@@ -94,7 +94,7 @@ function kr_posted_items(): array
 
 function kr_row_is_blank(array $item): bool
 {
-    foreach (['product_id', 'item_name', 'quantity', 'unit_price', 'unit_price_subunit', 'target_price', 'target_price_subunit'] as $key) {
+    foreach (['product_id', 'item_name', 'quantity', 'unit_price', 'unit_price_subunit', 'target_price', 'target_price_subunit', 'note'] as $key) {
         if (trim((string) ($item[$key] ?? '')) !== '') {
             return false;
         }
@@ -294,7 +294,18 @@ try {
 
             if (!$result['already_converted']) {
                 Audit::record('kitchen_run.convert', 'order', (int) $result['id'], null, ['order_number' => $result['order_number'], 'request_id' => $requestId], $staffId);
-                Notifications::announceOrderPlaced((int) $result['id'], (string) $result['trail_token']);
+                try {
+                    Notifications::announceOrderPlaced((int) $result['id'], (string) $result['trail_token']);
+                } catch (Throwable $e) {
+                    error_log('kitchen_runs announce order placed failed: ' . $e->getMessage());
+                }
+                if ((string) okv_input('payment_option', '') === 'on_account') {
+                    try {
+                        Notifications::announceCreditChargePosted((int) $result['id']);
+                    } catch (Throwable $e) {
+                        error_log('kitchen_runs announce credit charge failed: ' . $e->getMessage());
+                    }
+                }
             }
             // The token is the customer's private key to their order trail and
             // is never handed back over the API.

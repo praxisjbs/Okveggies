@@ -37,15 +37,13 @@ const CHECKOUT_STEP_FIELDS = [
 const CHECKOUT_NEXT_STEP = ['customer' => 3, 'delivery' => 4, 'payment' => 4];
 
 /**
- * Create a light account for a guest checkout and sign them in, so the order
- * can be tracked and a delivery day chosen. Refuses when they did not consent,
- * when the details are not valid, or when the email or phone is already in use.
+ * Create a light account for a signed-out customer who asked for one, and sign
+ * them in. Only called when they ticked the box: a checkout without the tick is
+ * a guest order, and PRD 9.2 allows it. Refuses when the details are not valid,
+ * or when the email or phone already belongs to somebody.
  */
 function checkout_create_guest_account(array $customer): void
 {
-    if (empty($customer['create_account'])) {
-        throw new DomainException('consent_required');
-    }
     $email = strtolower(trim((string) ($customer['email'] ?? '')));
     $phone = Phone::normalize((string) ($customer['recipient_phone'] ?? ''));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $phone === null) {
@@ -106,24 +104,42 @@ try {
     $delivery = $bag['delivery'] ?? [];
     $payment  = $bag['payment'] ?? [];
 
-    if (!Customer::isLoggedIn()) {
+    // An account is offered, never required. Ticking the box makes one and
+    // signs them in; leaving it makes a guest order, which is tracked by the
+    // Order Trail link in the confirmation email rather than by signing in.
+    if (!Customer::isLoggedIn() && !empty($customer['create_account'])) {
         checkout_create_guest_account($customer);
     }
+    $guest = !Customer::isLoggedIn();
 
     $input = array_merge($customer, [
         'user_id'          => Customer::id(),
-        'customer_type'    => Customer::type(),
-        'activated'        => Customer::isActivated(),
+        'customer_type'    => $guest ? 'household' : Customer::type(),
+        'activated'        => !$guest && Customer::isActivated(),
         'delivery_date'    => $delivery['delivery_date'] ?? '',
         'delivery_zone_id' => (int) ($delivery['delivery_zone_id'] ?? 0),
         'payment_option'   => $payment['payment_option'] ?? '',
     ]);
 
     $result = Checkout::place($input);
+    if ($guest) {
+        OrderTrail::remember((int) $result['order_id'], (string) ($result['trail_token'] ?? ''));
+    }
     // The order is committed. Send the customer their copy with the trail link
     // in it, and raise the staff alert. PRD 14.2 makes that link the way a
     // customer follows their order, so it has to leave the building here.
-    Notifications::announceOrderPlaced((int) $result['order_id'], (string) ($result['trail_token'] ?? ''));
+    try {
+        Notifications::announceOrderPlaced((int) $result['order_id'], (string) ($result['trail_token'] ?? ''));
+    } catch (Throwable $e) {
+        error_log('checkout announce order placed failed: ' . $e->getMessage());
+    }
+    if (($input['payment_option'] ?? '') === 'on_account') {
+        try {
+            Notifications::announceCreditChargePosted((int) $result['order_id']);
+        } catch (Throwable $e) {
+            error_log('checkout announce credit charge failed: ' . $e->getMessage());
+        }
+    }
     $base = rtrim((string) APP_URL, '/');
     $result['confirmation_url'] = $base . $result['confirmation_url'];
     $result['trail_url'] = $result['trail_url'] === '' ? '' : $base . $result['trail_url'];
@@ -153,18 +169,25 @@ try {
         error_log('checkout.place_order: charge failed for order ' . $orderId . ': ' . $e->getMessage());
     }
 
+    // Where they land if the charge could not be opened. A guest cannot sign
+    // in, so their order is reachable only by its trail link.
+    $fallback = $guest && $result['trail_url'] !== ''
+        ? '/public/order.php?token=' . rawurlencode((string) $result['trail_token'])
+        : '/public/order.php?order=' . $orderId;
+
     if (checkout_is_fetch()) {
         okv_json(['status' => 'ok', 'pay_url' => $payNow] + $result);
     }
     if ($payNow !== null) {
         okv_redirect($payNow, 303);
     }
-    okv_redirect('/public/order.php?order=' . $orderId . ($pending !== null ? '&payment=unavailable' : ''), 303);
+    okv_redirect($fallback . ($pending !== null ? '&payment=unavailable' : ''), 303);
 } catch (DomainException $e) {
     $known = [
-        'consent_required'    => ['Tick the account consent box to continue.', 'consent_required'],
         'payment_not_allowed' => ['That payment choice is not available for this account.', 'payment_not_allowed'],
-        'credit_not_approved' => ['On-account payment is only available after credit approval.', 'credit_not_approved'],
+        'credit_not_approved' => [Credit::message('credit_not_approved'), 'credit_not_approved'],
+        'credit_limit_exceeded' => [Credit::message('credit_limit_exceeded'), 'credit_limit_exceeded'],
+        'invalid_charge'      => [Credit::message('invalid_charge'), 'invalid_charge'],
         'delivery_unavailable' => ['That delivery date is no longer available. Pick another date.', 'delivery_unavailable'],
         'zone_unavailable'    => ['That delivery area is no longer available. Pick another area.', 'zone_unavailable'],
         'empty_cart'          => ['Your basket is empty.', 'empty_cart'],

@@ -30,7 +30,9 @@ require_once $root . '/includes/classes/Combos.php';
 require_once $root . '/includes/classes/Customer.php';
 require_once $root . '/includes/classes/Basket.php';
 require_once $root . '/includes/classes/Delivery.php';
+require_once $root . '/includes/classes/OrderLifecycle.php';
 require_once $root . '/includes/classes/OrderTrail.php';
+require_once $root . '/includes/classes/Credit.php';
 require_once $root . '/includes/classes/Checkout.php';
 require_once $root . '/includes/functions/helpers.php';
 
@@ -137,16 +139,88 @@ try {
     t_eq($orderId, (int) $again['order_id'], 'placing the same basket again returns the first order, not a second');
     $orderCount = Database::one('SELECT COUNT(*) AS c FROM orders WHERE shopping_cart_id = :c', [':c' => $cartId]);
     t_eq(1, (int) $orderCount['c'], 'only one order exists for the basket');
+
+    // --- A guest order (PRD 9.2, Milestone 6/7) ------------------------------
+    //
+    // No account, no sign in, and it still has to be a whole order: an address
+    // snapshot, a payment row, a delivery schedule, a trail token, and the email
+    // address to reach the customer on. The account write paths are the ones
+    // that used to demand a user id, so each is checked for a guest.
+    unset($_SESSION['user_id'], $_SESSION['okv_checkout']);
+    Basket::addProduct($productId);
+    $guestState = Basket::state();
+    $guestCartId = $guestState['cart_id'] === null ? 0 : (int) $guestState['cart_id'];
+    t_ok($guestCartId > 0 && $guestCartId !== $cartId, 'a signed out visitor gets a basket of their own');
+
+    $guestInput = [
+        'user_id'          => null,
+        'customer_type'    => 'household',
+        'activated'        => false,
+        'email'            => 'zz-guest@example.test',
+        'recipient_name'   => 'ZZ Guest',
+        'recipient_phone'  => '+2348012345679',
+        'address_line_1'   => '2 Test Street',
+        'city'             => 'Lagos',
+        'state'            => 'Lagos',
+        'delivery_date'    => $date,
+        'delivery_zone_id' => $zoneId,
+        'payment_option'   => 'pay_in_full',
+    ];
+    $guestResult = Checkout::place($guestInput);
+    $guestOrderId = (int) $guestResult['order_id'];
+    t_ok($guestOrderId > 0 && $guestOrderId !== $orderId, 'a guest places a real order of their own');
+    t_ok(OrderTrail::isValidToken((string) $guestResult['trail_token']), 'and it carries a trail token, which is the only way back to it');
+
+    $guestOrder = Database::one('SELECT user_id, contact_email, created_by FROM orders WHERE id = :id', [':id' => $guestOrderId]);
+    t_eq(null, $guestOrder['user_id'], 'a guest order belongs to no account');
+    t_eq(null, $guestOrder['created_by'], 'and names no account as its author');
+    t_eq('zz-guest@example.test', (string) $guestOrder['contact_email'], 'the order keeps the address its email goes to');
+
+    t_ok((bool) Database::one('SELECT id FROM order_addresses WHERE order_id = :o', [':o' => $guestOrderId]), 'a guest order snapshots its delivery address');
+    t_ok((bool) Database::one('SELECT id FROM payments WHERE order_id = :o', [':o' => $guestOrderId]), 'and records what is owed');
+    t_ok((bool) Database::one('SELECT id FROM delivery_schedules WHERE order_id = :o', [':o' => $guestOrderId]), 'and is on the delivery schedule like any other order');
+    t_eq(
+        0,
+        (int) Database::one('SELECT COUNT(*) AS c FROM customer_addresses WHERE recipient_name = :n', [':n' => 'ZZ Guest'])['c'],
+        'a guest has no account, so nothing is saved to one for next time'
+    );
+
+    // A guest who shops again straight after checking out. Their session token
+    // is still on the basket the order converted, and session_token is unique,
+    // so a second basket has to mint a fresh one rather than fall over.
+    Basket::addProduct($productId);
+    $secondGuestState = Basket::state();
+    $secondGuestCartId = $secondGuestState['cart_id'] === null ? 0 : (int) $secondGuestState['cart_id'];
+    t_ok($secondGuestCartId > 0, 'a guest can start a new basket after checking out');
+    t_ok($secondGuestCartId !== $guestCartId, 'and it is a new basket, not the one their order converted');
+
+    // The trail link is the credential, so it has to find the order.
+    t_ok(OrderTrail::findByToken((string) $guestResult['trail_token']) !== null, 'the trail token opens the guest order');
+    t_eq(
+        $guestOrderId,
+        (int) OrderTrail::findByToken((string) $guestResult['trail_token'])['id'],
+        'and opens that order and no other'
+    );
 } finally {
     // --- Teardown ------------------------------------------------------------
-    if ($orderId) {
-        Database::run('DELETE FROM order_item_components WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id = :o)', [':o' => $orderId]);
-        Database::run('DELETE FROM order_items WHERE order_id = :o', [':o' => $orderId]);
-        Database::run('DELETE FROM order_addresses WHERE order_id = :o', [':o' => $orderId]);
-        Database::run('DELETE FROM order_status_history WHERE order_id = :o', [':o' => $orderId]);
-        Database::run('DELETE FROM delivery_schedules WHERE order_id = :o', [':o' => $orderId]);
-        Database::run('DELETE FROM payments WHERE order_id = :o', [':o' => $orderId]);
-        Database::run('DELETE FROM orders WHERE id = :o', [':o' => $orderId]);
+    if (!empty($secondGuestCartId)) {
+        Database::run('DELETE FROM cart_items WHERE cart_id = :id', [':id' => $secondGuestCartId]);
+        Database::run('DELETE FROM shopping_carts WHERE id = :id', [':id' => $secondGuestCartId]);
+    }
+    foreach (array_filter([$orderId ?? 0, $guestOrderId ?? 0]) as $o) {
+        Database::run('DELETE FROM order_item_components WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id = :o)', [':o' => $o]);
+        Database::run('DELETE FROM order_items WHERE order_id = :o', [':o' => $o]);
+        Database::run('DELETE FROM order_addresses WHERE order_id = :o', [':o' => $o]);
+        Database::run('DELETE FROM order_status_history WHERE order_id = :o', [':o' => $o]);
+        Database::run('DELETE FROM delivery_schedules WHERE order_id = :o', [':o' => $o]);
+        Database::run('DELETE FROM payments WHERE order_id = :o', [':o' => $o]);
+        Database::run('DELETE FROM notification_deliveries WHERE notification_id IN (SELECT id FROM notifications WHERE related_type = \'order\' AND related_id = :o)', [':o' => $o]);
+        Database::run('DELETE FROM notifications WHERE related_type = \'order\' AND related_id = :o', [':o' => $o]);
+        Database::run('DELETE FROM orders WHERE id = :o', [':o' => $o]);
+    }
+    if (isset($guestCartId) && $guestCartId > 0) {
+        Database::run('DELETE FROM cart_items WHERE cart_id = :c', [':c' => $guestCartId]);
+        Database::run('DELETE FROM shopping_carts WHERE id = :c', [':c' => $guestCartId]);
     }
     if (isset($userId)) {
         Database::run('DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM shopping_carts WHERE user_id = :u)', [':u' => $userId]);

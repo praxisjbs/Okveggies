@@ -86,6 +86,58 @@ migrations. You can also trigger it by hand from the Actions tab
 
 ---
 
+## Cron jobs (cPanel), a short guide
+
+The shop needs one scheduled job. Without it a payment made in a closed tab
+waits for the customer to come back, and the pending payment reminder never
+goes out.
+
+There is no shell on this host, so the job is a `curl` call to a token-guarded
+URL. It uses the same `MIGRATE_TOKEN` already in the server `.env`.
+
+**Set it up once:**
+
+1. cPanel, then **Cron Jobs**.
+2. Under **Add New Cron Job**, set **Common Settings** to
+   **Every Five Minutes** (`*/5 * * * *`).
+3. Paste this as the command, with your own token in place of `YOUR_TOKEN`:
+
+   ```
+   curl -fsS -H "X-Migrate-Token: YOUR_TOKEN" https://okveggies.com.ng/public/cron.php > /dev/null
+   ```
+
+   The header keeps the token out of the server access logs. `-f` makes curl
+   exit non-zero on a failure, so cPanel emails you only when something is
+   actually wrong.
+4. Save. Put your email in the **Cron Email** box at the top of the page if you
+   want those failures to reach you.
+
+**What that one job does, every five minutes:**
+
+| Job | What it fixes |
+|---|---|
+| Payment reconciliation sweep | A customer paid, then closed the tab before Paystack reached us. The sweep asks Paystack directly and credits the order. |
+| Due notifications | Sends the one reminder an unpaid pay in full or deposit order gets, 30 minutes after it was placed. Cancelled automatically if the payment lands first. |
+
+**To check it by hand**, open this in a browser:
+
+```
+https://okveggies.com.ng/public/cron.php?token=YOUR_TOKEN
+```
+
+It prints one line per job and ends with `CRON OK`. A wrong or missing token
+returns 404, the same as the migration and health check endpoints.
+
+**Nothing else needs a cron job.** `scripts/payment_sweep.php` and
+`scripts/cron.php` are the shell versions of the same work, for a host that has
+a shell. Do not schedule both: one pass is enough, and two only means two
+processes asking Paystack the same question.
+
+The reminder delay is a setting, not a constant: `payment_reminder_minutes` in
+`site_settings`, 30 by default.
+
+---
+
 ## Notes and safety
 
 - The migration endpoint fails closed: with no `MIGRATE_TOKEN` set, or a wrong

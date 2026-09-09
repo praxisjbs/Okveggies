@@ -79,10 +79,15 @@ try {
         [':email' => "kr-staff-$suffix@example.test", ':phone' => '+23472' . random_int(10000000, 99999999), ':hash' => password_hash('test-only', PASSWORD_BCRYPT)]
     );
     $staffId = (int) Database::getInstance()->getConnection()->lastInsertId();
+    // M8 made "approved" mean a real facility: a term of 7 to 10 days and a
+    // limit to draw on. A status with neither is not something a Kitchen Run
+    // can be settled against, so the fixture opens a proper one.
     Database::run(
-        'INSERT INTO business_customers (user_id, business_name, contact_person, credit_status)
-         VALUES (:user, :name, :contact, \'approved\')',
-        [':user' => $users[2], ':name' => 'Kitchen Test ' . $suffix, ':contact' => 'Chidi Kitchen']
+        'INSERT INTO business_customers (user_id, business_name, contact_person, credit_status,
+                                         credit_requested, credit_days, credit_limit_subunit)
+         VALUES (:user, :name, :contact, \'approved\', 1, 7, :credit_limit)',
+        [':user' => $users[2], ':name' => 'Kitchen Test ' . $suffix, ':contact' => 'Chidi Kitchen',
+         ':credit_limit' => 50000000]
     );
 
     $unitId = (int) Database::one('SELECT id FROM units_of_measurement ORDER BY id LIMIT 1')['id'];
@@ -529,6 +534,37 @@ try {
     krdb_ok(count(KitchenRuns::allForStaff('submitted')) >= 0, 'the staff queue can be filtered by status');
     krdb_ok(KitchenRuns::waitingCount() >= 0, 'the queue badge counts what is waiting on us');
 
+    // The queue tabs. Milestone 6/7: the filter never reached the query at all,
+    // so every tab showed every request. These check the two halves the SQL is
+    // responsible for: a status filter that narrows, and an expired quote that
+    // is counted and listed apart from a live one.
+    $everything = KitchenRuns::allForStaff('', 200);
+    foreach (KitchenRuns::STATUSES as $status) {
+        foreach (KitchenRuns::allForStaff($status, 200) as $row) {
+            krdb_eq($status, (string) $row['status'], "the $status tab returns only $status requests");
+        }
+    }
+    krdb_ok(count(KitchenRuns::allForStaff('submitted', 200)) <= count($everything), 'a filtered tab is never larger than All');
+
+    foreach (KitchenRuns::allForStaff(KitchenRuns::FILTER_EXPIRED, 200) as $row) {
+        krdb_eq('quoted', (string) $row['status'], 'the expired tab only ever holds quoted requests');
+        krdb_ok((bool) $row['is_expired'], 'and every one of them really has expired');
+    }
+    foreach (KitchenRuns::allForStaff('quoted', 200) as $row) {
+        krdb_ok(!$row['is_expired'], 'the Quote sent tab holds live quotes only, so an expired one cannot hide among them');
+    }
+
+    $counts = KitchenRuns::statusCounts();
+    krdb_ok(array_keys($counts) === KitchenRuns::FILTERS, 'every tab has a count, in tab order');
+    krdb_eq(count($everything), $counts[''], 'the All count matches what All lists');
+    foreach (KitchenRuns::FILTERS as $tab) {
+        if ($tab === '') {
+            continue;
+        }
+        krdb_eq(count(KitchenRuns::allForStaff($tab, 200)), $counts[$tab], "the $tab count matches what the $tab tab lists");
+    }
+    krdb_eq(0, KitchenRuns::statusCounts('nobody-by-this-name-' . $suffix)[''], 'the counts respect the customer search, so they never contradict the list under them');
+
     // -----------------------------------------------------------------------
     // 11. The internal note, staff approval, and withdrawing after approving.
     // -----------------------------------------------------------------------
@@ -697,6 +733,9 @@ try {
         Database::run('DELETE FROM payment_transactions WHERE payment_id IN (SELECT id FROM payments WHERE order_id = :id)', [':id' => $id]);
         Database::run('DELETE FROM payments WHERE order_id = :id', [':id' => $id]);
         Database::run('DELETE FROM order_status_history WHERE order_id = :id', [':id' => $id]);
+        // Converting on account now writes a credit charge, so the journal row
+        // has to go before the order it points at.
+        Database::run('DELETE FROM credit_transactions WHERE order_id = :id', [':id' => $id]);
         Database::run('DELETE FROM delivery_schedules WHERE order_id = :id', [':id' => $id]);
         Database::run('DELETE FROM order_addresses WHERE order_id = :id', [':id' => $id]);
         Database::run('UPDATE kitchen_run_requests SET converted_order_id = NULL WHERE converted_order_id = :id', [':id' => $id]);
@@ -711,6 +750,12 @@ try {
     }
     foreach ($users as $id) {
         Database::run('DELETE FROM customer_addresses WHERE user_id = :id', [':id' => $id]);
+        Database::run(
+            'DELETE ct FROM credit_transactions ct
+               JOIN business_customers bc ON bc.id = ct.business_customer_id
+              WHERE bc.user_id = :id',
+            [':id' => $id]
+        );
         Database::run('DELETE FROM business_customers WHERE user_id = :id', [':id' => $id]);
         Database::run('DELETE FROM audit_logs WHERE actor_user_id = :id', [':id' => $id]);
         Database::run('DELETE FROM users WHERE id = :id', [':id' => $id]);

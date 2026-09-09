@@ -448,3 +448,43 @@ okv_test_ok(str_contains($workflowSource, 'Checkout::writeAddress('), 'conversio
 okv_test_ok(str_contains($workflowSource, 'Checkout::freshTrailToken('), 'conversion mints the Order Trail token, so a Kitchen Run order can be followed like any other');
 okv_test_ok(str_contains($workflowSource, 'Checkout::writePayments('), 'conversion writes the money rows the same shape as checkout');
 okv_test_ok(str_contains($workflowSource, 'Delivery::isEligible('), 'conversion checks the delivery day against the same rules as checkout');
+
+// ---------------------------------------------------------------------------
+// 5. The staff queue tabs (Milestone 6/7 bug: the filter never filtered)
+//
+// The tabs on admin/kitchen_runs.php built their links with PHP's array union,
+// which keeps the LEFT operand for a repeated key. The current filter was on
+// the left, so every tab handed back the filter already in the URL: clicking
+// "Quote sent" from "All" linked straight back to "All", and staff saw an
+// unfiltered list under every tab. These pin both halves of the fix.
+// ---------------------------------------------------------------------------
+
+/** The link builder exactly as the admin page uses it. */
+$queryWith = static function (array $extra, string $filter, string $customer): string {
+    $query = array_filter($extra + ['status' => $filter, 'customer' => $customer], static fn($v): bool => (string) $v !== '');
+    return $query ? '?' . http_build_query($query) : '?';
+};
+
+okv_test_eq('?status=quoted', $queryWith(['status' => 'quoted'], '', ''), 'a tab clicked from All actually applies its status');
+okv_test_eq('?status=approved', $queryWith(['status' => 'approved'], 'quoted', ''), 'a tab clicked from another tab switches to it, rather than staying put');
+okv_test_eq('?', $queryWith(['status' => ''], 'quoted', ''), 'the All tab clears the status rather than keeping it');
+okv_test_eq(
+    '?status=quoted&customer=Ada',
+    $queryWith(['status' => 'quoted'], '', 'Ada'),
+    'switching status keeps the customer search, so one filter never clears the other'
+);
+okv_test_eq('?status=quoted', $queryWith(['customer' => ''], 'quoted', 'Ada'), 'clearing the search keeps the status');
+
+// Every tab is a filter the list honours, and every one has words on it.
+foreach (KitchenRuns::FILTERS as $filter) {
+    okv_test_ok(
+        $filter === '' || $filter === KitchenRuns::FILTER_EXPIRED || in_array($filter, KitchenRuns::STATUSES, true),
+        "the $filter tab is a real status, the expired view, or All"
+    );
+    okv_test_ok(KitchenRuns::filterLabel($filter) !== '', "the $filter tab has words on it");
+}
+okv_test_eq('All', KitchenRuns::filterLabel(''), 'the empty filter is All');
+okv_test_eq('Quote sent', KitchenRuns::filterLabel('quoted'), 'a live quote reads as Quote sent');
+okv_test_eq('Quote expired', KitchenRuns::filterLabel(KitchenRuns::FILTER_EXPIRED), 'an expired quote has its own words');
+okv_test_ok(in_array(KitchenRuns::FILTER_EXPIRED, KitchenRuns::FILTERS, true), 'an expired quote has its own tab, so it is not lost among live ones');
+okv_test_ok(!in_array(KitchenRuns::FILTER_EXPIRED, KitchenRuns::STATUSES, true), 'and it is a view, never a stored status');

@@ -20,7 +20,9 @@ const sources = [
   'assets/js/admin-settings.js',
   'assets/js/admin-payments.js',
   'assets/js/kitchen-runs.js',
+  'assets/js/pro-kitchen-lists.js',
   'assets/js/admin-kitchen-runs.js',
+  'assets/js/admin-credit.js',
   'assets/js/support-widget.js',
 ].filter(existsSync);
 

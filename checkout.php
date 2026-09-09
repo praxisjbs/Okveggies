@@ -48,6 +48,36 @@ $payment = (string) ($bag['payment']['payment_option'] ?? 'pay_in_full');
 $deposit = Money::deposit((int) $basket['subtotal_subunit'], Settings::depositPercentage());
 $steps   = [1 => 'Basket review', 2 => 'Your details', 3 => 'Delivery', 4 => 'Payment choice'];
 
+// On account is offered from the real facility, never from the account type
+// alone. The same rule refuses the order on the server, so what is shown here
+// and what is allowed cannot drift apart.
+$creditFacility = Customer::isBusiness() && Customer::id() !== null
+    ? Credit::facilityForUser((int) Customer::id())
+    : null;
+$creditRefusal  = Customer::isBusiness()
+    ? Credit::drawRefusal($creditFacility, (int) $basket['subtotal_subunit'])
+    : 'credit_not_approved';
+$creditDeliveryDate = (string) ($savedDelivery['delivery_date'] ?? '');
+$creditDueDate  = $creditRefusal === '' && $creditDeliveryDate !== ''
+    ? Credit::dueDateFor($creditDeliveryDate, (int) $creditFacility['days'])
+    : '';
+$creditNote     = static function (?array $facility, string $refusal, int $total, string $dueDate): string {
+    if ($refusal === '') {
+        $line = 'Nothing is taken now. ' . Money::format((int) $facility['available_subunit']) . ' is available on your account today.';
+        return $dueDate === '' ? $line : $line . ' This order falls due on ' . date('j F Y', strtotime($dueDate)) . '.';
+    }
+    $state = (string) ($facility['state'] ?? 'not_requested');
+    if ($refusal === 'credit_limit_exceeded') {
+        return 'This basket is ' . Money::format($total) . ' and ' . Money::format((int) $facility['available_subunit'])
+             . ' is available on your account today. Settle some of your balance, or choose another way to pay.';
+    }
+    if ($state === 'suspended') { return 'Your credit account is on hold, so it cannot take a new order. Talk to us and we will sort it out.'; }
+    if ($state === 'withdrawn') { return 'This account no longer runs on credit. Choose another way to pay.'; }
+    if ($state === 'requested')  { return 'Your credit application is with our team. We will let you know as soon as it is reviewed.'; }
+    if ($state === 'declined')   { return 'Your last credit application was not approved. You can apply again from the Pro Portal.'; }
+    return 'Apply for credit in the Pro Portal before you can pay on account.';
+};
+
 $pageTitle = 'Checkout. OK Veggies';
 $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
 ?><!doctype html>
@@ -139,10 +169,20 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
               <input class="okv-input mt-1" name="landmark" value="<?= okv_e($value('landmark')) ?>">
             </label>
             <?php if (!Customer::isLoggedIn()): ?>
-              <label class="flex gap-3 rounded-md bg-forest-tint p-4 text-sm text-ink sm:col-span-2">
-                <input type="checkbox" name="create_account" value="1" required>
-                <span>Create an account for this order. You can set your password and manage the order after checkout.</span>
-              </label>
+              <!-- Offered, never required. A guest order is a real order: the
+                   confirmation email carries a link that opens it, with no
+                   sign in. An account is for the person who wants their
+                   details and their history kept for next time. -->
+              <div class="rounded-md bg-forest-tint p-4 text-sm text-ink sm:col-span-2">
+                <label class="flex gap-3">
+                  <input type="checkbox" name="create_account" value="1" <?= !empty($savedCustomer['create_account']) ? 'checked' : '' ?>>
+                  <span>Create an account, so your details are saved for next time. We will email you a link to set your password.</span>
+                </label>
+                <p class="mt-2 pl-7 text-ink-60">
+                  You do not need one. Order as a guest and we will email you a link that opens your order, no sign in.
+                  Paying on delivery is the one choice that needs an account, because we verify it first.
+                </p>
+              </div>
             <?php endif; ?>
             <div class="flex justify-between gap-3 sm:col-span-2">
               <a class="okv-btn-text px-2" href="/checkout.php?step=1">Back</a>
@@ -194,10 +234,15 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
               <span class="mt-1 block text-sm text-ink-60"><?= Customer::isActivated() ? 'Nothing is taken now. You pay our team when your order arrives.' : 'Verify your email before choosing pay on delivery.' ?></span>
             </label>
             <?php if (Customer::isBusiness()): ?>
-              <label class="block rounded-md border border-mist p-4">
-                <input type="radio" name="payment_option" value="on_account" <?= $payment === 'on_account' ? 'checked' : '' ?>>
+              <label class="block rounded-md border border-mist p-4 <?= $creditRefusal === '' ? '' : 'opacity-60' ?>">
+                <input type="radio" name="payment_option" value="on_account"
+                       <?= $payment === 'on_account' && $creditRefusal === '' ? 'checked' : '' ?>
+                       <?= $creditRefusal === '' ? '' : 'disabled' ?>>
                 <strong>Use approved business credit</strong>
-                <span class="mt-1 block text-sm text-ink-60">The server checks your credit approval before placing the order.</span>
+                <span class="mt-1 block text-sm text-ink-60"><?= okv_e($creditNote($creditFacility, $creditRefusal, (int) $basket['subtotal_subunit'], $creditDueDate)) ?></span>
+                <?php if ($creditRefusal !== ''): ?>
+                  <a class="mt-2 inline-flex min-h-[44px] items-center text-sm text-forest underline" href="/pro/credit.php">Open your credit page</a>
+                <?php endif; ?>
               </label>
             <?php endif; ?>
 
@@ -210,7 +255,8 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                     Settings::str('cancellation_cutoff_time', '18:00'),
                     Settings::bool('cancellation_deposit_forfeit_after_cutoff', true),
                     Settings::bool('cancellation_after_dispatch_allowed', true),
-                    Settings::bool('cancellation_dispatched_forfeit_deposit', true)
+                    Settings::bool('cancellation_dispatched_forfeit_deposit', true),
+                    (string) ($savedDelivery['delivery_date'] ?? '')
                   )) ?>
             </p>
 

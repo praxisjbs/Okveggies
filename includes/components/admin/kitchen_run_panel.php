@@ -33,6 +33,15 @@ $mayNote    = Rbac::can('kitchen_runs.quote');
 $total     = $request['quoted_total_subunit'] === null ? null : (int) $request['quoted_total_subunit'];
 $deposit   = $request['deposit_subunit'] === null ? null : (int) $request['deposit_subunit'];
 $editable  = $lines ?: [[]];
+
+// What this customer's credit facility can actually take today. Staff see the
+// figures before they choose on account, rather than after a refusal.
+$creditFacility = (string) $request['customer_type'] === 'business'
+    ? Credit::facilityForUser((int) $request['user_id'])
+    : null;
+$creditRefusal  = (string) $request['customer_type'] === 'business'
+    ? Credit::drawRefusal($creditFacility, (int) ($total ?? 0))
+    : 'credit_not_approved';
 ?>
 <section class="okv-card" aria-labelledby="run-panel-heading">
 
@@ -43,7 +52,13 @@ $editable  = $lines ?: [[]];
         <span class="ml-2 text-base font-normal text-ink-60"><?= okv_e($request['status_label']) ?></span>
       </h2>
       <p class="mt-1 text-sm text-ink-60">
-        <?= okv_e(trim((string) $request['customer_name']) ?: (string) $request['contact_name']) ?>,
+        <?php $runCustomerName = trim((string) $request['customer_name']) ?: (string) $request['contact_name']; ?>
+        <?php if (Rbac::can('customers.view') && !empty($request['user_id'])): ?>
+          <a class="underline decoration-mist underline-offset-2 hover:text-forest"
+             href="/admin/customers.php?customer=<?= (int) $request['user_id'] ?>"><?= okv_e($runCustomerName) ?></a>,
+        <?php else: ?>
+          <?= okv_e($runCustomerName) ?>,
+        <?php endif; ?>
         <?= okv_e((string) $request['customer_email']) ?>,
         <?= okv_e((string) $request['contact_phone']) ?>.
         <?= okv_e(KitchenRuns::modeLabel((string) $request['input_mode'])) ?>,
@@ -335,9 +350,27 @@ $editable  = $lines ?: [[]];
               <option value="pay_in_full">Paid in full</option>
             <?php endif; ?>
             <?php if ((string) $request['customer_type'] === 'business'): ?>
-              <option value="on_account">On account, approved credit</option>
+              <option value="on_account" <?= $creditRefusal === '' ? '' : 'disabled' ?>>
+                On account, approved credit<?= $creditRefusal === '' ? '' : ' (not available)' ?>
+              </option>
             <?php endif; ?>
           </select>
+          <?php if ((string) $request['customer_type'] === 'business'): ?>
+            <p class="mt-1 text-sm text-ink-60">
+              <?php if ($creditFacility === null || (string) $creditFacility['state'] !== 'approved'): ?>
+                This business has no approved credit facility, so on account is closed to it.
+              <?php else: ?>
+                Credit limit <span class="font-mono"><?= okv_e(Money::format((int) $creditFacility['limit_subunit'])) ?></span>,
+                outstanding <span class="font-mono"><?= okv_e(Money::format((int) $creditFacility['outstanding_subunit'])) ?></span>,
+                available <span class="font-mono"><?= okv_e(Money::format((int) $creditFacility['available_subunit'])) ?></span>,
+                on <?= (int) $creditFacility['days'] ?> day terms.
+                <?php if ($creditRefusal === 'credit_limit_exceeded'): ?>
+                  This quote is above the credit available, so it cannot go on account today.
+                <?php endif; ?>
+              <?php endif; ?>
+              <a class="inline-flex min-h-[44px] items-center text-forest underline" href="/admin/credit.php?business=<?= (int) ($creditFacility['business_id'] ?? 0) ?>">Open credit</a>
+            </p>
+          <?php endif; ?>
         </div>
         <div>
           <label class="okv-label" for="convert_date">Delivery day</label>

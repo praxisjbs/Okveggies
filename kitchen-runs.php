@@ -44,6 +44,9 @@ if (!Customer::isLoggedIn()) {
 $userId       = (int) Customer::id();
 $customerType = Customer::type() ?? 'household';
 $current      = Customer::current();
+$savedListId  = (int) okv_input('saved_list', 0);
+$savedList    = $savedListId > 0 && Customer::isBusiness() ? KitchenLists::forRun($savedListId, $userId) : null;
+$prefillLines = $savedList['items'] ?? [];
 
 $openId  = (int) okv_input('request', 0);
 $request = $openId > 0 ? KitchenRuns::findForCustomer($openId, $userId) : null;
@@ -94,6 +97,12 @@ $errorCode = trim((string) okv_input('error', ''));
 $notice    = null;
 if ($errorCode !== '') {
     $notice = ['tone' => 'bad', 'text' => KitchenRuns::message($errorCode)];
+} elseif (okv_input('notice', '') === 'pro_business') {
+    $notice = ['tone' => 'neutral', 'text' => 'Pro screens are for business accounts. Your household Kitchen Runs are all available here.'];
+} elseif ($savedListId > 0 && $savedList === null) {
+    $notice = ['tone' => 'bad', 'text' => 'That saved list is not available. Open My Kitchen Lists and choose one there.'];
+} elseif ($savedList !== null) {
+    $notice = ['tone' => 'good', 'text' => 'Your saved list is filled in below. Check the items, delivery day and address before sending it.'];
 } elseif (okv_input('submitted', '') !== '') {
     $notice = ['tone' => 'good', 'text' => 'Your list is with the team. We will price it and send the quote here.'];
 } elseif (okv_input('approved', '') !== '') {
@@ -126,6 +135,9 @@ $starts = [
     ],
 ];
 $chosen = (string) okv_input('start', 'custom');
+if ($savedList !== null) {
+    $chosen = 'catalogue';
+}
 if (!isset($starts[$chosen])) {
     $chosen = 'custom';
 }
@@ -173,7 +185,12 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
   </header>
 
   <?php if ($notice): ?>
-    <p class="mt-6 rounded-md border px-4 py-3 text-sm <?= $notice['tone'] === 'good' ? 'border-foliage bg-foliage-tint text-forest' : 'border-tomato bg-tomato-tint text-tomato' ?>" role="status">
+    <?php
+      $noticeClass = $notice['tone'] === 'good'
+          ? 'border-foliage bg-foliage-tint text-forest'
+          : ($notice['tone'] === 'bad' ? 'border-tomato bg-tomato-tint text-tomato' : 'border-mist bg-white text-ink');
+    ?>
+    <p class="mt-6 rounded-md border px-4 py-3 text-sm <?= $noticeClass ?>" role="status">
       <?= okv_e($notice['text']) ?>
     </p>
   <?php endif; ?>
@@ -246,7 +263,8 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
         <div class="mt-5">
           <h3 class="okv-label">Your list</h3>
           <div data-kr-rows class="space-y-3">
-            <?php for ($row = 0; $row < 3; $row++): ?>
+            <?php $rowCount = max(3, count($prefillLines)); ?>
+            <?php for ($row = 0; $row < $rowCount; $row++): $prefillLine = $prefillLines[$row] ?? []; ?>
               <?php require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
             <?php endfor; ?>
           </div>
@@ -359,7 +377,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
       <div class="mt-5">
         <label class="okv-label" for="customer_note">Anything we should know</label>
         <textarea class="okv-input" id="customer_note" name="customer_note" rows="3" maxlength="2000"
-                  placeholder="Soft pomo please, and the tomatoes should be firm, not the very ripe ones."></textarea>
+                  placeholder="Soft pomo please, and the tomatoes should be firm, not the very ripe ones."><?= okv_e((string) ($savedList['note'] ?? '')) ?></textarea>
       </div>
 
       <div class="mt-6 flex flex-wrap items-center gap-3">

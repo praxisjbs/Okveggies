@@ -32,13 +32,80 @@ final class OrderTrail
         return (bool) preg_match('/^[A-Za-z0-9_-]{43}$/', $token);
     }
 
+    /** Where this browser keeps the trail tokens it has been handed. */
+    private const SESSION_KEY = 'okv_trail_tokens';
+
+    /**
+     * Remember a token in this session. A guest order has no account, so
+     * without this the customer coming back from Paystack lands on an order
+     * page that cannot recognise them. Held for the browser only: nothing is
+     * written, and another device still needs the link from the email.
+     */
+    public static function remember(int $orderId, string $token): void
+    {
+        if ($orderId < 1 || !self::isValidToken($token)) {
+            return;
+        }
+        $_SESSION[self::SESSION_KEY][$orderId] = $token;
+    }
+
+    /** The token this browser holds for one order, or null. */
+    public static function sessionToken(int $orderId): ?string
+    {
+        $token = (string) ($_SESSION[self::SESSION_KEY][$orderId] ?? '');
+        return self::isValidToken($token) ? $token : null;
+    }
+
     /** The order behind a public share token, or null. */
     public static function findByToken(string $token): ?array
     {
         if (!self::isValidToken($token)) {
             return null;
         }
-        return self::find('o.order_trail_token_hash = :value', self::hashToken($token));
+        $hash = self::hashToken($token);
+        $order = self::find('o.order_trail_token_hash = :value', $hash);
+        if ($order !== null) {
+            return $order;
+        }
+        try {
+            $share = Database::one(
+                'SELECT order_id FROM order_trail_share_links WHERE token_hash = :token_hash LIMIT 1',
+                [':token_hash' => $hash]
+            );
+        } catch (Throwable $e) {
+            error_log('order trail share lookup failed: ' . $e->getMessage());
+            return null;
+        }
+        return $share === null ? null : self::find('o.id = :value', (int) $share['order_id']);
+    }
+
+    /** Issue another share token for an owned order without replacing earlier links. */
+    public static function issueForCustomer(int $orderId, int $userId): ?string
+    {
+        if (self::findForCustomer($orderId, $userId) === null) {
+            return null;
+        }
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $token = self::newToken();
+            $hash = self::hashToken($token);
+            $exists = Database::one(
+                'SELECT id FROM orders WHERE order_trail_token_hash = :order_hash
+                 UNION ALL
+                 SELECT id FROM order_trail_share_links WHERE token_hash = :share_hash
+                 LIMIT 1',
+                [':order_hash' => $hash, ':share_hash' => $hash]
+            );
+            if ($exists !== null) {
+                continue;
+            }
+            Database::run(
+                'INSERT INTO order_trail_share_links (order_id, token_hash, created_by)
+                 VALUES (:order_id, :token_hash, :created_by)',
+                [':order_id' => $orderId, ':token_hash' => $hash, ':created_by' => $userId]
+            );
+            return $token;
+        }
+        throw new RuntimeException('trail_token_collision');
     }
 
     /** The order for its signed-in owner, or null when it is not theirs. */
@@ -57,7 +124,7 @@ final class OrderTrail
 
         $order = Database::one(
             'SELECT o.id, o.order_number, o.order_status, o.payment_option, o.payment_status,
-                    o.order_total_subunit, o.deposit_required_subunit, o.balance_due_subunit,
+                    o.user_id, o.order_total_subunit, o.deposit_required_subunit, o.balance_due_subunit,
                     o.preferred_delivery_date, o.created_at, o.confirmed_at, o.source_regions_snapshot,
                     (SELECT p.expected_amount_subunit FROM payments p WHERE p.order_id = o.id ORDER BY p.id LIMIT 1) AS amount_due_subunit
                FROM orders o
