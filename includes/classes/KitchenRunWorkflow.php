@@ -47,11 +47,24 @@ final class KitchenRunWorkflow
      * snapshot to copy into order_addresses and the run reaches the day
      * manifest with a recipient on it.
      */
-    public static function submit(int $userId, string $customerType, array $input, ?string $attachment = null): array
-    {
+    public static function submit(
+        int $userId,
+        string $customerType,
+        array $input,
+        ?string $attachment = null,
+        ?int $recordedBy = null
+    ): array {
         if ($userId < 1 || !in_array($customerType, Customer::TYPES, true)) {
             throw new DomainException('bad_customer');
         }
+
+        // A list does not always arrive through the customer's own form. It
+        // arrives on WhatsApp, or read out on the phone, and a colleague types
+        // it in for them (PRD 8.1: the list is the thing, not the channel).
+        // The run is identical either way; only who recorded it differs, so
+        // the trail says "typed in by" rather than pretending the customer
+        // pressed a button they never saw.
+        $byStaff = $recordedBy !== null && $recordedBy > 0;
 
         $mode = (string) ($input['input_mode'] ?? '');
         if (!in_array($mode, KitchenRuns::MODES, true)) {
@@ -148,13 +161,24 @@ final class KitchenRunWorkflow
                     ':zone'           => $zone,
                     ':original'       => json_encode(self::auditable($input), JSON_THROW_ON_ERROR),
                     ':note'           => KitchenRuns::note($input['customer_note'] ?? ''),
-                    ':created_by'     => $userId,
+                    ':created_by'     => $byStaff ? $recordedBy : $userId,
                 ]
             );
             $id = (int) $pdo->lastInsertId();
 
             self::insertLines($pdo, $id, $lines);
-            self::writeHistory($id, null, 'submitted', 'customer', $userId, 'List received with ' . count($lines) . ' ' . (count($lines) === 1 ? 'line' : 'lines') . '.');
+
+            $lineCount = count($lines) . ' ' . (count($lines) === 1 ? 'line' : 'lines');
+            self::writeHistory(
+                $id,
+                null,
+                'submitted',
+                $byStaff ? 'admin' : 'customer',
+                $byStaff ? $recordedBy : $userId,
+                $byStaff
+                    ? 'List typed in by our team with ' . $lineCount . '. It came in ' . self::arrivalLabel($input) . '.'
+                    : 'List received with ' . $lineCount . '.'
+            );
 
             $pdo->commit();
         } catch (Throwable $e) {
@@ -698,6 +722,22 @@ final class KitchenRunWorkflow
                 ':note'    => $note === null ? null : mb_substr($note, 0, 500),
             ]
         );
+    }
+
+    /**
+     * How a staff-recorded list reached us, for the first line of its trail.
+     * Public so the tests can hold it to its words, and so the admin form and
+     * the trail cannot drift apart about what the channels are.
+     */
+    public static function arrivalLabel(array $input): string
+    {
+        $labels = [
+            'whatsapp' => 'on WhatsApp',
+            'phone'    => 'by phone',
+            'walk_in'  => 'in person',
+            'email'    => 'by email',
+        ];
+        return $labels[(string) ($input['arrived_by'] ?? '')] ?? 'on WhatsApp';
     }
 
     private static function quoteNote(string $from, int $total): string

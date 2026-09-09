@@ -74,11 +74,19 @@ if ($errorCode !== '') {
     $notice = ['tone' => 'good', 'text' => 'Approved for the customer, and it is on the record as your approval. Convert it when you are ready.'];
 } elseif (okv_input('note_saved', '') !== '') {
     $notice = ['tone' => 'good', 'text' => 'The internal note has been saved. The customer never sees it.'];
+} elseif (okv_input('typed_in', '') !== '') {
+    $notice = ['tone' => 'good', 'text' => 'The list is saved and the customer has been told we have it. Price it below.'];
 }
 
 $okv_admin_title  = 'Kitchen Runs';
 $okv_admin_note   = 'Price a list, send the quote, then turn an approved request into an order.';
 $okv_admin_crumbs = [['label' => 'Orders', 'href' => '/admin/orders.php']];
+// Static markup, authored here rather than built from request or database data,
+// as the header component requires. The gate is UX only: api/v1/kitchen_runs.php
+// re-checks kitchen_runs.create on the server.
+if (Rbac::can('kitchen_runs.create')) {
+    $okv_admin_actions = '<a class="okv-btn px-4" href="/admin/kitchen_run_new.php">Type in a list</a>';
+}
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
 <div class="space-y-8">

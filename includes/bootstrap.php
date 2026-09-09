@@ -110,6 +110,11 @@ require_once __DIR__ . '/classes/KitchenLists.php';
 require_once __DIR__ . '/classes/ProOrders.php';
 require_once __DIR__ . '/classes/Credit.php';
 require_once __DIR__ . '/classes/Customers.php';
+// Work the back office starts itself, rather than following on from something a
+// customer did on the storefront: an order taken on the phone, and the customer
+// account that order may need before it can exist.
+require_once __DIR__ . '/classes/StaffCustomers.php';
+require_once __DIR__ . '/classes/ManualOrder.php';
 
 // 7. Warm the RBAC cache from the session (no DB hit unless a user is loaded).
 Rbac::init();

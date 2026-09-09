@@ -64,3 +64,22 @@ okv_test_ok($forced['eligible'], 'a forced-open exception opens a normally close
 $bad = Delivery::eligibleFromRules('not-a-date', $rules, null, $morning);
 okv_test_ok(!$bad['eligible'], 'a malformed date is refused');
 okv_test_ok(str_contains($bad['reason'], 'valid delivery date'), 'the refusal asks for a valid date');
+
+// ---------------------------------------------------------------------------
+// Zone names, added when the admin screen learned to add and rename a zone
+// rather than only switch the thirty seeded ones on and off (PRD 13).
+//
+// The slug matters more than it looks. It is UNIQUE on the table, so a name
+// that slugs to nothing would collide with the next one that also slugs to
+// nothing, and the second zone would be refused by the database rather than by
+// a sentence. cleanZoneName() catches that here instead.
+// ---------------------------------------------------------------------------
+
+okv_test_eq('Ikoyi', Delivery::cleanZoneName('  Ikoyi  '), 'a zone name is trimmed');
+okv_test_eq('Lekki Phase 1', Delivery::cleanZoneName("Lekki   Phase\t1"), 'runs of whitespace inside a name collapse to one space');
+okv_test_eq(null, Delivery::cleanZoneName(''), 'a zone with no name is refused');
+okv_test_eq(null, Delivery::cleanZoneName('   '), 'whitespace is not a name');
+okv_test_eq(null, Delivery::cleanZoneName('!!!'), 'a name that leaves no slug behind is refused, because slug is unique');
+okv_test_eq(null, Delivery::cleanZoneName(str_repeat('a', Delivery::ZONE_NAME_MAX + 1)), 'a name longer than the column is refused, never truncated into a different name');
+okv_test_ok(Delivery::cleanZoneName(str_repeat('a', Delivery::ZONE_NAME_MAX)) !== null, 'a name exactly the length of the column is allowed');
+okv_test_eq('Ajah 2', Delivery::cleanZoneName('Ajah 2'), 'digits are part of a name, Lagos zones are full of them');

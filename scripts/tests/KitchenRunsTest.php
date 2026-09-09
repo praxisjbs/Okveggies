@@ -317,8 +317,29 @@ okv_test_ok(mb_strlen((string) KitchenRuns::quoteLines([[
 // The upload refusal belongs to the upload. PDOException extends
 // RuntimeException, so a catch-all on RuntimeException in the controller told
 // a colleague their file was rejected when the real fault was a database one.
+//
+// There are two uploads now, the customer's own form and the list a colleague
+// types in for them, so counting the catches no longer says anything. What
+// matters is that every one of them sits directly around an upload call and
+// nowhere else, which is what this checks instead.
 $controllerSource = (string) file_get_contents($okvRoot . '/api/v1/kitchen_runs.php');
-okv_test_eq(1, substr_count($controllerSource, 'catch (RuntimeException'), 'exactly one place catches a RuntimeException, and it is the upload');
+$catches = substr_count($controllerSource, 'catch (RuntimeException');
+okv_test_ok($catches >= 1, 'the upload refusal is caught where it happens');
+
+$catchPieces = explode('catch (RuntimeException', $controllerSource);
+array_pop($catchPieces);
+foreach ($catchPieces as $index => $before) {
+    okv_test_ok(
+        str_contains(substr($before, -500), 'Uploads::saveUploadedFile'),
+        'RuntimeException catch ' . ($index + 1) . ' sits around an upload call, so a database fault is never reported as a rejected file'
+    );
+}
+// Calls, not mentions: the comment above the first one names the method too.
+okv_test_eq(
+    substr_count($controllerSource, 'Uploads::saveUploadedFile('),
+    $catches,
+    'every upload has its own refusal, and nothing else catches a RuntimeException'
+);
 $uploadCatch = strpos($controllerSource, 'catch (RuntimeException');
 $saveCall = strpos($controllerSource, 'Uploads::saveUploadedFile(');
 okv_test_ok($saveCall !== false && $uploadCatch !== false && $uploadCatch > $saveCall && $uploadCatch - $saveCall < 400, 'the upload catch sits beside the upload rather than around the whole controller');

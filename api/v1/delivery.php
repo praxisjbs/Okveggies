@@ -98,6 +98,90 @@ try {
             delivery_success('Delivery zone updated.');
             break;
 
+        // Add a zone. The thirty Lagos zones that shipped with the seed were
+        // always meant to be edited rather than lived with (PRD 13), and until
+        // now the screen could only switch one on and off. A new estate, a new
+        // corridor, or a name the team actually uses now has somewhere to go.
+        case 'create_zone':
+            delivery_guard('delivery.zones.edit');
+            $name = Delivery::cleanZoneName((string) okv_input('name', ''));
+            if ($name === null) {
+                okv_error('Give the zone a name, up to 120 characters.', 422, 'bad_zone_name');
+            }
+            if (Database::one('SELECT id FROM delivery_zones WHERE name = :name LIMIT 1', [':name' => $name])) {
+                okv_error('There is already a zone with that name.', 409, 'duplicate_zone');
+            }
+            $sortRaw = trim((string) okv_input('sort_order', ''));
+            if ($sortRaw !== '' && preg_match('/^\d{1,4}$/', $sortRaw) !== 1) {
+                okv_error('The order must be a whole number.', 422, 'bad_sort_order');
+            }
+            Database::run(
+                'INSERT INTO delivery_zones (name, slug, area_note, is_active, sort_order)
+                 VALUES (:name, :slug, :note, :active, :sort)',
+                [
+                    ':name'   => $name,
+                    ':slug'   => Delivery::uniqueZoneSlug($name),
+                    ':note'   => mb_substr(trim((string) okv_input('area_note', '')), 0, Delivery::ZONE_NOTE_MAX) ?: null,
+                    ':active' => okv_input('is_active', '') !== '' ? 1 : 0,
+                    ':sort'   => $sortRaw === '' ? Delivery::nextZoneSortOrder() : (int) $sortRaw,
+                ]
+            );
+            delivery_success('Zone added.');
+            break;
+
+        // Edit a zone in place. No delete: an order, a Kitchen Run and a
+        // manifest all point at a zone, and history is append-only (CLAUDE.md).
+        // Switching a zone off already takes it out of the checkout picker,
+        // which is what "remove it" actually means here.
+        case 'update_zone':
+            delivery_guard('delivery.zones.edit');
+            $zoneId = (int) okv_input('zone_id', 0);
+            $zone = $zoneId > 0
+                ? Database::one('SELECT id, name FROM delivery_zones WHERE id = :id', [':id' => $zoneId])
+                : null;
+            if (!$zone) {
+                okv_error('Choose a valid delivery zone.', 422, 'bad_zone');
+            }
+            $name = Delivery::cleanZoneName((string) okv_input('name', ''));
+            if ($name === null) {
+                okv_error('Give the zone a name, up to 120 characters.', 422, 'bad_zone_name');
+            }
+            if (Database::one(
+                'SELECT id FROM delivery_zones WHERE name = :name AND id <> :id LIMIT 1',
+                [':name' => $name, ':id' => $zoneId]
+            )) {
+                okv_error('There is already a zone with that name.', 409, 'duplicate_zone');
+            }
+            $sortRaw = trim((string) okv_input('sort_order', ''));
+            if ($sortRaw !== '' && preg_match('/^\d{1,4}$/', $sortRaw) !== 1) {
+                okv_error('The order must be a whole number.', 422, 'bad_sort_order');
+            }
+
+            // The slug is only rebuilt when the name really changed, so a link
+            // or a saved filter that carries the old slug does not break every
+            // time somebody fixes a comma.
+            $params = [
+                ':name'   => $name,
+                ':note'   => mb_substr(trim((string) okv_input('area_note', '')), 0, Delivery::ZONE_NOTE_MAX) ?: null,
+                ':active' => okv_input('is_active', '') !== '' ? 1 : 0,
+                ':id'     => $zoneId,
+            ];
+            $setSlug = '';
+            if ($name !== (string) $zone['name']) {
+                $setSlug = ', slug = :slug';
+                $params[':slug'] = Delivery::uniqueZoneSlug($name, $zoneId);
+            }
+            if ($sortRaw !== '') {
+                $setSlug .= ', sort_order = :sort';
+                $params[':sort'] = (int) $sortRaw;
+            }
+            Database::run(
+                'UPDATE delivery_zones SET name = :name, area_note = :note, is_active = :active' . $setSlug . ' WHERE id = :id',
+                $params
+            );
+            delivery_success('Zone updated.');
+            break;
+
         case 'save_exception':
             delivery_guard('delivery.exceptions.edit');
             $date = (string) okv_input('exception_date', '');

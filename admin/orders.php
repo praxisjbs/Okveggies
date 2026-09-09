@@ -127,8 +127,26 @@ $statusFlag = (string) okv_input('status', '');
 
 $okv_admin_title = 'Orders';
 $okv_admin_note  = 'Every order, what was paid, the delivery day it is on, and the trail the customer follows.';
+// Static markup, authored here rather than built from request or database data,
+// as the header component requires. The gate is UX only: api/v1/orders.php
+// re-checks orders.create on the server.
+if (Rbac::can('orders.create')) {
+    $okv_admin_actions = '<a class="okv-btn px-4" href="/admin/order_new.php">Take an order</a>';
+}
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
+<?php if (okv_input('created', '') !== ''): ?>
+  <?php $paymentFlag = (string) okv_input('payment', ''); ?>
+  <p class="okv-note-ok mb-5" role="status">
+    The order has been created and the customer has their confirmation and trail link.
+    <?php if ($paymentFlag === 'payment_recorded'): ?>
+      The money you recorded is on it, and is waiting in the proof queue for review.
+    <?php elseif ($paymentFlag === 'payment_failed'): ?>
+      The payment you entered was <strong>not</strong> recorded. Record it on the
+      <a class="underline" href="/admin/payments.php">Payments screen</a>. The order itself is fine.
+    <?php endif; ?>
+  </p>
+<?php endif; ?>
 <?php if ($flag !== ''): ?>
   <p class="okv-note-ok mb-5" role="status"><?= $flag === 'already_cancelled' ? 'The order was already cancelled. No second refund was raised.' : 'The order has been cancelled.' ?></p>
 <?php endif; ?>

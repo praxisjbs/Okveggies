@@ -371,6 +371,11 @@ final class KitchenRuns
             'bad_pricing_mode'       => 'Choose who should put the prices on this list.',
             'bad_address'            => 'We need a delivery name, phone number, street, city and state.',
             'bad_customer'           => 'Sign in again, then send your list.',
+            // The same fault seen from the back office. A colleague typing in a
+            // list that arrived on WhatsApp is not signed out, they have simply
+            // not said whose list it is, and telling them to sign in would send
+            // them looking in the wrong place.
+            'staff_bad_customer'     => 'Choose the customer this list came from before you save it.',
             'open_budget_pricing'    => 'An open budget means we set the prices, so leave the prices blank.',
             'attachment_required'    => 'Attach your list as a JPEG, PNG or PDF.',
             'attachment_rejected'    => 'That file is not a JPEG, PNG or PDF under 5MB.',

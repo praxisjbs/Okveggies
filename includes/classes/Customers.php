@@ -55,15 +55,27 @@ final class Customers
         if ($filters['search'] !== '') {
             // One placeholder per position: this connection runs native
             // prepared statements, which refuse a repeated named placeholder.
+            //
+            // The phone is matched twice on purpose. A number is stored in one
+            // canonical form (+2348031234567) and said in another (08031234567),
+            // and the second is not a substring of the first, so a LIKE alone
+            // finds nobody when a colleague types the number the way the caller
+            // reads it out. Phone::normalize is the same one registration and
+            // checkout store through, so both spellings land on one person.
+            //
+            // The term is escaped before it goes into a LIKE pattern, or a
+            // customer searching for "%" matches every account we have.
             $where[] = '(TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) LIKE :search_name
                          OR u.email LIKE :search_email
                          OR u.phone LIKE :search_phone
+                         OR u.phone = :search_phone_exact
                          OR bc.business_name LIKE :search_business)';
-            $like = '%' . $filters['search'] . '%';
-            $params[':search_name']     = $like;
-            $params[':search_email']    = $like;
-            $params[':search_phone']    = $like;
-            $params[':search_business'] = $like;
+            $like = '%' . Catalogue::escapeLike($filters['search']) . '%';
+            $params[':search_name']       = $like;
+            $params[':search_email']      = $like;
+            $params[':search_phone']      = $like;
+            $params[':search_phone_exact'] = Phone::normalize($filters['search']) ?? '';
+            $params[':search_business']   = $like;
         }
         $clause = 'WHERE ' . implode(' AND ', $where);
 

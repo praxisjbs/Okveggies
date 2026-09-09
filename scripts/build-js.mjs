@@ -24,6 +24,9 @@ const sources = [
   'assets/js/admin-kitchen-runs.js',
   'assets/js/admin-credit.js',
   'assets/js/support-widget.js',
+  'assets/js/admin-customer-picker.js',
+  'assets/js/admin-order-new.js',
+  'assets/js/admin-run-new.js',
 ].filter(existsSync);
 
 if (sources.length === 0) {

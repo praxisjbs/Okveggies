@@ -74,6 +74,63 @@ final class Delivery
         return !empty($zone['is_active']);
     }
 
+    /** Longest zone name and note the columns hold. */
+    public const ZONE_NAME_MAX = 120;
+    public const ZONE_NOTE_MAX = 255;
+
+    /**
+     * A zone name a colleague typed, or null when it is not one. Pure, so the
+     * unit tests can hold it to its word without a database.
+     */
+    public static function cleanZoneName(string $name): ?string
+    {
+        $name = trim(preg_replace('/\s+/', ' ', $name) ?? '');
+        if ($name === '' || mb_strlen($name) > self::ZONE_NAME_MAX) {
+            return null;
+        }
+        // A name has to leave something behind once it is slugged, or two zones
+        // called "..." and "!!!" would collide on an empty slug.
+        return okv_slug($name) === '' ? null : $name;
+    }
+
+    /**
+     * A slug no other zone holds. "Lekki Phase 1" becomes lekki-phase-1, and a
+     * second zone by that name becomes lekki-phase-1-2. Mirrors
+     * Products::uniqueSlug, because a colleague renaming a zone should get the
+     * same behaviour they get renaming a product.
+     */
+    public static function uniqueZoneSlug(string $name, ?int $ignoreId = null): string
+    {
+        $base = okv_slug($name);
+        if ($base === '') {
+            $base = 'zone';
+        }
+        $base = mb_substr($base, 0, 130);
+        $slug = $base;
+        $n    = 1;
+        while (true) {
+            $row = Database::one(
+                'SELECT id FROM delivery_zones WHERE slug = :slug' . ($ignoreId ? ' AND id <> :ignore' : '') . ' LIMIT 1',
+                $ignoreId ? [':slug' => $slug, ':ignore' => $ignoreId] : [':slug' => $slug]
+            );
+            if (!$row) {
+                return $slug;
+            }
+            $n++;
+            $slug = $base . '-' . $n;
+        }
+    }
+
+    /**
+     * Where a new zone sits in the picker when nobody said. On the end, so
+     * adding one never quietly reorders the list a colleague already knows.
+     */
+    public static function nextZoneSortOrder(): int
+    {
+        $row = Database::one('SELECT COALESCE(MAX(sort_order), 0) AS top FROM delivery_zones');
+        return (int) ($row['top'] ?? 0) + 1;
+    }
+
     /** Exceptions that fall between two dates, keyed by date. */
     private static function exceptionsBetween(string $from, string $to): array
     {

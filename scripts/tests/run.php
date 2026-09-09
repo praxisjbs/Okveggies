@@ -67,6 +67,9 @@ require_once $appRoot . '/includes/classes/KitchenLists.php';
 require_once $appRoot . '/includes/classes/ProOrders.php';
 require_once $appRoot . '/includes/classes/Credit.php';
 require_once $appRoot . '/includes/classes/Customers.php';
+require_once $appRoot . '/includes/classes/Customer.php';
+require_once $appRoot . '/includes/classes/StaffCustomers.php';
+require_once $appRoot . '/includes/classes/ManualOrder.php';
 require_once $appRoot . '/includes/functions/helpers.php';
 require_once $appRoot . '/includes/functions/pro_access.php';
 

@@ -121,7 +121,12 @@ $action     = okv_action();
 $requestId  = (int) okv_input('request_id', 0);
 $customerUrl = '/kitchen-runs.php' . ($requestId > 0 ? '?request=' . $requestId : '');
 $adminUrl    = '/admin/kitchen_runs.php' . ($requestId > 0 ? '?request=' . $requestId : '');
-$backTo      = in_array($action, ['quote', 'decline', 'convert', 'staff_approve', 'save_note'], true) ? $adminUrl : $customerUrl;
+// staff_submit has no request yet, so a refusal goes back to the form that was
+// being filled in rather than to a request page that does not exist.
+$newRunUrl   = '/admin/kitchen_run_new.php' . ((int) okv_input('user_id', 0) > 0 ? '?user_id=' . (int) okv_input('user_id', 0) : '');
+$backTo      = $action === 'staff_submit'
+    ? $newRunUrl
+    : (in_array($action, ['quote', 'decline', 'convert', 'staff_approve', 'save_note'], true) ? $adminUrl : $customerUrl);
 
 if (!okv_is_post()) {
     okv_error('Use POST for this action.', 405, 'method_not_allowed');
@@ -190,6 +195,95 @@ try {
             Notifications::announceKitchenRunSubmitted((int) $result['id']);
             Notifications::announceKitchenRunReceived((int) $result['id']);
             kr_ok($result, '/kitchen-runs.php?request=' . $result['id'] . '&submitted=1');
+            break;
+
+        // --- Staff type in a list that arrived some other way ------------------
+        //
+        // A kitchen list mostly does not arrive through the customer's own form.
+        // It arrives as a WhatsApp message, or read down the phone, and until
+        // now there was nothing a colleague could do with it: quoting, approving
+        // and converting all need a run to exist, and only a signed-in customer
+        // could make one. This is that missing first step.
+        //
+        // It lands as Submitted, exactly as a customer's own list does, so the
+        // quote, approve and convert path that follows is the same one. The
+        // trail records that our team typed it in and how it reached us.
+        case 'staff_submit':
+            Rbac::requirePermission('kitchen_runs.create');
+            $staffId = (int) Rbac::userId();
+
+            $forUserId = (int) okv_input('user_id', 0);
+            $forCustomer = StaffCustomers::find($forUserId);
+            if (!$forCustomer) {
+                kr_fail('staff_bad_customer', '/admin/kitchen_run_new.php');
+            }
+
+            // The photograph and the typed lines are not a choice a colleague
+            // should have to make. They keep the original beside what they
+            // typed, and the mode follows from what actually arrived: a list
+            // with lines on it is mixed, a photograph nobody has transcribed
+            // yet is an upload that the quote workshop turns into lines.
+            $staffItems = kr_posted_items();
+            $attachment = null;
+            if (!empty($_FILES['attachment']['name'] ?? '')) {
+                $file = $_FILES['attachment'];
+                if (!KitchenRuns::allowedUpload(
+                    (string) ($file['name'] ?? ''),
+                    (string) ($file['type'] ?? ''),
+                    (int) ($file['size'] ?? 0)
+                )) {
+                    kr_fail('attachment_rejected', $newRunUrl);
+                }
+                try {
+                    $attachment = Uploads::saveUploadedFile($file, 'kitchen_runs', KitchenRuns::UPLOAD_MIME);
+                } catch (RuntimeException $e) {
+                    // Uploads refuses with one of these, and only this call can
+                    // throw it. Anything else is caught as ours further down.
+                    error_log('kitchen_runs staff upload refused: ' . $e->getMessage());
+                    kr_fail('attachment_rejected', $newRunUrl);
+                }
+            }
+            $mode = $staffItems ? 'mixed' : 'upload';
+
+            $result = KitchenRunWorkflow::submit(
+                $forUserId,
+                (string) $forCustomer['user_type'],
+                [
+                    'input_mode'            => $mode,
+                    'pricing_mode'          => (string) okv_input('pricing_mode', 'by_us'),
+                    'is_open_budget'        => okv_input('is_open_budget', '') !== '',
+                    'spend_cap_subunit'     => kr_money_input('spend_cap', 'budget_not_a_number'),
+                    'budget_ceiling_subunit' => kr_money_input('budget_ceiling', 'budget_not_a_number'),
+                    'customer_note'         => okv_input('customer_note', ''),
+                    'preferred_delivery_date' => okv_input('preferred_delivery_date', ''),
+                    'delivery_zone_id'      => okv_input('delivery_zone_id', 0),
+                    'recipient_name'        => okv_input('recipient_name', ''),
+                    'recipient_phone'       => okv_input('recipient_phone', ''),
+                    'address_line_1'        => okv_input('address_line_1', ''),
+                    'address_line_2'        => okv_input('address_line_2', ''),
+                    'city'                  => okv_input('city', ''),
+                    'state'                 => okv_input('state', ''),
+                    'landmark'              => okv_input('landmark', ''),
+                    'arrived_by'            => okv_input('arrived_by', 'whatsapp'),
+                    'items'                 => $staffItems,
+                ],
+                $attachment,
+                $staffId
+            );
+
+            Audit::record(
+                'kitchen_run.staff_submit',
+                'kitchen_run',
+                (int) $result['id'],
+                null,
+                ['request_number' => $result['request_number'], 'for_user_id' => $forUserId],
+                $staffId
+            );
+            // The customer is told we have their list, exactly as they would be
+            // had they sent it themselves. The team alert is deliberately not
+            // sent: the team already knows, one of them just typed it in.
+            Notifications::announceKitchenRunReceived((int) $result['id']);
+            kr_ok($result, '/admin/kitchen_runs.php?request=' . $result['id'] . '&typed_in=1');
             break;
 
         // --- Staff price it ---------------------------------------------------

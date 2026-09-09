@@ -91,18 +91,33 @@ okv_test_ok(
     str_contains($domain, "AND user_type IN (\\'household\\', \\'business\\')"),
     'opening one customer is limited to household and business accounts too'
 );
-okv_test_ok(
-    substr_count($domain, ':search_') === 8,
-    'each search position carries its own placeholder, which native prepared statements require'
+// A count of placeholders was pinned at 8 here, which broke the moment the
+// search grew a fifth position (the phone matched exactly as well as by LIKE,
+// so a number typed the way a caller says it finds the person). The count was
+// never the point. What matters is that no placeholder name is used twice: the
+// connection runs native prepared statements, and MySQL refuses a repeated
+// named placeholder, which is the defect that took the orders screen down once.
+// So this counts distinct names against total uses instead, and stays true
+// however many positions the search grows.
+preg_match_all('/:search_[a-z_]+/', $domain, $okvSearchNames);
+$okvSearchUses = $okvSearchNames[0];
+okv_test_ok(count($okvSearchUses) > 0, 'the customer search binds its term rather than pasting it in');
+okv_test_eq(
+    count($okvSearchUses),
+    count(array_unique($okvSearchUses)) * 2,
+    'each search position carries its own placeholder, named once in the statement and once in the parameters, which native prepared statements require'
 );
 okv_test_eq(
     substr_count($domain, '$where[] = '),
     substr_count($domain, '$where[] = \''),
     'every condition added to the where clause is a literal, never a value from the request'
 );
+// The term is still bound rather than pasted into the statement, and it is now
+// escaped on the way into the LIKE pattern as well: without that, a colleague
+// searching for "%" matched every account we have.
 okv_test_ok(
-    str_contains($domain, '$like = \'%\' . $filters[\'search\'] . \'%\';'),
-    'the search term reaches the database as a bound parameter, never as statement text'
+    str_contains($domain, '$like = \'%\' . Catalogue::escapeLike($filters[\'search\']) . \'%\';'),
+    'the search term reaches the database as a bound parameter, escaped for LIKE, never as statement text'
 );
 okv_test_eq(
     substr_count($domain, 'Database::'),
@@ -163,7 +178,27 @@ $api = (string) file_get_contents($root . '/api/v1/customers.php');
 okv_test_ok(str_contains($api, 'okv_is_post()'), 'the customer endpoint refuses anything but POST');
 okv_test_ok(str_contains($api, 'Csrf::validate()'), 'the customer endpoint checks the CSRF token');
 okv_test_ok(str_contains($api, "Rbac::requirePermission('customers.view')"), 'the customer endpoint is gated on customers.view');
-okv_test_ok(str_contains($api, "okv_action() !== 'search'"), 'the customer endpoint answers the search action only');
+// The endpoint answered one action when M8 wrote it. It now answers three: the
+// search, plus the `get` and `create` the phone-order and typed-in-list pickers
+// need before an order can belong to anybody. "One action" was never the safety
+// property; "every action gated, and nothing else reachable" is, so that is
+// what this asserts now.
+preg_match_all('/\$action === \'([a-z_]+)\'/', $api, $okvApiActions);
+$okvApiActionNames = $okvApiActions[1];
+okv_test_ok(count($okvApiActionNames) >= 1, 'the customer endpoint dispatches on a named action');
+okv_test_ok(
+    str_contains($api, "okv_error('That action is not available.'"),
+    'anything the customer endpoint does not name is refused, rather than falling through'
+);
+okv_test_eq(
+    count($okvApiActionNames),
+    substr_count($api, 'Rbac::requirePermission('),
+    'every action the customer endpoint answers is gated on a permission of its own'
+);
+okv_test_ok(
+    str_contains($api, "Rbac::requirePermission('customers.create')"),
+    'making a customer needs its own permission, not the one for reading them'
+);
 okv_test_ok(str_contains($api, '405') && str_contains($api, '419'), 'the endpoint answers with the right refusal codes');
 okv_test_ok(str_contains($api, 'error_log('), 'a failure is logged for us');
 okv_test_ok(!str_contains($api, '$e->getMessage()') || !str_contains($api, 'okv_error(\'' . '$e'), 'exception text never reaches the caller');
