@@ -374,3 +374,21 @@ if (!function_exists('okv_page_of_position')) {
         return intdiv(max(0, $before), max(1, $perPage)) + 1;
     }
 }
+
+if (!function_exists('okv_support_whatsapp_url')) {
+    /**
+     * The click-to-chat link the support widget, the contact page and the
+     * acknowledgement email all use (PRD Sections 4.1 and 15). One place, so
+     * the number and the opening line can never disagree between them.
+     */
+    function okv_support_whatsapp_url(): string
+    {
+        $configured = Settings::str('support_whatsapp_number', '2348000000000');
+        $normalised = Phone::normalize($configured);
+        $number = $normalised !== null
+            ? substr($normalised, 1)
+            : (preg_replace('/\D+/', '', $configured) ?: '2348000000000');
+        $message = 'Hello OK Veggies, I need help with an order or produce question.';
+        return 'https://wa.me/' . rawurlencode($number) . '?text=' . rawurlencode($message);
+    }
+}

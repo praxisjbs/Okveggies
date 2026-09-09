@@ -21,6 +21,16 @@ if ($token !== '') {
     $order = OrderTrail::findByToken($token);
 } elseif ($orderId > 0 && Customer::id() !== null) {
     $order = OrderTrail::findForCustomer($orderId, (int) Customer::id());
+} elseif ($orderId > 0 && OrderTrail::sessionToken($orderId) !== null) {
+    // A guest, back from Paystack or refreshing their confirmation. They have
+    // no account to be recognised by, so send them to the link they do have
+    // and keep whatever the payment told us on the way.
+    $flag = trim((string) okv_input('payment', ''));
+    okv_redirect(
+        '/public/order.php?token=' . rawurlencode((string) OrderTrail::sessionToken($orderId))
+        . ($flag === '' ? '' : '&payment=' . rawurlencode($flag)),
+        303
+    );
 }
 
 if (!$order) {
@@ -50,8 +60,18 @@ if (!$order) {
     exit;
 }
 
+// A guest order has no account behind it, so the trail link is the only way
+// its owner can ever reach it. That makes the trail their order page: while
+// something is still owed on it, the link has to be able to take the payment,
+// otherwise a guest who closes the Paystack tab can never pay. The share
+// button is withheld until it is paid, so nobody is invited to hand out a link
+// that can spend money on their behalf.
+$guestOrder = ($order['user_id'] ?? null) === null;
+
 $publicTrail = $token !== '';
-$cancellation = $publicTrail ? null : OrderCancellation::forCustomer((int) $order['id'], (int) Customer::id());
+$cancellation = ($publicTrail || Customer::id() === null)
+    ? null
+    : OrderCancellation::forCustomer((int) $order['id'], (int) Customer::id());
 
 // The owner, fresh from checkout, gets the share token from the bag so the page
 // can offer a share link. A public visitor already has it in the URL.
@@ -79,9 +99,9 @@ $shareUrl = $trailUrl !== ''
 // What the customer can still pay online, and what the Paystack return told us.
 // Only ever for the signed-in owner: the public trail shows no money and offers
 // no payment.
-$pendingPayment = ($publicTrail || (string) $order['order_status'] === 'cancelled')
-    ? null
-    : Payments::pendingOnlinePayment((int) $order['id']);
+$mayPay = (string) $order['order_status'] !== 'cancelled'
+    && (!$publicTrail || $guestOrder);
+$pendingPayment = $mayPay ? Payments::pendingOnlinePayment((int) $order['id']) : null;
 $paymentFlag    = (string) okv_input('payment', '');
 $paymentNotices = [
     'paid'        => ['Payment received. Thank you.', 'ok'],
@@ -184,6 +204,9 @@ $publicStatus = [
           <?= Csrf::field() ?>
           <input type="hidden" name="action" value="initialise">
           <input type="hidden" name="payment_id" value="<?= (int) $pendingPayment['id'] ?>">
+          <?php if ($publicTrail): ?>
+            <input type="hidden" name="token" value="<?= okv_e($token) ?>">
+          <?php endif; ?>
           <button class="okv-btn w-full justify-center min-h-[44px]">
             Pay <?= okv_e(Money::format($due)) ?> now
           </button>
@@ -194,7 +217,7 @@ $publicStatus = [
       <?php endif; ?>
 
       <p class="mt-5 text-sm text-ink-60">Delivery fee is arranged and settled separately after we confirm your area.</p>
-      <?php if ($shareUrl !== ''): ?>
+      <?php if ($shareUrl !== '' && !($guestOrder && $pendingPayment !== null)): ?>
         <a class="okv-btn-outline mt-5 w-full justify-center" href="<?= okv_e($shareUrl) ?>" rel="noopener" target="_blank">Share on WhatsApp</a>
       <?php endif; ?>
     </aside>

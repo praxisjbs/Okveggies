@@ -208,7 +208,17 @@ require __DIR__ . '/../includes/components/admin/header.php';
       </div>
       <div class="space-y-6 p-4 md:p-5">
         <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <div><dt class="text-ink-60">Customer</dt><dd class="mt-1 font-medium"><?= okv_e($address['recipient_name'] ?? 'Customer') ?></dd></div>
+          <div>
+            <dt class="text-ink-60">Customer</dt>
+            <dd class="mt-1 font-medium">
+              <?php if (Rbac::can('customers.view') && !empty($selected['user_id'])): ?>
+                <a class="underline decoration-mist underline-offset-2 hover:text-forest"
+                   href="/admin/customers.php?customer=<?= (int) $selected['user_id'] ?>"><?= okv_e($address['recipient_name'] ?? 'Customer') ?></a>
+              <?php else: ?>
+                <?= okv_e($address['recipient_name'] ?? 'Customer') ?>
+              <?php endif; ?>
+            </dd>
+          </div>
           <div>
             <dt class="text-ink-60">Delivery</dt>
             <dd class="mt-1">
@@ -336,11 +346,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
                       <span class="mt-1 block text-xs text-clay-ink"><?= okv_e((string) $message['last_error']) ?></span>
                     <?php endif; ?>
                   </span>
+                  <?php $state = Notifications::deliveryState($message); ?>
                   <span class="flex shrink-0 items-center gap-2">
-                    <span class="okv-badge <?= (string) $message['delivery_status'] === 'sent' ? 'okv-badge-available' : 'okv-badge-warn' ?>">
-                      <?= (string) $message['delivery_status'] === 'sent' ? 'Sent' : 'Not sent' ?>
+                    <span class="okv-badge <?= $state['tone'] === 'good' ? 'okv-badge-available' : 'okv-badge-warn' ?>">
+                      <?= okv_e($state['label']) ?>
                     </span>
-                    <?php if ($canResend && (string) $message['delivery_status'] !== 'sent' && (string) $message['channel'] === 'email'): ?>
+                    <?php if ($canResend && $state['may_resend']): ?>
                       <form action="/api/v1/orders.php" method="POST">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="action" value="resend_notification">

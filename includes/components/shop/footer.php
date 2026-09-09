@@ -13,6 +13,7 @@
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/brand.php';
+require_once __DIR__ . '/support_widget.php';
 
 if (!function_exists('okv_shop_footer')) {
     function okv_shop_footer(): void
@@ -85,6 +86,7 @@ if (!function_exists('okv_shop_footer')) {
         // /cart.php, so nothing here is required for the basket to work.
         ?>
         <script src="<?= okv_e(okv_asset('/assets/js/basket.min.js')) ?>" defer></script>
+        <?php okv_support_widget(); ?>
         <?php
     }
 }

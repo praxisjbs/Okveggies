@@ -126,6 +126,7 @@ try {
     $writes = [
         ['/api/v1/orders.php',       'create'],
         ['/api/v1/customers.php',    'create'],
+        ['/api/v1/customers.php',    'get'],
         ['/api/v1/kitchen_runs.php', 'staff_submit'],
         ['/api/v1/delivery.php',     'create_zone'],
         ['/api/v1/delivery.php',     'update_zone'],
@@ -173,13 +174,38 @@ try {
 
     // --- 3. A manager does the job over the real route -----------------------
     // The customer picker first, because everything else needs somebody to be for.
-    [$code, $body] = moh_req($jars[0], $base . '/api/v1/customers.php?action=search&q=Manual');
+    // A read, but a POST: every action on this endpoint is CSRF checked, and
+    // one door is easier to keep shut than two.
+    [$code, $body] = moh_req($jars[0], $base . '/api/v1/customers.php', [
+        'action' => 'search', 'search' => 'Manual', 'okv_csrf' => $managerCsrf,
+    ]);
     moh_eq(200, $code, 'a manager searches customers');
     $found = json_decode($body, true) ?: [];
     moh_ok(isset($found['customers']) && is_array($found['customers']), 'the search answers with a list, whatever it found');
     moh_ok(
-        !in_array($users[0], array_map(static fn(array $c): int => (int) $c['id'], $found['customers']), true),
+        !in_array($users[0], array_map(static fn(array $c): int => (int) $c['id'], $found['customers'] ?? []), true),
         'and never offers a staff account as a customer to sell to'
+    );
+
+    // The picker and the Customers screen share one search, so it has to carry
+    // what the picker reads as well as what that screen does.
+    $firstMatch = ($found['customers'] ?? [])[0] ?? [];
+    foreach (['id', 'name', 'phone_display', 'orders', 'type', 'type_key'] as $field) {
+        moh_ok(array_key_exists($field, $firstMatch), 'a search result carries ' . $field . ', which the picker reads');
+    }
+
+    // A number typed the way a caller reads it out finds the person, even
+    // though it is stored in another form. This is the whole reason the phone
+    // matching went into Customers::listing() rather than beside it.
+    $callerNumber = (string) Database::one('SELECT phone FROM users WHERE id = :id', [':id' => $users[1]])['phone'];
+    [$code, $body] = moh_req($jars[0], $base . '/api/v1/customers.php', [
+        'action' => 'search', 'search' => '0' . substr($callerNumber, 4), 'okv_csrf' => $managerCsrf,
+    ]);
+    moh_eq(200, $code, 'a manager searches by the phone number as it was said');
+    $byPhone = json_decode($body, true)['customers'] ?? [];
+    moh_ok(
+        in_array($users[1], array_map(static fn(array $c): int => (int) $c['id'], $byPhone), true),
+        'and 08031234567 finds the account stored as +2348031234567'
     );
 
     [$code, $body] = moh_req($jars[0], $base . '/api/v1/customers.php', [

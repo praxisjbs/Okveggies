@@ -12,15 +12,21 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Manual back-office operations, on branch `claude/admin-manual-operations-xhysmn`.** The admin panel could move work along and could not start any of it: no order could be created by hand, no kitchen list typed in, no delivery zone added, and the payments screen found an order only by its exact number. All four are built. `admin/order_new.php` takes an order over the phone, `admin/kitchen_run_new.php` types in a list that arrived on WhatsApp, the Delivery screen adds and renames zones, and the Payments screen searches by name, phone, email, order number or Paystack reference, with the customer name and the date on every result and on Recent payments. Migration `027` adds `orders.create`, `kitchen_runs.create` and `customers.create` to both roles. Full account in the session log below. **This needs migration `027`, which the deploy applies.**
+**Manual back-office operations, on branch `claude/admin-manual-operations-xhysmn`.** The admin panel could move work along and could not start any of it: no order could be created by hand, no kitchen list typed in, no delivery zone added, and the payments screen found an order only by its exact number. All four are built. `admin/order_new.php` takes an order over the phone, `admin/kitchen_run_new.php` types in a list that arrived on WhatsApp, the Delivery screen adds and renames zones, and the Payments screen searches by name, phone, email, order number or Paystack reference, with the customer name and the date on every result and on Recent payments. Migration `041` adds `orders.create`, `kitchen_runs.create` and `customers.create` to both roles. Full account in the session log below. **This needs migration `041`, which the deploy applies.** It was written as `027` and renumbered when M8 and M9 landed on `main`, because `027_guest_checkout_and_payment_reminder` already owns that number.
+
+**Milestone M9, Notifications and contact. Reviewed and finished on branch `M9-notifications_contact`, on top of pull request 43.** The notification half shipped in M6, so this was contact: the widget, the form, the messages landing in admin. The first attempt had good bones. The `ContactMessages` class is careful about concurrency, the admin workspace is genuinely well built, and the escaping and the RBAC gates are right. Six things were wrong or missing. Its migration was numbered `032`, which `032_credit_notifications` already owns on `main`, so two migrations shared a number; it is now `040`, from the range M9 was given. Only one of the two templates the brief asks for existed, so a customer who wrote in heard nothing back. Contact never reached `$OKV_FOOTER_NAV`. Nothing anywhere showed a count of new messages. The form kept `required` and `type="email"`, so a person met a browser bubble before our own wording ever ran. And a one-time token minted into the session on every page view, capped at 20, meant a visitor who browsed 21 pages and then sent a message was told the form was no longer valid. Two defects were found while finishing it: a refused submission spent the IP rate limit, so three typos locked a customer out of the only support channel for 15 minutes, and `visual_pass.mjs` could not sign in at all, on `main` as much as here. The written review is `docs/M9_REVIEW.md`.
+
+**Milestone 6/7 reported bugs. Fixed on branch `claude/milestone-6-7-bugs-297v81` (9 September 2026).** Four defects off the live site: the Kitchen Runs queue tabs never applied their filter, checkout demanded an account before it would take an order, the cancellation note read as if a customer paying in full lost everything, and an order confirmation went out before the payment. Migration `027` ships with it. Two things need a person: run the database and HTTP suites (this container has neither), and set up the cPanel cron job in `docs/DEPLOYMENT.md`, because until it exists the payment sweep and the new reminder are written and never sent. One open question for the owner is in the session log: a pay in full order records no deposit, so cancelling after the cutoff refunds it in full while a deposit customer forfeits.
 
 **Milestone M7, Kitchen Runs. Follow-up merged into `main` on 8 September 2026 (pull request 38, merge commit `0fc0a2e`), and deployed.** The twelve items the completion pass left open are all done: a signed-out visitor is told rather than redirected, the customer picks their own delivery day and area, the queue filters by customer, lines reorder and carry a note, the team gets an internal note of its own, `kitchen_runs.approve` is a real path, an approved run can be withdrawn, an order links back to its run, the customer hears that we have their list, the Pro Portal screen is real, already-priced is its own mode, and the balance after delivery is proved rather than rebuilt. Verified on MySQL 8.0.46, the production engine, which retires the MariaDB caveat in the review. The authenticated browser journey at 390px and 1440px finally ran, and it found two defects no curl-shaped test could see: the customer's form had never posted with JavaScript on, and pricing a free-text list failed on the database while telling the colleague their file was rejected. Both fixed, both with regression tests. Full account in the session log below.
+
+**Milestone M8, the Pro Portal and credit. Reviewed and finished on branch `claude/milestone-8-completion-stc5te`, on top of pull requests 40 and 41.** Six real Pro screens behind one account-type gate, saved kitchen lists that become a Kitchen Run in one click, a credit facility a business applies for and an Owner grants, and on-account orders that draw on a real limit and give it back when the money arrives. The first attempt had the shape of the milestone and good judgement underneath it: the balance is a calculation over `credit_transactions` and is stored nowhere, one pure rule decides every draw, and the locked draw is genuinely careful about concurrency. What it did not have was evidence. Seven tasks were recorded as passed "per owner instruction", and the suite three of them cited had never been able to run, because it inserted two columns the `refunds` table does not have. Repairing it proved Task H and turned up four more red suites that nothing had been running, one of them hiding a live bug on the guest shop. The written review is `docs/M8_REVIEW.md`.
 
 **Milestone M7, Kitchen Runs. Reviewed and finished on branch `claude/milestone-7-completion-2nlnib`, on top of pull request 36.** A customer sends a list however they have it, we price it, they approve it, it becomes an ordinary order. The first attempt (pull request 36) had the shape of the milestone and one fatal hole: conversion had never once run. It bound the same named placeholder twice in one INSERT, which MySQL refuses on a native prepared statement, and the only conversion test exercised an injected failure that returned before any write. Twenty green database assertions sat on top of a feature that threw on first use. That, six public rules nothing called, a form that took one item, and conversion writing no delivery address and no trail token, are what this branch fixes. The written review is `docs/M7_REVIEW.md`.
 
 **Migrations are applied by the deploy, not by hand.** A merge to `main` triggers `.github/workflows/deploy.yml`, which uploads the tree over SFTP and then calls `public/migrate.php` on the server; the run fails unless that answers `MIGRATE OK`. Migrations `022` to `024` went up with pull request 37, and `025` and `026` with pull request 38, whose deploy reported both as applied. Nobody needs to run a migration for a merged branch, and an entry here that says otherwise is wrong. What the pipeline does not do is run the tests: `deploy.yml` checks the brand and nothing else, so the suites are the pull request's gate in `ci.yml`, before the merge.
 
-Left on the live site for a person, since no pipeline can do it: take one Kitchen Run end to end, request to quote to approval to order, and check the order reaches the day manifest with a recipient on it. Check as well that the delivery day and area selects on `/kitchen-runs.php` both offer options, because the customer's own form now requires both and refuses a submission without them, where before staff filled them in later. **M8, the Pro Portal and credit, is next.**
+Left on the live site for a person, since no pipeline can do it: take one Kitchen Run end to end, request to quote to approval to order, and check the order reaches the day manifest with a recipient on it. Check as well that the delivery day and area selects on `/kitchen-runs.php` both offer options, because the customer's own form now requires both and refuses a submission without them, where before staff filled them in later. M8 has since been reviewed and finished; see below.
 
 **Milestone M6, Delivery and the Order Trail. Merged into `main` on 4 September 2026 (pull request 34, merge commit `7c0c0dc`).** The lifecycle spine, cancellation including the terms that apply after dispatch, the public Order Trail, the day manifest, and the notification half that the milestone list had left in M9. Nine defects found and fixed while verifying it, five of them in code that had already been written and two in the test suite itself. The written review is `docs/M6_REVIEW.md`. Pull request 33 carries the same first two commits and is redundant; close it rather than merging it.
 
@@ -149,6 +155,127 @@ Delivered in two parts. The storefront half arrived first and was audited and co
 - [x] The balance after delivery proved on the existing path: a deposit conversion's balance row settled through M5's manual payments to a paid order
 - [x] Tests: the unit on a converted line, the method gate on every action, the permission gate on every staff action, a signed-out caller on all of them
 - [x] The authenticated journey exercised in a real browser at 390px and 1440px, request to order, both viewports
+
+### 9 Sep 2026, Milestone 6/7 bug fixes: the queue filter, the mandatory account, the cancellation words, and an email sent before the money
+
+Branch `claude/milestone-6-7-bugs-297v81`. Four defects reported off the live
+site after M7. Five decisions were taken by the owner before any code was
+written: an expired quote gets its own tab, a guest checkout is genuinely
+optional with the account offered rather than demanded, the cancellation note
+is rewritten simply and names the real date, only a pay in full order holds its
+email until the money lands, and the scheduled work runs from a token-guarded
+URL so a host with no shell can still run it.
+
+**1. The Kitchen Runs queue never filtered.** Not a query bug. The tab links
+were built with PHP's array union, and the union keeps the LEFT operand for a
+repeated key. The current filter was on the left, so the status a colleague
+clicked was thrown away and every tab handed back the filter already in the
+URL: from All, "Quote sent" linked to All. The list under it was correct for the
+filter it was given, which is why it looked like the list was broken rather than
+the link. One character of ordering fixes it, and `KitchenRunsTest` now pins the
+link builder itself so it cannot regress silently.
+
+While in there: every tab carries its count, and an expired quote has its own
+tab. A quote past its window used to sit among live ones labelled "Quote
+expired" on its row, which is exactly where a job nobody is chasing goes to
+hide. `KitchenRuns::FILTERS` is now the one list the tabs, the counts and the
+query all read, and `Quote sent` means a live quote only.
+
+**2. Checkout demanded an account.** The consent tick carried `required`, and
+`api/v1/checkout.php` created a light account for every signed-out customer
+whether or not they wanted one, refusing the order with `consent_required` if
+the box was clear. A visitor who wanted to pay in full and leave had to open an
+account first. PRD 9.2 allows a guest checkout, so now the page offers and never
+demands: tick it and you get the account and a set-your-password link, leave it
+and you place a real guest order tracked by the Order Trail link in your email.
+Pay on delivery still needs a verified account, which is PRD 10.2 and unchanged.
+
+A guest order has no `users` row, so three things had to give. `orders` carries
+a `contact_email` (migration 027, written for every order, backfilled for the
+old ones), because otherwise there is nowhere to send the confirmation. Every
+write path in `Checkout` takes a null user, and the saved-address-for-next-time
+write is skipped rather than orphaned. And the guest needs a way back to their
+own order: the trail link is their only credential, so the trail page takes the
+payment while one is owed, `api/v1/payments.php` accepts that token in place of
+a sign in (refused the moment the order has an account behind it), and the
+WhatsApp share button is withheld until the order is paid, so nobody is invited
+to hand out a link that can spend money for them.
+
+**3. The cancellation note at checkout.** Rewritten shorter and more direct, and
+it now names the actual evening: "Cancel free until 18:00 on Wednesday 9th, the
+day before your delivery." It also says what comes back, which the old line
+never did: it mentioned only that a deposit is not returned, so a customer
+paying in full read it as losing everything.
+
+**Discovered while writing that copy, and left alone deliberately.** A pay in
+full order records no `deposit_required_subunit`, and `Cancellation::moneyOutcome`
+caps the forfeit at that column. So a customer who paid in full and cancels
+after the cutoff is refunded in full today, while a deposit customer loses their
+deposit. The new copy is accurate about what the code does. Whether that
+asymmetry is the intended policy is a decision for the owner, not a bug to fix
+quietly, and it is the one open question from this session.
+
+**4. An order confirmation arrived before the payment.** `announceOrderPlaced`
+fired for every order the instant it was placed, before the customer had even
+reached Paystack, so a pay in full customer read "we have your order and we are
+sourcing it now" for an order nobody had been paid for. What each mode does now:
+
+| Mode | At placement | When the money lands |
+|---|---|---|
+| Pay in full | nothing to the customer | the receipt, with the order details and the trail link |
+| Deposit | the receipt, as before | the deposit acknowledged |
+| Pay on delivery | the receipt | nothing owed online |
+| On account | the receipt | the credit line is the payment |
+
+Staff still hear about every order the moment it is placed, paid or not.
+
+The hard part was the Order Trail link. The token exists in plain text for one
+request and is stored only as a hash, so an email rendered after the fact cannot
+carry one, and PRD 14.2 makes that link the way a customer follows their order.
+So the pay in full receipt is **rendered at checkout, while the token is in
+hand, and held**: `notifications` grew `cta_url` and `cta_label` to remember its
+button, and `Notifications::release` sends the stored copy when Paystack
+confirms. Nothing is re-rendered, so nothing can quietly lose the link.
+
+**And the one reminder.** An order that chose to pay online and did not pay gets
+exactly one email 30 minutes later, with a link back to the payment rather than
+to the trail. It is a single queued row, so "once" is structural rather than a
+flag somebody has to remember to set. It is cancelled when the money lands by
+any route, when staff record cash at the counter, and when the order is
+cancelled; and the flush asks the order one more time before sending, so a
+customer can never be chased for money they have already paid. `Notifications::resend`
+now refuses a held or queued email outright: resend is for one that failed, not
+a way to fire "payment received" before the payment. The Order 360 screen labels
+them honestly, "Waiting on the payment" and "Scheduled for 9 Sep 2026, 18:30",
+with no resend button on either.
+
+**5. Nothing was running the scheduled work.** `scripts/payment_sweep.php` was
+written in M5 for a cron that `docs/DEPLOYMENT.md` never set up, on a host with
+no shell. So a payment made in a closed tab has been waiting for the customer to
+come back rather than being reconciled. New `Cron` class runs the sweep and the
+due notifications in one pass, driven by `scripts/cron.php` for a shell and
+`public/cron.php` for a URL, the second fails closed on `MIGRATE_TOKEN` exactly
+like `public/migrate.php` and `public/healthcheck.php`. `docs/DEPLOYMENT.md` now
+carries the cPanel steps: one job, every five minutes, one curl line. The delay
+before the reminder is `payment_reminder_minutes` in Order settings, 30 by
+default, not a constant.
+
+**Verified.** 1,943 unit assertions green, up from 1,864, with new coverage on
+the link builder, the guest checkout shape, the dated cancellation copy, the
+per-mode announcement, the reminder's last-moment re-check and the cron
+endpoint's token guard. `php -l` clean across all 118 PHP files.
+`scripts/brand-check.sh` green on all eight checks. The stylesheet was rebuilt
+(one new utility class) and the minified JavaScript with it.
+
+**Not verified here, and it needs a person.** This container has no database and
+no `.env`, so the database and HTTP suites could not run, the same limit the M1
+entry above records. New assertions were added to `checkout_db_test.php` (a
+guest order writes a whole order with no account, and its trail token opens it)
+and `kitchen_runs_db_test.php` (each tab returns only its own status, expired
+quotes list and count apart from live ones, and the counts match the lists), and
+they have not been executed. Run both, plus one guest checkout end to end on
+staging with a Paystack test key, and set up the cron job in cPanel: until that
+job exists, the reminder is written and never sent.
 
 ### 8 Sep 2026, M7 follow-up: the twelve open items, and two defects only a browser could find
 
@@ -452,15 +579,61 @@ is the whole lesson, and it is written up for the engineer in `docs/M7_REVIEW.md
 - Remaining release check: repeat the authenticated visual Kitchen Run journeys in a browser profile that permits local `/api/v1/*` POSTs. Use only disposable accounts and the migration-built scratch database, then exercise request, quote, approval, conversion and the two-way related-record links at 390px and 1440px.
 
 ### M8. Pro Portal and credit
-- [ ] Pro dashboard, saved kitchen lists, standing-order placeholder
-- [ ] Credit: self-serve application, admin approval, manual grant and limit
-- [ ] Credit orders draw on limit; outstanding / aging view
-- [ ] Tests: credit limit and balance
+- [x] Pro dashboard, saved kitchen lists, standing-order placeholder
+- [x] Credit: self-serve application, admin approval, manual grant and limit
+- [x] Credit orders draw on limit; outstanding / aging view
+- [x] Tests: credit limit and balance
+
+**Reviewed and finished on `claude/milestone-8-completion-stc5te`, on top of pull requests 40 and 41.** The written review for the engineer is `docs/M8_REVIEW.md`.
+
+The task entries below are rewritten from what was actually executed on 9 September 2026. The entries they replace recorded Tasks A, B, C, H, I, J and K as passed "per owner instruction", and three of them cited a suite "as designed". One of those suites, `credit_orders_db_test.php`, could not run on any database: it inserted `refunds.payment_id` and `refunds.reason`, and the table has neither. That is the milestone's one real lesson and it is written up properly in the review. What follows is the evidence, not the claim.
+
+- [x] **Task A, one Pro gate and six real screens.** `require_business_customer()` runs immediately after bootstrap on all six `/pro` routes. A guest gets customer sign-in with a path-only return; a household is sent to Account, or to Kitchen Runs from the lists screen, with a plain explanation rather than a refusal. Staff RBAC does not grant customer portal access. Verified over HTTP (`customer_http_test.php`, 132/132) and in a real browser at both widths: a signed-in household asking for `/pro/credit.php` lands on `/account.php?notice=pro_business`.
+- [x] **Task B, the business Dashboard.** `/pro/index.php` shows this business only: credit outstanding, earliest unpaid due date, overdue, available limit, the newest 5 orders with customer-facing labels, the next delivery date from `Delivery::nextEligibleDates('business', 1)` so the seeded Tuesday and Friday queue stays the source of truth, and the 3 most recently updated saved lists. Verified with `pro_dashboard_db_test.php` (17/17), which proves cross-business isolation with two businesses.
+- [x] **Task C, reusable Kitchen Lists.** Create, edit, reorder, delete with confirmation, save an M7 Kitchen Run as a list, and start a run from a list with every line, quantity, unit and note prefilled. Names are unique per business regardless of case; lists stop at 50 lines; an inactive product degrades to its saved free-text snapshot rather than vanishing. `kitchen_run_templates` and `kitchen_run_template_items` are now read and written by `KitchenLists` and `ProDashboard`. Verified with `kitchen_lists_db_test.php` (19/19), including that another business gets the same answer as a missing list.
+- [x] **Task D, Standing Orders stays honest.** The page says automatic repeat ordering is planned for a later phase and that nothing is scheduled now. It contains zero forms, zero inputs, zero selects and zero buttons; the working links go to My Kitchen Lists, the Kitchen Run form, Pro Orders and WhatsApp. Phase 2 by decision Q25, and there is no table for it.
+- [x] **Task E, Pro Orders and Invoices.** Every order this business has placed, newest first, with status, delivery date, total, payment state and balance due; server-rendered status, payment and delivery filters that survive 25-per-page navigation; detail with snapshot items, address, lifecycle trail, invoice, receipt once money has been received, and links to the related Kitchen Run and credit charge. A POST plus CSRF action issues an additional hashed Order Trail share link without replacing the original token. Verified with `pro_orders_db_test.php` (20/20).
+- [x] **Task F, business credit.** Apply for 7 to 10 day terms with a limit and a reason; watch the application while it is pending; once approved see the limit, outstanding, available, term, overdue and next due date, with a 25-row signed statement. A second pending application is refused, and so is an application against approved or suspended credit. **Overdue is now said in a sentence** rather than left to be worked out: a late account reads "₦37,500 on this account is past its due date", then which part is up to 7 days late, 8 to 30, and over 30. Verified with `credit_customer_db_test.php` (14/14).
+- [x] **Task G, credit administration.** The application queue with search and paging, review, approve or decline with a reason the customer sees, an Owner manual grant with no application at all, term and limit changes, suspend, reinstate and withdraw, a repayment, and the ageing view. **Two changes since the first pass:** recording a repayment offered a raw database payment id in a text box, and is now a list of that business's confirmed, not-yet-credited payments showing reference, order number, amount and date, filtered as you type by `assets/js/admin-credit.js` over a `<select>` that works without JavaScript. The ageing view gained real buckets, not yet due, 1 to 7, 8 to 30 and over 30 days, plus a totals row, all computed inside the one journal walk the customer statement uses. Every action is gated on the seeded Owner-only permissions: `credit.view`, `credit.apply.review`, `credit.grant`, `credit.limit.set`. Verified with `credit_admin_db_test.php` (30/30).
+- [x] **Task H, credit orders draw on the limit.** Both routes that put an order on account draw on one facility: `Checkout::place()` and `KitchenRunWorkflow::convert()`. `Credit::drawRefusal()` is the single rule; the exact limit passes and one kobo over is refused. The draw locks the business row with `SELECT ... FOR UPDATE`, reads the journal `FOR SHARE` in the same transaction, refuses to run outside a transaction, and writes one charge keyed on the unique `source_key`, due on the approved term. **Repayment is now automatic:** `Payments::recomputeOrder()` is the one seam every money path already passes through, so `Credit::settleOrderFromPayments()` hangs there and reconciles the order's charge against what has actually been received, appending a repayment when money comes in and a signed adjustment when a payment is reversed. Recording a repayment by hand stands aside for an on-account order, so the two paths cannot count the same money twice. The balance is computed from `credit_transactions` every time and stored nowhere. Verified with `credit_orders_db_test.php` (48/48) and `credit_checkout_http_test.php` (18/18), the latter placing a real on-account order over the real checkout route, being refused past the limit with no order row written, then having the limit freed by a confirmed payment.
+- [x] **Task I, customer 360 in admin.** One searchable, paginated list of households and businesses, and a read-only profile gathering customer and business details, addresses, the last 10 orders, the last 10 payments, the last 5 Kitchen Runs and, for a business, the credit facility with its last 10 journal entries and latest application. A household is never shown a credit block. `Customers.php` runs no `INSERT`, `UPDATE` or `DELETE`; every action links to the module that owns it, so the audit trail stays where it belongs. Six separate permission gates for six blocks. Verified with `customers_db_test.php` (40/40).
+- [x] **Task J, credit notifications.** Four events ride the M6 dispatcher: a staff alert on a new application, a customer mail on approval carrying the limit and terms, a separate mail on decline carrying only the approved staff reason, and a customer mail when an on-account order posts a charge with its due date. Both checkout and Kitchen Run conversion post the same charge event. All four are seeded by migration `032` and are editable and previewable on the Notifications settings tab like every other template. Every announcement runs after the domain transaction commits and is wrapped, so a mail failure is logged rather than rolling back an order. Verified with `notifications_db_test.php` (121/121) against a local SMTP sink, with two messages captured and read.
+- [x] **Task K, verification.** `bash scripts/tests/run_all.sh`: **34 suites, 0 failed, 0 skipped.** That is 2,492 unit assertions, 23 database suites, 8 HTTP suites, the browser pass and the brand guard. `php -l` clean on every touched file. Migrations 000 to 033 applied to a fresh MySQL 8.0.46 database and the second run reported nothing to apply.
+- [x] **The browser pass is a script now.** `scripts/tests/visual_pass.mjs` signs in as a real business customer and a real Owner, walks the six Pro screens and the two M8 admin screens at 390px and 1440px, and checks horizontal overflow, touch targets under 44px, a suppressed focus ring, and content hidden behind the fixed mobile navigation bar. It also drives the repayment combobox, which no server-side test can see. **103 / 103 checks pass**, and they found nothing wrong with the screens as built; what was missing was the evidence. Three milestones running had recorded checks at both widths with nothing having driven a browser, so this closes that for good. `scripts/tests/seed_visual_fixture.php` builds what it needs and refuses to run with `APP_ENV=production`.
+
+**Defects found and fixed while verifying, beyond the milestone's own scope.** Each was red before this branch and green after:
+- `credit_orders_db_test.php` had never run: it inserted `refunds.payment_id` and `refunds.reason`, columns that do not exist. Repaired, it then went red a second time on a fixture that wrote its order outside the transaction it expected a rollback to undo.
+- `checkout_db_test.php` could not load, because its hand-written `require` list had not kept up with `OrderTrail` needing `OrderLifecycle` and `Checkout` needing `Credit`.
+- Chasing that down found a live bug with nothing to do with credit: a guest who checked out and then added another item hit the unique index on `shopping_carts.session_token`, because the token was still on the cart their order had converted. A spent token is now rotated, and it is covered.
+- `kitchen_runs_db_test.php` broke the moment M8 made "approved" mean a real facility. Its M7 fixture set `credit_status` with no term and no limit, which is not something an order can be settled against.
+- `refund_cancellation_db_test.php` was reading whatever cancellation settings the last suite to crash had left behind. It now sets the two it depends on and restores all three.
+- Migration `027_kitchen_list_line_notes.sql` collided with `027_guest_checkout_and_payment_reminder.sql` on `main`. Renumbered to `033`.
+- A duplicate credit application answered 422 where the branch's own HTTP test expected 409, matching the duplicate registration beside it.
+
+**Still open, and not ticked.** `bash scripts/verify.sh` is a deployed-host check and was not run against production in this pass. Its `/migrations/` and `/docs/` denial checks were already failing before M8 and remain a deployment matter. Nothing in this milestone changes deployment packaging or web-server rules.
 
 ### M9. Notifications and contact
 - [x] Email templates and delivery: placed, payment confirmed, dispatched, delivered, trail link. **Delivered in M6**, per `docs/M6_GUIDE.md` Section 1: every one of these is fired by a status change M6 builds, so building them apart meant writing every transition twice. Contact stayed here, which is the clean seam.
-- [ ] Floating support widget: WhatsApp click-to-chat and contact form
-- [ ] Contact messages surface in admin
+- [x] Floating support widget: two choices where there was one, message us on WhatsApp
+  or send a message here. One shared trigger on every storefront route through the
+  shop footer, plus `account.php`, `page.php` and the two auth screens that do not
+  use it. A slide-up sheet on mobile, an anchored panel on desktop, a 56px target
+  sitting clear of the mobile tab bar, focus trapped both ways, Escape closing it
+  and handing the trigger back, and no animation when reduced motion is asked for.
+  The same form has a page of its own at `/contact.php`, linked from the footer,
+  and a plain POST lands the same row with JavaScript switched off. Proved in a
+  browser at 390px and 1440px (`visual_pass.mjs`, 140/140) and over HTTP
+  (`contact_http_test.php`, 39/39; `contact_db_test.php`, 32/32).
+- [x] Contact messages surface in admin: `admin/content.php` is Content and Messages,
+  two tabs, with the page-copy half left to M12 and a note on the screen saying so.
+  `messages.view` gates the searchable, newest-first list and detail; `messages.handle`
+  separately gates internal notes, handling and reopening. Filters and 25-row
+  pagination preserve their URL state, handling history comes from the audit log,
+  message text is escaped, reply links open external apps, and there is no delete
+  action. The count of unanswered messages sits on the admin sidebar, so staff carry
+  it on every screen. Proved by `contact_admin_db_test.php` (27/27) and
+  `contact_admin_http_test.php` (42/42), which also covers a staff member with
+  neither permission seeing no screen, no sidebar link and a 403 on a direct write.
 - [x] Tests: template render; notification queued on order events (**M6**, `NotificationsTest.php` and `notifications_db_test.php`)
 
 ### M10. Trust and Make It Right
@@ -505,8 +678,8 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 - Product content: descriptions now seeded for all 24 products; one image each is in place, expand to five per product as the client delivers them.
 - Sourcing is still described site-wide, not per product: `source_regions` and now `source_day` are two settings every product reads. The M2 audit already carried forward "give products a real source region"; the day has the same shape and should move with it, so a product sourced on Thursday from Jos can say so.
 - The storefront scaffolds (`cart.php`, `checkout.php`, `kitchen-runs.php`, `page.php`, `public/order.php`) still carry the old gold-on-white "OK VEGGIES" wordmark line, which is 2.75:1 and fails AA. They were left alone in the brand PR2 pass because they render no real data yet; each one gets the brand when its milestone builds it (M4, M7, M12, M6).
-- Carried forward from brand PR3, for M8: the `pro/*.php` screens still have no server-side access check. They render nothing but static copy today, so there is nothing to leak, but M8 must add the gate as it builds each screen. The file headers say so.
-- The remaining scaffolds each name the milestone that builds them, and every one of those milestones is still open: `api/v1/payments.php` and `api/v1/paystack_webhook.php` (M5), `api/v1/orders.php` (M6), `kitchen-runs.php` and `api/v1/kitchen_runs.php` (M7), `api/v1/credit.php` (M8; `api/v1/customers.php` is no longer a scaffold, it carries the search, get and create actions the phone-order and typed-in-list screens need, and says in its header that the rest of the Customers module is still M8), `api/v1/contact.php` (M9), `api/v1/make_it_right.php` (M10), `page.php` (M12), the nine admin placeholders and the six Pro Portal placeholders. Checked on 1 Sep 2026: none of them names a milestone that has already closed. Settings was built (M0 reopened), and M4 built out `cart.php`, `checkout.php`, `api/v1/checkout.php`, `api/v1/delivery.php` and `public/order.php` (the confirmation and the public Order Trail), leaving only the M6 order manifest and trail-writing behind those two files' fuller M6 scope.
+- ~~Carried forward from brand PR3, for M8: the `pro/*.php` screens still have no server-side access check.~~ **Closed by M8.** `require_business_customer()` in `includes/functions/pro_access.php` runs immediately after bootstrap on all six routes, proved over HTTP and in a browser.
+- The remaining scaffolds each name the milestone that builds them, and every one of those milestones is still open: `api/v1/payments.php` and `api/v1/paystack_webhook.php` (M5), `api/v1/orders.php` (M6), `kitchen-runs.php` and `api/v1/kitchen_runs.php` (M7), `api/v1/make_it_right.php` (M10), `page.php` (M12), the remaining admin placeholders. M9 built `api/v1/contact.php`, `contact.php` and the Messages half of `admin/content.php`, so those are not scaffolds any more; the page-copy half of that screen is still M12's. M8 built `api/v1/credit.php`, `api/v1/customers.php`, `admin/credit.php`, `admin/customers.php` and all six Pro Portal screens, so none of those is a scaffold any more. `api/v1/customers.php` later took two writes as well, `get` and `create`, for the phone-order and typed-in-list pickers; the Customers module itself is still the screen, not the endpoint. Checked on 1 Sep 2026: none of them names a milestone that has already closed. Settings was built (M0 reopened), and M4 built out `cart.php`, `checkout.php`, `api/v1/checkout.php`, `api/v1/delivery.php` and `public/order.php` (the confirmation and the public Order Trail), leaving only the M6 order manifest and trail-writing behind those two files' fuller M6 scope.
 - Carried forward from brand PR3, for M5: `public/documents/invoice.php` and `receipt.php` have the branded frame and the print rules but no rows, because nothing creates an order yet. Each file lists what M5 has to add first: the access check (token link, or the owner of the order, or staff with `payments.view`), the read from the order snapshot rather than today's prices, and dompdf over the same markup.
 
 ---
@@ -598,6 +771,20 @@ an M8 placeholder; only the picker the two forms need was built.
    carries both facts (`product:12`, `combo:3`, `custom`) and
    `ManualOrder::parseItem()` reads them apart on the server.
 
+**Merged with `main` after M8 and M9 landed.** Five files conflicted. The one
+that mattered was `api/v1/customers.php`: M8 had built a customer search there
+for its own screen, and this branch had built another for the picker. Two
+customer searches that disagree about whether `08031234567` finds
+`+2348031234567` is exactly the drift a shared class exists to prevent, so
+`StaffCustomers::search()` was deleted and the picker now calls
+`Customers::listing()`, the M8 one. The phone matching the picker needed went
+into `Customers::listing()` rather than beside it, so the Customers screen has
+it too: a number typed the way a caller reads it out now finds the person, which
+it did not before on either screen. The endpoint carries one `search`, plus the
+`get` and `create` the picker needs. The migration was renumbered from `027` to
+`041`, because `027_guest_checkout_and_payment_reminder` landed on `main` under
+that number while this branch was open.
+
 **Tested.** 2,003 unit assertions green (`ManualOrderTest`, `StaffCustomersTest`
 and the zone rules appended to `DeliveryTest` are new), 83 new database
 assertions and 94 new HTTP assertions, plus the existing suites re-run: Kitchen
@@ -619,6 +806,99 @@ cannot yet be edited after it is created, only cancelled, which is the same rule
 every other order lives under. Zones cannot be reordered by dragging, only by
 typing a number.
 
+### 9 Sep 2026, M9 reviewed and finished
+
+Merged `main` into `M9-notifications_contact` rather than replacing it, so the engineer's two commits and their authorship stay. Five conflicts, all unions except the notification preview sample, which now carries the contact tokens alongside the M8 credit ones.
+
+**Six answers were taken from the owner before any code was written**, each with three options: drop the one-time submission token rather than issue one on every page view; send the acknowledgement whenever an email address was given; put the unanswered count on the admin sidebar; keep a page-copy tab for M12 on the same screen; keep the honeypot and drop the two-second timing gate; and keep the refund fix the branch carried in from M5 and M6 rather than strip it out.
+
+**What was wrong with the first attempt.** Migration `032_contact_messages.sql` collided with `032_credit_notifications.sql`, already merged; both applied on a fresh database because the runner sorts by filename, which is exactly how a numbering contract rots quietly. Renumbered `040`, from the M9 reserved range. The brief asks for two seeded templates and one existed, so nothing ever went back to the person who wrote in; `contact_acknowledgement` is now seeded and sent whenever an email was left, carrying nothing the sender typed, because the address is unverified and a mail that echoes a stranger's words is a way to deliver them. `$OKV_FOOTER_NAV` was untouched, so the contact page existed with no link to it. No count of new messages existed anywhere. The form kept `required` and `type="email"` with no `novalidate`, so the browser refused a submission in its own words before our one error path ever ran.
+
+**The two defects found while finishing it.** `ContactMessages::submit()` called `RateLimiter::hit()` before validating anything, so a refused attempt spent the allowance: three mistyped email addresses and a real customer is locked out of the only public support channel for 15 minutes. It now checks with `isLocked()` before doing the work and spends the allowance only once a row is committed, which still caps a flood at 3 stored messages per 15 minutes. `scripts/tests/visual_pass.mjs` could not sign in at all; the session cookie is `Secure`, and over plain http Playwright's API request context will not send it while a browser does, because 127.0.0.1 counts as a trustworthy origin. Reproduced on untouched `main` before changing anything. Sign-in now goes through the page's own fetch, which is what a customer's browser does anyway.
+
+**Verification.** `bash scripts/tests/run_all.sh` reports **37 suites passed, 0 failed**, on MySQL 8.0.46, the production engine. That is 2,603 unit assertions, 25 database suites, 10 HTTP suites, the browser pass and the brand guard. The one suite `run_all.sh` skipped, `refund_cancellation_db_test`, was then run against the stand-in gateway on 8124 and passed 24/24, so nothing in the tree is unrun. Migrations 000 to 040 applied to an empty database and the second run reported nothing to apply.
+
+New this pass: `contact_db_test` (32), `contact_http_test` (39), `contact_admin_db_test` (27) and `contact_admin_http_test` (42) cover every M9 test item. A valid submission writes exactly one row with the right source; no way to reply is refused; CSRF, the rate limit and the honeypot each refuse and write nothing; handling records who and when; `messages.view` reads but cannot handle, and staff with neither permission get no screen, no sidebar link and a 403 on a direct write; the staff alert fires and a failed alert leaves the message on record. `visual_pass.mjs` grew 26 checks for the widget and now runs 140/140 at 390px and 1440px: one trigger on each of 9 storefront routes, a 56px target sitting 15px clear of the mobile tab bar, keyboard reach, the gold ring at `rgb(201, 146, 43)`, a sheet from the bottom edge on mobile and an anchored panel on desktop, a working focus trap both ways, Escape closing and returning focus, every visible control at 44px, and no animation when reduced motion is asked for.
+
+Both emails were captured on a local SMTP sink and read: three staff alerts carrying the exact `/admin/content.php?message=<id>` link, and one acknowledgement to the sender with no leftover token and nothing of theirs repeated back.
+
+`bash scripts/verify.sh http://127.0.0.1:8123` passes all three new contact checks. Its `.env`, `/migrations/` and `/docs/` denials still fail under PHP's built-in server, which does not read `.htaccess`. That is the same open deployment matter M8 recorded, not something this milestone changed.
+
+**Kept from the first attempt, out of M9 scope.** A refund that Paystack settles immediately was never announced, because only the webhook path called `announceRefund`. The fix touches `Refunds`, `OrderCancellation`, `api/v1/orders.php` and `api/v1/payments.php` and carries its own regression tests. Kept, on the owner's decision, and recorded here rather than left silent.
+
+**Not done here.** The page-copy half of `admin/content.php` stays with M12, which owns the storefront pages it feeds; the tab says so on the screen. Agreeing that split with whoever takes M12 is still a conversation for a person, not a commit.
+
+### 9 Sep 2026, M8 reviewed and finished
+
+Merged pull request 41 (which contains 40) onto `claude/milestone-8-completion-stc5te` rather than replacing it, so the engineer's history stays. Five conflicts against the M6/M7 fixes already on `main` were unions, except the notification preview sample, which now picks the right `reason` per template. Migration `027_kitchen_list_line_notes.sql` was renumbered `033`: it had been written against a base that did not yet carry `027_guest_checkout_and_payment_reminder.sql`.
+
+**The M8 entries above are rewritten from what was executed today.** They replace entries recording Tasks A, B, C, H, I, J and K as passed "per owner instruction of 9 September 2026", three of which cited a suite "as designed". `credit_orders_db_test.php` could not run on any database: it inserted `refunds.payment_id` and `refunds.reason`, and that table has neither, hanging off `payment_transaction_id` and storing `customer_note`. Repaired, it went red a second time on a fixture that wrote its order outside the transaction whose rollback it was asserting on, then passed 48/48 and proved Task H properly, refund and cancellation adjustments included. The engineer's own 8 September entries below are accurate and are left as they stand; the review is `docs/M8_REVIEW.md`.
+
+Four more suites were red the moment M8 landed and were in nobody's notes. `checkout_db_test.php` could not load, its hand-written `require` list having missed that `OrderTrail` needs `OrderLifecycle` and `Checkout` now needs `Credit`; chasing that down found a live bug with nothing to do with credit, where a guest who checked out and then added another item hit the unique index on `shopping_carts.session_token` because the token was still on the cart their order had converted. `kitchen_runs_db_test.php` broke because M8 rightly made "approved" mean a real facility and the M7 fixture set a status with no term and no limit. `refund_cancellation_db_test.php` was reading whatever cancellation settings the last suite to crash had left behind. A duplicate credit application answered 422 where the branch's own HTTP test expected 409.
+
+Built on top, all four decided with the owner before any code was written: an on-account order now settles its own credit through `Payments::recomputeOrder()`, the one seam every money path already passes through, appending a repayment when money arrives and a signed adjustment when a payment is reversed; recording a repayment by hand is a type-to-filter picker over that business's confirmed payments rather than a box asking for a database id, and stands aside for on-account orders so the two paths cannot double count; the ageing view has real buckets and a totals row, computed inside the same journal walk the customer statement uses; and `/pro/credit.php` says what is overdue in a sentence. The five files the milestone had compressed onto single lines, one of them 2,863 characters, are laid out normally, behaviour unchanged and proved by the suites.
+
+**Verification.** `bash scripts/tests/run_all.sh` reports **34 suites, 0 failed, 0 skipped**: 2,492 unit assertions, 23 database suites, 8 HTTP suites, the browser pass and the brand guard, on MySQL 8.0.46, which is what production runs. Migrations 000 to 033 applied to a fresh database and the second run reported nothing to apply. Notification delivery was proved against a local SMTP sink with two messages captured and read, so `notifications_db_test.php` is 121/121 rather than 117/121. `settings_db_test.php` needs `log_bin_trust_function_creators` to create its tripwire trigger. New this pass: `credit_checkout_http_test.php` places a real on-account order over the real checkout route (18/18), and `scripts/tests/visual_pass.mjs` drives a headless browser over all eight M8 screens at 390px and 1440px (103/103), checking overflow, touch targets, the focus ring and the fixed mobile bar. Three milestones running had recorded checks at both widths with nothing having driven a browser; that is now a script anyone can run.
+
+Not run against production: `bash scripts/verify.sh`, which is a deployed-host check. Its `/migrations/` and `/docs/` denial checks were already failing before M8 and remain a separate, open deployment matter.
+### 8 Sep 2026, M8 Task G: Credit review, facilities, repayment and ageing
+
+- Extended `Credit` with staff application reads, approval and decline, manual grant, term changes, facility transitions, payment-backed repayment and ageing. Approval and grant lock the application or business profile and are idempotent for identical retries. Declined applications remain closed. A pending application is approved when the Owner grants the facility directly.
+- Extended `/api/v1/credit.php` with separate permission gates: `credit.apply.review` for approve and decline, `credit.grant` for manual grant, and `credit.limit.set` for terms, facility state and repayment journal entries. Every action remains POST plus CSRF and records an audit event after the domain transaction commits.
+- Replaced the admin Credit placeholder with the application queue, review forms, Owner grant form, facility controls, repayment reference and simple ageing table. Related businesses link to the Customers module rather than duplicating customer actions.
+- Migration `030_unique_credit_repayment_payment.sql` adds a guarded unique index on `credit_transactions.payment_id`, so one confirmed payment cannot free the credit limit twice. It applied on MySQL 8 and the second migration run was a no-op.
+- Verification: 1,942 unit assertions passed; the Task G MySQL 8 suite passed 11 assertions across approval retry, conflicting review, decline, manual grant, terms, suspension, reinstatement, withdrawal, repayment idempotency and ageing. Static controller tests confirm each action's exact permission. Owner-authenticated browser checks at 390px and 1440px showed the queue, review, grant and ageing regions with no page overflow and no affected main control below 44px. PHP lint, brand and diff checks passed. No production-domain verification was run.
+
+### 8 Sep 2026, M8 Task F: customer credit application and statement
+
+- Added `Credit` as the shared application, facility, journal balance, overdue, due-date and statement service. Charges are positive; repayments and credit-reducing adjustments are negative. Reductions are applied to the oldest positive entries for overdue and next-due views, while outstanding remains the signed sum of the complete journal.
+- Implemented the business-only `apply` action in `/api/v1/credit.php`. It requires POST and CSRF, locks the business profile, prevents another pending application or an application against approved or suspended credit, validates 7 to 10 days, exact integer-subunit money and a 20 to 1,000 character reason, and writes the application plus current facility request state atomically.
+- Replaced `/pro/credit.php` with application, pending, declined, approved, suspended and withdrawn presentations plus a signed statement of charges, repayments and adjustments. Approved accounts show limit, outstanding, available, terms, overdue and next due date. Related orders and payment receipts use owned existing routes. No customer withdrawal action or automated reminder was added.
+- Migration `029_credit_application_decision_reason.sql` adds the missing 1,000-character customer-facing decision reason through guarded MySQL 8 DDL. It applied on a fresh database and the second migration run reported nothing to apply.
+- Refactored `ProDashboard` to consume `Credit` rather than maintain another balance query. Verification: 1,934 unit assertions passed; Task F customer credit passed 14 MySQL 8 assertions; the updated Dashboard credit regression passed 17; the expanded method, CSRF and role HTTP suite passed 132. Browser checks of an approved account at 390px and 1440px found no overflow, no visible control below 44px, the correct active state, the exact ₦500,000 limit, ₦370,000 outstanding and ₦130,000 available, and the signed statement. No production-domain verification was run.
+
+### 8 Sep 2026, M8 Task E: Pro Orders, documents and secure share links
+
+- Added `ProOrders` for customer-scoped order filters, 25-per-page pagination and owned detail. Every order list and detail query binds the signed-in customer ID; unavailable and somebody-else's order use the same response.
+- Extended `OrderDocument` with an explicit customer-owned loader, so the Pro detail and the existing invoice and receipt use the same authorised snapshot data. Receipt links appear only after money has been received.
+- Added migration `028_order_trail_share_links.sql`. It creates an append-only table containing only token hashes. The business owner can issue a fresh link through the POST and CSRF protected `/api/v1/pro_orders.php`; the original emailed token remains valid, the new raw token is returned only in the immediate redirect, and public Order Trail output still omits money.
+- The real Pro screen shows order number, customer-facing status, delivery date, total, payment state and balance due. Detail includes item quantities and units, delivery address, lifecycle trail, invoice, applicable receipt, shareable trail, and related Kitchen Run or credit charge. Opening and closing detail preserves the current filters and page.
+- Verification: migration 028 applied on fresh MySQL 8 and the second migration run reported nothing to apply. The Task E database suite passed 20 assertions across pagination, filters, ownership, snapshots, documents, related records and old plus new trail tokens. The expanded customer HTTP suite passed 122 assertions across role gates, invoice and receipt ownership, share-link creation and public money suppression. Browser checks at 390px and 1440px found no page overflow, no visible control below 44px, the correct Pro active state, and all detail sections and document actions present.
+
+### 8 Sep 2026, M8 Task D: Standing Orders stays honest in Phase 1
+
+- Replaced the generic Standing Orders shell with a dedicated neutral information panel. It explains the intended later behaviour in 1 short paragraph without claiming that any schedule, payment or recurrence exists now.
+- Kept the shared Pro business gate, page frame, breadcrumb and active navigation. Added working actions to My Kitchen Lists, Start a Kitchen Run, Pro Orders and the configured WhatsApp route.
+- Verification: 1,909 unit assertions passed; the MySQL 8 guest, household and business HTTP smoke passed 109 assertions; PHP lint, the brand guard and diff checks passed. Authenticated browser checks at 390px and 1440px showed the correct title and active path, no page overflow, no visible control below 44px, and no form, input, select or button on the page. The local role test also proves the server access gate.
+- `scripts/verify.sh` is an Apache and deployed-host check. It was not used against production for Task D. The local PHP server does not apply `.htaccess`, so its protected-directory assertions are a manual Apache or cPanel deployment check rather than a valid built-in-server result.
+
+### 8 Sep 2026, M8 Task C: reusable B2B Kitchen Lists
+
+- Added the `KitchenLists` domain class and `/api/v1/kitchen_lists.php` with business-only create, update, confirmed delete, save-from-run and start-run actions. Every lookup binds both the record ID and customer ID where ownership matters. Another business receives the same unavailable result as a missing list.
+- Rebuilt `/pro/kitchen_lists.php` around saved-list cards, create and edit forms, a confirmed delete path, start-run actions and the existing M7 Kitchen Run history. An earlier run can be saved with its overall note and ordered line set intact. The page still reads M7 history through `KitchenRuns::allForCustomer()`.
+- Starting a saved list creates no request. It opens the existing `/kitchen-runs.php` form in catalogue mode with catalogue-linked and free-text lines, quantities, units, overall note and per-line notes prefilled. The customer still chooses or checks the delivery day and address before submitting. A product that is inactive or has no current price is downgraded to the saved free-text snapshot rather than dropped.
+- Migration `033_kitchen_list_line_notes.sql` is the only schema change. It adds `kitchen_run_template_items.note` and a case-insensitive unique index on `(user_id, name)`, both guarded through `information_schema` for MySQL 8. A fresh migration run applied 000 through 033, and the second run reported nothing to apply.
+- Verification: 1,897 unit assertions passed; the Task C MySQL 8 suite passed 19 assertions; the expanded guest, household and business HTTP smoke passed 106 assertions; the existing M7 database and HTTP suites remained green at 157 and 132 assertions. Browser checks at 390px and 1440px showed no page-level overflow, the correct active path, accessible controls and complete saved-list prefill. The checkbox itself is 20px inside a 44px labelled target.
+- The required live `scripts/verify.sh` run again passed 12 checks and failed only the pre-existing `/migrations/` and `/docs/` denial checks, which both returned 200. Task C does not alter deployment packaging or server rules, so that separate release blocker remains open.
+
+### 8 Sep 2026, M8 Task B: the business Dashboard
+
+- Added the read-only `ProDashboard` service. Its profile, credit, order and saved-list reads bind the current customer ID or the business profile found through that ID. Credit is calculated from open `credit_transactions`; available credit is the approved limit minus that outstanding amount, never below zero. Due today is shown but is not overdue.
+- Delivery uses `Delivery::nextEligibleDates('business', 1)`, so admin-managed weekdays, exceptions, lead time and cutoff remain the source of truth. The seeded Tuesday and Friday rules are not copied into the page.
+- Replaced the Dashboard shell with responsive credit, delivery, recent-order and saved-list panels. Orders link to `/pro/orders.php?order=...`; saved lists link to `/pro/kitchen_lists.php?list=...`; credit summaries and the no-credit state link to `/pro/credit.php`. Businesses without orders, saved lists or approved credit get plain next steps instead of zero-value cards.
+- Added `OrderLifecycle::customerLabel()` so the Dashboard uses the same customer-facing order stages as the Order Trail. Added pure credit arithmetic tests and a MySQL 8 database test with 2 businesses. The database test proves the ₦500,000 limit and ₦125,000 outstanding example, overdue boundaries, 5 recent orders, 3 recent saved lists, exception-aware delivery selection and cross-business isolation.
+- Verification: 1,883 unit assertions passed; the Task B MySQL 8 suite passed 17 assertions; customer and Pro role HTTP smoke passed 95 assertions; the delivery database regression passed 10 assertions. The populated Dashboard was checked in a browser at 390px and 1440px with no page overflow, no visible control below 44px, correct active navigation and working deep links. The first wide check caught an unbuilt grid utility; rebuilding `assets/css/tailwind.css` fixed the cards to 1 column on mobile and 3 columns on desktop.
+- The required live `scripts/verify.sh` run passed 12 checks and still failed its pre-existing `/migrations/` and `/docs/` denial checks because both returned 200. Task B does not change deployment packaging or web-server rules, so that release blocker remains separate and open.
+
+### 8 Sep 2026, M8 Task A: one Pro gate and honest screen shells
+
+- Added `require_business_customer()` under `includes/functions/` and loaded it from the shared bootstrap. Its allowlist comes from the shared Pro navigation. Return values keep only a known Pro path and discard query strings. Staff RBAC does not grant customer portal access.
+- Applied the gate immediately after bootstrap on all 6 Pro routes. `pro/kitchen_lists.php` still reads its history through `KitchenRuns::allForCustomer()` after the gate. No branch records, branch controls, credit figures, order figures or standing-order behaviour were invented.
+- Added contextual household notices to `/account.php` and `/kitchen-runs.php`. Updated the customer sign-in form and controller so `/pro/credit.php` returns a business customer to Credit, while an unsafe return is ignored.
+- Replaced the promise-heavy placeholder copy with accessible shells and useful working links. Pro navigation now uses the full PRD labels, current-page semantics, consistent breadcrumbs and back routes. It is fixed to the bottom on narrow screens and returns to the header flow on wider screens. Visible controls are at least 44px and the shared gold focus rule remains active.
+- Tests: `php scripts/tests/run.php` passed 1,868 assertions. `customer_http_test.php` passed 91 assertions against a fresh MySQL 8 database. `kitchen_runs_db_test.php` passed 157 assertions and `kitchen_runs_http_test.php` passed 132 assertions. The Kitchen Runs HTTP fixture now uses a real business customer for the Pro history assertion and confirms a household receives a redirect. `scripts/brand-check.sh` passed. Every touched PHP file passed `php -l`.
+- Browser checks covered all 6 routes at 390px and 1440px. There was no page-level horizontal overflow, every active navigation label matched its screen, all visible controls measured at least 44px, and the mobile and desktop navigation positions matched the intended layouts.
+- `bash scripts/verify.sh https://okveggies.com.ng` reached the live site and passed 12 checks, but its `/migrations/` and `/docs/` denial checks received 200. This is a pre-existing deployment verification issue outside Task A and remains open. The generic staff `scripts/smoke_roles.sh` could not run because the workspace has no `.env` or MySQL command-line client; the new customer account-type role smoke ran against MySQL 8 instead.
 
 ### 4 Sep 2026, M6 merged
 

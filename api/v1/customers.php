@@ -2,24 +2,32 @@
 /**
  * api/v1/customers.php
  * -----------------------------------------------------------------------------
- * OK Veggies. Customer reads and edits (PRD Section 17).
+ * OK Veggies. Staff customer reads over JSON, and the one write the back office
+ * needs before it can start a piece of work.
  *
- * Only the two actions the back office needs to start work are built here:
- * finding the customer who is on the phone, and creating them when they have
- * never bought from us before. Everything else the Customers module will hold,
- * the profile, the addresses, the order history and the credit terms, is M8, and
- * admin/customers.php is still its placeholder.
+ *   search  The type-ahead for /admin/customers.php, and the picker on the
+ *           phone-order and typed-in-list screens. One search, not two: both
+ *           call Customers::listing(), so they cannot disagree about who a
+ *           number belongs to.
+ *   get     One customer with the address we last delivered to, the days we can
+ *           offer them and whether credit is open, so the order form can fill
+ *           itself in rather than making a colleague read it all back.
+ *   create  The light account a first-time caller needs. Somebody is on the
+ *           phone, they have never bought from us, and their order has to
+ *           belong to somebody.
  *
- * They live here rather than inside the order endpoint because two screens use
- * them, the phone order and the typed-in Kitchen Run, and a customer search that
- * belongs to orders would have to be written twice.
+ * Orders, payments, Kitchen Runs and credit are still written by the modules
+ * that own them, each with its own permission and audit trail. The rest of the
+ * Customers module (the profile, the addresses, the credit terms) is the
+ * screen at /admin/customers.php, not this endpoint.
  *
- * Every action gates on its own permission and re-checks it on the server. The
- * gates on the screens are UX only.
+ * Every action is POST, CSRF checked and gated on its own permission.
  * -----------------------------------------------------------------------------
  */
-
 require_once __DIR__ . '/../../includes/bootstrap.php';
+
+if (!okv_is_post()) { okv_error('Use POST for this action.', 405, 'method_not_allowed'); }
+if (!Csrf::validate()) { okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired'); }
 
 $action = okv_action();
 
@@ -40,42 +48,53 @@ function customers_return_to(string $fallback): string
     return okv_safe_path((string) okv_input('return_to', ''), $fallback);
 }
 
-// A fetch gets JSON. A plain form post gets a redirect, so every one of these
-// screens still works with JavaScript switched off.
-if (customers_is_fetch() || !okv_is_post()) {
-    header('Content-Type: application/json; charset=utf-8');
-}
-
 // -----------------------------------------------------------------------------
-// Search. A read, so GET is allowed, and it answers with the same shape whether
-// it found nobody or twenty people.
+// Search.
 // -----------------------------------------------------------------------------
 if ($action === 'search') {
     Rbac::requirePermission('customers.view');
 
-    $term    = StaffCustomers::cleanSearch((string) okv_input('q', ''));
-    $matches = $term === '' ? [] : StaffCustomers::search($term, 20);
+    try {
+        $listing = Customers::listing([
+            'search' => okv_input('search', okv_input('q', '')),
+            'type'   => okv_input('type', ''),
+        ], (int) okv_input('page', 1));
 
-    $customers = [];
-    foreach ($matches as $row) {
-        $email = (string) $row['email'];
-        $customers[] = [
-            'id'           => (int) $row['id'],
-            'name'         => trim($row['first_name'] . ' ' . $row['last_name']),
-            'email'        => StaffCustomers::isPlaceholderEmail($email) ? '' : $email,
-            'phone'        => (string) $row['phone'],
-            'phone_display' => Phone::display((string) $row['phone']),
-            'type'         => (string) $row['user_type'],
-            'order_count'  => (int) $row['order_count'],
-        ];
+        // One row shape for both callers. The Customers screen reads name,
+        // email, type and orders; the picker also needs the phone as a person
+        // reads it, the raw account type, and whether the address on file is
+        // one of ours rather than one the customer gave.
+        $customers = array_map(static function (array $row): array {
+            $email = (string) $row['email'];
+            return [
+                'id'            => (int) $row['id'],
+                'name'          => Customers::displayName($row),
+                'email'         => StaffCustomers::isPlaceholderEmail($email) ? '' : $email,
+                'type'          => Customers::typeLabel((string) $row['user_type']),
+                'type_key'      => (string) $row['user_type'],
+                'phone'         => (string) $row['phone'],
+                'phone_display' => Phone::display((string) $row['phone']),
+                'status'        => (string) $row['status'],
+                'orders'        => (int) $row['order_count'],
+                'url'           => '/admin/customers.php?customer=' . (int) $row['id'],
+            ];
+        }, $listing['customers']);
+
+        okv_json([
+            'status'    => 'ok',
+            'customers' => $customers,
+            'count'     => (int) $listing['count'],
+            'page'      => (int) $listing['page'],
+            'last_page' => (int) $listing['lastPage'],
+        ]);
+    } catch (Throwable $e) {
+        error_log('customers search failed: ' . $e->getMessage());
+        okv_error('We could not search customers just now. Please try again.', 500, 'failed');
     }
-
-    okv_json(['status' => 'ok', 'customers' => $customers, 'term' => $term]);
 }
 
 // -----------------------------------------------------------------------------
-// One customer, with the address we last delivered to, so the order form can
-// fill itself in rather than making a colleague read it back over the phone.
+// One customer, with everything the order form needs to fill itself in.
 // -----------------------------------------------------------------------------
 if ($action === 'get') {
     Rbac::requirePermission('customers.view');
@@ -84,12 +103,11 @@ if ($action === 'get') {
     if (!$customer) {
         okv_error('That customer could not be found.', 404, 'not_found');
     }
-    $address = StaffCustomers::lastAddress((int) $customer['id']);
 
     $credit = null;
     if ((string) $customer['user_type'] === 'business') {
         $row = Database::one(
-            'SELECT credit_status, credit_limit_subunit FROM business_customers WHERE user_id = :id',
+            'SELECT credit_status FROM business_customers WHERE user_id = :id',
             [':id' => (int) $customer['id']]
         );
         $credit = [
@@ -101,29 +119,23 @@ if ($action === 'get') {
     okv_json([
         'status'   => 'ok',
         'customer' => [
-            'id'    => (int) $customer['id'],
-            'name'  => trim($customer['first_name'] . ' ' . $customer['last_name']),
-            'phone' => (string) $customer['phone'],
-            'type'  => (string) $customer['user_type'],
+            'id'        => (int) $customer['id'],
+            'name'      => trim($customer['first_name'] . ' ' . $customer['last_name']),
+            'phone'     => (string) $customer['phone'],
+            'type'      => (string) $customer['user_type'],
             'activated' => $customer['email_verified_at'] !== null,
         ],
-        'address' => $address ?: null,
+        'address' => StaffCustomers::lastAddress((int) $customer['id']) ?: null,
         'credit'  => $credit,
         'dates'   => Delivery::nextEligibleDates((string) $customer['user_type'], 21),
     ]);
 }
 
 // -----------------------------------------------------------------------------
-// Create. A state change, so POST, permission and CSRF, in that order.
+// Create the light account a first-time caller needs.
 // -----------------------------------------------------------------------------
 if ($action === 'create') {
-    if (!okv_is_post()) {
-        okv_error('Use POST for this action.', 405, 'method_not_allowed');
-    }
     Rbac::requirePermission('customers.create');
-    if (!Csrf::validate()) {
-        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
-    }
 
     $staffId = (int) Rbac::userId();
     try {
@@ -162,13 +174,14 @@ if ($action === 'create') {
         'status'   => 'ok',
         'message'  => 'Customer added.',
         'customer' => [
-            'id'    => $userId,
-            'name'  => trim($clean['first_name'] . ' ' . $clean['last_name']),
-            'phone' => $clean['phone'],
+            'id'            => $userId,
+            'name'          => trim($clean['first_name'] . ' ' . $clean['last_name']),
+            'phone'         => $clean['phone'],
             'phone_display' => Phone::display($clean['phone']),
-            'email' => StaffCustomers::isPlaceholderEmail($clean['email']) ? '' : $clean['email'],
-            'type'  => $clean['customer_type'],
-            'order_count' => 0,
+            'email'         => StaffCustomers::isPlaceholderEmail($clean['email']) ? '' : $clean['email'],
+            'type'          => $clean['customer_type'],
+            'type_key'      => $clean['customer_type'],
+            'orders'        => 0,
         ],
     ], 201);
 }

@@ -206,8 +206,11 @@ final class Payments
      */
     public static function beginCharge(int $paymentId, string $callbackUrl): array
     {
+        // The receipt address: the account's when there is one, otherwise the
+        // address the order itself carries, which is all a guest order has.
         $payment = Database::one(
-            'SELECT p.*, o.order_number, o.order_status, o.id AS order_id, u.email
+            'SELECT p.*, o.order_number, o.order_status, o.id AS order_id,
+                    COALESCE(NULLIF(u.email, \'\'), o.contact_email) AS email
                FROM payments p
                JOIN orders o ON o.id = p.order_id
                LEFT JOIN users u ON u.id = p.user_id
@@ -225,7 +228,7 @@ final class Payments
         }
         $email = trim((string) ($payment['email'] ?? ''));
         if ($email === '') {
-            return ['ok' => false, 'code' => 'no_email', 'message' => 'This account has no email address to send a receipt to.'];
+            return ['ok' => false, 'code' => 'no_email', 'message' => 'This order has no email address to send a receipt to.'];
         }
 
         $expected = (int) $payment['expected_amount_subunit'];
@@ -512,6 +515,13 @@ final class Payments
                 ':id'      => $orderId,
             ]
         );
+
+        // Every path that moves money on an order comes through here: a
+        // Paystack charge, a payment recorded by staff, and a reversal. So this
+        // is the one place an on-account order's credit has to be reconciled
+        // against what has actually been received. It appends, never edits, and
+        // does nothing at all for an order that is not on account.
+        Credit::settleOrderFromPayments($orderId);
     }
 
     // -------------------------------------------------------------------------

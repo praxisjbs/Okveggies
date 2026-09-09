@@ -113,12 +113,16 @@ final class Mail
     public static function ctaFromVars(array $vars): ?array
     {
         $labels = [
+            'pay_url'         => 'Finish paying',
             'order_trail_url' => 'Follow your order',
             'activate_url'    => 'Activate your account',
             'reset_url'       => 'Set a new password',
             'invoice_url'     => 'View the invoice',
             'receipt_url'     => 'View the receipt',
             'request_url'     => 'Open your Kitchen Run',
+            'credit_url'      => 'Open your credit page',
+            'whatsapp_url'    => 'Message us on WhatsApp',
+            'admin_url'       => 'Open in admin',
         ];
         foreach ($labels as $key => $label) {
             if (!empty($vars[$key])) {

@@ -268,6 +268,7 @@ final class OrderCancellation
                 'UPDATE delivery_schedules SET status = \'cancelled\', updated_by = :actor WHERE order_id = :order',
                 [':actor' => $actorId, ':order' => $orderId]
             );
+            Credit::adjustCancelledOrder($orderId);
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -307,6 +308,10 @@ final class OrderCancellation
             'forfeit_subunit'   => (int) $outcome['forfeit_subunit'],
             'forfeit_reason'    => (string) ($outcome['reason'] ?? ''),
             'manual_subunit'    => (int) $plan['manual_subunit'] + (int) $plan['unmatched_subunit'],
+            // The HTTP caller announces terminal refund outcomes after every
+            // database write above has finished. It removes this internal list
+            // before returning the cancellation response to the browser.
+            'refund_events'     => $refundResults,
         ];
     }
 
@@ -512,7 +517,7 @@ final class OrderCancellation
         $order['restriction'] = $restriction;
         $order['money_outcome'] = $outcome;
         $order['is_dispatched'] = Cancellation::isDispatched($stage);
-        $order['terms_line'] = Cancellation::termsLine($stage, $cutoff, $forfeitAfterCutoff, $afterDispatchAllowed, $dispatchedForfeit);
+        $order['terms_line'] = Cancellation::termsLine($stage, $cutoff, $forfeitAfterCutoff, $afterDispatchAllowed, $dispatchedForfeit, (string) ($order['preferred_delivery_date'] ?? ''));
         $order['deadline'] = Cancellation::deadline((string) $order['preferred_delivery_date'], $cutoff);
         $order['refunds'] = Refunds::forOrder((int) $order['id']);
         return $order;

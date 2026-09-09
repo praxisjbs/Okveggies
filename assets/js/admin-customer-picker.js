@@ -52,8 +52,8 @@
       var detail = document.createElement('p');
       detail.className = 'text-sm text-ink-60';
       detail.textContent = customer.phone_display
-        + ' . ' + customer.order_count + (customer.order_count === 1 ? ' order' : ' orders')
-        + ' . ' + (customer.type === 'business' ? 'Business' : 'Household');
+        + ' . ' + customer.orders + (customer.orders === 1 ? ' order' : ' orders')
+        + ' . ' + customer.type;
 
       about.appendChild(name);
       about.appendChild(detail);
@@ -71,19 +71,34 @@
     results.appendChild(list);
   }
 
+  /**
+   * A read, but a POST, because api/v1/customers.php gates every action on the
+   * CSRF token and one door is easier to keep shut than two.
+   */
   function search() {
     var term = box.value.trim();
     if (term.length < 2) { return; }
 
-    fetch('/api/v1/customers.php?action=search&q=' + encodeURIComponent(term), {
-      headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' },
-      credentials: 'same-origin'
+    var body = new URLSearchParams();
+    body.set('action', 'search');
+    body.set('search', term);
+    body.set('okv_csrf', (window.OKV && window.OKV.csrf) || '');
+
+    fetch('/api/v1/customers.php', {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'fetch',
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      credentials: 'same-origin',
+      body: body.toString()
     })
       .then(function (response) { return response.json(); })
       .then(function (data) {
         if (data && data.status === 'ok') { render(data.customers || [], term); }
       })
-      .catch(function () { /* The GET form still works. Say nothing. */ });
+      .catch(function () { /* The GET form on the page still works. Say nothing. */ });
   }
 
   box.addEventListener('input', function () {

@@ -138,7 +138,6 @@ $introStarts = [
 
 </main>
 
-<?php okv_support_widget(); ?>
 <?php okv_shop_footer(); ?>
 </body>
 </html>

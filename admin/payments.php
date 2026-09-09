@@ -88,7 +88,7 @@ function okv_payments_search(string $term, int $limit = 25): array
     $phone = Phone::normalize($term);
 
     return Database::all(
-        'SELECT o.id, o.order_number, o.order_total_subunit, o.amount_paid_subunit,
+        'SELECT o.id, o.user_id, o.order_number, o.order_total_subunit, o.amount_paid_subunit,
                 o.balance_due_subunit, o.payment_status, o.order_status, o.customer_type,
                 o.created_at, o.preferred_delivery_date,
                 TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS account_name,
@@ -130,7 +130,7 @@ $orderPayments = [];
 if ($openOrderId > 0) {
     // A colleague picked one out of the list.
     $foundOrder = Database::one(
-        'SELECT o.id, o.order_number, o.order_total_subunit, o.amount_paid_subunit,
+        'SELECT o.id, o.user_id, o.order_number, o.order_total_subunit, o.amount_paid_subunit,
                 o.balance_due_subunit, o.payment_status, o.customer_type, o.created_at,
                 o.preferred_delivery_date,
                 TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS account_name,
@@ -490,8 +490,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
         <p class="mt-1 text-sm text-ink-60">
           Ordered <?= okv_e(date('j M Y', strtotime((string) $foundOrder['created_at']))) ?>,
           for delivery <?= okv_e(date('l j F', strtotime((string) $foundOrder['preferred_delivery_date']))) ?>.
-          <a class="underline" href="/admin/orders.php?order=<?= (int) $foundOrder['id'] ?>">Open the order</a>
-        </p>
+          <a class="underline decoration-mist underline-offset-2 hover:text-forest"
+             href="/admin/orders.php?order=<?= (int) $foundOrder['id'] ?>">Open the order</a>
+          <?php if (Rbac::can('customers.view') && !empty($foundOrder['user_id'])): ?>
+            <a class="ml-2 underline decoration-mist underline-offset-2 hover:text-forest"
+               href="/admin/customers.php?customer=<?= (int) $foundOrder['user_id'] ?>">Open the customer</a>
+          <?php endif; ?>
         <p class="mt-1 text-sm text-ink-60">
           Total <?= okv_e(Money::format((int) $foundOrder['order_total_subunit'])) ?>.
           Paid <?= okv_e(Money::format((int) $foundOrder['amount_paid_subunit'])) ?>.

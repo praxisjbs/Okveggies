@@ -2,34 +2,33 @@
 /**
  * includes/components/pro/placeholder.php
  * -----------------------------------------------------------------------------
- * OK Veggies. What a Pro Portal screen shows before its milestone is built.
+ * OK Veggies. Shared screen shell for Pro Portal work that is not active yet.
  *
- * A business customer reads this, not staff, so it never mentions a milestone
- * number or a document. It says plainly what the screen will do, and offers the
- * two things that work today: the shop, and a person on WhatsApp.
+ * A business customer reads this, not staff. It names what belongs on the
+ * screen, states what is available now, and links to working parts of the site.
  * -----------------------------------------------------------------------------
  */
 
-if (!function_exists('okv_pro_placeholder')) {
-    /** @param string $summary One or two plain sentences on what this screen will do. */
-    function okv_pro_placeholder(string $summary): void
+if (!function_exists('okv_pro_screen_shell')) {
+    /** @param array<int, array{label: string, href: string, primary?: bool}> $actions */
+    function okv_pro_screen_shell(string $heading, string $summary, string $availability, array $actions): void
     {
-        $whatsapp = preg_replace('/\D+/', '', Settings::str('support_whatsapp_number', '2348000000000'));
         ?>
-        <div class="okv-panel max-w-3xl">
+        <section class="okv-panel max-w-3xl" aria-labelledby="pro-screen-heading">
           <div class="okv-panel-body">
-            <p class="okv-eyebrow">Coming soon</p>
+            <p class="okv-eyebrow">This screen</p>
+            <h2 id="pro-screen-heading" class="okv-panel-title mt-1"><?= okv_e($heading) ?></h2>
             <p class="mt-3 text-ink"><?= okv_e($summary) ?></p>
-            <p class="mt-3 text-sm text-ink-60">
-              We are building it now. Until it is ready, order from the shop the same way you always have,
-              and tell us what your kitchen needs. We will sort it out with you directly.
-            </p>
+            <p class="mt-3 text-sm text-ink-60" role="status"><?= okv_e($availability) ?></p>
             <div class="mt-6 flex flex-wrap gap-2">
-              <a href="/shop.php" class="okv-btn px-5">Go to the shop</a>
-              <a href="https://wa.me/<?= okv_e($whatsapp) ?>" class="okv-btn-outline px-5" rel="noopener">Talk to us on WhatsApp</a>
+              <?php foreach ($actions as $action): ?>
+                <a href="<?= okv_e($action['href']) ?>" class="<?= !empty($action['primary']) ? 'okv-btn' : 'okv-btn-outline' ?> px-5">
+                  <?= okv_e($action['label']) ?>
+                </a>
+              <?php endforeach; ?>
             </div>
           </div>
-        </div>
+        </section>
         <?php
     }
 }

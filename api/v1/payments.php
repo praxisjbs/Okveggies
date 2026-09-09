@@ -33,34 +33,57 @@ if ($action === 'initialise' || $action === 'initialize') {
     if (!okv_is_post()) {
         okv_error('Use POST for this action.', 405, 'method_not_allowed');
     }
-    Customer::requireLoginApi();
+
+    // Two ways to prove this payment is yours, and never a third. A signed-in
+    // customer owns the order. A guest order has no account to sign in to
+    // (PRD 9.2), so its Order Trail token is the only credential it has: the
+    // token is unguessable, stored only as a hash, and it opens nothing but
+    // this one order. A token is refused the moment the order has an account
+    // behind it, so it can never be used to pay around a sign in.
+    $token = trim((string) okv_input('token', ''));
+    if ($token === '') {
+        Customer::requireLoginApi();
+    }
     if (!Csrf::validate()) {
         okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
     }
 
-    $userId = (int) Customer::id();
-
-    // A customer who hammers this makes a Paystack transaction each time, so it
-    // is capped per account rather than per payment.
-    if (!RateLimiter::hit('payment_init:' . $userId, 10, 300)) {
-        okv_error('Too many payment attempts. Wait a few minutes and try again.', 429, 'rate_limited');
-    }
-
+    $userId    = Customer::id() === null ? null : (int) Customer::id();
     $paymentId = (int) okv_input('payment_id', 0);
     if ($paymentId < 1) {
         okv_error('That payment could not be found.', 422, 'bad_payment');
     }
 
+    // A customer who hammers this makes a Paystack transaction each time, so it
+    // is capped per account, and per order for a guest who has none.
+    $limitKey = $userId !== null ? 'payment_init:' . $userId : 'payment_init:guest:' . $paymentId;
+    if (!RateLimiter::hit($limitKey, 10, 300)) {
+        okv_error('Too many payment attempts. Wait a few minutes and try again.', 429, 'rate_limited');
+    }
+
     // Ownership, on the server, every time. The join is the gate.
-    $owned = Database::one(
-        'SELECT p.id
-           FROM payments p
-           JOIN orders o ON o.id = p.order_id
-          WHERE p.id = :id AND o.user_id = :user',
-        [':id' => $paymentId, ':user' => $userId]
-    );
+    $owned = $token !== '' && OrderTrail::isValidToken($token)
+        ? Database::one(
+            'SELECT p.id
+               FROM payments p
+               JOIN orders o ON o.id = p.order_id
+              WHERE p.id = :id AND o.user_id IS NULL AND o.order_trail_token_hash = :token',
+            [':id' => $paymentId, ':token' => OrderTrail::hashToken($token)]
+        )
+        : ($userId === null ? null : Database::one(
+            'SELECT p.id
+               FROM payments p
+               JOIN orders o ON o.id = p.order_id
+              WHERE p.id = :id AND o.user_id = :user',
+            [':id' => $paymentId, ':user' => $userId]
+        ));
     if (!$owned) {
         okv_error('That payment could not be found.', 404, 'not_found');
+    }
+    if ($token !== '') {
+        // Keep it for the trip back from Paystack, which carries no token.
+        $orderRow = Database::one('SELECT order_id FROM payments WHERE id = :id', [':id' => $paymentId]);
+        OrderTrail::remember((int) ($orderRow['order_id'] ?? 0), $token);
     }
 
     try {
@@ -253,6 +276,10 @@ if ($action === 'request_refund') {
         error_log('payments.request_refund failed: ' . $e->getMessage());
         okv_error('We could not raise that refund. Check the Paystack dashboard before trying again.', 500, 'failed');
     }
+    // Paystack may answer with a terminal result immediately. Announce that
+    // result now, after the refund row is committed, because a later webhook
+    // can correctly report that the row was already final.
+    Notifications::announceRefund($result);
     if (!$result['ok']) {
         okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
     }

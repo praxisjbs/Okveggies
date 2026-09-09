@@ -4,12 +4,16 @@
  * -----------------------------------------------------------------------------
  * OK Veggies. Finding a customer, and making one, from the back office.
  *
- * Two screens need this and neither of them is the Customers module: a colleague
- * taking an order over the phone (admin/order_new.php) and a colleague typing in
- * a list that arrived on WhatsApp (admin/kitchen_runs.php). Both start the same
- * way, with a name or a number said out loud, and both hit the same wall when
- * the caller has never bought from us before. So the search and the light
- * account live here once rather than twice.
+ * Two screens need this: a colleague taking an order over the phone
+ * (admin/order_new.php) and a colleague typing in a list that arrived on
+ * WhatsApp (admin/kitchen_run_new.php). Both start the same way, with a name or
+ * a number said out loud, and both hit the same wall when the caller has never
+ * bought from us before.
+ *
+ * This is not a second Customers module. The search is Customers::listing(),
+ * the one the Customers screen uses, with the picker's own rule on top. What
+ * lives here is only what those two screens need and the Customers module does
+ * not have: making a light account for somebody who is on the phone right now.
  *
  * Three things are worth knowing.
  *
@@ -20,9 +24,11 @@
  *   trail link and a history.
  *
  *   The phone number is the identity that matters. People ring in and give a
- *   number, not an email address, so the search normalises what was typed and
- *   matches on the stored form. Phone::normalize is the same one checkout uses,
- *   so 0803..., +234803... and 234803... all find the same person.
+ *   number, not an email address, so the search matches the stored canonical
+ *   form as well as the raw string. Phone::normalize is the same one checkout
+ *   uses, so 0803..., +234803... and 234803... all find the same person. That
+ *   matching was added to Customers::listing(), so the Customers screen has it
+ *   too rather than only this picker.
  *
  *   An email is still required, because the order trail, the confirmation and
  *   every later notification travel by email (PRD Section 15) and the column is
@@ -119,14 +125,19 @@ final class StaffCustomers
     // -------------------------------------------------------------------------
 
     /**
-     * Customers matching what a colleague typed: the account name, the email,
-     * or the phone number in whatever shape it was said. Staff accounts are
-     * never returned, because an order belongs to a buyer.
+     * Customers matching what a colleague typed, for the picker on the phone
+     * order and typed-in list screens.
      *
-     * One named placeholder per position. The connection runs native prepared
-     * statements, and MySQL refuses the same named placeholder twice in one
-     * statement, which is the defect that took the orders screen down once
-     * already (see admin/orders.php).
+     * The search itself is Customers::listing(), the one the M8 Customers screen
+     * uses. There is no second implementation on purpose: two customer searches
+     * that disagree about whether 08031234567 finds +2348031234567 is exactly
+     * the drift a shared class exists to prevent, and the phone matching this
+     * picker needed was added there rather than here, so the Customers screen
+     * gets it too.
+     *
+     * What this adds is the picker's own rule: a suspended account is not
+     * offered, because find() refuses it at the next step and a colleague
+     * should not be able to pick somebody they cannot then sell to.
      */
     public static function search(string $term, int $limit = 20): array
     {
@@ -134,36 +145,14 @@ final class StaffCustomers
         if ($term === '') {
             return [];
         }
-        $limit = max(1, min(50, $limit));
-        $like  = '%' . Catalogue::escapeLike($term) . '%';
 
-        // A number typed as 0803... is stored as +234803..., so search both the
-        // raw string and the normalised one. Normalize returns null for
-        // anything that is not a phone number, and then only the raw match runs.
-        $normalised = Phone::normalize($term);
+        $listing = Customers::listing(['search' => $term], 1);
+        $active  = array_values(array_filter(
+            $listing['customers'],
+            static fn(array $row): bool => (string) ($row['status'] ?? '') === 'active'
+        ));
 
-        return Database::all(
-            'SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.user_type,
-                    u.email_verified_at,
-                    (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count
-               FROM users u
-              WHERE u.user_type IN (\'household\', \'business\')
-                AND u.status = \'active\'
-                AND (
-                     TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) LIKE :name
-                     OR u.email LIKE :email
-                     OR u.phone LIKE :phone_raw
-                     OR u.phone = :phone_exact
-                )
-              ORDER BY u.first_name, u.last_name
-              LIMIT ' . $limit,
-            [
-                ':name'        => $like,
-                ':email'       => $like,
-                ':phone_raw'   => $like,
-                ':phone_exact' => $normalised ?? '',
-            ]
-        );
+        return array_slice($active, 0, max(1, min(50, $limit)));
     }
 
     /** One customer, by id. Null for a staff account or an id that is not there. */
@@ -180,7 +169,12 @@ final class StaffCustomers
         );
     }
 
-    /** The address we last delivered to for this customer, to prefill the form. */
+    /**
+     * The address we last delivered to for this customer, to prefill the form.
+     * Customers::addresses() lists them all oldest first for the Customers
+     * screen; a phone order wants the one most recently used, which is a
+     * different question of the same table.
+     */
     public static function lastAddress(int $userId): ?array
     {
         if ($userId < 1) {

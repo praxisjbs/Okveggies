@@ -73,6 +73,7 @@ require_once __DIR__ . '/classes/Audit.php';
 require_once __DIR__ . '/classes/Phone.php';
 require_once __DIR__ . '/classes/Auth.php';
 require_once __DIR__ . '/classes/Customer.php';
+require_once __DIR__ . '/classes/ContactMessages.php';
 require_once __DIR__ . '/classes/Catalogue.php';
 require_once __DIR__ . '/classes/Basket.php';
 require_once __DIR__ . '/classes/Pricing.php';
@@ -103,6 +104,12 @@ require_once __DIR__ . '/classes/OrderDocument.php';
 require_once __DIR__ . '/classes/PaymentHealth.php';
 require_once __DIR__ . '/classes/KitchenRuns.php';
 require_once __DIR__ . '/classes/KitchenRunWorkflow.php';
+require_once __DIR__ . '/classes/Cron.php';
+require_once __DIR__ . '/classes/ProDashboard.php';
+require_once __DIR__ . '/classes/KitchenLists.php';
+require_once __DIR__ . '/classes/ProOrders.php';
+require_once __DIR__ . '/classes/Credit.php';
+require_once __DIR__ . '/classes/Customers.php';
 // Work the back office starts itself, rather than following on from something a
 // customer did on the storefront: an order taken on the phone, and the customer
 // account that order may need before it can exist.
@@ -122,6 +129,7 @@ unset($__okv_tz);
 // 9. Shared helper functions and the brand head block.
 require_once __DIR__ . '/functions/helpers.php';
 require_once __DIR__ . '/functions/assets.php';
+require_once __DIR__ . '/functions/pro_access.php';
 require_once __DIR__ . '/components/head_meta.php';
 
 // 10. Tag the DB session with the current user id so audit columns can record

@@ -51,6 +51,8 @@ require_once $appRoot . '/includes/config/env.php';
 require_once $appRoot . '/includes/classes/Paystack.php';
 require_once $appRoot . '/includes/classes/Payments.php';
 require_once $appRoot . '/includes/classes/ManualPayments.php';
+require_once $appRoot . '/includes/classes/Phone.php';
+require_once $appRoot . '/includes/classes/ContactMessages.php';
 require_once $appRoot . '/includes/classes/Refunds.php';
 require_once $appRoot . '/includes/classes/Cancellation.php';
 require_once $appRoot . '/includes/classes/OrderCancellation.php';
@@ -59,11 +61,17 @@ require_once $appRoot . '/includes/classes/DeliveryManifest.php';
 require_once $appRoot . '/includes/classes/Notifications.php';
 require_once $appRoot . '/includes/classes/KitchenRuns.php';
 require_once $appRoot . '/includes/classes/KitchenRunWorkflow.php';
-require_once $appRoot . '/includes/classes/Phone.php';
+require_once $appRoot . '/includes/classes/Cron.php';
+require_once $appRoot . '/includes/classes/ProDashboard.php';
+require_once $appRoot . '/includes/classes/KitchenLists.php';
+require_once $appRoot . '/includes/classes/ProOrders.php';
+require_once $appRoot . '/includes/classes/Credit.php';
+require_once $appRoot . '/includes/classes/Customers.php';
 require_once $appRoot . '/includes/classes/Customer.php';
 require_once $appRoot . '/includes/classes/StaffCustomers.php';
 require_once $appRoot . '/includes/classes/ManualOrder.php';
 require_once $appRoot . '/includes/functions/helpers.php';
+require_once $appRoot . '/includes/functions/pro_access.php';
 
 foreach (glob(__DIR__ . '/*Test.php') as $file) {
     fwrite(STDOUT, "[test] " . basename($file) . "\n");

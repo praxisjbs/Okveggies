@@ -44,6 +44,20 @@ final class KitchenRuns
     public const STATUSES = ['submitted', 'quoted', 'approved', 'converted', 'declined', 'cancelled'];
 
     /**
+     * The tabs the staff queue offers, in the order they are shown. Every one
+     * is a real filter the list honours. "quoted_expired" is not a stored
+     * status: it is a quote that stands past its window, which is the request
+     * most likely to be forgotten, so it gets its own tab rather than hiding
+     * among the live ones.
+     */
+    public const FILTERS = [
+        '', 'submitted', 'quoted', 'quoted_expired', 'approved', 'converted', 'declined', 'cancelled',
+    ];
+
+    /** The pseudo-status for a quote whose window has run out. */
+    public const FILTER_EXPIRED = 'quoted_expired';
+
+    /**
      * What a converted run may be settled with. Pay on delivery is deliberately
      * absent: a Kitchen Run is produce bought to order against a list we do not
      * stock, so it is a deposit, the full amount, or approved credit.
@@ -316,13 +330,31 @@ final class KitchenRuns
     public static function statusLabel(string $status): string
     {
         return [
-            'submitted' => 'Waiting for a price',
-            'quoted'    => 'Quote sent',
-            'approved'  => 'Approved',
-            'converted' => 'Made into an order',
-            'declined'  => 'Declined',
-            'cancelled' => 'Cancelled',
+            'submitted'      => 'Waiting for a price',
+            'quoted'         => 'Quote sent',
+            'quoted_expired' => 'Quote expired',
+            'approved'       => 'Approved',
+            'converted'      => 'Made into an order',
+            'declined'       => 'Declined',
+            'cancelled'      => 'Cancelled',
         ][$status] ?? ucfirst($status);
+    }
+
+    /** The words on a queue tab. The empty filter is every request. */
+    public static function filterLabel(string $filter): string
+    {
+        return $filter === '' ? 'All' : self::statusLabel($filter);
+    }
+
+    /**
+     * The moment a quote sent now would expire, as a datetime the database can
+     * compare against. Kept here so the list, the counts and decorate() all
+     * read expiry off the same rule.
+     */
+    public static function expiredBefore(?string $now = null): string
+    {
+        $stamp = strtotime($now ?? date('Y-m-d H:i:s'));
+        return date('Y-m-d H:i:s', strtotime('-' . self::quoteDays() . ' days', $stamp === false ? time() : $stamp));
     }
 
     /**
@@ -372,6 +404,9 @@ final class KitchenRuns
             'stale_or_not_owned'     => 'This request changed, or it is not yours. Reload the page.',
             'illegal_transition'     => 'That is not something this request can do right now.',
             'payment_not_allowed'    => 'That payment choice is not open to this account.',
+            'credit_not_approved'    => 'This business does not have approved credit, so this run cannot go on account.',
+            'credit_limit_exceeded'  => 'This run is above the credit available on that account. Record a repayment or settle it another way.',
+            'invalid_charge'         => 'There is no amount on this run to place on account.',
             'not_found'              => 'We could not find that Kitchen Run.',
         ][$code] ?? 'We could not save that Kitchen Run. Please try again.';
     }
@@ -495,7 +530,18 @@ final class KitchenRuns
         $params   = [];
         $customer = mb_substr(trim($customer), 0, 100);
 
-        if ($status !== '' && in_array($status, self::STATUSES, true)) {
+        if ($status === self::FILTER_EXPIRED) {
+            // A quote that stands past its window. Not a stored status, so it
+            // is asked for the same way decorate() works it out.
+            $where[] = 'r.status = \'quoted\' AND r.quoted_at IS NOT NULL AND r.quoted_at <= :expired_before';
+            $params[':expired_before'] = self::expiredBefore();
+        } elseif ($status === 'quoted') {
+            // Live quotes only. An expired one has its own tab, because a quote
+            // nobody can accept any more is work, not a waiting customer.
+            $where[] = 'r.status = :status AND (r.quoted_at IS NULL OR r.quoted_at > :live_since)';
+            $params[':status'] = $status;
+            $params[':live_since'] = self::expiredBefore();
+        } elseif ($status !== '' && in_array($status, self::STATUSES, true)) {
             $where[] = 'r.status = :status';
             $params[':status'] = $status;
         }
@@ -535,6 +581,57 @@ final class KitchenRuns
     {
         $row = Database::one('SELECT COUNT(*) AS n FROM kitchen_run_requests WHERE status = \'submitted\'');
         return (int) ($row['n'] ?? 0);
+    }
+
+    /**
+     * How many requests sit behind each queue tab, so a colleague reads the
+     * queue without clicking through it. One pass over the table, keyed the
+     * same way the tabs are, expired quotes counted apart from live ones.
+     *
+     * @return array<string, int> keyed by filter, including '' for all
+     */
+    public static function statusCounts(string $customer = ''): array
+    {
+        $counts = array_fill_keys(self::FILTERS, 0);
+        $params = [':expired_before' => self::expiredBefore()];
+        $where  = '';
+
+        $customer = mb_substr(trim($customer), 0, 100);
+        if ($customer !== '') {
+            $where = ' WHERE (u.email LIKE :customer_email
+                              OR r.request_number LIKE :customer_number
+                              OR r.contact_phone LIKE :customer_phone
+                              OR r.contact_name LIKE :customer_contact
+                              OR TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) LIKE :customer_account)';
+            $like = '%' . $customer . '%';
+            $params[':customer_email']   = $like;
+            $params[':customer_number']  = $like;
+            $params[':customer_phone']   = $like;
+            $params[':customer_contact'] = $like;
+            $params[':customer_account'] = $like;
+        }
+
+        $rows = Database::all(
+            'SELECT r.status,
+                    CASE WHEN r.status = \'quoted\' AND r.quoted_at IS NOT NULL AND r.quoted_at <= :expired_before
+                         THEN 1 ELSE 0 END AS is_expired,
+                    COUNT(*) AS n
+               FROM kitchen_run_requests r
+               LEFT JOIN users u ON u.id = r.user_id'
+            . $where .
+            ' GROUP BY r.status, is_expired',
+            $params
+        );
+
+        foreach ($rows as $row) {
+            $n   = (int) $row['n'];
+            $key = (int) $row['is_expired'] === 1 ? self::FILTER_EXPIRED : (string) $row['status'];
+            if (array_key_exists($key, $counts)) {
+                $counts[$key] += $n;
+            }
+            $counts[''] += $n;
+        }
+        return $counts;
     }
 
     public static function lines(int $id): array

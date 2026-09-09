@@ -1,5 +1,5 @@
 -- =============================================================================
--- 027_manual_operations_permissions.sql
+-- 041_manual_operations_permissions.sql
 -- OK Veggies. Three permissions the admin panel needed and never had, because
 -- until now nothing in the back office could start a piece of work. It could
 -- only move along work a customer had started on the storefront.
