@@ -912,12 +912,16 @@ final class Notifications
     {
         $report = Database::one(
             'SELECT i.id, i.status, i.resolution_type, i.resolution_note,
+                    i.resolution_amount_subunit, i.replacement_order_id,
                     o.id AS order_id, o.order_number,
+                    r.status AS refund_status, ro.order_number AS replacement_order_number,
                     u.id AS user_id, u.email AS user_email,
                     TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
                FROM issue_reports i
                JOIN orders o ON o.id = i.order_id
                JOIN users u ON u.id = i.user_id
+          LEFT JOIN refunds r ON r.issue_report_id = i.id
+          LEFT JOIN orders ro ON ro.id = i.replacement_order_id
               WHERE i.id = :id AND i.status IN (:resolved_status, :declined_status)',
             [':id' => $issueId, ':resolved_status' => 'resolved', ':declined_status' => 'declined']
         );
@@ -930,13 +934,20 @@ final class Notifications
         $outcome = (string) $report['status'] === 'declined'
             ? 'We could not approve the report. ' . $note
             : $note;
+        if ((string) $report['resolution_type'] === 'refund' && $report['refund_status'] !== null) {
+            $outcome .= ' ' . Refunds::customerStatusLine((string) $report['refund_status']);
+        }
+        if ((string) $report['resolution_type'] === 'replacement' && trim((string) $report['replacement_order_number']) !== '') {
+            $outcome .= ' Your replacement is on order ' . (string) $report['replacement_order_number'] . '.';
+        }
+        $amount = (int) ($report['resolution_amount_subunit'] ?? 0);
         self::send(
             'issue_report_resolved',
             [
                 'customer_name' => $name !== '' ? (explode(' ', $name)[0] ?: 'there') : 'there',
                 'order_number' => (string) $report['order_number'],
                 'outcome_line' => $outcome,
-                'amount_line' => '',
+                'amount_line' => $amount > 0 ? 'Amount: ' . Money::format($amount) : '',
                 'issue_url' => $base . '/public/order.php?order=' . (int) $report['order_id'],
             ],
             self::customerRecipients(['user_email' => $report['user_email'], 'user_id' => $report['user_id']]),

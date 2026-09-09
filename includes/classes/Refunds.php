@@ -171,8 +171,33 @@ final class Refunds
      * Send money back. Owner gated at the controller. Not retried: a refund that
      * reached Paystack has moved money, and a blind retry pays a customer twice.
      */
-    public static function request(int $transactionId, int $amountSubunit, string $customerNote, string $merchantNote, int $staffId): array
+    public static function request(
+        int $transactionId,
+        int $amountSubunit,
+        string $customerNote,
+        string $merchantNote,
+        int $staffId,
+        ?int $issueReportId = null
+    ): array
     {
+        if ($issueReportId !== null) {
+            $existing = Database::one(
+                'SELECT id, order_id, amount_subunit, status
+                   FROM refunds WHERE issue_report_id = :issue_id',
+                [':issue_id' => $issueReportId]
+            );
+            if ($existing !== null) {
+                return [
+                    'ok' => true,
+                    'code' => 'already_raised',
+                    'refund_id' => (int) $existing['id'],
+                    'status' => (string) $existing['status'],
+                    'order_id' => (int) $existing['order_id'],
+                    'amount_subunit' => (int) $existing['amount_subunit'],
+                    'message' => self::customerStatusLine((string) $existing['status']),
+                ];
+            }
+        }
         $quote = self::quote($transactionId);
         if (!$quote['ok']) {
             return $quote;
@@ -208,12 +233,13 @@ final class Refunds
 
             Database::run(
                 'INSERT INTO refunds
-                    (payment_transaction_id, order_id, amount_subunit, currency, status,
+                    (payment_transaction_id, order_id, issue_report_id, amount_subunit, currency, status,
                      customer_note, merchant_note, requested_by, approved_by)
-                 VALUES (:txn, :order, :amount, :currency, :status, :cnote, :mnote, :staff, :staff2)',
+                 VALUES (:txn, :order, :issue, :amount, :currency, :status, :cnote, :mnote, :staff, :staff2)',
                 [
                     ':txn'      => $transactionId,
                     ':order'    => $quote['order_id'],
+                    ':issue'    => $issueReportId,
                     ':amount'   => $amountSubunit,
                     ':currency' => Money::CODE,
                     ':status'   => self::STATUS_REQUESTED,
@@ -230,6 +256,29 @@ final class Refunds
             // an answer still leaves a row the reconciliation can find. Same
             // rule as opening a charge in PR1.
             $pdo->commit();
+        } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            if ($issueReportId !== null && (string) $e->getCode() === '23000') {
+                $existing = Database::one(
+                    'SELECT id, order_id, amount_subunit, status
+                       FROM refunds WHERE issue_report_id = :issue_id',
+                    [':issue_id' => $issueReportId]
+                );
+                if ($existing !== null) {
+                    return [
+                        'ok' => true,
+                        'code' => 'already_raised',
+                        'refund_id' => (int) $existing['id'],
+                        'status' => (string) $existing['status'],
+                        'order_id' => (int) $existing['order_id'],
+                        'amount_subunit' => (int) $existing['amount_subunit'],
+                        'message' => self::customerStatusLine((string) $existing['status']),
+                    ];
+                }
+            }
+            throw $e;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();

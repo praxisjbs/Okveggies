@@ -20,7 +20,11 @@ $page = min($pages, max(1, (int) okv_input('page', 1)));
 $reports = IssueReports::forStaff($status, $category, $from, $to, $page);
 $reportId = (int) okv_input('report', $reports ? $reports[0]['id'] : 0);
 $selected = $reportId > 0 ? IssueReports::findForStaff($reportId) : null;
+$resolutionOptions = $selected !== null ? IssueResolutions::options((int) $selected['id']) : [];
 $canResolve = Rbac::can('issues.resolve');
+$canRefund = Rbac::can('payments.refund');
+$canCredit = Rbac::can('credit.grant');
+$isOwner = in_array('owner', Rbac::roles(), true);
 $staffId = (int) (Rbac::userId() ?? 0);
 
 $urlFor = static function (array $changes = []) use ($status, $category, $from, $to, $page, $reportId): string {
@@ -43,6 +47,9 @@ $noticeCopy = [
     'taken' => 'You are now handling this report.',
     'already_taken' => 'You were already handling this report. No duplicate history was added.',
     'declined' => 'The report was declined and the customer has been told.',
+    'resolved' => 'The outcome was recorded and the customer has been told.',
+    'reassigned' => 'You are now handling this report.',
+    'already_handler' => 'You were already handling this report.',
 ];
 $errorCopy = [
     'csrf_expired' => 'Your session expired. Reload the page and try again.',
@@ -53,6 +60,16 @@ $errorCopy = [
     'resolution_note_too_long' => 'Keep the customer note to 1,000 characters or fewer.',
     'invalid_decline' => 'Take the report before declining it.',
     'invalid_take' => 'Reload the report before taking it.',
+    'invalid_reassign' => 'Reload the report before taking it over.',
+    'invalid_resolution' => 'Take the report before resolving it.',
+    'not_confirmed' => 'Confirm the final outcome before saving it.',
+    'items_required' => 'Choose at least 1 affected order item.',
+    'bad_amount' => 'Check the amount against the selected items and payment.',
+    'invalid_transaction' => 'Choose a refundable Paystack payment from this order.',
+    'credit_not_available' => 'Account credit is available only for a business with an approved credit facility.',
+    'replacement_required' => 'Enter the replacement order number.',
+    'invalid_replacement' => 'Choose an active manual order for the same customer.',
+    'replacement_used' => 'That order already carries another replacement.',
     'not_found' => 'That report could not be found.',
     'failed' => 'We could not update that report. Reload it and try again.',
 ];
@@ -254,17 +271,86 @@ require __DIR__ . '/../includes/components/admin/header.php';
               <?= $selected['handled_by'] ? 'Handled by ' . okv_e(trim((string) $selected['handler_name']) ?: 'a former colleague') : 'No handler recorded' ?>
               <?= $selected['handled_at'] ? ' since ' . okv_e(date('j M Y, H:i', strtotime((string) $selected['handled_at']))) : '' ?>.
             </p>
+            <?php if ($selected['status'] === 'in_progress' && $canResolve && $isOwner && (int) $selected['handled_by'] !== $staffId): ?>
+              <form action="/api/v1/make_it_right.php" method="post" class="mt-3">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="action" value="reassign">
+                <input type="hidden" name="issue_id" value="<?= (int) $selected['id'] ?>">
+                <input type="hidden" name="expected_status" value="in_progress">
+                <input type="hidden" name="return_to" value="<?= okv_e($detailUrl) ?>">
+                <button class="okv-btn-outline min-h-[44px] px-4" type="submit">Take over this report</button>
+              </form>
+            <?php endif; ?>
           <?php endif; ?>
 
           <?php if ($selected['status'] === 'in_progress' && $canResolve && (int) $selected['handled_by'] === $staffId): ?>
             <div class="mt-5 grid gap-4 lg:grid-cols-2">
               <section class="rounded-md border border-mist p-4" aria-labelledby="resolution-heading">
                 <h4 id="resolution-heading" class="font-semibold text-ink">Put it right</h4>
-                <p class="mt-2 text-sm text-ink-60">Refund, account credit, and replacement are connected to their existing engines in Task D. No financial outcome is recorded from this screen until that work is present.</p>
-                <label class="okv-label mt-3" for="resolution-type-preview">Resolution type</label>
-                <select class="okv-input mt-1" id="resolution-type-preview" disabled>
-                  <?php foreach (IssueReports::RESOLUTION_TYPES as $value => $label): ?><option value="<?= okv_e($value) ?>"><?= okv_e($label) ?></option><?php endforeach; ?>
-                </select>
+                <p class="mt-2 text-sm text-ink-60">Choose the affected items, then record 1 final outcome. Refunds use Paystack, credit uses the approved business account, and a replacement links an order created through New order.</p>
+                <form action="/api/v1/make_it_right.php" method="post" class="mt-4 space-y-4" novalidate>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="resolve">
+                  <input type="hidden" name="issue_id" value="<?= (int) $selected['id'] ?>">
+                  <input type="hidden" name="expected_status" value="in_progress">
+                  <input type="hidden" name="return_to" value="<?= okv_e($detailUrl) ?>">
+
+                  <fieldset>
+                    <legend class="okv-label">Affected order items</legend>
+                    <div class="mt-2 space-y-2">
+                      <?php foreach ($selected['items'] as $item): ?>
+                        <label class="flex min-h-[44px] items-center gap-3 rounded-md border border-mist px-3 py-2 text-sm">
+                          <input class="h-5 w-5" type="checkbox" name="item_ids[]" value="<?= (int) $item['id'] ?>">
+                          <span class="min-w-0 flex-1"><?= okv_e($item['item_name']) ?>, <?= okv_e(okv_quantity($item['quantity'])) ?> <?= okv_e($item['unit_name']) ?></span>
+                          <span class="font-mono"><?= okv_e(Money::format((int) $item['line_total_subunit'])) ?></span>
+                        </label>
+                      <?php endforeach; ?>
+                    </div>
+                  </fieldset>
+
+                  <div>
+                    <label class="okv-label" for="resolution-type">Resolution type</label>
+                    <select class="okv-input mt-1" id="resolution-type" name="resolution_type" required>
+                      <option value="">Choose an outcome</option>
+                      <option value="refund" <?= (!$canRefund || empty($resolutionOptions['transactions'])) ? 'disabled' : '' ?>>Refund<?= !$canRefund ? ' (Owner permission required)' : (empty($resolutionOptions['transactions']) ? ' (no refundable Paystack payment)' : '') ?></option>
+                      <option value="credit" <?= (!$canCredit || empty($resolutionOptions['credit_available'])) ? 'disabled' : '' ?>>Account credit<?= !$canCredit ? ' (Owner permission required)' : (empty($resolutionOptions['credit_available']) ? ' (approved business credit required)' : '') ?></option>
+                      <option value="replacement">Replacement</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label class="okv-label" for="refund-transaction">Paystack payment for a refund</label>
+                    <select class="okv-input mt-1" id="refund-transaction" name="transaction_id">
+                      <option value="">Choose when refunding</option>
+                      <?php foreach (($resolutionOptions['transactions'] ?? []) as $transaction): ?>
+                        <option value="<?= (int) $transaction['id'] ?>"><?= okv_e($transaction['reference']) ?>, <?= okv_e(Money::format((int) $transaction['refundable_subunit'])) ?> available</option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label class="okv-label" for="resolution-amount">Refund or credit amount in naira</label>
+                    <input class="okv-input mt-1 font-mono" id="resolution-amount" name="amount" inputmode="decimal" placeholder="For example, 2,700">
+                    <p class="mt-1 text-xs text-ink-60">The server caps this at the combined stored price of the selected items.</p>
+                  </div>
+
+                  <div>
+                    <label class="okv-label" for="replacement-order">Replacement order number</label>
+                    <input class="okv-input mt-1 font-mono uppercase" id="replacement-order" name="replacement_order_number" maxlength="50" placeholder="For example, OKV26042">
+                    <p class="mt-1 text-xs text-ink-60">Create the order through <a class="font-medium text-forest underline" href="/admin/order_new.php">New order</a>, then enter its number here.</p>
+                  </div>
+
+                  <div>
+                    <label class="okv-label" for="resolution-note">Outcome shown to the customer</label>
+                    <textarea class="okv-input mt-1 min-h-28 py-3" id="resolution-note" name="resolution_note" minlength="10" maxlength="1000" required></textarea>
+                  </div>
+
+                  <label class="flex min-h-[44px] items-center gap-3 text-sm">
+                    <input class="h-5 w-5" type="checkbox" name="confirmed" value="1" required>
+                    <span>I checked the affected items and final outcome.</span>
+                  </label>
+                  <button class="okv-btn min-h-[44px] px-4" type="submit">Record final outcome</button>
+                </form>
               </section>
               <section class="rounded-md border border-mist p-4" aria-labelledby="decline-heading">
                 <h4 id="decline-heading" class="font-semibold text-ink">Decline report</h4>
