@@ -32,8 +32,16 @@ if (!Paystack::isOverridden()) {
 
 $suffix = substr(bin2hex(random_bytes(5)), 0, 10);
 $userId = 0; $orderId = 0;
+// This suite cancels an order that is already on the van, so it needs the two
+// settings that permit that. Other suites toggle them, and one that dies before
+// its teardown would otherwise leave this one failing for a reason that has
+// nothing to do with refunds. Set what we depend on, and put it all back.
 $oldForfeit = Settings::bool('cancellation_deposit_forfeit_after_cutoff', true);
-$oldDispatch = Settings::bool('cancellation_dispatched_forfeit_deposit', true);
+$oldAfterDispatch = Settings::bool('cancellation_after_dispatch_allowed', true);
+$oldDispatchForfeit = Settings::bool('cancellation_dispatched_forfeit_deposit', true);
+Settings::set('cancellation_after_dispatch_allowed', 'true');
+Settings::set('cancellation_dispatched_forfeit_deposit', 'true');
+Settings::flushCache();
 try {
     Settings::set('cancellation_deposit_forfeit_after_cutoff', true, 'bool', null);
     Settings::set('cancellation_dispatched_forfeit_deposit', true, 'bool', null);
@@ -140,7 +148,8 @@ try {
     r_eq(1, count($sent), 'a processed refund tells the customer, once');
 } finally {
     Settings::set('cancellation_deposit_forfeit_after_cutoff', $oldForfeit, 'bool', null);
-    Settings::set('cancellation_dispatched_forfeit_deposit', $oldDispatch, 'bool', null);
+    Settings::set('cancellation_after_dispatch_allowed', $oldAfterDispatch, 'bool', null);
+    Settings::set('cancellation_dispatched_forfeit_deposit', $oldDispatchForfeit, 'bool', null);
     Settings::flushCache();
     if ($orderId) {
         Database::run('DELETE FROM notification_deliveries WHERE notification_id IN (SELECT id FROM notifications WHERE related_type = \'order\' AND related_id = :o)', [':o' => $orderId]);
