@@ -186,4 +186,107 @@ if ($action === 'resend_notification') {
     okv_redirect('/admin/orders.php?order=' . $orderId . '&status=resent', 303);
 }
 
+/**
+ * An order a colleague builds while the customer is on the phone.
+ *
+ * The write itself is ManualOrder::create(), which produces an ordinary order:
+ * same order number, address snapshot, trail token, status history, delivery
+ * schedule and unpaid payment rows as a checkout order. This controller only
+ * gates the call, turns the posted form into the shape the class expects, and
+ * hands the colleague either the new order or a plain sentence saying why not.
+ *
+ * Money is deliberately not taken here. The order is created unpaid, and any
+ * cash or transfer the caller has already sent is recorded afterwards through
+ * api/v1/payments.php record_manual, so it still lands in the proof queue and
+ * still reverses the same way. One money path, not two.
+ */
+if ($action === 'create') {
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission('orders.create');
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+
+    $staffId = (int) Rbac::userId();
+    $lines   = $_POST['lines'] ?? [];
+
+    try {
+        $result = ManualOrder::create([
+            'user_id'          => (int) okv_input('user_id', 0),
+            'payment_option'   => (string) okv_input('payment_option', ''),
+            'channel'          => (string) okv_input('channel', 'phone'),
+            'delivery_date'    => (string) okv_input('delivery_date', ''),
+            'delivery_zone_id' => (int) okv_input('delivery_zone_id', 0),
+            'recipient_name'   => (string) okv_input('recipient_name', ''),
+            'recipient_phone'  => (string) okv_input('recipient_phone', ''),
+            'address_line_1'   => (string) okv_input('address_line_1', ''),
+            'address_line_2'   => (string) okv_input('address_line_2', ''),
+            'city'             => (string) okv_input('city', ''),
+            'state'            => (string) okv_input('state', ''),
+            'landmark'         => (string) okv_input('landmark', ''),
+            'customer_note'    => (string) okv_input('customer_note', ''),
+            'lines'            => is_array($lines) ? $lines : [],
+        ], $staffId);
+    } catch (DomainException $e) {
+        $code = $e->getMessage();
+        if (orders_is_fetch()) {
+            okv_error(ManualOrder::message($code), 422, $code);
+        }
+        okv_redirect('/admin/order_new.php?error=' . rawurlencode($code), 303);
+    } catch (Throwable $e) {
+        // Never the exception text. The colleague gets a sentence, the log gets
+        // the detail.
+        error_log('orders.create failed: ' . $e->getMessage());
+        okv_error('We could not create that order. Please try again.', 500, 'failed');
+    }
+
+    // The customer hears about their order the same way every other customer
+    // does, including the trail link, because a phone order is an order.
+    Notifications::announceOrderPlaced((int) $result['id'], (string) $result['trail_token']);
+
+    // Money the caller had already sent before they rang off. Optional, and
+    // recorded through the ordinary manual path so it lands in the same proof
+    // queue and reverses the same way as money recorded on the Payments screen.
+    // The order already exists by this point, so a refusal here says the
+    // payment was not recorded. It never says the order failed.
+    $paidFlag = '';
+    if (trim((string) okv_input('paid_amount', '')) !== '') {
+        $paidFlag = 'payment_failed';
+        $option   = (string) okv_input('payment_option', '');
+        $payment  = Database::one(
+            'SELECT id FROM payments WHERE order_id = :order AND payment_type = :type ORDER BY id LIMIT 1',
+            [':order' => (int) $result['id'], ':type' => $option]
+        );
+        if ($payment) {
+            try {
+                $recorded = ManualPayments::record([
+                    'payment_id'     => (int) $payment['id'],
+                    'amount_subunit' => Money::toSubunit((string) okv_input('paid_amount', '')),
+                    'method'         => (string) okv_input('paid_method', ''),
+                    'record_token'   => (string) okv_input('record_token', ''),
+                    'bank_reference' => (string) okv_input('paid_reference', ''),
+                    'payer_name'     => (string) okv_input('paid_payer_name', ''),
+                ], $staffId);
+                if (!empty($recorded['ok'])) {
+                    Notifications::announceManualPayment($recorded, $staffId);
+                    $paidFlag = 'payment_recorded';
+                }
+            } catch (Throwable $e) {
+                error_log('orders.create manual payment failed: ' . $e->getMessage());
+            }
+        }
+    }
+
+    if (orders_is_fetch()) {
+        okv_json(['status' => 'ok', 'payment' => $paidFlag] + $result);
+    }
+    okv_redirect(
+        '/admin/orders.php?order=' . (int) $result['id'] . '&created=1'
+            . ($paidFlag !== '' ? '&payment=' . $paidFlag : ''),
+        303
+    );
+}
+
 okv_error('That action is not available.', 400, 'unknown_action');

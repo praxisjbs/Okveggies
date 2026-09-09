@@ -12,6 +12,8 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
+**Manual back-office operations, on branch `claude/admin-manual-operations-xhysmn`.** The admin panel could move work along and could not start any of it: no order could be created by hand, no kitchen list typed in, no delivery zone added, and the payments screen found an order only by its exact number. All four are built. `admin/order_new.php` takes an order over the phone, `admin/kitchen_run_new.php` types in a list that arrived on WhatsApp, the Delivery screen adds and renames zones, and the Payments screen searches by name, phone, email, order number or Paystack reference, with the customer name and the date on every result and on Recent payments. Migration `027` adds `orders.create`, `kitchen_runs.create` and `customers.create` to both roles. Full account in the session log below. **This needs migration `027`, which the deploy applies.**
+
 **Milestone M7, Kitchen Runs. Follow-up merged into `main` on 8 September 2026 (pull request 38, merge commit `0fc0a2e`), and deployed.** The twelve items the completion pass left open are all done: a signed-out visitor is told rather than redirected, the customer picks their own delivery day and area, the queue filters by customer, lines reorder and carry a note, the team gets an internal note of its own, `kitchen_runs.approve` is a real path, an approved run can be withdrawn, an order links back to its run, the customer hears that we have their list, the Pro Portal screen is real, already-priced is its own mode, and the balance after delivery is proved rather than rebuilt. Verified on MySQL 8.0.46, the production engine, which retires the MariaDB caveat in the review. The authenticated browser journey at 390px and 1440px finally ran, and it found two defects no curl-shaped test could see: the customer's form had never posted with JavaScript on, and pricing a free-text list failed on the database while telling the colleague their file was rejected. Both fixed, both with regression tests. Full account in the session log below.
 
 **Milestone M7, Kitchen Runs. Reviewed and finished on branch `claude/milestone-7-completion-2nlnib`, on top of pull request 36.** A customer sends a list however they have it, we price it, they approve it, it becomes an ordinary order. The first attempt (pull request 36) had the shape of the milestone and one fatal hole: conversion had never once run. It bound the same named placeholder twice in one INSERT, which MySQL refuses on a native prepared statement, and the only conversion test exercised an injected failure that returned before any write. Twenty green database assertions sat on top of a feature that threw on first use. That, six public rules nothing called, a form that took one item, and conversion writing no delivery address and no trail token, are what this branch fixes. The written review is `docs/M7_REVIEW.md`.
@@ -499,17 +501,124 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 
 - PHP version confirmed: 8.3 (pinned in composer.json).
 - Delivery cutoff confirmed: 16:00 (4pm), 1 day lead, and fully editable in admin Settings.
-- Delivery zones: 30 Lagos zones seeded, editable in the admin Delivery screen.
+- Delivery zones: 30 Lagos zones seeded. The admin Delivery screen adds a zone, renames one, sets its area note and its place in the list, and switches it on or off. There is no delete, because orders and Kitchen Runs point at a zone; switching one off is what takes it out of the checkout picker.
 - Product content: descriptions now seeded for all 24 products; one image each is in place, expand to five per product as the client delivers them.
 - Sourcing is still described site-wide, not per product: `source_regions` and now `source_day` are two settings every product reads. The M2 audit already carried forward "give products a real source region"; the day has the same shape and should move with it, so a product sourced on Thursday from Jos can say so.
 - The storefront scaffolds (`cart.php`, `checkout.php`, `kitchen-runs.php`, `page.php`, `public/order.php`) still carry the old gold-on-white "OK VEGGIES" wordmark line, which is 2.75:1 and fails AA. They were left alone in the brand PR2 pass because they render no real data yet; each one gets the brand when its milestone builds it (M4, M7, M12, M6).
 - Carried forward from brand PR3, for M8: the `pro/*.php` screens still have no server-side access check. They render nothing but static copy today, so there is nothing to leak, but M8 must add the gate as it builds each screen. The file headers say so.
-- The remaining scaffolds each name the milestone that builds them, and every one of those milestones is still open: `api/v1/payments.php` and `api/v1/paystack_webhook.php` (M5), `api/v1/orders.php` (M6), `kitchen-runs.php` and `api/v1/kitchen_runs.php` (M7), `api/v1/credit.php` and `api/v1/customers.php` (M8), `api/v1/contact.php` (M9), `api/v1/make_it_right.php` (M10), `page.php` (M12), the nine admin placeholders and the six Pro Portal placeholders. Checked on 1 Sep 2026: none of them names a milestone that has already closed. Settings was built (M0 reopened), and M4 built out `cart.php`, `checkout.php`, `api/v1/checkout.php`, `api/v1/delivery.php` and `public/order.php` (the confirmation and the public Order Trail), leaving only the M6 order manifest and trail-writing behind those two files' fuller M6 scope.
+- The remaining scaffolds each name the milestone that builds them, and every one of those milestones is still open: `api/v1/payments.php` and `api/v1/paystack_webhook.php` (M5), `api/v1/orders.php` (M6), `kitchen-runs.php` and `api/v1/kitchen_runs.php` (M7), `api/v1/credit.php` (M8; `api/v1/customers.php` is no longer a scaffold, it carries the search, get and create actions the phone-order and typed-in-list screens need, and says in its header that the rest of the Customers module is still M8), `api/v1/contact.php` (M9), `api/v1/make_it_right.php` (M10), `page.php` (M12), the nine admin placeholders and the six Pro Portal placeholders. Checked on 1 Sep 2026: none of them names a milestone that has already closed. Settings was built (M0 reopened), and M4 built out `cart.php`, `checkout.php`, `api/v1/checkout.php`, `api/v1/delivery.php` and `public/order.php` (the confirmation and the public Order Trail), leaving only the M6 order manifest and trail-writing behind those two files' fuller M6 scope.
 - Carried forward from brand PR3, for M5: `public/documents/invoice.php` and `receipt.php` have the branded frame and the print rules but no rows, because nothing creates an order yet. Each file lists what M5 has to add first: the access check (token link, or the owner of the order, or staff with `payments.view`), the read from the order snapshot rather than today's prices, and dompdf over the same markup.
 
 ---
 
 ## Session log (newest first)
+
+### 9 Sep 2026, the back office learns to start work, not only to follow it
+
+Branch `claude/admin-manual-operations-xhysmn`, cut from `main`. Raised by the
+owner in four questions that were really one observation: the admin panel could
+move work along, and could not start any. Somebody rings to place an order and
+nobody can help them. A restaurant sends its list on WhatsApp and nobody can
+turn it into a quote. That is a real hole in a business where the phone and
+WhatsApp are how most of the trade arrives, and it was invisible from the code
+because every module looked finished.
+
+Seven clarifying questions were answered before any code was written. The
+customer on a phone order is searched for and, failing that, created as a light
+account (their trail and their emails need somewhere to live). An order line may
+be anything: a catalogue product, a combo, or a line typed in by hand, with a
+per-line price override. Money already sent is recorded on the same screen,
+through the ordinary manual path. The payments search is one box, and its
+results carry the customer name and the date. Zones are added and edited, never
+deleted. A typed-in kitchen list lands as Submitted. The Customers module stays
+an M8 placeholder; only the picker the two forms need was built.
+
+**What was missing, exactly.**
+
+- `admin/payments.php:63` looked an order up by `order_number = :n`, an exact
+  match, one at a time. Nobody rings up with their order number. Meanwhile
+  `admin/orders.php:20` had searched by name, email and recipient since M6.
+- `api/v1/delivery.php` had one zone action, `set_zone_active`. The thirty Lagos
+  zones seeded in `003_reference_seed.sql` could be switched on and off and
+  nothing else. There was no way to add the estate a customer actually names.
+- `api/v1/orders.php` had `transition`, `cancel_customer`, `cancel_staff`,
+  `save_note` and `resend_notification`. Nothing created an order. The only two
+  things that could were customer checkout and Kitchen Run conversion.
+- `api/v1/kitchen_runs.php` gated `submit` on `Customer::requireLoginApi()`, so
+  a colleague could quote, approve, decline and convert a run, but not make one.
+
+**What was built.**
+
+- **Payments search (PRD 11).** One box across the order number, the account
+  name, the delivery name, the phone number, the email address and the Paystack
+  reference. Results carry the customer name, the order number, the day it was
+  ordered and the delivery day, because those are the facts that settle "is this
+  the right order" on a phone call. One match opens itself. Recent payments
+  gained a Customer column and an Ordered column for the same reason.
+- **Zones (PRD 13).** `create_zone` and `update_zone` on `api/v1/delivery.php`,
+  both gated on the `delivery.zones.edit` permission that was seeded in M1 and
+  had only ever driven a tick box. Name, area note, sort order and active state.
+  No delete: orders, Kitchen Runs and every past manifest point at a zone, and
+  switching one off is what takes it out of the checkout picker anyway.
+- **A phone order (PRD 9, 17.2).** `admin/order_new.php` and
+  `ManualOrder::create()`. Two steps, because the customer decides which
+  delivery days we can offer, whether on account is open, and what address to
+  start from. The order that comes out is an ordinary order: same order number
+  helper, address snapshot, trail token, status history, delivery schedule and
+  payment rows, written by the same `Checkout` methods a checkout order uses,
+  so the day manifest cannot tell them apart. A combo fans out into its parts.
+  A price typed over ours is honoured and written into the order's own history,
+  so a discount given on the phone is never invisible.
+- **A typed-in kitchen list (PRD 8.1).** `admin/kitchen_run_new.php` and a
+  `staff_submit` action. `KitchenRunWorkflow::submit()` took one new optional
+  parameter, the colleague recording it: the run is identical either way, and
+  only the trail differs, saying our team typed it in and how the list reached
+  us. It lands as Submitted, so quote, approve and convert run unchanged.
+- **The customer picker.** `StaffCustomers`, plus the `search`, `get` and
+  `create` actions on `api/v1/customers.php`, which was an M8 scaffold answering
+  501. Only those three are built and the file says so; the module itself is
+  still M8.
+
+**Three decisions worth keeping.**
+
+1. **Pay on delivery does not need an activated account here, and does on the
+   storefront.** The activation rule exists because a stranger placing an unpaid
+   order from a browser is the flow most exposed to abuse (PRD 10.2). A
+   colleague who has just spoken to the caller is the check that rule stands in
+   for. Requiring it would have blocked the one thing the screen is for. Both
+   rules are asserted side by side in `ManualOrderTest.php` so the difference is
+   deliberate rather than drift.
+2. **A caller with no email still gets an account.** `users.email` is NOT NULL
+   UNIQUE and a phone caller often has no address, so one is built from their
+   phone number under `no-email.okveggies.invalid`, as unique as the phone is
+   and visibly not a real address. Screens say plainly that the customer will
+   not get the emails.
+3. **One control per order line, not two.** A "what kind" select beside a "which
+   one" select can disagree the moment JavaScript is off. The line select
+   carries both facts (`product:12`, `combo:3`, `custom`) and
+   `ManualOrder::parseItem()` reads them apart on the server.
+
+**Tested.** 2,003 unit assertions green (`ManualOrderTest`, `StaffCustomersTest`
+and the zone rules appended to `DeliveryTest` are new), 83 new database
+assertions and 94 new HTTP assertions, plus the existing suites re-run: Kitchen
+Runs 157 and 130, payments 43, delivery 10, checkout 17, lifecycle 11 and 26,
+manifest 9. `php -l` clean, `brand-check.sh` green. The authenticated browser
+journey ran at 390px and 1440px: the live customer search, choosing a customer,
+the catalogue price dropping into the line, the running total, the typed-item
+fields appearing only on a typed line, no JavaScript errors and no horizontal
+overflow on any of the four screens.
+
+**Two things a person still has to do.** The database here was MariaDB 10.11,
+not the production MySQL 8, so migration `027` and the new queries want the same
+confirmation on MySQL that M7 gave its own. And `settings_http_test.php` fails
+its three "send a test email" assertions in this container because there is no
+SMTP server to reach; nothing in this change touches that path.
+
+**Left for later, deliberately.** The Customers module is still M8. A phone order
+cannot yet be edited after it is created, only cancelled, which is the same rule
+every other order lives under. Zones cannot be reordered by dragging, only by
+typing a number.
+
 
 ### 4 Sep 2026, M6 merged
 

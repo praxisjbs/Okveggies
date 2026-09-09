@@ -60,25 +60,111 @@ $openReversals = Database::all(
     [':status' => ManualPayments::REVERSAL_REQUESTED]
 );
 
-// Lookup: find an order by its number, then show what it still owes.
-$search      = trim((string) okv_input('order', ''));
-$foundOrder  = null;
-$orderPayments = [];
-if ($search !== '') {
-    $foundOrder = Database::one(
-        'SELECT id, order_number, order_total_subunit, amount_paid_subunit,
-                balance_due_subunit, payment_status, customer_type
-           FROM orders WHERE order_number = :n',
-        [':n' => $search]
+// -----------------------------------------------------------------------------
+// Lookup.
+//
+// This used to take an order number and nothing else, which meant a customer
+// ringing to say "I have sent the transfer" could only be helped if they could
+// read their order number out. Nobody has their order number. They have their
+// name and the day they ordered.
+//
+// So one box takes whatever a colleague has: the order number, the name on the
+// account, the name on the delivery, a phone number, an email address, or a
+// Paystack reference off a receipt. It answers with a list of orders carrying
+// the customer's name and the date, because those are the two facts that settle
+// "is this the right order" on a phone call. One match opens itself.
+//
+// One named placeholder per position. The connection runs native prepared
+// statements and MySQL refuses the same named placeholder twice in one
+// statement, the defect that took the orders screen down once already.
+// -----------------------------------------------------------------------------
+$search = mb_substr(trim((string) okv_input('q', okv_input('order', ''))), 0, 100);
+$openOrderId = (int) okv_input('order_id', 0);
+
+/** Every order matching what a colleague typed, newest first. */
+function okv_payments_search(string $term, int $limit = 25): array
+{
+    $like  = '%' . Catalogue::escapeLike($term) . '%';
+    $phone = Phone::normalize($term);
+
+    return Database::all(
+        'SELECT o.id, o.order_number, o.order_total_subunit, o.amount_paid_subunit,
+                o.balance_due_subunit, o.payment_status, o.order_status, o.customer_type,
+                o.created_at, o.preferred_delivery_date,
+                TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS account_name,
+                a.recipient_name, u.phone AS account_phone, u.email AS account_email
+           FROM orders o
+           LEFT JOIN users u ON u.id = o.user_id
+           LEFT JOIN order_addresses a ON a.order_id = o.id
+          WHERE o.order_number LIKE :number
+             OR TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) LIKE :account
+             OR a.recipient_name LIKE :recipient
+             OR u.email LIKE :email
+             OR u.phone LIKE :phone_raw
+             OR u.phone = :phone_exact
+             OR a.recipient_phone LIKE :recipient_phone
+             OR EXISTS (
+                  SELECT 1 FROM payments p
+                    JOIN payment_transactions t ON t.payment_id = p.id
+                   WHERE p.order_id = o.id AND t.reference LIKE :reference
+                )
+          ORDER BY o.id DESC
+          LIMIT ' . $limit,
+        [
+            ':number'          => $like,
+            ':account'         => $like,
+            ':recipient'       => $like,
+            ':email'           => $like,
+            ':phone_raw'       => $like,
+            ':phone_exact'     => $phone ?? '',
+            ':recipient_phone' => $like,
+            ':reference'       => $like,
+        ]
     );
-    if ($foundOrder) {
-        $orderPayments = Database::all(
-            'SELECT id, payment_number, payment_type, provider, expected_amount_subunit,
-                    paid_amount_subunit, status, due_at
-               FROM payments WHERE order_id = :id ORDER BY id',
-            [':id' => (int) $foundOrder['id']]
-        );
+}
+
+$matches       = $search !== '' ? okv_payments_search($search) : [];
+$foundOrder    = null;
+$orderPayments = [];
+
+if ($openOrderId > 0) {
+    // A colleague picked one out of the list.
+    $foundOrder = Database::one(
+        'SELECT o.id, o.order_number, o.order_total_subunit, o.amount_paid_subunit,
+                o.balance_due_subunit, o.payment_status, o.customer_type, o.created_at,
+                o.preferred_delivery_date,
+                TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS account_name,
+                a.recipient_name
+           FROM orders o
+           LEFT JOIN users u ON u.id = o.user_id
+           LEFT JOIN order_addresses a ON a.order_id = o.id
+          WHERE o.id = :id',
+        [':id' => $openOrderId]
+    );
+} elseif (count($matches) === 1) {
+    // Exactly one order answers to what was typed, so open it rather than
+    // making somebody click a list of one on a phone call.
+    $foundOrder = $matches[0];
+}
+
+if ($foundOrder) {
+    $orderPayments = Database::all(
+        'SELECT id, payment_number, payment_type, provider, expected_amount_subunit,
+                paid_amount_subunit, status, due_at
+           FROM payments WHERE order_id = :id ORDER BY id',
+        [':id' => (int) $foundOrder['id']]
+    );
+}
+
+/** The name to put on an order: whoever it is going to, else the account. */
+function okv_payments_customer_name(array $order): string
+{
+    $recipient = trim((string) ($order['recipient_name'] ?? ''));
+    if ($recipient !== '') {
+        return $recipient;
     }
+    $account = trim((string) ($order['account_name'] ?? ''));
+    return $account !== '' ? $account : 'No name on this order';
 }
 
 $canRefund = Rbac::can('payments.refund');
@@ -114,14 +200,24 @@ foreach (Database::all(
     $refundsByDay[(string) $row['day']] = (int) $row['refunded_subunit'];
 }
 
+// The last twenty transactions. The customer's name and the day the order was
+// placed are on every row on purpose: a reference and an amount identify a
+// transaction to the database, and neither of them identifies it to the person
+// on the phone. Same two joins the search uses, so the two tables agree about
+// whose order this is.
 $recent = Database::all(
     'SELECT t.id, t.reference, t.provider, t.status, t.amount_subunit, t.channel,
             t.paid_at, t.created_at, p.payment_type, o.id AS order_id, o.order_number,
+            o.created_at AS order_created_at, o.preferred_delivery_date,
+            TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS account_name,
+            a.recipient_name,
             COALESCE((SELECT SUM(r.amount_subunit) FROM refunds r
                        WHERE r.payment_transaction_id = t.id AND r.status <> \'failed\'), 0) AS refunded_subunit
        FROM payment_transactions t
        JOIN payments p ON p.id = t.payment_id
        JOIN orders o ON o.id = p.order_id
+       LEFT JOIN users u ON u.id = o.user_id
+       LEFT JOIN order_addresses a ON a.order_id = o.id
       ORDER BY t.id DESC
       LIMIT 20'
 );
@@ -314,21 +410,88 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <p class="mt-1 text-sm text-ink-60">Find the order, then record the transfer or cash against what it owes. The order is credited straight away.</p>
 
     <form method="GET" class="mt-4 flex flex-wrap items-end gap-2">
-      <label class="text-sm text-ink-60">Order number
-        <input class="okv-input mt-1" name="order" value="<?= okv_e($search) ?>" placeholder="OKV26000123" required>
+      <label class="text-sm text-ink-60 grow sm:grow-0">Find the customer or the order
+        <input class="okv-input mt-1 sm:w-80" name="q" value="<?= okv_e($search) ?>" required
+               placeholder="Name, phone, email, OKV26000123">
       </label>
-      <button class="okv-btn-outline min-h-[44px]">Find the order</button>
+      <button class="okv-btn-outline min-h-[44px]">Search</button>
+      <?php if ($search !== ''): ?>
+        <a class="okv-btn-text min-h-[44px] inline-flex items-center" href="/admin/payments.php">Clear</a>
+      <?php endif; ?>
     </form>
+    <p class="mt-2 text-sm text-ink-60">
+      Searches the order number, the name on the account, the name on the delivery, the phone number,
+      the email address and the Paystack reference.
+    </p>
 
-    <?php if ($search !== '' && !$foundOrder): ?>
+    <?php if ($search !== '' && !$matches): ?>
       <p class="mt-4 rounded-md border border-clay bg-clay-tint px-3 py-2 text-sm text-ink" role="status">
-        No order carries the number <?= okv_e($search) ?>.
+        Nothing matches <?= okv_e($search) ?>. Try the phone number, or part of the name.
       </p>
+    <?php endif; ?>
+
+    <?php if (count($matches) > 1 || ($matches && $openOrderId > 0)): ?>
+      <!-- The result list. Name and date first, because those are what a
+           colleague can check against the person on the phone. -->
+      <div class="okv-table-wrap mt-4">
+        <table class="okv-table">
+          <caption class="sr-only">Orders matching <?= okv_e($search) ?></caption>
+          <thead>
+            <tr>
+              <th scope="col">Customer</th>
+              <th scope="col">Order</th>
+              <th scope="col">Ordered</th>
+              <th scope="col">Delivery</th>
+              <th scope="col">Total</th>
+              <th scope="col">Outstanding</th>
+              <th scope="col">Payment</th>
+              <th scope="col"><span class="sr-only">Choose</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($matches as $match): ?>
+              <?php $isOpen = $foundOrder && (int) $foundOrder['id'] === (int) $match['id']; ?>
+              <tr<?= $isOpen ? ' class="bg-foliage-tint"' : '' ?>>
+                <td>
+                  <span class="font-medium text-ink"><?= okv_e(okv_payments_customer_name($match)) ?></span>
+                  <span class="okv-table-sub"><?= okv_e(Phone::display((string) ($match['account_phone'] ?? ''))) ?></span>
+                </td>
+                <td class="font-mono"><?= okv_e($match['order_number']) ?></td>
+                <td><?= okv_e(date('j M Y', strtotime((string) $match['created_at']))) ?></td>
+                <td><?= okv_e(date('D j M', strtotime((string) $match['preferred_delivery_date']))) ?></td>
+                <td><?= okv_e(Money::format((int) $match['order_total_subunit'])) ?></td>
+                <td><?= okv_e(Money::format((int) $match['balance_due_subunit'])) ?></td>
+                <td>
+                  <span class="okv-badge <?= okv_e(okv_payment_badge((string) $match['payment_status'] === 'paid' ? 'success' : 'pending')) ?>">
+                    <?= okv_e(str_replace('_', ' ', (string) $match['payment_status'])) ?>
+                  </span>
+                </td>
+                <td>
+                  <?php if ($isOpen): ?>
+                    <span class="text-sm text-ink-60">Open below</span>
+                  <?php else: ?>
+                    <a class="okv-btn-outline-sm inline-flex min-h-[44px] items-center"
+                       href="?q=<?= rawurlencode($search) ?>&amp;order_id=<?= (int) $match['id'] ?>#record-heading">Record</a>
+                  <?php endif; ?>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
     <?php endif; ?>
 
     <?php if ($foundOrder): ?>
       <div class="mt-5 rounded-lg border border-mist p-4">
-        <p class="font-semibold text-ink">Order <?= okv_e($foundOrder['order_number']) ?></p>
+        <p class="font-semibold text-ink">
+          <?= okv_e(okv_payments_customer_name($foundOrder)) ?>,
+          order <span class="font-mono"><?= okv_e($foundOrder['order_number']) ?></span>
+        </p>
+        <p class="mt-1 text-sm text-ink-60">
+          Ordered <?= okv_e(date('j M Y', strtotime((string) $foundOrder['created_at']))) ?>,
+          for delivery <?= okv_e(date('l j F', strtotime((string) $foundOrder['preferred_delivery_date']))) ?>.
+          <a class="underline" href="/admin/orders.php?order=<?= (int) $foundOrder['id'] ?>">Open the order</a>
+        </p>
         <p class="mt-1 text-sm text-ink-60">
           Total <?= okv_e(Money::format((int) $foundOrder['order_total_subunit'])) ?>.
           Paid <?= okv_e(Money::format((int) $foundOrder['amount_paid_subunit'])) ?>.
@@ -473,7 +636,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
   <!-- 4. Everything that has happened. -->
   <section class="okv-card" aria-labelledby="recent-heading">
     <h2 id="recent-heading" class="font-display text-xl font-bold text-ink">Recent payments</h2>
-    <p class="mt-1 text-sm text-ink-60">The last 20 transactions, newest first.</p>
+    <p class="mt-1 text-sm text-ink-60">The last 20 transactions, newest first, with whose order each one is and the day it was placed.</p>
 
     <?php if (!$recent): ?>
       <p class="mt-4 text-sm text-ink-60">No payment has been taken yet.</p>
@@ -483,11 +646,13 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <caption class="sr-only">Recent payment transactions</caption>
           <thead>
             <tr>
+              <th scope="col">Customer</th>
               <th scope="col">Order</th>
+              <th scope="col">Ordered</th>
               <th scope="col">Amount</th>
               <th scope="col">How</th>
               <th scope="col">Status</th>
-              <th scope="col">When</th>
+              <th scope="col">Paid</th>
               <?php if ($canRefund): ?><th scope="col">Refund</th><?php endif; ?>
             </tr>
           </thead>
@@ -495,11 +660,15 @@ require __DIR__ . '/../includes/components/admin/header.php';
             <?php foreach ($recent as $row): ?>
               <tr>
                 <td>
-                  <a class="underline" href="/admin/orders.php?order=<?= (int) $row['order_id'] ?>">
-                    <?= okv_e($row['order_number']) ?>
-                  </a>
+                  <span class="font-medium text-ink"><?= okv_e(okv_payments_customer_name($row)) ?></span>
                   <span class="okv-table-sub"><?= okv_e(str_replace('_', ' ', (string) $row['payment_type'])) ?></span>
                 </td>
+                <td>
+                  <a class="underline font-mono" href="/admin/orders.php?order=<?= (int) $row['order_id'] ?>">
+                    <?= okv_e($row['order_number']) ?>
+                  </a>
+                </td>
+                <td><?= okv_e(date('j M Y', strtotime((string) $row['order_created_at']))) ?></td>
                 <td><?= okv_e(Money::format((int) ($row['amount_subunit'] ?? 0))) ?></td>
                 <td><?= okv_e($row['provider'] === 'manual' ? ($row['channel'] ?: 'manual') : 'Paystack') ?></td>
                 <td>

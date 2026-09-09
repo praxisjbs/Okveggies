@@ -35,6 +35,9 @@ foreach (['household', 'business'] as $customerType) {
 $zones = Database::all('SELECT * FROM delivery_zones ORDER BY sort_order, name');
 $exceptions = Database::all('SELECT * FROM delivery_date_exceptions ORDER BY exception_date DESC LIMIT 20');
 
+// UX only. api/v1/delivery.php re-checks this on the server for every write.
+$canEditZones = Rbac::can('delivery.zones.edit');
+
 $isoDays = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'];
 
 $okv_admin_title = 'Delivery';
@@ -112,20 +115,85 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <?php endif; ?>
   </section>
 
+  <!-- ---------------------------------------------------------------------
+       Lagos zones. The thirty that shipped with the seed are a starting point,
+       not the list: the team adds the estate or the corridor they are actually
+       asked for, renames the ones whose names nobody uses, and switches off the
+       ones we have stopped running. There is no delete on purpose. An order, a
+       Kitchen Run and every past manifest point at a zone, so a zone we no
+       longer serve is switched off, which is what takes it out of the customer's
+       area picker.
+       --------------------------------------------------------------------- -->
   <section class="okv-card">
     <h2 class="font-display text-xl font-bold text-ink">Lagos zones</h2>
-    <p class="mt-1 text-sm text-ink-60">Only active zones appear in the checkout area picker.</p>
-    <div class="mt-4 grid gap-3 sm:grid-cols-2">
-      <?php foreach ($zones as $zone): ?>
-        <form method="post" action="/api/v1/delivery.php" class="flex items-center justify-between gap-3 border-t border-mist pt-3">
-          <?= Csrf::field() ?>
-          <input type="hidden" name="action" value="set_zone_active">
-          <input type="hidden" name="zone_id" value="<?= (int) $zone['id'] ?>">
-          <span class="text-sm text-ink"><?= okv_e($zone['name']) ?></span>
-          <label class="flex items-center gap-2 text-sm text-ink-60">Active
-            <input type="checkbox" name="is_active" value="1" <?= $zone['is_active'] ? 'checked' : '' ?>>
+    <p class="mt-1 text-sm text-ink-60">
+      Only active zones appear in the checkout area picker. <?= count($zones) ?> zones,
+      <?= count(array_filter($zones, static fn(array $z): bool => !empty($z['is_active']))) ?> of them active.
+    </p>
+
+    <?php if ($canEditZones): ?>
+      <form method="post" action="/api/v1/delivery.php" class="mt-4 grid gap-3 rounded-xl border border-mist bg-forest-tint p-4 sm:grid-cols-12">
+        <?= Csrf::field() ?>
+        <input type="hidden" name="action" value="create_zone">
+        <div class="sm:col-span-4">
+          <label class="okv-label" for="new-zone-name">Zone name</label>
+          <input class="okv-input mt-1" id="new-zone-name" name="name" maxlength="120" required placeholder="Ikoyi">
+        </div>
+        <div class="sm:col-span-5">
+          <label class="okv-label" for="new-zone-note">What it covers</label>
+          <input class="okv-input mt-1" id="new-zone-note" name="area_note" maxlength="255" placeholder="Optional. Banana Island, Parkview, Dolphin Estate.">
+        </div>
+        <div class="sm:col-span-1">
+          <label class="okv-label" for="new-zone-sort">Order</label>
+          <input class="okv-input mt-1" id="new-zone-sort" name="sort_order" inputmode="numeric" maxlength="4" placeholder="Last">
+        </div>
+        <div class="sm:col-span-2 flex items-end gap-3">
+          <label class="flex items-center gap-2 text-sm text-ink-60">
+            <input type="checkbox" name="is_active" value="1" checked class="min-h-[20px] min-w-[20px]">
+            Active
           </label>
-          <button class="okv-btn-outline px-3">Save</button>
+          <button class="okv-btn px-4">Add zone</button>
+        </div>
+      </form>
+    <?php endif; ?>
+
+    <div class="mt-4 divide-y divide-mist">
+      <?php foreach ($zones as $zone): ?>
+        <form method="post" action="/api/v1/delivery.php" class="grid items-end gap-3 py-3 sm:grid-cols-12">
+          <?= Csrf::field() ?>
+          <input type="hidden" name="action" value="<?= $canEditZones ? 'update_zone' : 'set_zone_active' ?>">
+          <input type="hidden" name="zone_id" value="<?= (int) $zone['id'] ?>">
+          <?php if ($canEditZones): ?>
+            <div class="sm:col-span-4">
+              <label class="sr-only" for="zone-name-<?= (int) $zone['id'] ?>">Name of this zone</label>
+              <input class="okv-input" id="zone-name-<?= (int) $zone['id'] ?>" name="name"
+                     maxlength="120" required value="<?= okv_e($zone['name']) ?>">
+            </div>
+            <div class="sm:col-span-5">
+              <label class="sr-only" for="zone-note-<?= (int) $zone['id'] ?>">What this zone covers</label>
+              <input class="okv-input" id="zone-note-<?= (int) $zone['id'] ?>" name="area_note"
+                     maxlength="255" value="<?= okv_e($zone['area_note'] ?? '') ?>" placeholder="What it covers">
+            </div>
+            <div class="sm:col-span-1">
+              <label class="sr-only" for="zone-sort-<?= (int) $zone['id'] ?>">Order in the list</label>
+              <input class="okv-input" id="zone-sort-<?= (int) $zone['id'] ?>" name="sort_order"
+                     inputmode="numeric" maxlength="4" value="<?= (int) $zone['sort_order'] ?>">
+            </div>
+          <?php else: ?>
+            <div class="sm:col-span-10">
+              <p class="text-sm font-medium text-ink"><?= okv_e($zone['name']) ?></p>
+              <?php if (trim((string) ($zone['area_note'] ?? '')) !== ''): ?>
+                <p class="text-sm text-ink-60"><?= okv_e($zone['area_note']) ?></p>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
+          <div class="sm:col-span-2 flex items-center gap-3">
+            <label class="flex items-center gap-2 text-sm text-ink-60">
+              <input type="checkbox" name="is_active" value="1" <?= $zone['is_active'] ? 'checked' : '' ?> class="min-h-[20px] min-w-[20px]">
+              Active
+            </label>
+            <button class="okv-btn-outline px-3">Save</button>
+          </div>
         </form>
       <?php endforeach; ?>
     </div>
