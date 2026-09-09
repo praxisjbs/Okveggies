@@ -119,6 +119,8 @@ final class Mail
             'invoice_url'     => 'View the invoice',
             'receipt_url'     => 'View the receipt',
             'request_url'     => 'Open your Kitchen Run',
+            'credit_url'      => 'Open your credit page',
+            'admin_url'       => 'Open in admin',
         ];
         foreach ($labels as $key => $label) {
             if (!empty($vars[$key])) {

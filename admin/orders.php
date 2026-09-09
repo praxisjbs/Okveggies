@@ -190,7 +190,17 @@ require __DIR__ . '/../includes/components/admin/header.php';
       </div>
       <div class="space-y-6 p-4 md:p-5">
         <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <div><dt class="text-ink-60">Customer</dt><dd class="mt-1 font-medium"><?= okv_e($address['recipient_name'] ?? 'Customer') ?></dd></div>
+          <div>
+            <dt class="text-ink-60">Customer</dt>
+            <dd class="mt-1 font-medium">
+              <?php if (Rbac::can('customers.view') && !empty($selected['user_id'])): ?>
+                <a class="underline decoration-mist underline-offset-2 hover:text-forest"
+                   href="/admin/customers.php?customer=<?= (int) $selected['user_id'] ?>"><?= okv_e($address['recipient_name'] ?? 'Customer') ?></a>
+              <?php else: ?>
+                <?= okv_e($address['recipient_name'] ?? 'Customer') ?>
+              <?php endif; ?>
+            </dd>
+          </div>
           <div>
             <dt class="text-ink-60">Delivery</dt>
             <dd class="mt-1">

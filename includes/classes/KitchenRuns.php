@@ -367,6 +367,9 @@ final class KitchenRuns
             'stale_or_not_owned'     => 'This request changed, or it is not yours. Reload the page.',
             'illegal_transition'     => 'That is not something this request can do right now.',
             'payment_not_allowed'    => 'That payment choice is not open to this account.',
+            'credit_not_approved'    => 'This business does not have approved credit, so this run cannot go on account.',
+            'credit_limit_exceeded'  => 'This run is above the credit available on that account. Record a repayment or settle it another way.',
+            'invalid_charge'         => 'There is no amount on this run to place on account.',
             'not_found'              => 'We could not find that Kitchen Run.',
         ][$code] ?? 'We could not save that Kitchen Run. Please try again.';
     }

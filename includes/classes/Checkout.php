@@ -149,6 +149,20 @@ final class Checkout
             throw new DomainException('payment_not_allowed');
         }
 
+        // On account is refused here, before a transaction is opened and before
+        // any row is written. The authoritative check runs again under a lock
+        // inside Credit::drawForOrder, because the limit can move between the
+        // two moments.
+        if ($option === 'on_account') {
+            $refusal = Credit::drawRefusal(
+                Credit::facilityForUser($userId),
+                (int) $basket['subtotal_subunit']
+            );
+            if ($refusal !== '') {
+                throw new DomainException($refusal);
+            }
+        }
+
         $eligibility = Delivery::isEligible((string) ($input['delivery_date'] ?? ''), $type);
         if (empty($eligibility['eligible'])) {
             throw new CheckoutException('delivery_unavailable', (string) $eligibility['reason']);

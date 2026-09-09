@@ -16,15 +16,15 @@ foreach (Notifications::EVENTS as $event => $definition) {
 // Every customer email carries a way back to the thing it is about, because
 // PRD 14.2 makes that link the way a customer follows their own business with
 // us. For an order that is the Order Trail; for a Kitchen Run, which is not an
-// order yet, it is the request itself. An email with no way on is a dead end,
-// and PRD Section 2 says we do not build those.
+// order yet, it is the request itself; for credit it is the credit page. An
+// email with no way on is a dead end, and PRD Section 2 says we do not build those.
 foreach (Notifications::EVENTS as $event => $definition) {
     if ($definition['audience'] !== 'customer') {
         continue;
     }
     $tokens = Notifications::TOKENS[$definition['template']];
     okv_test_ok(
-        in_array('order_trail_url', $tokens, true) || in_array('request_url', $tokens, true),
+        in_array('order_trail_url', $tokens, true) || in_array('request_url', $tokens, true) || in_array('credit_url', $tokens, true),
         "the customer email for $event carries a link back to what it is about"
     );
 }
@@ -157,6 +157,27 @@ okv_test_ok(str_contains($health, 'PHPMailer is installed'), 'the health check n
 // on that override is what stops it being a way to redirect real money.
 $paystack = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Paystack.php');
 okv_test_ok(str_contains($paystack, 'PAYSTACK_BASE_URL'), 'the API base can be pointed at a stand-in for testing');
+
+// --- Credit notifications (PRD Section 12, M8 Task J) -------------------------
+$creditApi = file_get_contents(dirname(__DIR__, 2) . '/api/v1/credit.php');
+okv_test_ok(str_contains($creditApi, 'Notifications::announceCreditApplicationSubmitted'), 'a new credit application alerts staff');
+okv_test_ok(str_contains($creditApi, 'Notifications::announceCreditApproved'), 'an approved credit application tells the customer');
+okv_test_ok(str_contains($creditApi, 'Notifications::announceCreditDeclined'), 'a declined credit application tells the customer the approved reason only');
+okv_test_ok(str_contains($creditApi, 'Notifications::announceCreditGranted'), 'a manual grant tells the customer with the same approved words');
+
+okv_test_ok(str_contains($checkout, 'Notifications::announceCreditChargePosted'), 'an on-account checkout tells the customer the amount and due date');
+$kitchenApi = file_get_contents(dirname(__DIR__, 2) . '/api/v1/kitchen_runs.php');
+okv_test_ok(str_contains($kitchenApi, 'Notifications::announceCreditChargePosted'), 'a converted Kitchen Run on account tells the customer the amount and due date');
+
+$dispatcher = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Notifications.php');
+okv_test_ok(str_contains($dispatcher, "'credit_approved'"), 'credit approved is a registered event');
+okv_test_ok(str_contains($dispatcher, "'credit_declined'"), 'credit declined is a registered event');
+okv_test_ok(str_contains($dispatcher, "'credit_charge_posted'"), 'credit charge is a registered event');
+okv_test_ok(str_contains($dispatcher, "'admin_new_credit_application'"), 'new credit application is a registered staff alert');
+okv_test_ok(str_contains($dispatcher, "'credit_limit'") && str_contains($dispatcher, "'credit_days'"), 'credit approved declares limit and terms');
+okv_test_ok(str_contains($dispatcher, "'declined_reason'") && !str_contains($dispatcher, "'credit_declined' => ['customer_name', 'business_name', 'reason'"), 'declined uses the approved reason only, not the customer request reason');
+okv_test_ok(str_contains($dispatcher, 'announceCreditChargePosted'), 'charge announcement fetches amount and due_date');
+okv_test_ok(str_contains($dispatcher, 'try {') && str_contains($creditApi, 'try {'), 'credit announcements are after commit and never bubble to the caller');
 okv_test_ok(
     preg_match('/if \(\$override === \'\' \|\| !self::isTestMode\(\)\)/', $paystack) === 1,
     'the override is ignored on a live key, so real money always goes to Paystack'

@@ -134,6 +134,67 @@ final class Credit
         ];
     }
 
+    /**
+     * The facility a business may draw on, read only. Checkout, the Kitchen Run
+     * conversion panel and the draw itself all read the same shape, so what a
+     * customer is shown and what the server allows can never disagree.
+     */
+    public static function facilityForUser(int $userId, ?DateTimeImmutable $now = null): ?array
+    {
+        $business = Database::one(
+            'SELECT id, business_name, credit_status, credit_days, credit_limit_subunit
+               FROM business_customers WHERE user_id = :user_id',
+            [':user_id' => $userId]
+        );
+        if ($business === null) { return null; }
+        return self::facility($business, self::summaryForBusiness($business, $now));
+    }
+
+    /** One facility shape from a business row and its journal snapshot. */
+    public static function facility(array $business, array $summary): array
+    {
+        return $summary + [
+            'business_id'   => (int) ($business['id'] ?? 0),
+            'business_name' => (string) ($business['business_name'] ?? ''),
+            'days'          => (int) ($business['credit_days'] ?? 0),
+        ];
+    }
+
+    /**
+     * The one rule that decides whether an amount may go on account. It is pure,
+     * so ordinary checkout, Kitchen Run conversion and the locked draw all reach
+     * the same answer. An amount exactly equal to the available credit passes.
+     *
+     * @return string '' when the draw is allowed, otherwise the refusal code.
+     */
+    public static function drawRefusal(?array $facility, int $amount): string
+    {
+        if ($amount < 1) { return 'invalid_charge'; }
+        if ($facility === null) { return 'credit_not_approved'; }
+        $days = (int) ($facility['days'] ?? 0);
+        if ((string) ($facility['state'] ?? '') !== 'approved' || $days < 7 || $days > 10) {
+            return 'credit_not_approved';
+        }
+        if ($amount > (int) ($facility['available_subunit'] ?? 0)) {
+            return 'credit_limit_exceeded';
+        }
+        return '';
+    }
+
+    /** True when this amount may go on account against this facility. */
+    public static function mayDraw(?array $facility, int $amount): bool
+    {
+        return self::drawRefusal($facility, $amount) === '';
+    }
+
+    /** The day a charge raised for this delivery falls due, on the approved term. */
+    public static function dueDateFor(string $deliveryDate, int $days): string
+    {
+        return (new DateTimeImmutable($deliveryDate, new DateTimeZone(self::TZ)))
+            ->modify('+' . max(0, $days) . ' days')
+            ->format('Y-m-d');
+    }
+
     public static function statement(int $userId, string $type, int $page): array
     {
         $type = in_array($type, self::TRANSACTION_TYPES, true) ? $type : '';
@@ -233,14 +294,85 @@ final class Credit
         $rows=Database::all('SELECT bc.id,bc.business_name,bc.user_id,bc.credit_status,bc.credit_limit_subunit,bc.credit_days FROM business_customers bc WHERE bc.credit_status IN (:approved,:suspended,:withdrawn) ORDER BY bc.business_name',[':approved'=>'approved',':suspended'=>'suspended',':withdrawn'=>'withdrawn']);foreach($rows as &$row){$row['summary']=self::summaryForBusiness($row);}unset($row);return $rows;
     }
 
-    /** Reserve available credit and append exactly one charge inside the caller's transaction. */
+    /**
+     * Reserve available credit and append exactly one charge, inside the
+     * caller's transaction.
+     *
+     * Concurrency: the business row is locked first, so two orders for the same
+     * business queue behind one another. The journal is then read with a
+     * locking read, because a plain read under REPEATABLE READ would answer
+     * from the snapshot this request opened and could miss a charge the other
+     * order has just committed. The unique source_key is the last backstop: a
+     * retry of the same order can never write a second charge.
+     *
+     * The charge is the order's balance due, so an amount already settled at
+     * placement is never put on account twice.
+     */
     public static function drawForOrder(int $userId,int $orderId,int $amount,string $deliveryDate): array
     {
-        if($amount<1){throw new DomainException('invalid_limit');}$key='order:'.$orderId.':charge';$existing=Database::one('SELECT id,due_date FROM credit_transactions WHERE source_key=:key',[':key'=>$key]);if($existing){return ['id'=>(int)$existing['id'],'due_date'=>$existing['due_date'],'already'=>true];}
-        $bc=Database::one('SELECT * FROM business_customers WHERE user_id=:user FOR UPDATE',[':user'=>$userId]);if(!$bc||$bc['credit_status']!=='approved'||(int)$bc['credit_days']<7||(int)$bc['credit_days']>10){throw new DomainException('credit_not_approved');}
-        $balance=(int)(Database::one('SELECT COALESCE(SUM(amount_subunit),0) AS total FROM credit_transactions WHERE business_customer_id=:id',[':id'=>$bc['id']])['total']??0);$available=max(0,(int)$bc['credit_limit_subunit']-max(0,$balance));if($amount>$available){throw new DomainException('credit_limit_exceeded');}
-        $due=(new DateTimeImmutable($deliveryDate,new DateTimeZone(self::TZ)))->modify('+'.(int)$bc['credit_days'].' days')->format('Y-m-d');Database::run('INSERT INTO credit_transactions(business_customer_id,order_id,transaction_type,source_key,amount_subunit,due_date,status)VALUES(:business,:order,:type,:key,:amount,:due,:status)',[':business'=>$bc['id'],':order'=>$orderId,':type'=>'charge',':key'=>$key,':amount'=>$amount,':due'=>$due,':status'=>'posted']);return ['id'=>(int)Database::getInstance()->getConnection()->lastInsertId(),'due_date'=>$due,'already'=>false];
+        $pdo = Database::getInstance()->getConnection();
+        if (!$pdo->inTransaction()) {
+            throw new LogicException('credit draw called outside a transaction');
+        }
+
+        $key = 'order:' . $orderId . ':charge';
+        $existing = Database::one('SELECT id, due_date FROM credit_transactions WHERE source_key = :key', [':key' => $key]);
+        if ($existing) {
+            return ['id' => (int) $existing['id'], 'due_date' => $existing['due_date'], 'already' => true];
+        }
+
+        $order = Database::one(
+            'SELECT payment_option, balance_due_subunit FROM orders WHERE id = :id FOR UPDATE',
+            [':id' => $orderId]
+        );
+        if ($order !== null) {
+            if ((string) $order['payment_option'] !== 'on_account') {
+                throw new DomainException('invalid_charge');
+            }
+            $amount = (int) $order['balance_due_subunit'];
+        }
+
+        $business = Database::one(
+            'SELECT id, business_name, credit_status, credit_days, credit_limit_subunit
+               FROM business_customers WHERE user_id = :user FOR UPDATE',
+            [':user' => $userId]
+        );
+        $facility = $business === null ? null : self::facility($business, self::lockedSummary($business));
+
+        $refusal = self::drawRefusal($facility, $amount);
+        if ($refusal !== '') {
+            throw new DomainException($refusal);
+        }
+
+        $due = self::dueDateFor($deliveryDate, (int) $facility['days']);
+        Database::run(
+            'INSERT INTO credit_transactions
+                (business_customer_id, order_id, transaction_type, source_key, amount_subunit, due_date, status)
+             VALUES (:business, :order, :type, :key, :amount, :due, :status)',
+            [':business' => $facility['business_id'], ':order' => $orderId, ':type' => 'charge',
+             ':key' => $key, ':amount' => $amount, ':due' => $due, ':status' => 'posted']
+        );
+        return ['id' => (int) $pdo->lastInsertId(), 'due_date' => $due, 'already' => false, 'amount_subunit' => $amount];
     }
+
+    /**
+     * The journal snapshot read under a shared lock, for use inside a draw. A
+     * locking read always sees the latest committed rows, which a plain read in
+     * the same transaction may not.
+     */
+    private static function lockedSummary(array $business): array
+    {
+        $entries = Database::all(
+            'SELECT amount_subunit, due_date FROM credit_transactions
+              WHERE business_customer_id = :business_id
+              ORDER BY (due_date IS NULL), due_date, id
+              FOR SHARE',
+            [':business_id' => (int) $business['id']]
+        );
+        $today = (new DateTimeImmutable('now', new DateTimeZone(self::TZ)))->format('Y-m-d');
+        return self::snapshotFromTransactions($business, $entries, $today);
+    }
+
 
     public static function adjustCancelledOrder(int $orderId): void
     {
@@ -279,6 +411,7 @@ final class Credit
             'repayment_recorded' => 'That payment has already been credited to this account.',
             'credit_not_approved' => 'This business does not have approved credit for this order.',
             'credit_limit_exceeded' => 'This order is above the credit available on this account.',
+            'invalid_charge' => 'This order has no amount to place on account.',
         ][$code] ?? 'We could not save that credit application. Please try again.';
     }
 

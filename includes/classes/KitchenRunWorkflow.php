@@ -491,7 +491,13 @@ final class KitchenRunWorkflow
                 throw new DomainException('stale');
             }
 
-            $creditApproved = $paymentOption === 'on_account';
+            // The facility is read, never assumed. This used to pass "true"
+            // whenever the option was on account, which asked the pure rule a
+            // question it had already answered itself.
+            $facility = (string) $request['customer_type'] === 'business'
+                ? Credit::facilityForUser((int) $request['user_id'])
+                : null;
+            $creditApproved = $facility !== null && (string) ($facility['state'] ?? '') === 'approved';
             if (!KitchenRuns::paymentAllowed($paymentOption, (string) $request['customer_type'], !empty($request['is_open_budget']), $creditApproved)) {
                 throw new DomainException('payment_not_allowed');
             }
@@ -512,6 +518,16 @@ final class KitchenRunWorkflow
             $cap = $request['spend_cap_subunit'] === null ? null : (int) $request['spend_cap_subunit'];
             if (!KitchenRuns::withinCap($total, $cap)) {
                 throw new DomainException('cap_exceeded');
+            }
+
+            // An over-limit run is refused before the order row is written, on
+            // the same rule checkout uses. Credit::drawForOrder checks it once
+            // more under a lock when the charge is appended.
+            if ($paymentOption === 'on_account') {
+                $refusal = Credit::drawRefusal($facility, $total);
+                if ($refusal !== '') {
+                    throw new DomainException($refusal);
+                }
             }
 
             $date = trim((string) ($deliveryDate ?? '')) !== ''

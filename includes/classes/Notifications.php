@@ -63,6 +63,11 @@ final class Notifications
         'admin_new_kitchen_run'      => ['template' => 'admin_new_kitchen_run',      'label' => 'New Kitchen Run, for staff',      'audience' => 'staff'],
         'admin_kitchen_run_approved' => ['template' => 'admin_kitchen_run_approved', 'label' => 'Kitchen Run approved, for staff', 'audience' => 'staff'],
         'admin_kitchen_run_cancelled' => ['template' => 'admin_kitchen_run_cancelled', 'label' => 'Kitchen Run withdrawn after approval, for staff', 'audience' => 'staff'],
+
+        'credit_approved'            => ['template' => 'credit_approved',            'label' => 'Credit approved',               'audience' => 'customer'],
+        'credit_declined'            => ['template' => 'credit_declined',            'label' => 'Credit declined',               'audience' => 'customer'],
+        'credit_charge_posted'       => ['template' => 'credit_charge_posted',       'label' => 'Charge placed on account',      'audience' => 'customer'],
+        'admin_new_credit_application' => ['template' => 'admin_new_credit_application', 'label' => 'New credit application, for staff', 'audience' => 'staff'],
     ];
 
     /** The tokens each template may use, so the editor can list them honestly. */
@@ -86,6 +91,11 @@ final class Notifications
         'admin_new_kitchen_run'      => ['customer_name', 'request_number', 'line_count', 'input_mode_label', 'pricing_mode_label', 'budget_line', 'admin_url'],
         'admin_kitchen_run_approved' => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'admin_url'],
         'admin_kitchen_run_cancelled' => ['customer_name', 'request_number', 'quote_total', 'admin_url'],
+
+        'credit_approved'            => ['customer_name', 'business_name', 'credit_limit', 'credit_days', 'credit_url'],
+        'credit_declined'            => ['customer_name', 'business_name', 'declined_reason', 'credit_url'],
+        'credit_charge_posted'       => ['customer_name', 'business_name', 'order_number', 'amount', 'due_date', 'order_trail_url'],
+        'admin_new_credit_application' => ['customer_name', 'business_name', 'requested_days', 'requested_limit', 'reason', 'admin_url'],
     ];
 
     /** Which lifecycle stage announces itself, and with which event. */
@@ -567,6 +577,187 @@ final class Notifications
             return;
         }
         self::send('kitchen_run_declined', $context['vars'], $context['recipients'], 'kitchen_run', $requestId, $actorId);
+    }
+
+    // --- Credit (PRD Section 12) ---------------------------------------------
+
+    /**
+     * The facts a credit email needs. One helper for an application, one for a
+     * business directly, one for a charge. Each returns null when the row is
+     * gone, so a caller sends nothing rather than an email full of blanks.
+     */
+    private static function creditApplicationContext(int $applicationId): ?array
+    {
+        $row = Database::one(
+            'SELECT ca.id, ca.requested_days, ca.requested_limit_subunit, ca.reason, ca.decision_reason,
+                    ca.status, ca.business_customer_id,
+                    bc.business_name, bc.credit_limit_subunit, bc.credit_days, bc.credit_status,
+                    u.id AS user_id, u.email AS user_email,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
+               FROM credit_applications ca
+               JOIN business_customers bc ON bc.id = ca.business_customer_id
+               JOIN users u ON u.id = bc.user_id
+              WHERE ca.id = :id',
+            [':id' => $applicationId]
+        );
+        if (!$row) {
+            return null;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $customer = (string) ($row['business_name'] !== '' ? $row['business_name'] : $row['user_name']);
+        $limit = $row['credit_limit_subunit'] === null ? null : (int) $row['credit_limit_subunit'];
+        $days = (int) ($row['credit_days'] ?? 0);
+        return [
+            'business_id' => (int) $row['business_customer_id'],
+            'user_id'     => (int) $row['user_id'],
+            'recipients'  => self::customerRecipients(['user_email' => $row['user_email'], 'user_id' => $row['user_id']]),
+            'vars' => [
+                'customer_name'   => trim((string) $row['user_name']) ?: 'there',
+                'business_name'   => trim((string) $row['business_name']) ?: $customer,
+                'credit_limit'    => $limit === null ? '' : Money::format($limit),
+                'credit_days'     => $days > 0 ? $days . ' days' : '',
+                'declined_reason' => trim((string) $row['decision_reason']) !== ''
+                    ? trim((string) $row['decision_reason'])
+                    : 'We need a longer trading history before we can set this limit.',
+                'requested_days'  => ((int) $row['requested_days']) . ' days',
+                'requested_limit' => $row['requested_limit_subunit'] === null ? '' : Money::format((int) $row['requested_limit_subunit']),
+                'reason'          => trim((string) $row['reason']),
+                'credit_url'      => $base . '/pro/credit.php',
+                'admin_url'       => $base . '/admin/credit.php?application=' . (int) $row['id'],
+            ],
+        ];
+    }
+
+    private static function creditBusinessContext(int $businessCustomerId): ?array
+    {
+        $row = Database::one(
+            'SELECT bc.id, bc.business_name, bc.credit_limit_subunit, bc.credit_days, bc.credit_status,
+                    u.id AS user_id, u.email AS user_email,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
+               FROM business_customers bc
+               JOIN users u ON u.id = bc.user_id
+              WHERE bc.id = :id',
+            [':id' => $businessCustomerId]
+        );
+        if (!$row) {
+            return null;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $limit = $row['credit_limit_subunit'] === null ? null : (int) $row['credit_limit_subunit'];
+        $days = (int) ($row['credit_days'] ?? 0);
+        return [
+            'business_id' => (int) $row['id'],
+            'user_id'     => (int) $row['user_id'],
+            'recipients'  => self::customerRecipients(['user_email' => $row['user_email'], 'user_id' => $row['user_id']]),
+            'vars' => [
+                'customer_name' => trim((string) $row['user_name']) ?: 'there',
+                'business_name' => trim((string) $row['business_name']) ?: 'there',
+                'credit_limit'  => $limit === null ? '' : Money::format($limit),
+                'credit_days'   => $days > 0 ? $days . ' days' : '',
+                'credit_url'    => $base . '/pro/credit.php',
+                'admin_url'     => $base . '/admin/credit.php?business=' . (int) $row['id'],
+            ],
+        ];
+    }
+
+    private static function creditChargeContext(int $orderId): ?array
+    {
+        $charge = Database::one(
+            'SELECT amount_subunit, due_date FROM credit_transactions
+              WHERE source_key = :key AND transaction_type = :type LIMIT 1',
+            [':key' => 'order:' . $orderId . ':charge', ':type' => 'charge']
+        );
+        if (!$charge) {
+            $charge = Database::one(
+                'SELECT amount_subunit, due_date FROM credit_transactions
+                  WHERE order_id = :order AND transaction_type = :type ORDER BY id ASC LIMIT 1',
+                [':order' => $orderId, ':type' => 'charge']
+            );
+        }
+        if (!$charge) {
+            return null;
+        }
+        $order = Database::one(
+            'SELECT o.id, o.order_number, o.user_id, o.order_trail_token_hash,
+                    bc.business_name, u.email AS user_email,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
+               FROM orders o
+               LEFT JOIN business_customers bc ON bc.user_id = o.user_id
+               LEFT JOIN users u ON u.id = o.user_id
+              WHERE o.id = :id',
+            [':id' => $orderId]
+        );
+        if (!$order) {
+            return null;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $due = trim((string) ($charge['due_date'] ?? ''));
+        $dueLabel = $due !== '' && strtotime($due) !== false ? date('l jS F', strtotime($due)) : $due;
+        // Trail link: we have only the hash, not the raw token, so link by order id.
+        return [
+            'recipients' => self::customerRecipients(['user_email' => $order['user_email'], 'user_id' => $order['user_id']]),
+            'vars' => [
+                'customer_name'   => trim((string) $order['user_name']) ?: 'there',
+                'business_name'   => trim((string) ($order['business_name'] ?? '')) ?: trim((string) $order['user_name']) ?: 'there',
+                'order_number'    => (string) $order['order_number'],
+                'amount'          => Money::format((int) $charge['amount_subunit']),
+                'due_date'        => $dueLabel,
+                'order_trail_url' => $base . '/public/order.php?order=' . (int) $order['id'],
+                'admin_url'       => $base . '/admin/orders.php?order=' . (int) $order['id'],
+            ],
+        ];
+    }
+
+    /** A business asked for credit, the team needs to review it. */
+    public static function announceCreditApplicationSubmitted(int $applicationId, ?int $actorId = null): void
+    {
+        $context = self::creditApplicationContext($applicationId);
+        if ($context === null) {
+            return;
+        }
+        self::send('admin_new_credit_application', $context['vars'], self::staffRecipients(), 'credit_application', $applicationId, $actorId);
+    }
+
+    /** An approved application, customer hears the approved limit and terms. */
+    public static function announceCreditApproved(int $applicationId, ?int $actorId = null): void
+    {
+        $context = self::creditApplicationContext($applicationId);
+        if ($context === null) {
+            return;
+        }
+        // Approved terms come from the business row, which the approval already wrote.
+        self::send('credit_approved', $context['vars'], $context['recipients'], 'credit_application', $applicationId, $actorId);
+    }
+
+    /** A manual grant without an application shares the same customer words. */
+    public static function announceCreditGranted(int $businessCustomerId, ?int $actorId = null): void
+    {
+        $context = self::creditBusinessContext($businessCustomerId);
+        if ($context === null) {
+            return;
+        }
+        self::send('credit_approved', $context['vars'], $context['recipients'], 'business_customer', $businessCustomerId, $actorId);
+    }
+
+    /** A declined application, with the approved staff reason only. */
+    public static function announceCreditDeclined(int $applicationId, ?int $actorId = null): void
+    {
+        $context = self::creditApplicationContext($applicationId);
+        if ($context === null) {
+            return;
+        }
+        // Never echo the customer's own application reason, only the reviewer decision.
+        self::send('credit_declined', $context['vars'], $context['recipients'], 'credit_application', $applicationId, $actorId);
+    }
+
+    /** A charge placed on account, with amount and due date. */
+    public static function announceCreditChargePosted(int $orderId, ?int $actorId = null): void
+    {
+        $context = self::creditChargeContext($orderId);
+        if ($context === null) {
+            return;
+        }
+        self::send('credit_charge_posted', $context['vars'], $context['recipients'], 'order', $orderId, $actorId);
     }
 
     /** A lifecycle stage the customer should hear about. */

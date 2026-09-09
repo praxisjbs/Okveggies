@@ -123,7 +123,18 @@ try {
     // The order is committed. Send the customer their copy with the trail link
     // in it, and raise the staff alert. PRD 14.2 makes that link the way a
     // customer follows their order, so it has to leave the building here.
-    Notifications::announceOrderPlaced((int) $result['order_id'], (string) ($result['trail_token'] ?? ''));
+    try {
+        Notifications::announceOrderPlaced((int) $result['order_id'], (string) ($result['trail_token'] ?? ''));
+    } catch (Throwable $e) {
+        error_log('checkout announce order placed failed: ' . $e->getMessage());
+    }
+    if (($input['payment_option'] ?? '') === 'on_account') {
+        try {
+            Notifications::announceCreditChargePosted((int) $result['order_id']);
+        } catch (Throwable $e) {
+            error_log('checkout announce credit charge failed: ' . $e->getMessage());
+        }
+    }
     $base = rtrim((string) APP_URL, '/');
     $result['confirmation_url'] = $base . $result['confirmation_url'];
     $result['trail_url'] = $result['trail_url'] === '' ? '' : $base . $result['trail_url'];
@@ -164,7 +175,9 @@ try {
     $known = [
         'consent_required'    => ['Tick the account consent box to continue.', 'consent_required'],
         'payment_not_allowed' => ['That payment choice is not available for this account.', 'payment_not_allowed'],
-        'credit_not_approved' => ['On-account payment is only available after credit approval.', 'credit_not_approved'],
+        'credit_not_approved' => [Credit::message('credit_not_approved'), 'credit_not_approved'],
+        'credit_limit_exceeded' => [Credit::message('credit_limit_exceeded'), 'credit_limit_exceeded'],
+        'invalid_charge'      => [Credit::message('invalid_charge'), 'invalid_charge'],
         'delivery_unavailable' => ['That delivery date is no longer available. Pick another date.', 'delivery_unavailable'],
         'zone_unavailable'    => ['That delivery area is no longer available. Pick another area.', 'zone_unavailable'],
         'empty_cart'          => ['Your basket is empty.', 'empty_cart'],
