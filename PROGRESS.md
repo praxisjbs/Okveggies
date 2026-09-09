@@ -12,7 +12,7 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
-**Milestone M10, Make It Right, workflow in progress on branch `M9-issue-report-make-it-right`.** Customer reporting, private photos, the staff queue and the three terminal outcomes are complete. Refunds delegate to M5, account credit appends through M8 for an approved business, and replacement links an existing manual order for the same customer. Selected order lines cap every money outcome, each result has a durable relationship, the assigned handler finishes it, and the Owner can explicitly take over. Migration `047` is applied on MySQL 8. The broader customer terminal-outcome screen, trust-signal pass and final role matrix remain open.
+**Milestone M10, Make It Right, workflow in progress on branch `M9-issue-report-make-it-right`.** Customer reporting, private photos, the staff queue, the three terminal outcomes and the signed-in customer outcome history are complete. Refunds delegate to M5, account credit appends through M8 for an approved business, and replacement links an existing manual order for the same customer. Selected order lines cap every money outcome, each result has a durable relationship, the assigned handler finishes it, and the Owner can explicitly take over. Customer outcomes stay off the public token trail, while the authenticated owner sees every report and its current result. Migration `047` is applied on MySQL 8. The trust-signal pass and final role matrix remain open.
 
 **Manual back-office operations, on branch `claude/admin-manual-operations-xhysmn`.** The admin panel could move work along and could not start any of it: no order could be created by hand, no kitchen list typed in, no delivery zone added, and the payments screen found an order only by its exact number. All four are built. `admin/order_new.php` takes an order over the phone, `admin/kitchen_run_new.php` types in a list that arrived on WhatsApp, the Delivery screen adds and renames zones, and the Payments screen searches by name, phone, email, order number or Paystack reference, with the customer name and the date on every result and on Recent payments. Migration `041` adds `orders.create`, `kitchen_runs.create` and `customers.create` to both roles. Full account in the session log below. **This needs migration `041`, which the deploy applies.** It was written as `027` and renumbered when M8 and M9 landed on `main`, because `027_guest_checkout_and_payment_reminder` already owns that number.
 
@@ -640,8 +640,9 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 
 ### M10. Trust and Make It Right
 - [x] Report an issue against an order (category, note, photos)
-- [ ] Admin resolves (refund, credit, replacement) and customer sees the outcome
-- [x] **Task D, the three resolutions:** full or partial refund through M5, approved-business account credit through M8, or a linked manual replacement order. The customer-facing terminal outcome on their signed-in order remains Task E, so the combined checklist line above stays open.
+- [x] Admin resolves (refund, credit, replacement) and customer sees the outcome
+- [x] **Task D, the three resolutions:** full or partial refund through M5, approved-business account credit through M8, or a linked manual replacement order. Each outcome is durable, capped by the selected order lines and protected against terminal replay.
+- [x] **Task E, private customer outcomes:** the signed-in order shows every report newest first, with the latest expanded, plain status and next-step copy, the exact customer-facing note, amount and live refund status where relevant. Eligible businesses can open Pro Credit, replacement order numbers open the authenticated order view, terminal reports no longer block a fresh report inside the window, and none of this appears on the public token trail.
 - [ ] Trust signals on storefront and checkout
 - [ ] Tests: issue lifecycle
 
@@ -688,6 +689,12 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 9 Sep 2026, M10 Task E: private customer outcomes
+
+- Added an owner-only report history to the authenticated order page. It lists every report newest first with the latest expanded, customer-safe status and next-step wording, the original description and protected photos. Terminal cards show the exact customer-facing reason or resolution note, the outcome amount, the live M5 refund status, a Pro Credit link for an approved business, or a link to the owned replacement order as appropriate. Internal handler and workflow-history data are not selected for this view.
+- Kept the report flow usable after a terminal result: an eligible order can show its past outcomes and the new-report form together, while an active report continues to block duplicates. Tightened `OrderTrail` so refunds linked to Make It Right reports are excluded from share-token refund notices; the public token route already withholds the entire issue section, outcome notes and links.
+- Verification: the full unit runner passed 2,930/2,930 assertions; the Task E database suite passed 6/6 against MySQL 8; the expanded issue HTTP suite passed 49/49 across owner access, exact decline output, renewed eligibility and public-token privacy. All touched PHP files passed `php -l`, the CSS and JavaScript builds completed, the 8-part brand check passed, and `git diff --check` was clean. Authenticated browser checks at 390px and 1440px found the report history and decline reason, no horizontal overflow and no visible main control below 44px. No commit or other Git history change was made.
 
 ### 9 Sep 2026, M10 Task D: refund, credit and replacement
 

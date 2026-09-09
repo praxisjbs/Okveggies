@@ -65,7 +65,7 @@ okv_test_eq(
 $page = file_get_contents(dirname(__DIR__, 2) . '/public/order.php');
 okv_test_ok(str_contains($page, 'if (!$publicTrail && $issueState !== null)'), 'issue UI is guarded from the public token view');
 okv_test_ok(str_contains($page, 'IssueReports::CATEGORIES'), 'the owner form reads categories from the shared service');
-okv_test_ok(str_contains($page, 'okv_e($openReport[\'description\'])'), 'stored customer text is escaped on owner output');
+okv_test_ok(str_contains($page, 'okv_e((string) $customerReport[\'description\'])'), 'stored customer text is escaped on owner output');
 okv_test_ok(str_contains($page, 'enctype="multipart/form-data"'), 'the owner report form can carry photo files');
 okv_test_ok(str_contains($page, 'Choose up to 5 JPEG, PNG or WebP photos'), 'the photo count and types are stated before selection');
 okv_test_ok(str_contains($page, '/public/issue_photo.php?photo='), 'owner photo links use the protected route');

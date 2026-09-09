@@ -75,6 +75,9 @@ $cancellation = ($publicTrail || Customer::id() === null)
 $issueState = ($publicTrail || Customer::id() === null)
     ? null
     : IssueReports::stateForCustomer((int) $order['id'], (int) Customer::id());
+$issueHistory = ($publicTrail || Customer::id() === null)
+    ? null
+    : IssueReports::historyForCustomer((int) $order['id'], (int) Customer::id());
 $issueForm = [];
 if (!$publicTrail && isset($_SESSION['issue_form'][(int) $order['id']])) {
     $issueForm = is_array($_SESSION['issue_form'][(int) $order['id']])
@@ -327,40 +330,54 @@ $publicStatus = [
         <p class="okv-note mt-4 bg-clay-tint" role="status">We already have an open report for order <?= okv_e($order['order_number']) ?>.</p>
       <?php endif; ?>
 
+      <?php if (!empty($issueHistory)): ?>
+        <div class="mt-5 space-y-3" aria-labelledby="issue-history-heading">
+          <h3 id="issue-history-heading" class="font-display text-lg font-bold text-ink">Your reports</h3>
+          <?php foreach ($issueHistory as $reportIndex => $customerReport): ?>
+            <details class="rounded-md border border-mist bg-white p-4" <?= $reportIndex === 0 ? 'open' : '' ?>>
+              <summary class="flex min-h-[44px] cursor-pointer flex-wrap items-center justify-between gap-2 font-semibold text-forest">
+                <span><?= okv_e(IssueReports::CATEGORIES[(string) $customerReport['category']] ?? 'Something else') ?></span>
+                <span class="text-sm text-ink-60"><?= okv_e((string) $customerReport['status_label']) ?> · <?= okv_e(date('j M Y', strtotime((string) $customerReport['created_at']))) ?></span>
+              </summary>
+              <p class="mt-3 text-sm font-semibold text-ink"><?= okv_e((string) $customerReport['next_step']) ?></p>
+              <p class="mt-2 whitespace-pre-line text-sm text-ink-60"><?= okv_e((string) $customerReport['description']) ?></p>
+              <?php if (!empty($customerReport['photos'])): ?>
+                <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <?php foreach ($customerReport['photos'] as $photoIndex => $photo): ?>
+                    <a href="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
+                       class="block min-h-[44px] rounded-md focus:outline-none"
+                       aria-label="Open photo <?= $photoIndex + 1 ?> for order <?= okv_e($order['order_number']) ?> at full size">
+                      <img src="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
+                           alt="Photo <?= $photoIndex + 1 ?> supplied for order <?= okv_e($order['order_number']) ?>"
+                           class="aspect-square w-full rounded-md border border-mist object-cover" loading="lazy">
+                    </a>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+
+              <?php if (in_array((string) $customerReport['status'], ['resolved', 'declined'], true)): ?>
+                <div class="okv-note mt-4 <?= (string) $customerReport['status'] === 'declined' ? 'bg-clay-tint' : 'bg-foliage-tint' ?>">
+                  <p class="font-semibold"><?= (string) $customerReport['status'] === 'declined' ? 'Why we could not approve it' : 'What we did' ?></p>
+                  <p class="mt-1 whitespace-pre-line"><?= okv_e((string) $customerReport['resolution_note']) ?></p>
+                  <?php if ((int) ($customerReport['resolution_amount_subunit'] ?? 0) > 0): ?>
+                    <p class="mt-2 font-mono font-semibold"><?= okv_e(Money::format((int) $customerReport['resolution_amount_subunit'])) ?></p>
+                  <?php endif; ?>
+                  <?php if ((string) $customerReport['refund_line'] !== ''): ?>
+                    <p class="mt-2"><?= okv_e((string) $customerReport['refund_line']) ?></p>
+                  <?php elseif ((string) $customerReport['resolution_type'] === 'credit' && !empty($customerReport['credit_link_available'])): ?>
+                    <a class="okv-btn-text mt-3 min-h-[44px]" href="/pro/credit.php">Open Pro Credit</a>
+                  <?php elseif ((string) $customerReport['resolution_type'] === 'replacement' && !empty($customerReport['replacement_order_id']) && trim((string) $customerReport['replacement_order_number']) !== ''): ?>
+                    <a class="okv-btn-text mt-3 min-h-[44px]" href="/public/order.php?order=<?= (int) $customerReport['replacement_order_id'] ?>">Open replacement order <?= okv_e((string) $customerReport['replacement_order_number']) ?></a>
+                  <?php endif; ?>
+                </div>
+              <?php endif; ?>
+            </details>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+
       <?php if (($issueState['code'] ?? '') === 'already_open'): ?>
-        <?php $openReport = $issueState['report']; ?>
-        <p class="mt-3 text-ink">We received your report for order <?= okv_e($order['order_number']) ?> and our team is checking it.</p>
-        <dl class="mt-4 space-y-3 rounded-md border border-mist bg-forest-tint p-4">
-          <div>
-            <dt class="text-sm text-ink-60">What was not right</dt>
-            <dd><?= okv_e(IssueReports::CATEGORIES[(string) $openReport['category']] ?? 'Something else') ?></dd>
-          </div>
-          <div>
-            <dt class="text-sm text-ink-60">Your description</dt>
-            <dd class="whitespace-pre-line"><?= okv_e($openReport['description']) ?></dd>
-          </div>
-          <div>
-            <dt class="text-sm text-ink-60">Received</dt>
-            <dd><?= okv_e(date('l jS F, H:i', strtotime((string) $openReport['created_at']))) ?></dd>
-          </div>
-        </dl>
-        <?php if (!empty($openReport['photos'])): ?>
-          <div class="mt-4">
-            <h3 class="font-semibold text-ink">Your photos</h3>
-            <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <?php foreach ($openReport['photos'] as $photoIndex => $photo): ?>
-                <a href="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
-                   class="block min-h-[44px] rounded-md focus:outline-none"
-                   aria-label="Open photo <?= $photoIndex + 1 ?> for order <?= okv_e($order['order_number']) ?> at full size">
-                  <img src="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
-                       alt="Photo <?= $photoIndex + 1 ?> supplied for order <?= okv_e($order['order_number']) ?>"
-                       class="aspect-square w-full rounded-md border border-mist object-cover"
-                       loading="lazy">
-                </a>
-              <?php endforeach; ?>
-            </div>
-          </div>
-        <?php endif; ?>
+        <p class="mt-4 text-sm text-ink-60">You can send another report after the current one is finished, if this order is still within its reporting window.</p>
       <?php elseif (!empty($issueState['ok'])): ?>
         <p class="mt-3 text-sm text-ink-60">
           If something in order <?= okv_e($order['order_number']) ?> is not right, tell us by

@@ -128,6 +128,72 @@ final class IssueReports
     }
 
     /**
+     * Private report history for the signed-in owner. Customer views contain
+     * only the outcome promised to them, never handler or internal-history data.
+     */
+    public static function historyForCustomer(int $orderId, int $userId): ?array
+    {
+        if (self::ownedOrder($orderId, $userId, false) === null) {
+            return null;
+        }
+        $reports = Database::all(
+            'SELECT i.id, i.category, i.description, i.status, i.resolution_type,
+                    i.resolution_note, i.resolution_amount_subunit, i.resolved_at,
+                    i.created_at, r.status AS refund_status,
+                    i.replacement_order_id, ro.order_number AS replacement_order_number,
+                    CASE WHEN bc.id IS NOT NULL AND bc.credit_status = :approved THEN 1 ELSE 0 END AS credit_link_available
+               FROM issue_reports i
+          LEFT JOIN refunds r ON r.issue_report_id = i.id
+          LEFT JOIN orders ro ON ro.id = i.replacement_order_id AND ro.user_id = :replacement_user
+          LEFT JOIN business_customers bc ON bc.user_id = i.user_id
+              WHERE i.order_id = :order_id AND i.user_id = :user_id
+           ORDER BY i.created_at DESC, i.id DESC',
+            [
+                ':approved' => 'approved',
+                ':replacement_user' => $userId,
+                ':order_id' => $orderId,
+                ':user_id' => $userId,
+            ]
+        );
+        foreach ($reports as &$report) {
+            $report['photos'] = self::photosForReport((int) $report['id']);
+            $report['status_label'] = self::customerStatusLabel((string) $report['status']);
+            $report['next_step'] = self::customerNextStep($report);
+            $report['refund_line'] = (string) $report['resolution_type'] === 'refund'
+                && $report['refund_status'] !== null
+                ? Refunds::customerStatusLine((string) $report['refund_status'])
+                : '';
+        }
+        unset($report);
+        return $reports;
+    }
+
+    public static function customerStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'in_progress' => 'In progress',
+            'resolved' => 'Resolved',
+            'declined' => 'Declined',
+            default => 'Received',
+        };
+    }
+
+    public static function customerNextStep(array $report): string
+    {
+        return match ((string) ($report['status'] ?? '')) {
+            'in_progress' => 'Our team is handling this report now.',
+            'resolved' => match ((string) ($report['resolution_type'] ?? '')) {
+                'refund' => 'Your refund has been raised. See its latest status below.',
+                'credit' => 'The account credit has been added.',
+                'replacement' => 'Your replacement order has been arranged.',
+                default => 'Our team has completed this report.',
+            },
+            'declined' => 'We could not approve this report. See the reason below.',
+            default => 'We received this report and our team is checking it.',
+        };
+    }
+
+    /**
      * Create one report. The order row lock and generated unique key jointly
      * protect the one-active-report rule under concurrent requests.
      */

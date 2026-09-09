@@ -234,6 +234,25 @@ try {
     irh_eq('already_open', (string) ($again['code'] ?? ''), 'the replay is identified as already open');
     irh_eq(1, (int) Database::one('SELECT COUNT(*) AS n FROM issue_reports WHERE order_id = :order_id', [':order_id' => $eligibleId])['n'], 'the replay creates no second report');
 
+    $declineReason = 'The delivery record confirms the full quantity arrived in good condition.';
+    Database::run(
+        'UPDATE issue_reports
+            SET status = :status, resolution_type = :type, resolution_note = :note,
+                resolved_at = NOW(), active_slot = NULL
+          WHERE id = :id',
+        [':status' => 'declined', ':type' => 'declined', ':note' => $declineReason, ':id' => $issueId]
+    );
+    [$status, $outcomePage] = irh_page($base, $jar, '/public/order.php?order=' . $eligibleId);
+    irh_eq(200, $status, 'the owner can open a terminal outcome');
+    irh_ok(str_contains($outcomePage, 'Your reports'), 'the signed-in order shows its private report history');
+    irh_ok(str_contains($outcomePage, 'Declined'), 'the terminal state is labelled exactly');
+    irh_ok(str_contains($outcomePage, $declineReason), 'the owner sees the exact customer-facing decline reason');
+    irh_ok(str_contains($outcomePage, 'Something is not right'), 'a finished report does not block a new report inside the window');
+    [$status, $privateTokenPage] = irh_page($base, $guestJar, '/public/order.php?token=' . rawurlencode($trailToken));
+    irh_eq(200, $status, 'the token trail still opens after an outcome');
+    irh_ok(!str_contains($privateTokenPage, $declineReason), 'the public token does not reveal the outcome note');
+    irh_ok(!str_contains($privateTokenPage, 'Your reports'), 'the public token does not reveal report history');
+
     [$plainId, $plainNumber] = $makeOrder($ownerId, 'delivered', date('Y-m-d H:i:s', strtotime('-1 day')));
     Database::run("DELETE FROM rate_limits WHERE bucket LIKE 'issues:%'");
     [, , $plainCsrf] = irh_page($base, $jar, '/public/order.php?order=' . $plainId);
