@@ -793,9 +793,19 @@ final class Basket
             return self::accountCartId($userId);
         }
 
+        // One token belongs to one basket, and session_token is unique. Once a
+        // checkout converts a guest's cart the token is spent, so a guest who
+        // shops again mints a fresh one instead of colliding with the order
+        // they have just placed.
+        $token = self::guestToken();
+        if (Database::one('SELECT id FROM shopping_carts WHERE session_token = :token LIMIT 1', [':token' => $token])) {
+            $token = bin2hex(random_bytes(32));
+            $_SESSION[self::SESSION_TOKEN_KEY] = $token;
+        }
+
         Database::run(
             'INSERT INTO shopping_carts (session_token, status, expires_at) VALUES (:token, \'active\', :expires_at)',
-            [':token' => self::guestToken(), ':expires_at' => self::guestExpiryStamp()]
+            [':token' => $token, ':expires_at' => self::guestExpiryStamp()]
         );
         return (int) Database::getInstance()->getConnection()->lastInsertId();
     }

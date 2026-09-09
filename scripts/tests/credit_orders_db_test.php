@@ -112,8 +112,10 @@ try {
         [':o' => $orderId, ':t' => 'charge'])['c'], 'a retry cannot double charge an order');
 
     // 3. One kobo over the available credit writes neither order nor charge.
-    $overId = $writeOrder($green['user_id'], 8000001, $delivery);
+    //    Checkout opens the transaction, writes the order and then draws, so
+    //    the fixture does the same: a refusal has to unwind both.
     $pdo->beginTransaction();
+    $overId = $writeOrder($green['user_id'], 8000001, $delivery);
     co_refuses(fn() => Credit::drawForOrder($green['user_id'], $overId, 8000001, $delivery),
         'credit_limit_exceeded', 'one kobo above the available credit is refused');
     $pdo->rollBack();
@@ -131,19 +133,42 @@ try {
     co_eq(50000000, $balance($green['business_id']), 'an order for the exact available credit is allowed');
     co_eq(0, (int) Credit::facilityForUser($green['user_id'])['available_subunit'], 'the facility is now fully drawn');
 
-    // 5. A repayment frees exactly what it repays.
+    // 5. A repayment recorded by hand frees exactly what it repays.
+    //    An on-account order settles its own credit the moment its payment is
+    //    confirmed, so the manual path is for money that arrives any other way.
+    //    This one sits on an ordinary prepaid order for the same business.
+    Database::run(
+        'INSERT INTO orders (order_number, user_id, customer_type, order_status, payment_option, payment_status,
+                             subtotal_subunit, order_total_subunit, balance_due_subunit, preferred_delivery_date)
+         VALUES (:n, :u, :ct, :os, :po, :ps, :st, :ot, :bd, :dd)',
+        [':n' => 'COD-M-' . $suffix, ':u' => $green['user_id'], ':ct' => 'business', ':os' => 'pending',
+         ':po' => 'full', ':ps' => 'paid', ':st' => 3000000, ':ot' => 3000000, ':bd' => 0, ':dd' => $delivery]
+    );
+    $prepaidId = (int) $pdo->lastInsertId();
+    $orders[] = $prepaidId;
+    Database::run(
+        'INSERT INTO payments (payment_number, user_id, order_id, provider, payment_type, expected_amount_subunit, paid_amount_subunit, status, confirmed_at)
+         VALUES (:n, :u, :o, :p, :t, :e, :a, :s, NOW())',
+        [':n' => 'COD-M-P-' . $suffix, ':u' => $green['user_id'], ':o' => $prepaidId, ':p' => 'manual',
+         ':t' => 'full', ':e' => 3000000, ':a' => 3000000, ':s' => 'paid']
+    );
+    $manualPaymentId = (int) $pdo->lastInsertId();
+    $repayment = Credit::recordRepayment($green['business_id'], $manualPaymentId);
+    co_eq(3000000, (int) $repayment['amount_subunit'], 'the repayment is the confirmed payment amount');
+    co_eq(3000000, (int) Credit::facilityForUser($green['user_id'])['available_subunit'], 'a repayment frees the same amount of limit');
+    co_refuses(fn() => Credit::recordRepayment($green['business_id'], $manualPaymentId), 'repayment_recorded',
+        'the same payment cannot be credited twice');
+
+    // The money on the on-account order itself, which section 7 refunds.
     Database::run(
         'INSERT INTO payments (payment_number, user_id, order_id, provider, payment_type, expected_amount_subunit, paid_amount_subunit, status, confirmed_at)
          VALUES (:n, :u, :o, :p, :t, :e, :a, :s, NOW())',
         [':n' => 'COD-P-' . $suffix, ':u' => $green['user_id'], ':o' => $orderId, ':p' => 'manual',
-         ':t' => 'credit_repayment', ':e' => 3000000, ':a' => 3000000, ':s' => 'paid']
+         ':t' => 'balance', ':e' => 42000000, ':a' => 2000000, ':s' => 'part_paid']
     );
     $paymentId = (int) $pdo->lastInsertId();
-    $repayment = Credit::recordRepayment($green['business_id'], $paymentId);
-    co_eq(3000000, (int) $repayment['amount_subunit'], 'the repayment is the confirmed payment amount');
-    co_eq(3000000, (int) Credit::facilityForUser($green['user_id'])['available_subunit'], 'a repayment frees the same amount of limit');
-    co_refuses(fn() => Credit::recordRepayment($green['business_id'], $paymentId), 'repayment_recorded',
-        'the same payment cannot be credited twice');
+    co_refuses(fn() => Credit::recordRepayment($green['business_id'], $paymentId), 'settles_itself',
+        'a payment on a credit order is never credited by hand');
 
     // 6. A cancellation appends an adjustment and never edits the charge.
     $chargeBefore = Database::one('SELECT id, amount_subunit, due_date FROM credit_transactions WHERE order_id = :o AND transaction_type = :t',
@@ -160,11 +185,23 @@ try {
         [':o' => $exactId, ':t' => 'adjustment'])['c'], 'a repeated cancellation appends nothing further');
 
     // 7. A refund appends its own adjustment, capped at the refunded amount.
+    //    A refund hangs off a payment transaction, not the payment row, so the
+    //    fixture writes the attempt the money actually came through.
     Database::run(
-        'INSERT INTO refunds (order_id, payment_id, amount_subunit, reason, status, requested_by)
-         VALUES (:o, :p, :a, :r, :s, :u)',
-        [':o' => $orderId, ':p' => $paymentId, ':a' => 2000000, ':r' => 'Short delivery on the tomatoes.',
-         ':s' => 'succeeded', ':u' => $green['user_id']]
+        'INSERT INTO payment_transactions
+            (payment_id, attempt_number, provider, reference, domain, status,
+             requested_amount_subunit, amount_subunit, customer_email, initialized_at, paid_at)
+         VALUES (:p, 1, :prov, :ref, :dom, :st, :req, :amt, :email, NOW(), NOW())',
+        [':p' => $paymentId, ':prov' => 'manual', ':ref' => 'COD-T-' . $suffix, ':dom' => 'test',
+         ':st' => 'success', ':req' => 3000000, ':amt' => 3000000,
+         ':email' => strtolower('green') . "-$suffix@example.test"]
+    );
+    $transactionId = (int) $pdo->lastInsertId();
+    Database::run(
+        'INSERT INTO refunds (payment_transaction_id, order_id, amount_subunit, customer_note, status, requested_by)
+         VALUES (:t, :o, :a, :r, :s, :u)',
+        [':t' => $transactionId, ':o' => $orderId, ':a' => 2000000,
+         ':r' => 'Short delivery on the tomatoes.', ':s' => 'succeeded', ':u' => $green['user_id']]
     );
     $refundId = (int) $pdo->lastInsertId();
     Credit::adjustRefund($orderId, $refundId, 2000000);
@@ -178,8 +215,8 @@ try {
     // 8. Suspended and withdrawn facilities cannot be drawn on.
     foreach (['suspended', 'withdrawn'] as $state) {
         Database::run('UPDATE business_customers SET credit_status = :s WHERE id = :id', [':s' => $state, ':id' => $green['business_id']]);
-        $blockedId = $writeOrder($green['user_id'], 100000, $delivery);
         $pdo->beginTransaction();
+        $blockedId = $writeOrder($green['user_id'], 100000, $delivery);
         co_refuses(fn() => Credit::drawForOrder($green['user_id'], $blockedId, 100000, $delivery),
             'credit_not_approved', "$state credit refuses a new order");
         $pdo->rollBack();
@@ -189,8 +226,8 @@ try {
 
     // 9. A household or an unknown business cannot draw at all.
     $other = $makeBusiness('Bowl', 'not_requested', 0, 0);
-    $otherOrder = $writeOrder($other['user_id'], 100000, $delivery);
     $pdo->beginTransaction();
+    $otherOrder = $writeOrder($other['user_id'], 100000, $delivery);
     co_refuses(fn() => Credit::drawForOrder($other['user_id'], $otherOrder, 100000, $delivery),
         'credit_not_approved', 'a business with no facility cannot go on account');
     $pdo->rollBack();
@@ -241,6 +278,119 @@ try {
     } catch (LogicException $e) {
         co_ok(true, 'the draw refuses to run outside a transaction');
     }
+
+    // 12. Money received on an on-account order frees the limit by itself.
+    //     Every path that moves money on an order goes through
+    //     Payments::recomputeOrder, so that is the seam this exercises.
+    $settle = $makeBusiness('Settle', 'approved', 20000000, 7);
+    $settleOrder = $writeOrder($settle['user_id'], 12000000, $delivery);
+    $pdo->beginTransaction();
+    Credit::drawForOrder($settle['user_id'], $settleOrder, 12000000, $delivery);
+    $pdo->commit();
+    co_eq(8000000, (int) Credit::facilityForUser($settle['user_id'])['available_subunit'],
+        'the on-account order takes its charge off the available limit');
+
+    /**
+     * Record money against the order the way staff do. The payments table holds
+     * one row per order and type, and manual money adds to it, so a second part
+     * payment increments the row it already has rather than opening a new one.
+     */
+    $receive = function (int $orderId, int $amount, string $reference, int $expected) use ($settle): int {
+        $existing = Database::one(
+            'SELECT id FROM payments WHERE order_id = :o AND payment_type = :t',
+            [':o' => $orderId, ':t' => 'balance']
+        );
+        if ($existing) {
+            Database::run(
+                'UPDATE payments
+                    SET paid_amount_subunit = paid_amount_subunit + :amount,
+                        status = :status, confirmed_at = NOW()
+                  WHERE id = :id',
+                [':amount' => $amount, ':status' => 'paid', ':id' => (int) $existing['id']]
+            );
+            $id = (int) $existing['id'];
+        } else {
+            Database::run(
+                'INSERT INTO payments (payment_number, user_id, order_id, provider, payment_type,
+                                       expected_amount_subunit, paid_amount_subunit, status, confirmed_at)
+                 VALUES (:n, :u, :o, :p, :t, :e, :a, :s, NOW())',
+                [':n' => $reference, ':u' => $settle['user_id'], ':o' => $orderId, ':p' => 'manual',
+                 ':t' => 'balance', ':e' => $expected, ':a' => $amount, ':s' => 'paid']
+            );
+            $id = (int) Database::getInstance()->getConnection()->lastInsertId();
+        }
+        Payments::recomputeOrder($orderId);
+        return $id;
+    };
+
+    // A part payment frees exactly what it settles, and no more.
+    $firstPayment = $receive($settleOrder, 5000000, 'SET-A-' . $suffix, 12000000);
+    co_eq(7000000, $balance($settle['business_id']), 'a part payment settles only its own part of the charge');
+    co_eq(13000000, (int) Credit::facilityForUser($settle['user_id'])['available_subunit'],
+        'a part payment gives back exactly that much limit');
+
+    // Recomputing again changes nothing: the payment is already credited.
+    Payments::recomputeOrder($settleOrder);
+    co_eq(1, (int) Database::one('SELECT COUNT(*) AS c FROM credit_transactions WHERE order_id = :o AND transaction_type = :t',
+        [':o' => $settleOrder, ':t' => 'repayment'])['c'], 'recomputing the same order credits the payment once');
+
+    // The manual path stands aside for an order that settles itself, so the
+    // same money can never be counted twice.
+    co_refuses(fn() => Credit::recordRepayment($settle['business_id'], $firstPayment), 'settles_itself',
+        'a payment on a credit order cannot also be entered by hand');
+
+    // Settling the rest clears the order and returns the whole limit.
+    $receive($settleOrder, 7000000, 'SET-B-' . $suffix, 12000000);
+    co_eq(0, $balance($settle['business_id']), 'paying the balance clears the order from the journal');
+    co_eq(20000000, (int) Credit::facilityForUser($settle['user_id'])['available_subunit'],
+        'a settled on-account order gives the whole limit back');
+    co_eq(2, (int) Database::one('SELECT COUNT(*) AS c FROM credit_transactions WHERE order_id = :o AND transaction_type = :t',
+        [':o' => $settleOrder, ':t' => 'repayment'])['c'], 'each part payment appends its own repayment row');
+    co_eq(1, (int) Database::one('SELECT COUNT(*) AS c FROM credit_transactions WHERE order_id = :o AND transaction_type = :t',
+        [':o' => $settleOrder, ':t' => 'charge'])['c'], 'settling never touches the original charge');
+
+    // Overpayment cannot free more limit than the order ever charged.
+    $receive($settleOrder, 3000000, 'SET-C-' . $suffix, 12000000);
+    co_eq(0, $balance($settle['business_id']), 'money beyond the charge does not push the account into credit');
+
+    // 13. A payment taken back off the order puts the credit back on, as a new
+    //     signed row rather than an edit to the repayment it undoes.
+    Database::run(
+        'UPDATE payments SET paid_amount_subunit = paid_amount_subunit - 5000000, status = :s WHERE id = :id',
+        [':s' => 'part_paid', ':id' => $firstPayment]
+    );
+    Payments::recomputeOrder($settleOrder);
+    // The order had taken 15,000,000 against a 12,000,000 charge, so 3,000,000
+    // of it was never settling credit in the first place. Taking 5,000,000 back
+    // therefore puts 2,000,000 of credit back on, not the whole 5,000,000: the
+    // surplus absorbs the rest. This is the case a stored balance gets wrong.
+    $reversal = Database::one(
+        'SELECT amount_subunit, transaction_type, source_key FROM credit_transactions
+          WHERE order_id = :o AND source_key LIKE :prefix ORDER BY id DESC LIMIT 1',
+        [':o' => $settleOrder, ':prefix' => 'order:' . $settleOrder . ':settle:%']
+    );
+    co_eq('adjustment', (string) ($reversal['transaction_type'] ?? ''), 'money taken back off the order is an adjustment, not a charge');
+    co_eq(2000000, (int) ($reversal['amount_subunit'] ?? 0), 'a reversed payment puts back only the credit it had settled');
+    co_eq(2000000, $balance($settle['business_id']), 'the balance reflects the money that came back off the order');
+    co_eq(18000000, (int) Credit::facilityForUser($settle['user_id'])['available_subunit'],
+        'the limit tightens again by exactly what came back off');
+    co_eq(2, (int) Database::one('SELECT COUNT(*) AS c FROM credit_transactions WHERE order_id = :o AND transaction_type = :t',
+        [':o' => $settleOrder, ':t' => 'repayment'])['c'], 'the repayment rows it undoes are left exactly as they were');
+
+    // 14. A household order never touches the credit journal at all.
+    $houseOrderId = 0;
+    Database::run(
+        'INSERT INTO orders (order_number, user_id, customer_type, order_status, payment_option, payment_status,
+                             subtotal_subunit, order_total_subunit, balance_due_subunit, preferred_delivery_date)
+         VALUES (:n, :u, :ct, :os, :po, :ps, :st, :ot, :bd, :dd)',
+        [':n' => 'COD-H-' . $suffix, ':u' => $settle['user_id'], ':ct' => 'household', ':os' => 'pending',
+         ':po' => 'full', ':ps' => 'unpaid', ':st' => 500000, ':ot' => 500000, ':bd' => 500000, ':dd' => $delivery]
+    );
+    $houseOrderId = (int) $pdo->lastInsertId();
+    $orders[] = $houseOrderId;
+    $receive($houseOrderId, 500000, 'SET-H-' . $suffix, 500000);
+    co_eq(0, (int) Database::one('SELECT COUNT(*) AS c FROM credit_transactions WHERE order_id = :o', [':o' => $houseOrderId])['c'],
+        'an order that is not on account writes nothing to the credit journal');
 } finally {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }
     foreach ($businesses as $id) {
@@ -249,6 +399,10 @@ try {
     }
     foreach ($orders as $id) {
         Database::run('DELETE FROM refunds WHERE order_id = :id', [':id' => $id]);
+        Database::run(
+            'DELETE t FROM payment_transactions t JOIN payments p ON p.id = t.payment_id WHERE p.order_id = :id',
+            [':id' => $id]
+        );
         Database::run('DELETE FROM payments WHERE order_id = :id', [':id' => $id]);
         Database::run('DELETE FROM orders WHERE id = :id', [':id' => $id]);
     }

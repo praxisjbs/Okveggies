@@ -515,6 +515,13 @@ final class Payments
                 ':id'      => $orderId,
             ]
         );
+
+        // Every path that moves money on an order comes through here: a
+        // Paystack charge, a payment recorded by staff, and a reversal. So this
+        // is the one place an on-account order's credit has to be reconciled
+        // against what has actually been received. It appends, never edits, and
+        // does nothing at all for an order that is not on account.
+        Credit::settleOrderFromPayments($orderId);
     }
 
     // -------------------------------------------------------------------------

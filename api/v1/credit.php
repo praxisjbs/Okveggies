@@ -57,7 +57,7 @@ try {
         error_log('credit announce ' . $action . ' failed: ' . $e->getMessage());
     }
     credit_response($result, '/admin/credit.php?' . (($action === 'approve' || $action === 'decline') ? 'application=' . $entityId : 'business=' . $entityId) . '&saved=1');
-} catch (DomainException $e) { $code = $e->getMessage(); credit_failure($code, in_array($code, ['conflicting_review', 'closed_application', 'repayment_recorded'], true) ? 409 : ($code === 'not_found' ? 404 : 422), $action); }
+} catch (DomainException $e) { $code = $e->getMessage(); credit_failure($code, in_array($code, ['conflicting_review', 'closed_application', 'repayment_recorded', 'active_application', 'active_credit'], true) ? 409 : ($code === 'not_found' ? 404 : 422), $action); }
 catch (Throwable $e) { error_log('credit ' . $action . ' failed: ' . $e->getMessage()); credit_failure('failed', 500, $action); }
 
 function credit_is_json(): bool { return strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'fetch' || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json'); }
