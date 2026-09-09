@@ -68,9 +68,15 @@ if (!function_exists('okv_contact_form')) {
           <h3 class="font-editorial text-okv-h6 text-ink">We have your message</h3>
           <p class="mt-2 text-sm text-ink-60">Thank you. We reply within 1 working day, Monday to Saturday, using the details you gave us.</p>
           <?php if ($context === 'support_widget'): ?>
-            <button type="button" class="okv-btn-outline mt-4" data-support-close>Done</button>
+            <div class="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button type="button" class="okv-btn-text text-sm" data-support-new-message>Send another message</button>
+              <button type="button" class="okv-btn-outline" data-support-close>Done</button>
+            </div>
           <?php else: ?>
-            <a href="/shop.php" class="okv-btn-outline mt-4">Back to the shop</a>
+            <div class="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button type="button" class="okv-btn-text text-sm" data-contact-new-message>Send another message</button>
+              <a href="/shop.php" class="okv-btn-outline">Back to the shop</a>
+            </div>
           <?php endif; ?>
         </section>
         <?php
