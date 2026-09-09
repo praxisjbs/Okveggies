@@ -12,6 +12,8 @@ Living tracker for the Phase 1 build. Update it at the end of every working sess
 
 ## Current focus
 
+**Milestone M9, Notifications and contact. Reviewed and finished on branch `M9-notifications_contact`, on top of pull request 43.** The notification half shipped in M6, so this was contact: the widget, the form, the messages landing in admin. The first attempt had good bones. The `ContactMessages` class is careful about concurrency, the admin workspace is genuinely well built, and the escaping and the RBAC gates are right. Six things were wrong or missing. Its migration was numbered `032`, which `032_credit_notifications` already owns on `main`, so two migrations shared a number; it is now `040`, from the range M9 was given. Only one of the two templates the brief asks for existed, so a customer who wrote in heard nothing back. Contact never reached `$OKV_FOOTER_NAV`. Nothing anywhere showed a count of new messages. The form kept `required` and `type="email"`, so a person met a browser bubble before our own wording ever ran. And a one-time token minted into the session on every page view, capped at 20, meant a visitor who browsed 21 pages and then sent a message was told the form was no longer valid. Two defects were found while finishing it: a refused submission spent the IP rate limit, so three typos locked a customer out of the only support channel for 15 minutes, and `visual_pass.mjs` could not sign in at all, on `main` as much as here. The written review is `docs/M9_REVIEW.md`.
+
 **Milestone 6/7 reported bugs. Fixed on branch `claude/milestone-6-7-bugs-297v81` (9 September 2026).** Four defects off the live site: the Kitchen Runs queue tabs never applied their filter, checkout demanded an account before it would take an order, the cancellation note read as if a customer paying in full lost everything, and an order confirmation went out before the payment. Migration `027` ships with it. Two things need a person: run the database and HTTP suites (this container has neither), and set up the cPanel cron job in `docs/DEPLOYMENT.md`, because until it exists the payment sweep and the new reminder are written and never sent. One open question for the owner is in the session log: a pay in full order records no deposit, so cancelling after the cutoff refunds it in full while a deposit customer forfeits.
 
 **Milestone M7, Kitchen Runs. Follow-up merged into `main` on 8 September 2026 (pull request 38, merge commit `0fc0a2e`), and deployed.** The twelve items the completion pass left open are all done: a signed-out visitor is told rather than redirected, the customer picks their own delivery day and area, the queue filters by customer, lines reorder and carry a note, the team gets an internal note of its own, `kitchen_runs.approve` is a real path, an approved run can be withdrawn, an order links back to its run, the customer hears that we have their list, the Pro Portal screen is real, already-priced is its own mode, and the balance after delivery is proved rather than rebuilt. Verified on MySQL 8.0.46, the production engine, which retires the MariaDB caveat in the review. The authenticated browser journey at 390px and 1440px finally ran, and it found two defects no curl-shaped test could see: the customer's form had never posted with JavaScript on, and pricing a free-text list failed on the database while telling the colleague their file was rejected. Both fixed, both with regression tests. Full account in the session log below.
@@ -610,8 +612,26 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 
 ### M9. Notifications and contact
 - [x] Email templates and delivery: placed, payment confirmed, dispatched, delivered, trail link. **Delivered in M6**, per `docs/M6_GUIDE.md` Section 1: every one of these is fired by a status change M6 builds, so building them apart meant writing every transition twice. Contact stayed here, which is the clean seam.
-- [ ] Floating support widget: WhatsApp click-to-chat and contact form
-- [ ] Contact messages surface in admin
+- [x] Floating support widget: two choices where there was one, message us on WhatsApp
+  or send a message here. One shared trigger on every storefront route through the
+  shop footer, plus `account.php`, `page.php` and the two auth screens that do not
+  use it. A slide-up sheet on mobile, an anchored panel on desktop, a 56px target
+  sitting clear of the mobile tab bar, focus trapped both ways, Escape closing it
+  and handing the trigger back, and no animation when reduced motion is asked for.
+  The same form has a page of its own at `/contact.php`, linked from the footer,
+  and a plain POST lands the same row with JavaScript switched off. Proved in a
+  browser at 390px and 1440px (`visual_pass.mjs`, 140/140) and over HTTP
+  (`contact_http_test.php`, 39/39; `contact_db_test.php`, 32/32).
+- [x] Contact messages surface in admin: `admin/content.php` is Content and Messages,
+  two tabs, with the page-copy half left to M12 and a note on the screen saying so.
+  `messages.view` gates the searchable, newest-first list and detail; `messages.handle`
+  separately gates internal notes, handling and reopening. Filters and 25-row
+  pagination preserve their URL state, handling history comes from the audit log,
+  message text is escaped, reply links open external apps, and there is no delete
+  action. The count of unanswered messages sits on the admin sidebar, so staff carry
+  it on every screen. Proved by `contact_admin_db_test.php` (27/27) and
+  `contact_admin_http_test.php` (42/42), which also covers a staff member with
+  neither permission seeing no screen, no sidebar link and a 403 on a direct write.
 - [x] Tests: template render; notification queued on order events (**M6**, `NotificationsTest.php` and `notifications_db_test.php`)
 
 ### M10. Trust and Make It Right
@@ -657,12 +677,34 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 - Sourcing is still described site-wide, not per product: `source_regions` and now `source_day` are two settings every product reads. The M2 audit already carried forward "give products a real source region"; the day has the same shape and should move with it, so a product sourced on Thursday from Jos can say so.
 - The storefront scaffolds (`cart.php`, `checkout.php`, `kitchen-runs.php`, `page.php`, `public/order.php`) still carry the old gold-on-white "OK VEGGIES" wordmark line, which is 2.75:1 and fails AA. They were left alone in the brand PR2 pass because they render no real data yet; each one gets the brand when its milestone builds it (M4, M7, M12, M6).
 - ~~Carried forward from brand PR3, for M8: the `pro/*.php` screens still have no server-side access check.~~ **Closed by M8.** `require_business_customer()` in `includes/functions/pro_access.php` runs immediately after bootstrap on all six routes, proved over HTTP and in a browser.
-- The remaining scaffolds each name the milestone that builds them, and every one of those milestones is still open: `api/v1/payments.php` and `api/v1/paystack_webhook.php` (M5), `api/v1/orders.php` (M6), `kitchen-runs.php` and `api/v1/kitchen_runs.php` (M7), `api/v1/contact.php` (M9), `api/v1/make_it_right.php` (M10), `page.php` (M12), the remaining admin placeholders. M8 built `api/v1/credit.php`, `api/v1/customers.php`, `admin/credit.php`, `admin/customers.php` and all six Pro Portal screens, so none of those is a scaffold any more. Checked on 1 Sep 2026: none of them names a milestone that has already closed. Settings was built (M0 reopened), and M4 built out `cart.php`, `checkout.php`, `api/v1/checkout.php`, `api/v1/delivery.php` and `public/order.php` (the confirmation and the public Order Trail), leaving only the M6 order manifest and trail-writing behind those two files' fuller M6 scope.
+- The remaining scaffolds each name the milestone that builds them, and every one of those milestones is still open: `api/v1/payments.php` and `api/v1/paystack_webhook.php` (M5), `api/v1/orders.php` (M6), `kitchen-runs.php` and `api/v1/kitchen_runs.php` (M7), `api/v1/make_it_right.php` (M10), `page.php` (M12), the remaining admin placeholders. M9 built `api/v1/contact.php`, `contact.php` and the Messages half of `admin/content.php`, so those are not scaffolds any more; the page-copy half of that screen is still M12's. M8 built `api/v1/credit.php`, `api/v1/customers.php`, `admin/credit.php`, `admin/customers.php` and all six Pro Portal screens, so none of those is a scaffold any more. Checked on 1 Sep 2026: none of them names a milestone that has already closed. Settings was built (M0 reopened), and M4 built out `cart.php`, `checkout.php`, `api/v1/checkout.php`, `api/v1/delivery.php` and `public/order.php` (the confirmation and the public Order Trail), leaving only the M6 order manifest and trail-writing behind those two files' fuller M6 scope.
 - Carried forward from brand PR3, for M5: `public/documents/invoice.php` and `receipt.php` have the branded frame and the print rules but no rows, because nothing creates an order yet. Each file lists what M5 has to add first: the access check (token link, or the owner of the order, or staff with `payments.view`), the read from the order snapshot rather than today's prices, and dompdf over the same markup.
 
 ---
 
 ## Session log (newest first)
+
+### 9 Sep 2026, M9 reviewed and finished
+
+Merged `main` into `M9-notifications_contact` rather than replacing it, so the engineer's two commits and their authorship stay. Five conflicts, all unions except the notification preview sample, which now carries the contact tokens alongside the M8 credit ones.
+
+**Six answers were taken from the owner before any code was written**, each with three options: drop the one-time submission token rather than issue one on every page view; send the acknowledgement whenever an email address was given; put the unanswered count on the admin sidebar; keep a page-copy tab for M12 on the same screen; keep the honeypot and drop the two-second timing gate; and keep the refund fix the branch carried in from M5 and M6 rather than strip it out.
+
+**What was wrong with the first attempt.** Migration `032_contact_messages.sql` collided with `032_credit_notifications.sql`, already merged; both applied on a fresh database because the runner sorts by filename, which is exactly how a numbering contract rots quietly. Renumbered `040`, from the M9 reserved range. The brief asks for two seeded templates and one existed, so nothing ever went back to the person who wrote in; `contact_acknowledgement` is now seeded and sent whenever an email was left, carrying nothing the sender typed, because the address is unverified and a mail that echoes a stranger's words is a way to deliver them. `$OKV_FOOTER_NAV` was untouched, so the contact page existed with no link to it. No count of new messages existed anywhere. The form kept `required` and `type="email"` with no `novalidate`, so the browser refused a submission in its own words before our one error path ever ran.
+
+**The two defects found while finishing it.** `ContactMessages::submit()` called `RateLimiter::hit()` before validating anything, so a refused attempt spent the allowance: three mistyped email addresses and a real customer is locked out of the only public support channel for 15 minutes. It now checks with `isLocked()` before doing the work and spends the allowance only once a row is committed, which still caps a flood at 3 stored messages per 15 minutes. `scripts/tests/visual_pass.mjs` could not sign in at all; the session cookie is `Secure`, and over plain http Playwright's API request context will not send it while a browser does, because 127.0.0.1 counts as a trustworthy origin. Reproduced on untouched `main` before changing anything. Sign-in now goes through the page's own fetch, which is what a customer's browser does anyway.
+
+**Verification.** `bash scripts/tests/run_all.sh` reports **37 suites passed, 0 failed**, on MySQL 8.0.46, the production engine. That is 2,603 unit assertions, 25 database suites, 10 HTTP suites, the browser pass and the brand guard. The one suite `run_all.sh` skipped, `refund_cancellation_db_test`, was then run against the stand-in gateway on 8124 and passed 24/24, so nothing in the tree is unrun. Migrations 000 to 040 applied to an empty database and the second run reported nothing to apply.
+
+New this pass: `contact_db_test` (32), `contact_http_test` (39), `contact_admin_db_test` (27) and `contact_admin_http_test` (42) cover every M9 test item. A valid submission writes exactly one row with the right source; no way to reply is refused; CSRF, the rate limit and the honeypot each refuse and write nothing; handling records who and when; `messages.view` reads but cannot handle, and staff with neither permission get no screen, no sidebar link and a 403 on a direct write; the staff alert fires and a failed alert leaves the message on record. `visual_pass.mjs` grew 26 checks for the widget and now runs 140/140 at 390px and 1440px: one trigger on each of 9 storefront routes, a 56px target sitting 15px clear of the mobile tab bar, keyboard reach, the gold ring at `rgb(201, 146, 43)`, a sheet from the bottom edge on mobile and an anchored panel on desktop, a working focus trap both ways, Escape closing and returning focus, every visible control at 44px, and no animation when reduced motion is asked for.
+
+Both emails were captured on a local SMTP sink and read: three staff alerts carrying the exact `/admin/content.php?message=<id>` link, and one acknowledgement to the sender with no leftover token and nothing of theirs repeated back.
+
+`bash scripts/verify.sh http://127.0.0.1:8123` passes all three new contact checks. Its `.env`, `/migrations/` and `/docs/` denials still fail under PHP's built-in server, which does not read `.htaccess`. That is the same open deployment matter M8 recorded, not something this milestone changed.
+
+**Kept from the first attempt, out of M9 scope.** A refund that Paystack settles immediately was never announced, because only the webhook path called `announceRefund`. The fix touches `Refunds`, `OrderCancellation`, `api/v1/orders.php` and `api/v1/payments.php` and carries its own regression tests. Kept, on the owner's decision, and recorded here rather than left silent.
+
+**Not done here.** The page-copy half of `admin/content.php` stays with M12, which owns the storefront pages it feeds; the tab says so on the screen. Agreeing that split with whoever takes M12 is still a conversation for a person, not a commit.
 
 ### 9 Sep 2026, M8 reviewed and finished
 

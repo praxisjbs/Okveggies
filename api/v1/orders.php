@@ -94,8 +94,13 @@ if ($action === 'cancel_customer') {
     if (!$result['ok']) {
         okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
     }
+    $refundEvents = is_array($result['refund_events'] ?? null) ? $result['refund_events'] : [];
+    unset($result['refund_events']);
     if ($result['code'] === 'cancelled') {
         Notifications::announceCancellation((int) okv_input('order_id', 0), $result, (int) Customer::id());
+        foreach ($refundEvents as $refundEvent) {
+            Notifications::announceRefund($refundEvent);
+        }
     }
     orders_done($result, '/public/order.php?order=' . (int) okv_input('order_id', 0));
 }
@@ -124,8 +129,13 @@ if ($action === 'cancel_staff') {
         $status = $result['code'] === 'not_found' ? 404 : ($result['code'] === 'refund_permission_required' ? 403 : 422);
         okv_error($result['message'], $status, $result['code']);
     }
+    $refundEvents = is_array($result['refund_events'] ?? null) ? $result['refund_events'] : [];
+    unset($result['refund_events']);
     if ($result['code'] === 'cancelled') {
         Notifications::announceCancellation((int) okv_input('order_id', 0), $result, (int) Rbac::userId());
+        foreach ($refundEvents as $refundEvent) {
+            Notifications::announceRefund($refundEvent);
+        }
     }
     orders_done($result, '/admin/orders.php?order=' . (int) okv_input('order_id', 0));
 }

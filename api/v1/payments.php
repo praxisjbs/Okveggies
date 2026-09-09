@@ -276,6 +276,10 @@ if ($action === 'request_refund') {
         error_log('payments.request_refund failed: ' . $e->getMessage());
         okv_error('We could not raise that refund. Check the Paystack dashboard before trying again.', 500, 'failed');
     }
+    // Paystack may answer with a terminal result immediately. Announce that
+    // result now, after the refund row is committed, because a later webhook
+    // can correctly report that the row was already final.
+    Notifications::announceRefund($result);
     if (!$result['ok']) {
         okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
     }

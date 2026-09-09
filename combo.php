@@ -36,7 +36,6 @@ if (!$combo) {
       <a href="/combos.php" class="okv-btn mt-8">See this week's combos</a>
     </main>
     <?php okv_shop_footer(); ?>
-    <?php okv_support_widget(); ?>
     </body></html><?php
     exit;
 }
@@ -168,7 +167,6 @@ $componentCount = (int) $combo['component_count'];
 </main>
 
 <?php okv_shop_footer(); ?>
-<?php okv_support_widget(); ?>
 <script>window.OKV = window.OKV || {}; window.OKV.csrf = <?= json_encode(Csrf::token()) ?>;</script>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>"></script>
 <script src="<?= okv_e(okv_asset('/assets/js/catalogue.min.js')) ?>"></script>

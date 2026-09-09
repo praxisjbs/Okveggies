@@ -27,6 +27,11 @@ expect_deny() { # url  label   (403 or 404 both acceptable)
   if [ "$code" = "403" ] || [ "$code" = "404" ]; then echo "  ok   [$code] $2 is denied"; else echo "  FAIL [$code] $2 should be denied"; fail=1; fi
 }
 
+expect_status() { # url  expected_code  label   (does not follow redirects)
+  code=$(curl -s -o /dev/null -w "%{http_code}" "$1")
+  if [ "$code" = "$2" ]; then echo "  ok   [$code] $3"; else echo "  FAIL [$code, wanted $2] $3"; fail=1; fi
+}
+
 expect_login() { # url  label   (a redirect to the login, or a hard refusal)
   code=$(curl -s -o /dev/null -w "%{http_code}" "$1")
   case "$code" in
@@ -56,6 +61,13 @@ expect_login "$BASE/admin/orders.php"            "the orders screen"
 # to be reachable by the cron job and refuse everybody else. No token, 404.
 expect "$BASE/public/cron.php"                   "404" "the cron endpoint fails closed without a token"
 expect "$BASE/public/cron.php?token=not-a-real-token" "404" "and refuses a wrong token without admitting it exists"
+
+# M9 contact. The contact page must serve. The one public write on the platform
+# never answers a GET: a person or a crawler that follows a link to it is sent
+# to the form, and only a POST can put a row in the table.
+expect "$BASE/contact.php" "200" "the contact page"
+expect_status "$BASE/api/v1/contact.php" "303" "the contact endpoint sends a GET to the form"
+expect_login "$BASE/admin/content.php" "the messages screen"
 
 expect_deny "$BASE/.env"                 ".env"
 expect_deny "$BASE/includes/config/db.php" "includes/"

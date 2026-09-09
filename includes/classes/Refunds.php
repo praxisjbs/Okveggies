@@ -258,8 +258,11 @@ final class Refunds
             return [
                 'ok'      => false,
                 'code'    => $response['reason'] === 'network' ? 'gateway_unreachable' : 'gateway_refused',
+                'status'  => $response['reason'] === 'network' ? self::STATUS_REQUESTED : self::STATUS_FAILED,
                 'message' => $note,
                 'refund_id' => $refundId,
+                'order_id' => (int) $quote['order_id'],
+                'amount_subunit' => $amountSubunit,
             ];
         }
 
@@ -290,6 +293,8 @@ final class Refunds
             'code'      => 'raised',
             'refund_id' => $refundId,
             'status'    => $status,
+            'order_id'  => (int) $quote['order_id'],
+            'amount_subunit' => $amountSubunit,
             'message'   => 'Refund of ' . Money::format($amountSubunit) . ' raised. ' . self::customerStatusLine($status),
         ];
     }

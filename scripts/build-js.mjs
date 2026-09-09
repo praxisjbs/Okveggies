@@ -23,6 +23,7 @@ const sources = [
   'assets/js/pro-kitchen-lists.js',
   'assets/js/admin-kitchen-runs.js',
   'assets/js/admin-credit.js',
+  'assets/js/support-widget.js',
 ].filter(existsSync);
 
 if (sources.length === 0) {

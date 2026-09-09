@@ -422,7 +422,6 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 
 </main>
 
-<?php okv_support_widget(); ?>
 <?php okv_shop_footer(); ?>
 <script src="<?= okv_e(okv_asset('/assets/js/kitchen-runs.min.js')) ?>" defer></script>
 </body>

@@ -27,7 +27,6 @@ if (!$product) {
       <a href="/shop.php" class="okv-btn mt-8">Back to the shop</a>
     </main>
     <?php okv_shop_footer(); ?>
-    <?php okv_support_widget(); ?>
     </body></html><?php
     exit;
 }
@@ -162,7 +161,6 @@ $basketNotice = (string) okv_input('basket', '');
 </main>
 
 <?php okv_shop_footer(); ?>
-<?php okv_support_widget(); ?>
 <script>window.OKV = window.OKV || {}; window.OKV.csrf = <?= json_encode(Csrf::token()) ?>;</script>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>"></script>
 <script src="<?= okv_e(okv_asset('/assets/js/catalogue.min.js')) ?>"></script>

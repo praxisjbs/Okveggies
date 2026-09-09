@@ -27,7 +27,10 @@ foreach (Notifications::EVENTS as $event => $definition) {
         in_array('order_trail_url', $tokens, true)
         || in_array('request_url', $tokens, true)
         || in_array('pay_url', $tokens, true)
-        || in_array('credit_url', $tokens, true),
+        || in_array('credit_url', $tokens, true)
+        // The contact acknowledgement has no order or request to point at. Its
+        // next step is the other half of the support offer, so WhatsApp counts.
+        || in_array('whatsapp_url', $tokens, true),
         "the customer email for $event carries a link back to what it is about"
     );
 }
@@ -62,8 +65,12 @@ okv_test_ok(str_contains($forfeit, 'farmer'), 'the reason the deposit is kept is
 $manual = Notifications::cancellationMoneyLine(['refund_subunit' => 300000, 'forfeit_subunit' => 0, 'manual_subunit' => 300000, 'refund_status' => 'pending_manual']);
 okv_test_ok(str_contains($manual, 'by hand'), 'money paid outside the gateway is said to need a person');
 
+$failed = Notifications::cancellationMoneyLine(['refund_subunit' => 500000, 'forfeit_subunit' => 0, 'manual_subunit' => 0, 'refund_status' => 'failed']);
+okv_test_ok(str_contains($failed, 'could not send'), 'a failed cancellation refund does not claim the money is on its way');
+okv_test_ok(!str_contains($failed, 'We are sending'), 'failed refund copy never says an automatic refund is being sent');
+
 // No house-law breach can reach a customer through this copy.
-foreach ([$nothing, $sending, $sent, $forfeit, $manual] as $line) {
+foreach ([$nothing, $sending, $sent, $forfeit, $manual, $failed] as $line) {
     okv_test_ok(!str_contains($line, "\u{2014}"), 'the cancellation money line carries no em dash');
 }
 
@@ -111,6 +118,14 @@ okv_test_ok(str_contains($callback, 'Notifications::announceCharge'), 'a verifie
 
 $payments = file_get_contents(dirname(__DIR__, 2) . '/api/v1/payments.php');
 okv_test_ok(str_contains($payments, 'Notifications::announceManualPayment'), 'a manually recorded payment is announced');
+okv_test_ok(str_contains($payments, 'Notifications::announceRefund($result)'), 'an immediate terminal refund result is announced by its caller');
+
+okv_test_ok(str_contains($orders, "unset(\$result['refund_events'])"), 'internal cancellation refund outcomes are removed before the HTTP response');
+okv_test_ok(str_contains($orders, 'Notifications::announceRefund($refundEvent)'), 'a terminal refund raised during cancellation is announced after the cancellation transaction');
+
+$refunds = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Refunds.php');
+okv_test_ok(substr_count($refunds, "'amount_subunit' => \$amountSubunit") >= 2, 'immediate refund results carry the amount needed by the notification');
+okv_test_ok(substr_count($refunds, "'order_id'") >= 2, 'immediate refund results carry the order needed by the notification');
 
 $settingsApi = file_get_contents(dirname(__DIR__, 2) . '/api/v1/settings.php');
 okv_test_ok(str_contains($settingsApi, "settings_guard_write('settings.notifications.edit')"), 'editing the words is Owner gated');

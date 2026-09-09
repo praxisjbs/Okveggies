@@ -73,6 +73,7 @@ require_once __DIR__ . '/classes/Audit.php';
 require_once __DIR__ . '/classes/Phone.php';
 require_once __DIR__ . '/classes/Auth.php';
 require_once __DIR__ . '/classes/Customer.php';
+require_once __DIR__ . '/classes/ContactMessages.php';
 require_once __DIR__ . '/classes/Catalogue.php';
 require_once __DIR__ . '/classes/Basket.php';
 require_once __DIR__ . '/classes/Pricing.php';

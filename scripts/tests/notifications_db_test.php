@@ -98,6 +98,55 @@ try {
     n_eq(2, (int) $after['attempt_count'], 'the attempt count counts both tries');
     n_eq(false, Notifications::resend($deliveryId, $userId)['ok'], 'an email that already went is not sent a third time');
 
+    // --- Refunds that finish during the request itself ---------------------
+    // Refunds::request uses `status` for an immediate gateway outcome, while a
+    // webhook uses `code`. Both shapes must reach the same dispatcher event.
+    Notifications::announceRefund([
+        'ok' => true,
+        'code' => 'raised',
+        'status' => Refunds::STATUS_PROCESSED,
+        'order_id' => $orderId,
+        'amount_subunit' => 120000,
+    ]);
+    $immediateProcessed = Database::one(
+        'SELECT COUNT(*) AS n FROM notifications
+          WHERE related_type = :type AND related_id = :id AND event_type = :event',
+        [':type' => 'order', ':id' => $orderId, ':event' => 'refund_processed']
+    );
+    n_eq(1, (int) ($immediateProcessed['n'] ?? 0), 'an immediately processed refund tells the customer without waiting for a webhook');
+
+    $beforePending = count(Database::all(
+        'SELECT id FROM notifications WHERE related_type = :type AND related_id = :id',
+        [':type' => 'order', ':id' => $orderId]
+    ));
+    Notifications::announceRefund([
+        'ok' => true,
+        'code' => 'raised',
+        'status' => Refunds::STATUS_PENDING,
+        'order_id' => $orderId,
+        'amount_subunit' => 120000,
+    ]);
+    $afterPending = count(Database::all(
+        'SELECT id FROM notifications WHERE related_type = :type AND related_id = :id',
+        [':type' => 'order', ':id' => $orderId]
+    ));
+    n_eq($beforePending, $afterPending, 'a pending refund does not claim that it finished');
+
+    Notifications::announceRefund([
+        'ok' => false,
+        'code' => 'gateway_refused',
+        'status' => Refunds::STATUS_FAILED,
+        'order_id' => $orderId,
+        'amount_subunit' => 120000,
+        'message' => 'The gateway refused the refund.',
+    ]);
+    $immediateFailed = Database::one(
+        'SELECT COUNT(*) AS n FROM notifications
+          WHERE related_type = :type AND related_id = :id AND event_type = :event',
+        [':type' => 'order', ':id' => $orderId, ':event' => 'refund_failed']
+    );
+    n_eq(1, (int) ($immediateFailed['n'] ?? 0), 'an immediately failed refund alerts staff without waiting for a webhook');
+
     // --- Every template in the matrix renders clean -----------------------
     foreach (Notifications::EVENTS as $event => $definition) {
         $tpl = Database::one('SELECT subject_template, body_template FROM notification_templates WHERE template_key = :k AND is_active = 1', [':k' => $definition['template']]);

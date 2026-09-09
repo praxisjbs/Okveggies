@@ -146,7 +146,6 @@ $noticeMessages = [
 </div>
 
 <?php okv_shop_footer(); ?>
-<?php okv_support_widget(); ?>
 <script>window.OKV = window.OKV || {}; window.OKV.csrf = <?= json_encode(Csrf::token()) ?>;</script>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>"></script>
 <script src="<?= okv_e(okv_asset('/assets/js/catalogue.min.js')) ?>"></script>

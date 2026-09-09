@@ -337,7 +337,10 @@ try {
     krh_eq(200, $code, 'a signed-out visitor is shown what a Kitchen Run is rather than a sign-in redirect');
     krh_ok(str_contains($body, 'A Kitchen Run needs an account'), 'and is told plainly why an account is needed');
     krh_ok(str_contains($body, '/account.php?mode=register') && str_contains($body, '/account.php?mode=signin'), 'with both ways to get one on the page');
-    krh_ok(!str_contains($body, 'name="action" value="submit"'), 'the form itself is not rendered to somebody who cannot post it');
+    // Narrowed in M9: the support widget now renders a contact form on every
+    // storefront page, and it carries an action="submit" of its own. What this
+    // assertion is for is the Kitchen Run form, which posts to its own endpoint.
+    krh_ok(!str_contains($body, 'action="/api/v1/kitchen_runs.php"'), 'the form itself is not rendered to somebody who cannot post it');
     krh_ok(str_contains($body, 'activate.php'), 'an unverified account is pointed at activation, which is the other reason a submit would fail');
 
     // The server, not the page, is still the gate. The token comes from a page
