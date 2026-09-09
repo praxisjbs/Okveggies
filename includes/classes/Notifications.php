@@ -56,6 +56,7 @@ final class Notifications
         'refund_processed'  => ['template' => 'refund_processed',  'label' => 'Refund sent',             'audience' => 'customer'],
         'refund_failed'     => ['template' => 'refund_failed',     'label' => 'Refund failed',           'audience' => 'staff'],
         'admin_new_order'   => ['template' => 'admin_new_order',   'label' => 'New order, for staff',    'audience' => 'staff'],
+        'admin_new_contact' => ['template' => 'admin_new_contact', 'label' => 'New contact message, for staff', 'audience' => 'staff'],
 
         'kitchen_run_received' => ['template' => 'kitchen_run_received', 'label' => 'Kitchen Run received',      'audience' => 'customer'],
         'kitchen_run_quoted'   => ['template' => 'kitchen_run_quoted',   'label' => 'Kitchen Run priced',        'audience' => 'customer'],
@@ -79,6 +80,7 @@ final class Notifications
         'refund_processed'  => ['customer_name', 'order_number', 'amount', 'order_trail_url'],
         'refund_failed'     => ['order_number', 'amount', 'reason', 'admin_url'],
         'admin_new_order'   => ['customer_name', 'order_number', 'order_total', 'delivery_day', 'zone_name', 'payment_choice', 'admin_url'],
+        'admin_new_contact' => ['contact_name', 'contact_method', 'subject', 'message_preview', 'admin_url'],
 
         'kitchen_run_received' => ['customer_name', 'request_number', 'line_count', 'delivery_day', 'request_url'],
         'kitchen_run_quoted'   => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'quote_expiry', 'request_url'],
@@ -405,6 +407,36 @@ final class Notifications
         self::send('admin_new_order', $staffVars, self::staffRecipients(), 'order', $orderId);
     }
 
+    /** A committed contact message that needs a staff response. */
+    public static function announceContactMessage(int $messageId): void
+    {
+        $message = Database::one(
+            'SELECT id, name, email, phone, subject, message FROM contact_messages WHERE id = :id',
+            [':id' => $messageId]
+        );
+        if (!$message) {
+            return;
+        }
+        $method = trim((string) ($message['email'] ?? ''));
+        if ($method === '') {
+            $method = Phone::display((string) ($message['phone'] ?? ''));
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        self::send(
+            'admin_new_contact',
+            [
+                'contact_name' => (string) $message['name'],
+                'contact_method' => $method,
+                'subject' => trim((string) ($message['subject'] ?? '')) ?: 'No subject',
+                'message_preview' => mb_substr(trim((string) $message['message']), 0, 300),
+                'admin_url' => $base . '/admin/content.php?message=' . $messageId,
+            ],
+            self::staffRecipients(),
+            'contact_message',
+            $messageId
+        );
+    }
+
     // --- Kitchen Runs (PRD Section 8) ----------------------------------------
 
     /**
@@ -607,9 +639,13 @@ final class Notifications
         }
         $lines = [];
         if ($refund > 0) {
-            $lines[] = $status === 'processed'
-                ? 'We have sent ' . Money::format($refund) . ' back to you.'
-                : 'We are sending ' . Money::format($refund) . ' back to you. It goes to the account you paid from and most banks show it within a few working days.';
+            if ($status === 'processed') {
+                $lines[] = 'We have sent ' . Money::format($refund) . ' back to you.';
+            } elseif (in_array($status, ['failed', 'failed_manual'], true)) {
+                $lines[] = 'We could not send ' . Money::format($refund) . ' back automatically. Our team has been told and will check it before contacting you.';
+            } else {
+                $lines[] = 'We are sending ' . Money::format($refund) . ' back to you. It goes to the account you paid from and most banks show it within a few working days.';
+            }
         }
         if ($manual > 0) {
             $lines[] = 'Part of that money, ' . Money::format($manual) . ', was paid outside our online gateway, so our team returns it by hand and will confirm it with you.';
@@ -660,7 +696,12 @@ final class Notifications
     public static function announceRefund(array $result): void
     {
         $orderId = (int) ($result['order_id'] ?? 0);
-        $status  = (string) ($result['code'] ?? '');
+        // Refunds::request reports the request operation in `code` and the
+        // gateway outcome in `status`. Webhook results use `code` for the
+        // outcome. Reading both lets an immediate processed or failed response
+        // announce itself without waiting for a webhook that may only say the
+        // row is already final.
+        $status  = (string) ($result['status'] ?? $result['code'] ?? '');
         if ($orderId < 1 || !in_array($status, [Refunds::STATUS_PROCESSED, Refunds::STATUS_FAILED], true)) {
             return;
         }

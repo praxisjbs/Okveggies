@@ -307,6 +307,10 @@ final class OrderCancellation
             'forfeit_subunit'   => (int) $outcome['forfeit_subunit'],
             'forfeit_reason'    => (string) ($outcome['reason'] ?? ''),
             'manual_subunit'    => (int) $plan['manual_subunit'] + (int) $plan['unmatched_subunit'],
+            // The HTTP caller announces terminal refund outcomes after every
+            // database write above has finished. It removes this internal list
+            // before returning the cancellation response to the browser.
+            'refund_events'     => $refundResults,
         ];
     }
 

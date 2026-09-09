@@ -394,7 +394,14 @@ final class SettingsEditor
             'reason'         => 'The customer bank account could not be reached.',
             'order_trail_url' => $base . '/public/order.php?token=sample',
             'admin_url'      => $base . '/admin/orders.php?order=1',
+            'contact_name'   => 'Ada Obi',
+            'contact_method' => 'ada@example.com',
+            'subject'        => 'Saturday delivery',
+            'message_preview' => 'Please help me check whether my order can arrive before noon.',
         ];
+        if ($templateKey === 'admin_new_contact') {
+            $all['admin_url'] = $base . '/admin/content.php?message=1';
+        }
         $tokens = Notifications::TOKENS[$templateKey] ?? [];
         $sample = [];
         foreach ($tokens as $token) {

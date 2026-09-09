@@ -14,6 +14,7 @@
  */
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/brand.php';
+require_once __DIR__ . '/includes/components/shop/support_widget.php';
 
 $signedIn = Customer::isLoggedIn();
 
@@ -416,6 +417,7 @@ $csrf = Csrf::token();
   </div>
 <?php endif; ?>
 
+  <?php okv_support_widget(); ?>
   <script>window.OKV = window.OKV || {}; window.OKV.csrf = <?= json_encode($csrf, JSON_UNESCAPED_SLASHES) ?>;</script>
   <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
   <script src="<?= okv_e(okv_asset('/assets/js/account.min.js')) ?>" defer></script>

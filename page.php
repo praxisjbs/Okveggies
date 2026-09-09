@@ -7,6 +7,7 @@
  * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
  */
 require_once __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/includes/components/shop/support_widget.php';
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,4 +21,5 @@ require_once __DIR__ . '/includes/bootstrap.php';
   <p class="text-ink-60 mt-3 max-w-xl">This screen is scaffolded and waiting to be built in milestone M12. The plan for it is in docs/PRD.md Section 18.</p>
   <a href="/" class="okv-btn mt-6">Back to the shop</a>
 </div>
+<?php okv_support_widget(); ?>
 </body></html>

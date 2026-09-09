@@ -457,7 +457,7 @@ is the whole lesson, and it is written up for the engineer in `docs/M7_REVIEW.md
 
 ### M9. Notifications and contact
 - [x] Email templates and delivery: placed, payment confirmed, dispatched, delivered, trail link. **Delivered in M6**, per `docs/M6_GUIDE.md` Section 1: every one of these is fired by a status change M6 builds, so building them apart meant writing every transition twice. Contact stayed here, which is the clean seam.
-- [ ] Floating support widget: WhatsApp click-to-chat and contact form
+- [x] Floating support widget: one shared trigger on the agreed storefront, account, auth and public-order routes; configured WhatsApp click-to-chat; desktop anchored panel; mobile sheet; guest and signed-in contact form; and `/contact.php` when JavaScript is unavailable. Phase 2 verified on MySQL 8 with 12 contact database, 16 contact HTTP and 108 notification database assertions, plus browser checks at 390px and 1440px.
 - [ ] Contact messages surface in admin
 - [x] Tests: template render; notification queued on order events (**M6**, `NotificationsTest.php` and `notifications_db_test.php`)
 
@@ -510,6 +510,36 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 9 Sep 2026, M9 Phase 2: support and contact submission
+
+- Replaced the direct WhatsApp bubble with one shared support widget. It is a
+  slide-up sheet below 640px and an anchored panel above it, traps focus, closes
+  on Escape, restores focus, keeps 44px controls and stays above the mobile tab
+  bar. The no-JavaScript trigger opens `/contact.php`.
+- Contact submission requires a name, message and either a valid email or a
+  valid Nigerian phone number. It uses CSRF, server-side limits, a honeypot, a
+  minimum completion time, 3 attempts per IP in 15 minutes, 10 per contact
+  identity in 24 hours, and a one-time token stored only as a SHA-256 hash.
+- Migration `032_contact_messages.sql` adds the unique submission-token index
+  and the editable `admin_new_contact` template. The message and audit row are
+  committed together. Only then does the existing notification dispatcher tell
+  staff, with a link to the exact message. A forced SMTP failure left the row in
+  place and recorded the failed delivery.
+- The Phase 1 audit found and fixed an M6 edge case: an immediately processed or
+  refused refund had no notification because only a later webhook announced it.
+  Terminal request results now carry their order and amount, and cancellation
+  copy no longer claims a failed refund is being sent.
+- Verification: 1,893 pure assertions, 12 contact database assertions, 16
+  contact HTTP assertions and 108 notification database assertions passed.
+  Migration `032` applied from empty and a second migration run had nothing to
+  apply. PHP lint, JavaScript build and syntax check, CSS build, the brand guard
+  and `git diff --check` passed. Browser checks found 1 support trigger on each
+  agreed public route, no horizontal overflow, a 56px trigger with 80px mobile
+  bottom clearance, working focus trap and Escape restoration at 390px, and the
+  anchored panel at 1440px. `scripts/verify.sh` passed its application checks;
+  its 2 Apache access-control checks fail under PHP's built-in server because it
+  does not read `.htaccess`.
 
 ### 4 Sep 2026, M6 merged
 

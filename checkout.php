@@ -236,7 +236,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
   <?php endif; ?>
 </main>
 
-<?php okv_shop_footer(); okv_support_widget(); ?>
+<?php okv_shop_footer(); ?>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>"></script>
 </body>
 </html>
