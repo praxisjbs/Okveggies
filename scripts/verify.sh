@@ -69,6 +69,11 @@ expect "$BASE/contact.php" "200" "the contact page"
 expect_status "$BASE/api/v1/contact.php" "303" "the contact endpoint sends a GET to the form"
 expect_login "$BASE/admin/content.php" "the messages screen"
 
+# M10 customer reporting. Writes require an authenticated POST, and a GET must
+# fail without touching a report or disclosing an order.
+expect_status "$BASE/api/v1/make_it_right.php" "405" "the Make It Right endpoint refuses a GET"
+expect "$BASE/public/issue_photo.php?photo=0" "404" "a missing private issue photo"
+
 expect_deny "$BASE/.env"                 ".env"
 expect_deny "$BASE/includes/config/db.php" "includes/"
 expect_deny "$BASE/migrations/001_core_schema.sql" "migrations/"

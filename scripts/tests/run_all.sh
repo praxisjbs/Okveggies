@@ -51,13 +51,14 @@ run "run.php" php scripts/tests/run.php
 
 echo
 echo "[tests] 2. Database suites (MySQL 8 from .env)"
-if php -r 'require "includes/bootstrap.php"; Database::one("SELECT 1");' >/dev/null 2>&1; then
+db_probe="$(php -r 'require "includes/bootstrap.php"; Database::one("SELECT 1"); fwrite(STDOUT, "OKV_DB_READY");' 2>/dev/null)"
+if [ "$db_probe" = "OKV_DB_READY" ]; then
   for suite in \
     auth_db_test basket_db_test cancellation_db_test checkout_db_test combos_db_test \
     contact_db_test contact_admin_db_test \
     credit_admin_db_test credit_customer_db_test credit_orders_db_test \
     customer_auth_db_test customers_db_test delivery_db_test kitchen_lists_db_test \
-    kitchen_runs_db_test manifest_db_test notifications_db_test order_lifecycle_db_test \
+    issue_reports_db_test kitchen_runs_db_test manifest_db_test notifications_db_test order_lifecycle_db_test \
     payments_db_test pricing_db_test pro_dashboard_db_test pro_orders_db_test \
     settings_db_test staff_password_reset_db_test
   do
@@ -79,7 +80,7 @@ if curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
   for suite in \
     cancellation_http_test contact_http_test contact_admin_http_test \
     credit_checkout_http_test customer_http_test delivery_http_test \
-    kitchen_runs_http_test order_lifecycle_http_test order_trail_http_test settings_http_test
+    issue_reports_http_test issue_photos_http_test kitchen_runs_http_test order_lifecycle_http_test order_trail_http_test settings_http_test
   do
     run "$suite" php "scripts/tests/$suite.php"
   done

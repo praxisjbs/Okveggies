@@ -114,6 +114,9 @@ $kitchenRun = $selected && Rbac::can('kitchen_runs.view') ? Database::one(
     'SELECT id, request_number FROM kitchen_run_requests WHERE converted_order_id = :id',
     [':id' => $selectedId]
 ) : null;
+$issueReports = $selected && Rbac::can('issues.view')
+    ? IssueReports::forOrderStaff($selectedId)
+    : [];
 
 $canCancel = Rbac::can('orders.cancel');
 $canNote     = Rbac::can('orders.update');
@@ -271,6 +274,11 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 </a>
               <?php endif; ?>
             <?php endif; ?>
+            <?php foreach ($issueReports as $issueReport): ?>
+              <a class="okv-btn-outline min-h-[44px] px-3" href="/admin/make_it_right.php?status=all&amp;report=<?= (int) $issueReport['id'] ?>">
+                Make It Right: <?= okv_e(IssueReports::statusLabel((string) $issueReport['status'])) ?>
+              </a>
+            <?php endforeach; ?>
           </div>
         </div>
         <?php if ($address): ?>

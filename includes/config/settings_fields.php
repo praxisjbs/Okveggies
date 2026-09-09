@@ -70,6 +70,16 @@ $OKV_SETTINGS_GROUPS = [
                 'confirm'    => true,
             ],
 
+            'make_it_right_reporting_window_days' => [
+                'label'      => 'Make It Right reporting window',
+                'help'       => 'How many calendar days a customer has to report a problem after dispatch or delivery. The full final day is included. 7 is the default.',
+                'type'       => 'days',
+                'value_type' => 'int',
+                'min'        => 1,
+                'cap'        => 90,
+                'confirm'    => true,
+            ],
+
             'kitchen_run_quote_days' => [
                 'label'      => 'How long a Kitchen Run quote stands',
                 'help'       => 'Days a priced Kitchen Run can still be approved before the customer has to ask for fresh prices. Produce prices move, so this is deliberately short. 7 is the default.',

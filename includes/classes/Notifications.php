@@ -77,6 +77,9 @@ final class Notifications
         'admin_new_order'   => ['template' => 'admin_new_order',   'label' => 'New order, for staff',    'audience' => 'staff'],
         'admin_new_contact' => ['template' => 'admin_new_contact', 'label' => 'New contact message, for staff', 'audience' => 'staff'],
         'contact_acknowledgement' => ['template' => 'contact_acknowledgement', 'label' => 'We have your message',  'audience' => 'customer'],
+        'issue_report_received' => ['template' => 'issue_report_received', 'label' => 'Report received', 'audience' => 'customer'],
+        'issue_report_resolved' => ['template' => 'issue_report_resolved', 'label' => 'Report resolved', 'audience' => 'customer'],
+        'admin_new_issue_report' => ['template' => 'admin_new_issue_report', 'label' => 'New Make It Right report, for staff', 'audience' => 'staff'],
 
         'kitchen_run_received' => ['template' => 'kitchen_run_received', 'label' => 'Kitchen Run received',      'audience' => 'customer'],
         'kitchen_run_quoted'   => ['template' => 'kitchen_run_quoted',   'label' => 'Kitchen Run priced',        'audience' => 'customer'],
@@ -108,6 +111,9 @@ final class Notifications
         'admin_new_order'   => ['customer_name', 'order_number', 'order_total', 'delivery_day', 'zone_name', 'payment_choice', 'admin_url'],
         'admin_new_contact' => ['contact_name', 'contact_method', 'source_label', 'subject', 'message_preview', 'admin_url'],
         'contact_acknowledgement' => ['customer_name', 'received_at', 'whatsapp_url'],
+        'issue_report_received' => ['customer_name', 'order_number', 'reported_at', 'issue_url'],
+        'issue_report_resolved' => ['customer_name', 'order_number', 'outcome_line', 'amount_line', 'issue_url'],
+        'admin_new_issue_report' => ['customer_name', 'order_number', 'category', 'reported_at', 'description_preview', 'admin_url'],
 
         'kitchen_run_received' => ['customer_name', 'request_number', 'line_count', 'delivery_day', 'request_url'],
         'kitchen_run_quoted'   => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'quote_expiry', 'request_url'],
@@ -847,6 +853,96 @@ final class Notifications
             [['email' => $email, 'name' => (string) $message['name']]],
             'contact_message',
             $messageId
+        );
+    }
+
+    /** Announce a committed issue report to its owner and the staff team. */
+    public static function announceIssueReportReceived(int $issueId): void
+    {
+        $report = Database::one(
+            'SELECT i.id, i.category, i.description, i.created_at,
+                    o.id AS order_id, o.order_number,
+                    u.id AS user_id, u.email AS user_email,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
+               FROM issue_reports i
+               JOIN orders o ON o.id = i.order_id
+               JOIN users u ON u.id = i.user_id
+              WHERE i.id = :id',
+            [':id' => $issueId]
+        );
+        if ($report === null) {
+            return;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $name = trim((string) $report['user_name']);
+        $firstName = $name !== '' ? (explode(' ', $name)[0] ?: 'there') : 'there';
+        $reportedAt = date('l jS F, H:i', strtotime((string) $report['created_at']));
+        $customerVars = [
+            'customer_name' => $firstName,
+            'order_number' => (string) $report['order_number'],
+            'reported_at' => $reportedAt,
+            'issue_url' => $base . '/public/order.php?order=' . (int) $report['order_id'],
+        ];
+        self::send(
+            'issue_report_received',
+            $customerVars,
+            self::customerRecipients([
+                'user_email' => $report['user_email'],
+                'user_id' => $report['user_id'],
+            ]),
+            'issue_report',
+            $issueId
+        );
+        self::send(
+            'admin_new_issue_report',
+            $customerVars + [
+                'customer_name' => $name ?: 'Customer',
+                'category' => IssueReports::CATEGORIES[(string) $report['category']] ?? 'Something else',
+                'description_preview' => mb_substr(trim((string) $report['description']), 0, 300),
+                'admin_url' => $base . '/admin/make_it_right.php?report=' . $issueId,
+            ],
+            self::staffRecipients(),
+            'issue_report',
+            $issueId
+        );
+    }
+
+    /** Tell the customer about a committed safe terminal outcome. */
+    public static function announceIssueReportResolved(int $issueId, ?int $actorId = null): void
+    {
+        $report = Database::one(
+            'SELECT i.id, i.status, i.resolution_type, i.resolution_note,
+                    o.id AS order_id, o.order_number,
+                    u.id AS user_id, u.email AS user_email,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
+               FROM issue_reports i
+               JOIN orders o ON o.id = i.order_id
+               JOIN users u ON u.id = i.user_id
+              WHERE i.id = :id AND i.status IN (:resolved_status, :declined_status)',
+            [':id' => $issueId, ':resolved_status' => 'resolved', ':declined_status' => 'declined']
+        );
+        if ($report === null) {
+            return;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $name = trim((string) $report['user_name']);
+        $note = trim((string) $report['resolution_note']);
+        $outcome = (string) $report['status'] === 'declined'
+            ? 'We could not approve the report. ' . $note
+            : $note;
+        self::send(
+            'issue_report_resolved',
+            [
+                'customer_name' => $name !== '' ? (explode(' ', $name)[0] ?: 'there') : 'there',
+                'order_number' => (string) $report['order_number'],
+                'outcome_line' => $outcome,
+                'amount_line' => '',
+                'issue_url' => $base . '/public/order.php?order=' . (int) $report['order_id'],
+            ],
+            self::customerRecipients(['user_email' => $report['user_email'], 'user_id' => $report['user_id']]),
+            'issue_report',
+            $issueId,
+            $actorId
         );
     }
 

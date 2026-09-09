@@ -72,6 +72,16 @@ $publicTrail = $token !== '';
 $cancellation = ($publicTrail || Customer::id() === null)
     ? null
     : OrderCancellation::forCustomer((int) $order['id'], (int) Customer::id());
+$issueState = ($publicTrail || Customer::id() === null)
+    ? null
+    : IssueReports::stateForCustomer((int) $order['id'], (int) Customer::id());
+$issueForm = [];
+if (!$publicTrail && isset($_SESSION['issue_form'][(int) $order['id']])) {
+    $issueForm = is_array($_SESSION['issue_form'][(int) $order['id']])
+        ? $_SESSION['issue_form'][(int) $order['id']]
+        : [];
+    unset($_SESSION['issue_form'][(int) $order['id']]);
+}
 
 // The owner, fresh from checkout, gets the share token from the bag so the page
 // can offer a share link. A public visitor already has it in the URL.
@@ -294,6 +304,115 @@ $publicStatus = [
           <p class="okv-note mt-3 bg-clay-tint"><?= okv_e($cancellation['terms_line']) ?></p>
         <?php endif; ?>
         <a href="https://wa.me/<?= okv_e($supportNumber) ?>?text=<?= okv_e($supportText) ?>" class="okv-btn-outline mt-4 min-h-[44px]" rel="noopener">Ask us on WhatsApp</a>
+      <?php endif; ?>
+    </section>
+  <?php endif; ?>
+
+  <?php if (!$publicTrail && $issueState !== null): ?>
+    <?php
+      $issueNotice = (string) okv_input('issue', '');
+      $issueError = (string) ($issueForm['message'] ?? '');
+      $issueField = (string) ($issueForm['field'] ?? '');
+      $oldCategory = (string) ($issueForm['category'] ?? '');
+      $oldDescription = (string) ($issueForm['description'] ?? '');
+      $supportNumber = preg_replace('/\D+/', '', Settings::str('support_whatsapp_number', '2348000000000'));
+      $supportText = rawurlencode('Please help me with order ' . $order['order_number'] . '.');
+    ?>
+    <section class="okv-card mt-6" id="make-it-right" aria-labelledby="make-it-right-heading">
+      <h2 id="make-it-right-heading" class="font-display text-xl font-bold text-ink">Make It Right</h2>
+
+      <?php if ($issueNotice === 'reported'): ?>
+        <p class="okv-note mt-4 bg-foliage-tint" role="status">We received your report for order <?= okv_e($order['order_number']) ?>.</p>
+      <?php elseif ($issueNotice === 'already_open'): ?>
+        <p class="okv-note mt-4 bg-clay-tint" role="status">We already have an open report for order <?= okv_e($order['order_number']) ?>.</p>
+      <?php endif; ?>
+
+      <?php if (($issueState['code'] ?? '') === 'already_open'): ?>
+        <?php $openReport = $issueState['report']; ?>
+        <p class="mt-3 text-ink">We received your report for order <?= okv_e($order['order_number']) ?> and our team is checking it.</p>
+        <dl class="mt-4 space-y-3 rounded-md border border-mist bg-forest-tint p-4">
+          <div>
+            <dt class="text-sm text-ink-60">What was not right</dt>
+            <dd><?= okv_e(IssueReports::CATEGORIES[(string) $openReport['category']] ?? 'Something else') ?></dd>
+          </div>
+          <div>
+            <dt class="text-sm text-ink-60">Your description</dt>
+            <dd class="whitespace-pre-line"><?= okv_e($openReport['description']) ?></dd>
+          </div>
+          <div>
+            <dt class="text-sm text-ink-60">Received</dt>
+            <dd><?= okv_e(date('l jS F, H:i', strtotime((string) $openReport['created_at']))) ?></dd>
+          </div>
+        </dl>
+        <?php if (!empty($openReport['photos'])): ?>
+          <div class="mt-4">
+            <h3 class="font-semibold text-ink">Your photos</h3>
+            <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <?php foreach ($openReport['photos'] as $photoIndex => $photo): ?>
+                <a href="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
+                   class="block min-h-[44px] rounded-md focus:outline-none"
+                   aria-label="Open photo <?= $photoIndex + 1 ?> for order <?= okv_e($order['order_number']) ?> at full size">
+                  <img src="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
+                       alt="Photo <?= $photoIndex + 1 ?> supplied for order <?= okv_e($order['order_number']) ?>"
+                       class="aspect-square w-full rounded-md border border-mist object-cover"
+                       loading="lazy">
+                </a>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        <?php endif; ?>
+      <?php elseif (!empty($issueState['ok'])): ?>
+        <p class="mt-3 text-sm text-ink-60">
+          If something in order <?= okv_e($order['order_number']) ?> is not right, tell us by
+          <?= okv_e($issueState['deadline']->format('l jS F')) ?>. We will check it and tell you what happens next.
+        </p>
+        <details class="mt-4 rounded-md border border-mist p-4" <?= $issueError !== '' ? 'open' : '' ?>>
+          <summary class="flex min-h-[44px] cursor-pointer items-center font-semibold text-forest">Something is not right</summary>
+          <?php if ($issueError !== ''): ?>
+            <div class="okv-note-bad mt-4" role="alert" tabindex="-1">
+              <p class="font-semibold">Check the report for order <?= okv_e($order['order_number']) ?>.</p>
+              <p class="mt-1"><?= okv_e($issueError) ?></p>
+            </div>
+          <?php endif; ?>
+          <form action="/api/v1/make_it_right.php" method="POST" enctype="multipart/form-data" class="mt-4 space-y-4" novalidate>
+            <?= Csrf::field() ?>
+            <input type="hidden" name="action" value="report">
+            <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+            <div>
+              <label class="okv-label" for="issue-category">What was not right?</label>
+              <select class="okv-input" id="issue-category" name="category" required
+                      <?= $issueField === 'category' ? 'aria-invalid="true" aria-describedby="issue-category-error"' : '' ?>>
+                <option value="">Choose one</option>
+                <?php foreach (IssueReports::CATEGORIES as $value => $label): ?>
+                  <option value="<?= okv_e($value) ?>" <?= $oldCategory === $value ? 'selected' : '' ?>><?= okv_e($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+              <?php if ($issueField === 'category'): ?><p id="issue-category-error" class="mt-1 text-sm text-tomato"><?= okv_e($issueError) ?></p><?php endif; ?>
+            </div>
+            <div>
+              <label class="okv-label" for="issue-description">What happened?</label>
+              <textarea class="okv-input" id="issue-description" name="description" rows="5"
+                        minlength="10" maxlength="1000" required
+                        <?= $issueField === 'description' ? 'aria-invalid="true" aria-describedby="issue-description-help issue-description-error"' : 'aria-describedby="issue-description-help"' ?>><?= okv_e($oldDescription) ?></textarea>
+              <p id="issue-description-help" class="mt-1 text-sm text-ink-60">Use 10 to 1,000 characters. Please describe the produce and what you found.</p>
+              <?php if ($issueField === 'description'): ?><p id="issue-description-error" class="mt-1 text-sm text-tomato"><?= okv_e($issueError) ?></p><?php endif; ?>
+            </div>
+            <div>
+              <label class="okv-label" for="issue-photos">Photos, optional</label>
+              <input class="okv-input" id="issue-photos" name="photos[]" type="file"
+                     accept="image/jpeg,image/png,image/webp" multiple
+                     <?= $issueField === 'photos' ? 'aria-invalid="true" aria-describedby="issue-photos-help issue-photos-error"' : 'aria-describedby="issue-photos-help"' ?>>
+              <p id="issue-photos-help" class="mt-1 text-sm text-ink-60">Choose up to 5 JPEG, PNG or WebP photos. Each photo may be up to <?= okv_e(IssueReports::photoLimitLabel()) ?>.</p>
+              <?php if ($issueField === 'photos'): ?><p id="issue-photos-error" class="mt-1 text-sm text-tomato"><?= okv_e($issueError) ?> Choose the photos again before sending.</p><?php endif; ?>
+            </div>
+            <button type="submit" class="okv-btn min-h-[44px] px-4">Send report for order <?= okv_e($order['order_number']) ?></button>
+          </form>
+        </details>
+      <?php else: ?>
+        <p class="mt-3 text-sm text-ink-60"><?= okv_e((string) ($issueState['message'] ?? 'Reporting is not available for this order yet.')) ?></p>
+        <?php if (in_array((string) ($issueState['code'] ?? ''), ['expired', 'missing_timestamp'], true)): ?>
+          <a href="https://wa.me/<?= okv_e($supportNumber) ?>?text=<?= okv_e($supportText) ?>" class="okv-btn-outline mt-4 min-h-[44px]" rel="noopener">Ask us about order <?= okv_e($order['order_number']) ?></a>
+        <?php endif; ?>
       <?php endif; ?>
     </section>
   <?php endif; ?>
