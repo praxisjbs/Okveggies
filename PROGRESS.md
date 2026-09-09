@@ -458,7 +458,11 @@ is the whole lesson, and it is written up for the engineer in `docs/M7_REVIEW.md
 ### M9. Notifications and contact
 - [x] Email templates and delivery: placed, payment confirmed, dispatched, delivered, trail link. **Delivered in M6**, per `docs/M6_GUIDE.md` Section 1: every one of these is fired by a status change M6 builds, so building them apart meant writing every transition twice. Contact stayed here, which is the clean seam.
 - [x] Floating support widget: one shared trigger on the agreed storefront, account, auth and public-order routes; configured WhatsApp click-to-chat; desktop anchored panel; mobile sheet; guest and signed-in contact form; and `/contact.php` when JavaScript is unavailable. Phase 2 verified on MySQL 8 with 12 contact database, 16 contact HTTP and 108 notification database assertions, plus browser checks at 390px and 1440px.
-- [ ] Contact messages surface in admin
+- [x] Contact messages surface in admin: `messages.view` gates the searchable,
+  newest-first list and detail; `messages.handle` separately gates internal
+  notes, handling and reopening. Filters and 25-row pagination preserve their
+  URL state, handling history comes from the audit log, message text is escaped,
+  reply links open external apps, and there is no delete action.
 - [x] Tests: template render; notification queued on order events (**M6**, `NotificationsTest.php` and `notifications_db_test.php`)
 
 ### M10. Trust and Make It Right
@@ -510,6 +514,41 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 9 Sep 2026, M9 Phases 3 and 4: contact workspace and closure
+
+- Replaced the Messages placeholder with a server-rendered contact workspace.
+  It searches message ID, sender, contact details, subject and message text;
+  filters by new or handled status and received date; paginates 25 newest-first
+  rows; and preserves filters in list, detail and pagination URLs.
+- Every read is gated by `messages.view`. Note, handle and reopen POST actions
+  require `messages.handle` and CSRF, use prepared queries and transactions,
+  reject stale state, and record append-only audit history. Reopening clears the
+  handler and handled time but keeps the internal note. No hard-delete route was
+  added.
+- Phase 4 added direct HTTP evidence for forged one-time tokens, the honeypot
+  and too-fast submissions. It also narrowed duplicate handling to MySQL error
+  1062 so unrelated integrity failures cannot be mislabeled as repeat sends.
+- Final automated evidence: 1,905/1,905 pure assertions, 12/12 contact database,
+  22/22 contact HTTP, 27/27 contact-admin database, 35/35 contact-admin HTTP and
+  108/108 notification database assertions passed on isolated MySQL 8 and
+  Mailpit. The JS and CSS builds, JS syntax checks, PHP lint, brand guard and
+  `git diff --check` passed.
+- Route inventory found exactly one support trigger on all 14 agreed routes.
+  The configured WhatsApp URL used `wa.me/2348000000000` with an encoded support
+  message. Mailpit captured the staff alert with the exact
+  `/admin/content.php?message=<id>` link, and the forced SMTP failure test kept
+  the committed message while recording the failed notification delivery.
+- Chrome checks at 390px and 1440px found no horizontal overflow. The support
+  control was 56px, the mobile sheet used dialog semantics and body scroll lock,
+  keyboard focus wrapped, Escape closed it and restored the trigger, and the
+  desktop panel stayed anchored. Visible contact controls met 44px, every field
+  had a label, and error and success regions used assertive and polite live
+  announcements. The admin list/detail remained usable at both widths.
+- `scripts/verify.sh` passed every application check against the local server.
+  Its checks that `/migrations/` and `/docs/` are denied returned 200 because
+  PHP's built-in server does not apply Apache `.htaccess`; repeat those two
+  server-configuration checks on the production-like Apache host.
 
 ### 9 Sep 2026, M9 Phase 2: support and contact submission
 

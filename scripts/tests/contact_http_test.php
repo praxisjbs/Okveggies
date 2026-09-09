@@ -80,6 +80,34 @@ try {
     ch_eq(419, $status, 'missing CSRF is refused');
 
     Database::run("DELETE FROM rate_limits WHERE bucket LIKE 'contact:%'");
+    [$status, $forged] = ch_req($base, $jar, 'POST', '/api/v1/contact.php', [
+        'action' => 'submit', 'okv_csrf' => $csrf, 'submission_token' => str_repeat('0', 64),
+        'name' => 'Forged Request', 'email' => $email, 'message' => 'This token was not issued.',
+    ]);
+    ch_eq(422, $status, 'a forged one-time token is refused');
+    ch_eq('invalid_submission', (string) ($forged['code'] ?? ''), 'a forged token returns the safe submission code');
+
+    Database::run("DELETE FROM rate_limits WHERE bucket LIKE 'contact:%'");
+    [$spamCsrf, $spamToken] = ch_form($base, $jar);
+    [$status, $spam] = ch_req($base, $jar, 'POST', '/api/v1/contact.php', [
+        'action' => 'submit', 'okv_csrf' => $spamCsrf, 'submission_token' => $spamToken,
+        'website' => 'https://spam.example', 'name' => 'Spam Request',
+        'email' => $email, 'message' => 'Honeypot submission.',
+    ]);
+    ch_eq(422, $status, 'a filled honeypot is refused');
+    ch_eq('spam_rejected', (string) ($spam['code'] ?? ''), 'the honeypot returns a plain rejection code');
+
+    Database::run("DELETE FROM rate_limits WHERE bucket LIKE 'contact:%'");
+    [$fastCsrf, $fastToken] = ch_form($base, $jar);
+    [$status, $fast] = ch_req($base, $jar, 'POST', '/api/v1/contact.php', [
+        'action' => 'submit', 'okv_csrf' => $fastCsrf, 'submission_token' => $fastToken,
+        'website' => '', 'name' => 'Fast Request', 'email' => $email,
+        'message' => 'Submitted before a person could complete the form.',
+    ]);
+    ch_eq(422, $status, 'a too-fast submission is refused');
+    ch_eq('too_fast', (string) ($fast['code'] ?? ''), 'a too-fast submission returns the safe validation code');
+
+    Database::run("DELETE FROM rate_limits WHERE bucket LIKE 'contact:%'");
     [$status, $invalid] = ch_req($base, $jar, 'POST', '/api/v1/contact.php', [
         'action' => 'submit', 'okv_csrf' => $csrf, 'submission_token' => $token,
         'name' => 'HTTP Guest', 'message' => 'No reply details.',

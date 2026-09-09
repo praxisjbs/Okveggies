@@ -147,7 +147,8 @@ final class ContactMessages
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            if ((string) $e->getCode() === '23000') {
+            $driverError = (int) ($e->errorInfo[1] ?? 0);
+            if ((string) $e->getCode() === '23000' && $driverError === 1062) {
                 self::consumeToken($tokenHash);
                 return self::failure('duplicate', 'That message was already received.');
             }
