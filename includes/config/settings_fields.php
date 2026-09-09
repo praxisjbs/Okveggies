@@ -179,6 +179,15 @@ $OKV_SETTINGS_GROUPS = [
                 'min'        => 1,
                 'cap'        => 1440,
             ],
+
+            'payment_reminder_minutes' => [
+                'label'      => 'Minutes before we remind about an unpaid order',
+                'help'       => 'An order that chose to pay in full or to pay a deposit, and then never paid, gets one reminder with a link back to the payment. One only, and never after the money has landed or the order has been cancelled.',
+                'type'       => 'minutes',
+                'value_type' => 'int',
+                'min'        => 5,
+                'cap'        => 1440,
+            ],
         ],
     ],
 

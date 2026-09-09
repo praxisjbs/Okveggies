@@ -318,11 +318,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
                       <span class="mt-1 block text-xs text-clay-ink"><?= okv_e((string) $message['last_error']) ?></span>
                     <?php endif; ?>
                   </span>
+                  <?php $state = Notifications::deliveryState($message); ?>
                   <span class="flex shrink-0 items-center gap-2">
-                    <span class="okv-badge <?= (string) $message['delivery_status'] === 'sent' ? 'okv-badge-available' : 'okv-badge-warn' ?>">
-                      <?= (string) $message['delivery_status'] === 'sent' ? 'Sent' : 'Not sent' ?>
+                    <span class="okv-badge <?= $state['tone'] === 'good' ? 'okv-badge-available' : 'okv-badge-warn' ?>">
+                      <?= okv_e($state['label']) ?>
                     </span>
-                    <?php if ($canResend && (string) $message['delivery_status'] !== 'sent' && (string) $message['channel'] === 'email'): ?>
+                    <?php if ($canResend && $state['may_resend']): ?>
                       <form action="/api/v1/orders.php" method="POST">
                         <?= Csrf::field() ?>
                         <input type="hidden" name="action" value="resend_notification">

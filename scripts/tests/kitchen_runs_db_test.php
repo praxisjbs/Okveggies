@@ -529,6 +529,37 @@ try {
     krdb_ok(count(KitchenRuns::allForStaff('submitted')) >= 0, 'the staff queue can be filtered by status');
     krdb_ok(KitchenRuns::waitingCount() >= 0, 'the queue badge counts what is waiting on us');
 
+    // The queue tabs. Milestone 6/7: the filter never reached the query at all,
+    // so every tab showed every request. These check the two halves the SQL is
+    // responsible for: a status filter that narrows, and an expired quote that
+    // is counted and listed apart from a live one.
+    $everything = KitchenRuns::allForStaff('', 200);
+    foreach (KitchenRuns::STATUSES as $status) {
+        foreach (KitchenRuns::allForStaff($status, 200) as $row) {
+            krdb_eq($status, (string) $row['status'], "the $status tab returns only $status requests");
+        }
+    }
+    krdb_ok(count(KitchenRuns::allForStaff('submitted', 200)) <= count($everything), 'a filtered tab is never larger than All');
+
+    foreach (KitchenRuns::allForStaff(KitchenRuns::FILTER_EXPIRED, 200) as $row) {
+        krdb_eq('quoted', (string) $row['status'], 'the expired tab only ever holds quoted requests');
+        krdb_ok((bool) $row['is_expired'], 'and every one of them really has expired');
+    }
+    foreach (KitchenRuns::allForStaff('quoted', 200) as $row) {
+        krdb_ok(!$row['is_expired'], 'the Quote sent tab holds live quotes only, so an expired one cannot hide among them');
+    }
+
+    $counts = KitchenRuns::statusCounts();
+    krdb_ok(array_keys($counts) === KitchenRuns::FILTERS, 'every tab has a count, in tab order');
+    krdb_eq(count($everything), $counts[''], 'the All count matches what All lists');
+    foreach (KitchenRuns::FILTERS as $tab) {
+        if ($tab === '') {
+            continue;
+        }
+        krdb_eq(count(KitchenRuns::allForStaff($tab, 200)), $counts[$tab], "the $tab count matches what the $tab tab lists");
+    }
+    krdb_eq(0, KitchenRuns::statusCounts('nobody-by-this-name-' . $suffix)[''], 'the counts respect the customer search, so they never contradict the list under them');
+
     // -----------------------------------------------------------------------
     // 11. The internal note, staff approval, and withdrawing after approving.
     // -----------------------------------------------------------------------

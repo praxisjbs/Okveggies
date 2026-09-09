@@ -139,10 +139,20 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
               <input class="okv-input mt-1" name="landmark" value="<?= okv_e($value('landmark')) ?>">
             </label>
             <?php if (!Customer::isLoggedIn()): ?>
-              <label class="flex gap-3 rounded-md bg-forest-tint p-4 text-sm text-ink sm:col-span-2">
-                <input type="checkbox" name="create_account" value="1" required>
-                <span>Create an account for this order. You can set your password and manage the order after checkout.</span>
-              </label>
+              <!-- Offered, never required. A guest order is a real order: the
+                   confirmation email carries a link that opens it, with no
+                   sign in. An account is for the person who wants their
+                   details and their history kept for next time. -->
+              <div class="rounded-md bg-forest-tint p-4 text-sm text-ink sm:col-span-2">
+                <label class="flex gap-3">
+                  <input type="checkbox" name="create_account" value="1" <?= !empty($savedCustomer['create_account']) ? 'checked' : '' ?>>
+                  <span>Create an account, so your details are saved for next time. We will email you a link to set your password.</span>
+                </label>
+                <p class="mt-2 pl-7 text-ink-60">
+                  You do not need one. Order as a guest and we will email you a link that opens your order, no sign in.
+                  Paying on delivery is the one choice that needs an account, because we verify it first.
+                </p>
+              </div>
             <?php endif; ?>
             <div class="flex justify-between gap-3 sm:col-span-2">
               <a class="okv-btn-text px-2" href="/checkout.php?step=1">Back</a>
@@ -210,7 +220,8 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                     Settings::str('cancellation_cutoff_time', '18:00'),
                     Settings::bool('cancellation_deposit_forfeit_after_cutoff', true),
                     Settings::bool('cancellation_after_dispatch_allowed', true),
-                    Settings::bool('cancellation_dispatched_forfeit_deposit', true)
+                    Settings::bool('cancellation_dispatched_forfeit_deposit', true),
+                    (string) ($savedDelivery['delivery_date'] ?? '')
                   )) ?>
             </p>
 

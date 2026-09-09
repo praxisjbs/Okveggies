@@ -113,6 +113,7 @@ final class Mail
     public static function ctaFromVars(array $vars): ?array
     {
         $labels = [
+            'pay_url'         => 'Finish paying',
             'order_trail_url' => 'Follow your order',
             'activate_url'    => 'Activate your account',
             'reset_url'       => 'Set a new password',

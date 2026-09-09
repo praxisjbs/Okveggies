@@ -200,13 +200,24 @@ final class Checkout
         }
     }
 
-    /** Validate and normalise the customer and address input, or refuse it. */
+    /**
+     * Validate and normalise the customer and address input, or refuse it.
+     *
+     * user_id is null for a guest order (PRD 9.2). A guest is always a
+     * household: a business order needs the account the credit sits on. Either
+     * way an email address is required and kept on the order, because the
+     * confirmation, the trail link and the payment reminder all have to reach
+     * somebody, and a guest order has no users row to read one from.
+     */
     private static function validateCustomer(array $input): array
     {
-        $userId = (int) ($input['user_id'] ?? 0);
+        $userId = ($input['user_id'] ?? null) === null ? null : (int) $input['user_id'];
         $type   = (string) ($input['customer_type'] ?? 'household');
 
-        if ($userId < 1 || !in_array($type, ['household', 'business'], true)) {
+        if (($userId !== null && $userId < 1) || !in_array($type, ['household', 'business'], true)) {
+            throw new DomainException('bad_customer');
+        }
+        if ($userId === null && $type !== 'household') {
             throw new DomainException('bad_customer');
         }
         foreach (self::REQUIRED_CUSTOMER_FIELDS as $field) {
@@ -222,6 +233,7 @@ final class Checkout
         return [
             'user_id'        => $userId,
             'customer_type'  => $type,
+            'contact_email'  => self::contactEmail($input, $userId),
             'recipient_name' => trim((string) $input['recipient_name']),
             'recipient_phone' => $phone,
             'address_line_1' => trim((string) $input['address_line_1']),
@@ -232,8 +244,30 @@ final class Checkout
         ];
     }
 
+    /**
+     * The address this order's email goes to: what they typed at checkout,
+     * falling back to the account's own address when they typed nothing. A
+     * guest with neither is refused, because an order nobody can be told about
+     * is not an order we should take.
+     */
+    private static function contactEmail(array $input, ?int $userId): string
+    {
+        $email = strtolower(trim((string) ($input['email'] ?? '')));
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $email;
+        }
+        if ($userId !== null) {
+            $account = Database::one('SELECT email FROM users WHERE id = :id', [':id' => $userId]);
+            $onFile  = strtolower(trim((string) ($account['email'] ?? '')));
+            if ($onFile !== '') {
+                return $onFile;
+            }
+        }
+        throw new DomainException('bad_customer');
+    }
+
     /** Write the order, its address, its lines, the first status event and the unpaid payment. */
-    private static function writeOrder(PDO $pdo, int $userId, string $type, int $cartId, string $option, array $customer, string $deliveryDate, int $zoneId, array $lines): array
+    private static function writeOrder(PDO $pdo, ?int $userId, string $type, int $cartId, string $option, array $customer, string $deliveryDate, int $zoneId, array $lines): array
     {
         $total      = self::total($lines);
         $percentage = Settings::depositPercentage();
@@ -246,18 +280,19 @@ final class Checkout
         Database::run(
             'INSERT INTO orders
                 (order_number, order_trail_token_hash, user_id, shopping_cart_id, customer_type,
-                 order_status, payment_option, payment_status, subtotal_subunit, order_total_subunit,
-                 deposit_percentage, deposit_required_subunit, balance_due_subunit,
+                 contact_email, order_status, payment_option, payment_status, subtotal_subunit,
+                 order_total_subunit, deposit_percentage, deposit_required_subunit, balance_due_subunit,
                  preferred_delivery_date, delivery_zone_id, delivery_fee_note, created_by)
              VALUES
                 (:number, :token, :user_id, :cart_id, :type,
-                 \'pending\', :option, \'unpaid\', :subtotal, :order_total,
-                 :percentage, :deposit, :balance,
+                 :email, \'pending\', :option, \'unpaid\', :subtotal,
+                 :order_total, :percentage, :deposit, :balance,
                  :date, :zone, :fee, :created_by)',
             [
                 ':number'      => $orderNumber,
                 ':token'       => self::hashToken($token),
                 ':user_id'     => $userId,
+                ':email'       => $customer['contact_email'],
                 ':cart_id'     => $cartId,
                 ':type'        => $type,
                 ':option'      => $option,
@@ -301,7 +336,7 @@ final class Checkout
      * day manifest, the packing list and the order emails cannot find an
      * address on a checkout order and nothing on a converted Kitchen Run.
      */
-    public static function writeAddress(int $orderId, int $userId, array $customer): void
+    public static function writeAddress(int $orderId, ?int $userId, array $customer): void
     {
         Database::run(
             'INSERT INTO order_addresses
@@ -318,6 +353,12 @@ final class Checkout
                 ':landmark' => $customer['landmark'],
             ]
         );
+
+        // The order's own snapshot is written for everybody. The saved address
+        // for next time belongs to an account, and a guest order has none.
+        if ($userId === null) {
+            return;
+        }
 
         $exists = Database::one(
             'SELECT id FROM customer_addresses
@@ -437,7 +478,7 @@ final class Checkout
      * reason as writeAddress(): a Kitchen Run converts into an ordinary order
      * and its money rows have to be shaped exactly like every other order's.
      */
-    public static function writePayments(int $orderId, int $userId, string $orderNumber, string $option, int $total, int $due, string $deliveryDate): void
+    public static function writePayments(int $orderId, ?int $userId, string $orderNumber, string $option, int $total, int $due, string $deliveryDate): void
     {
         $rows = [[
             'number'   => 'PAY-' . $orderNumber,

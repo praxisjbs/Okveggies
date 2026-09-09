@@ -32,6 +32,30 @@ final class OrderTrail
         return (bool) preg_match('/^[A-Za-z0-9_-]{43}$/', $token);
     }
 
+    /** Where this browser keeps the trail tokens it has been handed. */
+    private const SESSION_KEY = 'okv_trail_tokens';
+
+    /**
+     * Remember a token in this session. A guest order has no account, so
+     * without this the customer coming back from Paystack lands on an order
+     * page that cannot recognise them. Held for the browser only: nothing is
+     * written, and another device still needs the link from the email.
+     */
+    public static function remember(int $orderId, string $token): void
+    {
+        if ($orderId < 1 || !self::isValidToken($token)) {
+            return;
+        }
+        $_SESSION[self::SESSION_KEY][$orderId] = $token;
+    }
+
+    /** The token this browser holds for one order, or null. */
+    public static function sessionToken(int $orderId): ?string
+    {
+        $token = (string) ($_SESSION[self::SESSION_KEY][$orderId] ?? '');
+        return self::isValidToken($token) ? $token : null;
+    }
+
     /** The order behind a public share token, or null. */
     public static function findByToken(string $token): ?array
     {
@@ -57,7 +81,7 @@ final class OrderTrail
 
         $order = Database::one(
             'SELECT o.id, o.order_number, o.order_status, o.payment_option, o.payment_status,
-                    o.order_total_subunit, o.deposit_required_subunit, o.balance_due_subunit,
+                    o.user_id, o.order_total_subunit, o.deposit_required_subunit, o.balance_due_subunit,
                     o.preferred_delivery_date, o.created_at, o.confirmed_at, o.source_regions_snapshot,
                     (SELECT p.expected_amount_subunit FROM payments p WHERE p.order_id = o.id ORDER BY p.id LIMIT 1) AS amount_due_subunit
                FROM orders o

@@ -184,21 +184,41 @@ final class Cancellation
         string $cutoffTime,
         bool $forfeitAfterCutoff,
         bool $afterDispatchAllowed = true,
-        bool $dispatchedForfeit = true
+        bool $dispatchedForfeit = true,
+        string $deliveryDate = ''
     ): string {
-        $when = 'You can cancel free up to ' . $cutoffTime . ' the day before your delivery.';
+        // The deadline in the customer's own terms. Once they have picked a
+        // delivery day we can name the actual evening, which is the difference
+        // between a rule they have to work out and one they can act on.
+        $when = 'Cancel free until ' . $cutoffTime . self::deadlineDay($deliveryDate) . ', the day before your delivery.';
+
         $after = $forfeitAfterCutoff
-            ? ' After that we have already bought your produce, so a deposit is not returned.'
-            : ' After that, ask us and we will still return anything you have paid.';
+            ? ' After that we have already bought your produce, so a deposit is not returned. Anything you paid above it comes back to you.'
+            : ' After that, ask us and we return everything you have paid.';
 
         // The one people find out about at the door, so it is said here first.
         if (!$afterDispatchAllowed) {
-            return $when . $after . ' Once your order is on the way it cannot be cancelled here, so please tell the driver.';
+            return $when . $after . ' Once it is on the way, tell the driver and we will sort it out there.';
         }
         $dispatch = $dispatchedForfeit
-            ? ' You can still cancel after it has been dispatched, but the produce has been bought and the van has run, so a deposit is kept.'
-            : ' You can still cancel after it has been dispatched, and we will return anything you have paid.';
+            ? ' You can still cancel once it is on the way, on the same terms.'
+            : ' You can still cancel once it is on the way, and we return everything you have paid.';
         return $when . $after . $dispatch;
+    }
+
+    /**
+     * " on Monday 25th" for a known delivery day, or nothing. Numerals and the
+     * weekday, the way the rest of the shop writes a date, and the day before
+     * the delivery because that is when the deadline actually falls.
+     */
+    private static function deadlineDay(string $deliveryDate): string
+    {
+        $date = trim($deliveryDate);
+        if ($date === '') {
+            return '';
+        }
+        $stamp = strtotime($date . ' -1 day');
+        return $stamp === false ? '' : ' on ' . date('l jS', $stamp);
     }
 
     /**
@@ -211,7 +231,8 @@ final class Cancellation
         string $cutoffTime,
         bool $forfeitAfterCutoff,
         bool $afterDispatchAllowed = true,
-        bool $dispatchedForfeit = true
+        bool $dispatchedForfeit = true,
+        string $deliveryDate = ''
     ): string {
         if (in_array($orderStatus, self::CLOSED_STATUSES, true)) {
             return 'This order is finished, so there is nothing left to cancel.';
@@ -227,7 +248,7 @@ final class Cancellation
         if (in_array($orderStatus, self::COMMITTED_STATUSES, true)) {
             return 'This order is packed and waiting for the van, so our team cancels it rather than the screen. Ask us and we will tell you exactly what comes back.';
         }
-        return 'You can cancel this order free up to ' . $cutoffTime . ' the day before your delivery.'
+        return 'Cancel this order free until ' . $cutoffTime . self::deadlineDay($deliveryDate) . ', the day before your delivery.'
              . ($forfeitAfterCutoff ? ' After that a deposit is kept, because your produce will already have been bought.' : '');
     }
 
