@@ -40,9 +40,22 @@ $afterRepayment = Credit::snapshotFromTransactions(
 okv_test_eq(0, $afterRepayment['overdue_subunit'], 'a repayment clears the oldest overdue charge first');
 okv_test_eq('2026-09-20', $afterRepayment['earliest_due_date'], 'the next unpaid due date advances after repayment');
 
+// Each staff action asks for its own permission. This reads the controller
+// rather than calling it, so it stays a unit test; the match ignores spacing,
+// because what matters is the pairing, not how the array is laid out.
 $creditController = (string) file_get_contents(dirname(__DIR__, 2) . '/api/v1/credit.php');
-foreach (['approve' => 'credit.apply.review', 'decline' => 'credit.apply.review', 'grant' => 'credit.grant', 'change_terms' => 'credit.limit.set', 'record_repayment' => 'credit.limit.set'] as $action => $permission) {
-    okv_test_ok(str_contains($creditController, "'$action'=>'$permission'"), "$action uses its exact credit permission");
+foreach ([
+    'approve'          => 'credit.apply.review',
+    'decline'          => 'credit.apply.review',
+    'grant'            => 'credit.grant',
+    'change_terms'     => 'credit.limit.set',
+    'suspend'          => 'credit.limit.set',
+    'withdraw'         => 'credit.limit.set',
+    'reinstate'        => 'credit.limit.set',
+    'record_repayment' => 'credit.limit.set',
+] as $action => $permission) {
+    $pattern = "/'" . preg_quote($action, '/') . "'\s*=>\s*'" . preg_quote($permission, '/') . "'/";
+    okv_test_ok(preg_match($pattern, $creditController) === 1, "$action uses its exact credit permission");
 }
 
 // -----------------------------------------------------------------------------

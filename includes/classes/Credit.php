@@ -629,6 +629,58 @@ final class Credit
     }
 
     /**
+     * The confirmed payments from this business that a staff member could still
+     * credit by hand: money that has arrived, is not already in the journal,
+     * and is not sitting on an on-account order that settles itself.
+     *
+     * The screen offers these as a list rather than asking anyone to type a
+     * database id, so what can be chosen and what the server will accept are
+     * the same set.
+     */
+    public static function repayablePayments(int $businessId, int $limit = 100): array
+    {
+        $business = Database::one('SELECT user_id FROM business_customers WHERE id = :id', [':id' => $businessId]);
+        if (!$business) {
+            return [];
+        }
+
+        $stmt = Database::getInstance()->getConnection()->prepare(
+            'SELECT p.id, p.payment_number, p.paid_amount_subunit, p.refunded_amount_subunit,
+                    p.confirmed_at, o.order_number
+               FROM payments p
+               JOIN orders o ON o.id = p.order_id
+               LEFT JOIN credit_transactions ct ON ct.payment_id = p.id
+              WHERE o.user_id = :user
+                AND p.confirmed_at IS NOT NULL
+                AND o.payment_option <> :on_account
+                AND ct.id IS NULL
+                AND p.paid_amount_subunit > p.refunded_amount_subunit
+              ORDER BY p.confirmed_at DESC, p.id DESC
+              LIMIT :limit'
+        );
+        $stmt->bindValue(':user', (int) $business['user_id'], PDO::PARAM_INT);
+        $stmt->bindValue(':on_account', 'on_account');
+        $stmt->bindValue(':limit', max(1, $limit), PDO::PARAM_INT);
+        $stmt->execute();
+
+        $out = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $net = max(0, (int) $row['paid_amount_subunit'] - (int) $row['refunded_amount_subunit']);
+            if ($net < 1) {
+                continue;
+            }
+            $out[] = [
+                'id'             => (int) $row['id'],
+                'reference'      => (string) $row['payment_number'],
+                'order_number'   => (string) $row['order_number'],
+                'amount_subunit' => $net,
+                'confirmed_at'   => (string) $row['confirmed_at'],
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * Reconcile an on-account order's credit against the money actually
      * received on it. Payments::recomputeOrder() calls this after every change
      * to the money on an order, so a business that settles its invoice gets its

@@ -203,9 +203,20 @@ try {
             "and it counts as overdue at $daysLate days late");
     }
 
-    $totals = Credit::ageingTotals(Credit::ageing());
-    cad_eq(7000000, (int) $totals['due_over_30'], 'the ageing totals add up the buckets across the book');
-    cad_ok((int) $totals['outstanding_subunit'] >= 7000000, 'the ageing totals add up what is outstanding');
+    // The totals are asserted against the rows they came from rather than a
+    // fixed figure, so other accounts in the same database cannot break this.
+    $book   = Credit::ageing();
+    $totals = Credit::ageingTotals($book);
+    foreach (array_merge(Credit::AGEING_BUCKETS, ['outstanding_subunit', 'overdue_subunit']) as $key) {
+        $expected = 0;
+        foreach ($book as $account) {
+            $expected += in_array($key, Credit::AGEING_BUCKETS, true)
+                ? (int) ($account['summary']['buckets'][$key] ?? 0)
+                : (int) ($account['summary'][$key] ?? 0);
+        }
+        cad_eq($expected, (int) $totals[$key], "the ageing totals add up $key across the book");
+    }
+    cad_ok((int) $totals['due_over_30'] >= 7000000, 'and the over-30 total includes this account');
 } finally {
     foreach ($businesses as $id) {
         Database::run('DELETE FROM credit_transactions WHERE business_customer_id = :id', [':id' => $id]);
