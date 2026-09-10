@@ -40,6 +40,14 @@ expect_login() { # url  label   (a redirect to the login, or a hard refusal)
   esac
 }
 
+expect_private() { # url  label   (login/refusal, with 404 allowed to avoid existence disclosure)
+  code=$(curl -s -o /dev/null -w "%{http_code}" "$1")
+  case "$code" in
+    301|302|303|307|401|403|404) echo "  ok   [$code] $2 fails closed" ;;
+    *) echo "  FAIL [$code] $2 should fail closed"; fail=1 ;;
+  esac
+}
+
 expect "$BASE/"               "200" "storefront home"
 expect "$BASE/admin/login.php" "200" "admin login page"
 
@@ -49,6 +57,8 @@ expect "$BASE/site.webmanifest"                             "200" "web manifest"
 expect "$BASE/assets/img/brand/lockup.svg"                  "200" "logo lockup"
 expect "$BASE/assets/img/brand/icons/apple-touch-icon.png" "200" "apple touch icon"
 expect "$BASE/assets/fonts/hanken-grotesk-latin.woff2"      "200" "brand font (Hanken Grotesk)"
+expect "$BASE/assets/img/payments/paystack.svg"             "200" "Paystack checkout mark"
+expect "$BASE/page.php?slug=delivery-policy#make-it-right" "200" "Delivery Policy and Make It Right guidance"
 # M6 routes. A staff screen must send a signed-out visitor to the login rather
 # than answering, and a trail token that does not exist must be a clean 404
 # rather than a 500. expect_login is separate from expect_deny on purpose: an
@@ -68,6 +78,13 @@ expect "$BASE/public/cron.php?token=not-a-real-token" "404" "and refuses a wrong
 expect "$BASE/contact.php" "200" "the contact page"
 expect_status "$BASE/api/v1/contact.php" "303" "the contact endpoint sends a GET to the form"
 expect_login "$BASE/admin/content.php" "the messages screen"
+
+# M10 customer reporting. Writes require an authenticated POST, and a GET must
+# fail without touching a report or disclosing an order.
+expect_status "$BASE/api/v1/make_it_right.php" "405" "the Make It Right endpoint refuses a GET"
+expect_private "$BASE/public/order.php?order=1" "the private customer order view"
+expect_login "$BASE/admin/make_it_right.php" "the Make It Right staff queue"
+expect "$BASE/public/issue_photo.php?photo=0" "404" "a missing private issue photo"
 
 expect_deny "$BASE/.env"                 ".env"
 expect_deny "$BASE/includes/config/db.php" "includes/"

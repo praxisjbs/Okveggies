@@ -76,7 +76,7 @@ $basketNotice = (string) okv_input('basket', '');
           <div class="grid gap-4 <?= count($images) > 1 ? 'sm:grid-cols-2' : '' ?>">
             <?php foreach ($images as $index => $image): ?>
               <div class="overflow-hidden rounded-lg bg-white p-4 shadow-okv-1 <?= $index === 0 && count($images) > 2 ? 'sm:col-span-2' : '' ?>">
-                <img src="<?= okv_e(okv_image_url($image['image_url'])) ?>" alt="<?= okv_e($product['name']) ?>, <?= okv_e($product['unit']) ?>, sourced from <?= okv_e($sourceRegions) ?>" class="aspect-square w-full rounded-md object-cover">
+                <img src="<?= okv_e(okv_image_url($image['image_url'])) ?>" alt="<?= okv_e(okv_produce_alt((string) $product['name'], (string) $product['unit'], $sourceRegions)) ?>" class="aspect-square w-full rounded-md object-cover">
               </div>
             <?php endforeach; ?>
           </div>

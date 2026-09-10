@@ -147,7 +147,7 @@ $componentCount = (int) $combo['component_count'];
               <li class="flex items-center gap-4 py-3">
                 <div class="h-14 w-14 flex-none overflow-hidden rounded-md bg-forest-tint">
                   <?php if (!empty($line['image'])): ?>
-                    <img src="<?= okv_e(okv_image_url((string) $line['image'])) ?>" alt="<?= okv_e($productName) ?>, per <?= okv_e($unit) ?>, sourced from <?= okv_e($sourceRegions) ?>" class="h-full w-full object-cover" loading="lazy">
+                    <img src="<?= okv_e(okv_image_url((string) $line['image'])) ?>" alt="<?= okv_e(okv_produce_alt($productName, $unit, $sourceRegions)) ?>" class="h-full w-full object-cover" loading="lazy">
                   <?php endif; ?>
                 </div>
                 <div class="min-w-0 flex-1">

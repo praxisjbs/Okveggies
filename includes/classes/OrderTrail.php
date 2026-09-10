@@ -164,7 +164,9 @@ final class OrderTrail
         $order['source_is_promise'] = !$confirmed;
         $order['refund_lines'] = [];
         $refunds = Database::all(
-            'SELECT r.status FROM refunds r WHERE r.order_id = :id ORDER BY r.id',
+            'SELECT r.status FROM refunds r
+              WHERE r.order_id = :id AND r.issue_report_id IS NULL
+           ORDER BY r.id',
             [':id' => (int) $order['id']]
         );
         foreach ($refunds as $refund) {
