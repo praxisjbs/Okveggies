@@ -645,12 +645,14 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 ### M11. Admin dashboard and analytics
 - [x] Today's orders, revenue, payments due, credit outstanding
 - [x] Charts: sales over time, top products, order-share by category (fixed colours)
-- [ ] Command palette and keyboard shortcuts
+- [x] Command palette and keyboard shortcuts
 - [x] **Task A, analytics contract.** The Owner fixed the complete M11 metric contract before implementation: non-cancelled orders placed today in the configured Lagos timezone; net cash revenue from credited transaction events less processed refunds on their real movement dates; unpaid payment obligations due today or earlier, with due-today and overdue splits; global credit outstanding as the sum of each business's non-negative signed-journal balance; 7, 30 and 90 day GET presets with 30 days as the default; refund-adjusted top sellable lines ranked by value; and refund-adjusted category share by line value across the 5 product categories plus Combos and Kitchen Runs. Layered server gates pair `dashboard.view` with the relevant Orders, Payments or Credit permission, and every chart additionally needs `dashboard.analytics.view`. `docs/M11_ANALYTICS_CONTRACT.md` records timestamp boundaries, fixed token mapping, empty states, schema limitations and the required verification fixtures. No schema or production code changed, and the 3 headline acceptance criteria remain open.
 - [x] **Task B, read-only analytics service.** `AdminDashboard` now owns the reusable summary and chart aggregation layer outside `admin/index.php`. Its selective overview and public metric methods return integer-kobo, permission-neutral data; use Lagos-local half-open date ranges; keep due today separate from overdue; rebuild credit balances from the signed journal through `Credit`; emit dense zero-filled sales days; rank snapshot sellable lines by refund-adjusted value; and allocate category share to exactly 10,000 basis points using the fixed M11 colour tokens. Focused pure tests passed 2,836/2,836 with the full unit runner, and the fresh MySQL 8 aggregation suite passed 23/23. The headline criteria remain open until the route gates and dashboard presentation consume this service.
 - [x] **Task C, today's operational dashboard.** The temporary catalogue-count row is replaced by 4 permission-layered cards backed only by `AdminDashboard`: non-cancelled orders placed today, net confirmed revenue with completed refunds explained, due and overdue payment balances, and signed-journal credit outstanding. Each card is a keyboard link with a specific zero or isolated error state. Orders gained an exact placed-date filter, and Payments gained a due-attention table that reads the same eligible obligations as the card. Pricing, Catalogue and Combos remain as server-gated quick links. HTTP tests prove `dashboard.view`, partial-role data absence and both filtered destinations, so the first M11 acceptance criterion is closed.
 - [x] **Task D, dashboard charts.** The dashboard now presents the shared 7, 30 and 90 day analytics period through a signed net-sales line chart, a top-10 ranked product view and a fixed-token category-share bar. All query work remains in `AdminDashboard`; the route applies `dashboard.analytics.view` plus Payments or Orders permission before querying or serialising each independent region. Server-rendered exact tables, honest empty and isolated error states, and local integrity notices remain useful without JavaScript. Vanilla JavaScript progressively enhances only permitted non-empty data, uses no dependency or CDN and adds no motion. The full unit suite passed 2,838/2,838, the clean MySQL 8 dashboard suite passed 26/26 and dashboard HTTP permission and rendering checks passed 53/53. Browser checks passed at 390px and 1440px with no overflow, complete chart paint and no undersized visible control. The M11 charts acceptance criterion is closed.
 - [x] **Task E, shared command palette.** Every admin page now receives one accessible command palette from the shared header and footer. Both the sidebar and palette consume `includes/config/nav.php`; approved search keywords live beside each canonical item, and `okv_admin_nav_commands()` removes forbidden destinations before markup reaches the browser. The visible top-bar control and `Ctrl+K` or `Command+K` open a mobile sheet or desktop dialog. Search, Arrow Up, Arrow Down, Enter, Escape, backdrop closing, focus trapping and focus restoration work without a framework or unsafe HTML rendering. The full unit suite passed 2,850/2,850, the dashboard database regression passed 26/26 and the HTTP permission matrix passed 75/75. Browser checks at 390px and 1440px proved search, no-match copy, keyboard wrapping, same-tab navigation, field-level shortcut access, focus containment and 44px controls. The headline command-palette and keyboard-shortcuts criterion remains open until the remaining general shortcuts are completed.
+- [x] **Task F, shared admin keyboard shortcuts.** The palette module is now the single shared `admin-shortcuts.js` controller loaded throughout admin. It retains `Ctrl+K` and `Command+K`, Escape, Arrow Up, Arrow Down and Enter, and adds permission-filtered 2-key navigation for Dashboard (`G D`), Orders (`G O`), Products (`G P`), Payments (`G M`), Delivery (`G L`) and Customers (`G C`). Direct sequences expire after 1.5 seconds, ignore repeated events, never run in editable fields or open overlays, announce same-page and failed states, and can activate only server-rendered permitted commands. The palette documents its general controls and only the direct shortcuts available to the signed-in role. Unit tests passed 2,858/2,858, the clean MySQL 8 dashboard suite passed 26/26 and the expanded HTTP role matrix passed 86/86. Keyboard-only browser checks passed at 390px and 1440px, including input and overlay protection, current-page handling, focus containment and restoration, direct navigation, no horizontal overflow and scrollable guidance on short screens. The combined M11 command-palette and keyboard-shortcuts criterion is closed.
+- [x] **Task G, final audit and handover.** A fresh MySQL 8 audit expanded the M11 proof to Lagos midnight boundaries, zero, one and multiple records, multi-item order deduplication, all payment and refund states, open, overdue and settled credit journals, and product rename and category-move history. The final suites passed 2,861/2,861 unit, 41/41 dashboard database and 96/96 dashboard HTTP assertions, with Payments 43/43, Credit admin 30/30, Credit orders 48/48 and Cancellation 28/28 also green. The HTTP suite now uses the actual seeded Owner and Manager plus restricted custom roles and proves exact ordered palette/sidebar parity. Live browser checks passed at 390px and 1440px for responsive layout, 44px mobile targets, accessible chart tables, keyboard-only palette and shortcuts, editable-field protection, focus containment and restoration, reduced motion and a clean console. PHP and JavaScript syntax, brand-check, deploy verify and `git diff --check` passed. `docs/M11_REVIEW.md` records the final evidence and the agreed current-category schema boundary. No M11 work is deferred.
 
 ### M12. Content pages
 - [ ] Home (documentary hero, featured combos, categories)
@@ -690,6 +692,56 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 10 Sep 2026, M11 Task G: final audit and handover
+
+- Audited all 9 M11 outcomes against the PRD and the agreed analytics contract:
+  4 operational metrics, 3 analytics views, the command palette and keyboard
+  shortcuts. No production calculation defect remained.
+- Metric definitions are final: non-cancelled orders inside the Lagos-local day;
+  successful credited cash less processed refunds on movement dates; remaining
+  non-cancelled obligations due today or earlier; and non-negative per-business
+  balances rebuilt from the signed credit journal. Charts use the selected 7,
+  30 or 90 day period, with 30 days as the default.
+- Permission checks use `dashboard.view` at the route, the relevant Orders,
+  Payments or Credit permission at every metric boundary, and
+  `dashboard.analytics.view` before any chart markup, payload or script is
+  emitted. The seeded Owner and Manager and restricted custom roles all passed;
+  palette destinations exactly matched each role's sidebar destinations.
+- Verification passed: 2,861/2,861 unit assertions, 41/41 fresh MySQL 8 M11
+  assertions, 96/96 HTTP and role assertions, Payments 43/43, Credit admin
+  30/30, Credit orders 48/48 and Cancellation 28/28. PHP lint, JavaScript
+  syntax, brand-check, deploy verify and `git diff --check` were green.
+- Browser checks passed at 390px and 1440px with all 4 cards, all 3 charts and
+  all 3 exact-value tables present, no overflow, no mobile control below 44px,
+  keyboard-only palette and shortcut operation, focus containment and return,
+  editable-field protection, the loaded reduced-motion rule and no console
+  warnings or errors.
+- The agreed schema boundary remains: order-item labels and values are
+  historical snapshots, but product category share uses the current category
+  because the current schema has no order-item category snapshot. This is
+  documented, not deferred work. No migration, commit or push was made.
+
+### 10 Sep 2026, M11 Task F: admin keyboard shortcuts
+
+- Consolidated command-palette and direct-navigation behaviour into one shared
+  `admin-shortcuts.js` controller loaded on every admin page.
+- Added `G D`, `G O`, `G P`, `G M`, `G L` and `G C` beside their canonical,
+  permission-gated navigation items. A missing or forbidden command has no
+  shortcut data in the page and cannot be activated by JavaScript.
+- Added visible shortcut guidance inside the palette, input and contenteditable
+  protection, open-overlay protection, a 1.5-second sequence timeout, repeated
+  key suppression and accessible current-page or cancelled-sequence notices.
+- Verification: 2,858/2,858 unit assertions, 26/26 clean MySQL 8 dashboard
+  assertions and 86/86 dashboard shortcut and role assertions passed. PHP and
+  JavaScript syntax, brand-check and `git diff --check` passed.
+- Keyboard-only checks passed at 390px and 1440px. Palette navigation, direct
+  navigation, editable-field safety, overlay safety, focus containment and
+  restoration, no horizontal overflow, 44px mobile controls and scrollable
+  shortcut guidance were verified. The built-in PHP server passed every
+  application check; as expected, it cannot apply Apache `.htaccess` denial to
+  `/docs` and `/migrations`.
+- No migration, commit or push was made.
 
 ### 10 Sep 2026, M11 Task E: shared command palette
 

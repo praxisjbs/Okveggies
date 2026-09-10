@@ -30,6 +30,35 @@ function adh_eq($expected, $actual, string $label): void
         : ' (expected ' . var_export($expected, true) . ', got ' . var_export($actual, true) . ')'));
 }
 
+function adh_admin_links(string $html, string $region): array
+{
+    $source = $html;
+    if ($region === 'sidebar') {
+        if (preg_match('/<nav\b[^>]*aria-label="Admin"[^>]*>(.*?)<\/nav>/s', $html, $match) !== 1) {
+            return [];
+        }
+        $source = $match[1];
+        $pattern = '/<a\b[^>]*href="([^"]+)"[^>]*>/';
+    } else {
+        $pattern = '/<a\b[^>]*href="([^"]+)"[^>]*data-command-item\b[^>]*>/';
+    }
+
+    $links = [];
+    if (preg_match_all($pattern, $source, $matches) > 0) {
+        foreach ($matches[1] as $href) {
+            $links[] = html_entity_decode((string) $href, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+    }
+    return $links;
+}
+
+function adh_assert_palette_matches_sidebar(string $html, string $roleLabel): void
+{
+    $sidebar = adh_admin_links($html, 'sidebar');
+    $palette = adh_admin_links($html, 'palette');
+    adh_eq($sidebar, $palette, $roleLabel . ' receives the same ordered destinations in the sidebar and command palette');
+}
+
 function adh_request(string $base, string $jar, string $path): array
 {
     $ch = curl_init($base . $path);
@@ -154,6 +183,33 @@ try {
         $jars[$key] = tempnam(sys_get_temp_dir(), 'okv-m11-dashboard-');
     }
 
+    foreach (['owner', 'manager'] as $roleName) {
+        $role = Database::one('SELECT id FROM roles WHERE name = :name', [':name' => $roleName]);
+        if ($role === null) {
+            throw new RuntimeException('Run the RBAC seed before the M11 HTTP test.');
+        }
+        $key = 'launch_' . $roleName;
+        $email = 'm11-' . $roleName . '-' . strtolower($suffix) . '@example.test';
+        Database::run(
+            'INSERT INTO users
+                (first_name, last_name, email, phone, password_hash, user_type, status)
+             VALUES (:first, :last, :email, :phone, :password_hash, :user_type, :status)',
+            [
+                ':first' => ucfirst($roleName), ':last' => 'M11', ':email' => $email,
+                ':phone' => '+23471' . str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+                ':password_hash' => password_hash($password, PASSWORD_BCRYPT),
+                ':user_type' => 'staff', ':status' => 'active',
+            ]
+        );
+        $userId = (int) Database::getInstance()->getConnection()->lastInsertId();
+        $users[$key] = ['id' => $userId, 'email' => $email];
+        Database::run(
+            'INSERT INTO user_roles (user_id, role_id) VALUES (:user, :role)',
+            [':user' => $userId, ':role' => (int) $role['id']]
+        );
+        $jars[$key] = tempnam(sys_get_temp_dir(), 'okv-m11-dashboard-');
+    }
+
     $today = date('Y-m-d');
     $tomorrow = date('Y-m-d', strtotime('+1 day'));
     foreach ([
@@ -268,7 +324,33 @@ try {
     }
     adh_ok(!str_contains($full, 'href="/admin/users.php"'), 'a role without users.view receives no Users command or sidebar URL');
     adh_ok(str_contains($full, 'data-command-empty hidden>No permitted page matches that search.'), 'the palette carries a plain no-match state');
-    adh_ok(str_contains($full, '/assets/js/admin-command-palette'), 'every admin response loads the shared command module');
+    adh_ok(str_contains($full, '/assets/js/admin-shortcuts'), 'every admin response loads the shared shortcut controller');
+    adh_ok(str_contains($full, 'Keyboard shortcuts')
+        && str_contains($full, 'Move through results')
+        && str_contains($full, 'Open result'), 'the palette documents its keyboard controls inside the interface');
+    adh_eq(3, substr_count($full, 'data-shortcut-guide'), 'the full fixture documents only its 3 permitted direct shortcuts');
+    foreach (['g d', 'g o', 'g m'] as $shortcut) {
+        adh_ok(str_contains($full, 'data-command-shortcut="' . $shortcut . '"'), 'the permitted source includes direct shortcut ' . $shortcut);
+    }
+    adh_ok(!str_contains($full, 'data-command-shortcut="g p"'), 'an unavailable Products shortcut is absent from page source');
+    adh_ok(str_contains($full, 'data-shortcut-status'), 'the shared shell provides an accessible shortcut announcement region');
+    adh_assert_palette_matches_sidebar($full, 'the restricted full-metrics custom role');
+
+    [, $owner] = adh_request($base, $jars['launch_owner'], '/admin/');
+    $ownerText = html_entity_decode($owner, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    adh_ok(str_contains($ownerText, 'Owner')
+        && str_contains($ownerText, "Today's revenue")
+        && str_contains($ownerText, 'Sales over time'), 'the seeded Owner role receives every M11 financial and chart region');
+    adh_ok(str_contains($owner, 'href="/admin/users.php"'), 'the seeded Owner receives the Owner-only Users destination');
+    adh_assert_palette_matches_sidebar($owner, 'the seeded Owner');
+
+    [, $manager] = adh_request($base, $jars['launch_manager'], '/admin/');
+    $managerText = html_entity_decode($manager, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    adh_ok(str_contains($managerText, 'Manager')
+        && str_contains($managerText, "Today's revenue")
+        && str_contains($managerText, 'Sales over time'), 'the seeded Manager role receives the operational M11 financial and chart regions');
+    adh_ok(!str_contains($manager, 'href="/admin/users.php"'), 'the seeded Manager receives no Owner-only Users destination');
+    adh_assert_palette_matches_sidebar($manager, 'the seeded Manager');
 
     [, $sevenDays] = adh_request($base, $jars['full'], '/admin/?period=7');
     adh_ok(preg_match('/aria-current="page"[^>]*>\s*7 days\s*<\/a>/', $sevenDays) === 1, 'the 7 day GET preset is selected');
@@ -285,9 +367,13 @@ try {
     adh_ok(str_contains($ordersOnlyText, 'Top products') && str_contains($ordersOnlyText, 'Order share by category'), 'an analytics and orders role sees both order charts');
     adh_ok(!str_contains($ordersOnly, 'Sales over time') && !str_contains($ordersOnly, 'sales_over_time'), 'an orders-only response contains no sales chart or sales payload');
     adh_eq(2, substr_count($ordersOnly, 'data-command-item'), 'an Orders role receives only Dashboard and Orders commands');
+    adh_eq(2, substr_count($ordersOnly, 'data-shortcut-guide'), 'an Orders role receives only its 2 permitted shortcut guides');
+    adh_ok(str_contains($ordersOnly, 'data-command-shortcut="g o"')
+        && !str_contains($ordersOnly, 'data-command-shortcut="g m"'), 'Orders-role source exposes no Payments shortcut');
     adh_ok(str_contains($ordersOnly, 'data-command-search-text="Orders Selling order basket checkout sales"'), 'approved Orders keywords are rendered only with its permitted command');
     adh_ok(!str_contains($ordersOnly, 'href="/admin/payments.php"')
         && !str_contains($ordersOnly, 'href="/admin/users.php"'), 'forbidden command URLs are absent from Orders-role source');
+    adh_assert_palette_matches_sidebar($ordersOnly, 'the restricted Orders custom role');
 
     [, $paymentsOnly] = adh_request($base, $jars['payments'], '/admin/');
     $paymentsOnlyText = html_entity_decode($paymentsOnly, ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -298,6 +384,7 @@ try {
     adh_ok(!str_contains($paymentsOnly, 'Top products') && !str_contains($paymentsOnly, 'top_products')
         && !str_contains($paymentsOnly, 'Order share by category'), 'a payments-only response contains no order chart data');
     adh_eq(2, substr_count($paymentsOnly, 'data-command-item'), 'a Payments role receives only Dashboard and Payments commands');
+    adh_eq(2, substr_count($paymentsOnly, 'data-shortcut-guide'), 'a Payments role receives only its 2 permitted shortcut guides');
     adh_ok(str_contains($paymentsOnly, 'payment pay paystack transactions refunds reconciliation'), 'searching pay can match the permitted Payments command');
 
     [, $ordersNoAnalytics] = adh_request($base, $jars['orders_no_analytics'], '/admin/');
@@ -317,6 +404,7 @@ try {
     adh_ok(!str_contains($dashboardOnlyText, "Today's orders") && !str_contains($dashboardOnlyText, "Today's revenue"), 'dashboard-only HTML contains no operational cards');
     adh_ok(!str_contains($dashboardOnly, Money::format(1234500)), 'dashboard-only HTML contains no payment amount');
     adh_eq(1, substr_count($dashboardOnly, 'data-command-item'), 'a dashboard-only role receives only the Dashboard command');
+    adh_eq(1, substr_count($dashboardOnly, 'data-shortcut-guide'), 'a dashboard-only role receives only the Dashboard shortcut guide');
 
     [, $usersOnly] = adh_request($base, $jars['users'], '/admin/');
     adh_eq(2, substr_count($usersOnly, 'data-command-item'), 'a Users role receives only Dashboard and Users commands');
@@ -332,7 +420,7 @@ try {
     adh_ok(!str_contains($filteredOrders, 'M11-YESTERDAY-' . $suffix), 'the created-date filter excludes an earlier order');
     adh_ok(str_contains($filteredOrders, 'name="filter_created" value="' . $today . '"'), 'the Orders form preserves its placed-date filter');
     adh_ok(str_contains($filteredOrders, 'id="okv-command-palette"')
-        && str_contains($filteredOrders, '/assets/js/admin-command-palette'), 'the shared palette is present beyond the dashboard page');
+        && str_contains($filteredOrders, '/assets/js/admin-shortcuts'), 'the shared shortcut controller is present beyond the dashboard page');
 
     [, $duePage] = adh_request($base, $jars['payments'], '/admin/payments.php?due=attention#payments-due');
     adh_ok(str_contains($duePage, 'M11-TODAY-' . $suffix), 'the due-attention view lists a payment due today');

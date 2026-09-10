@@ -27,9 +27,22 @@ $pdo->beginTransaction();
 try {
     $unit = Database::one('SELECT id FROM units_of_measurement ORDER BY id LIMIT 1');
     $category = Database::one('SELECT id FROM product_categories WHERE slug = :slug', [':slug' => 'vegetables']);
-    if (!$unit || !$category) {
+    $fruitCategory = Database::one('SELECT id FROM product_categories WHERE slug = :slug', [':slug' => 'fruits']);
+    if (!$unit || !$category || !$fruitCategory) {
         throw new RuntimeException('Run all migrations before the dashboard database test.');
     }
+
+    $emptyNow = new DateTimeImmutable('2080-01-15 12:00:00', new DateTimeZone('Africa/Lagos'));
+    adb_eq(0, AdminDashboard::ordersToday($emptyNow), 'zero records returns 0 orders');
+    $emptyRevenue = AdminDashboard::revenueToday($emptyNow);
+    adb_eq(0, $emptyRevenue['revenue_subunit'], 'zero records returns 0 revenue');
+    adb_eq(0, AdminDashboard::paymentsDue($emptyNow)['payments_due_count'], 'zero records returns 0 payments due');
+    adb_eq(0, AdminDashboard::creditOutstanding($emptyNow), 'zero records returns 0 credit outstanding');
+    $emptySales = AdminDashboard::salesOverTime(7, $emptyNow);
+    adb_eq(7, count($emptySales['series']), 'zero records still returns all requested sales days');
+    adb_eq(0, array_sum(array_column($emptySales['series'], 'amount_subunit')), 'zero-record sales days contain explicit zero values');
+    adb_eq([], AdminDashboard::topProducts(7, $emptyNow), 'zero records returns no top products');
+    adb_eq([], AdminDashboard::categoryShare(7, $emptyNow)['rows'], 'zero records returns no category share');
 
     Database::run(
         'INSERT INTO products
@@ -68,6 +81,9 @@ try {
 
     $todayOrder = $makeOrder('pending', '2099-12-31 00:00:00', 10000, 'TODAY');
     $cancelledOrder = $makeOrder('cancelled', '2099-12-31 23:59:59', 5000, 'CANCELLED');
+    $beforeMidnightOrder = $makeOrder('pending', '2099-12-30 23:59:59', 200, 'BEFORE-MIDNIGHT');
+    $multiItemOrder = $makeOrder('pending', '2099-12-31 00:00:01', 200, 'MULTI-ITEM');
+    $singleOrder = $makeOrder('pending', '2099-12-20 12:00:00', 2500, 'SINGLE');
     $comboOrder = $makeOrder('delivered', '2099-12-30 09:00:00', 8000, 'COMBO');
     $kitchenOrder = $makeOrder('confirmed', '2099-12-29 09:00:00', 6000, 'KITCHEN');
     $manualOrder = $makeOrder('pending', '2099-12-28 09:00:00', 4000, 'MANUAL');
@@ -85,6 +101,34 @@ try {
             ':line_total' => 10000, ':created_at' => '2099-12-31 00:00:00',
         ]
     );
+    foreach ([['A', 120], ['B', 80]] as [$tag, $lineTotal]) {
+        Database::run(
+            'INSERT INTO order_items
+                (order_id, item_type, item_name, sku, unit_name, quantity,
+                 unit_price_subunit, line_total_subunit, created_at)
+             VALUES (:order_id, :item_type, :item_name, :sku, :unit_name, :quantity,
+                     :unit_price, :line_total, :created_at)',
+            [
+                ':order_id' => $multiItemOrder, ':item_type' => 'product',
+                ':item_name' => 'Boundary item ' . $tag, ':sku' => 'BOUNDARY-' . $tag . '-' . $suffix,
+                ':unit_name' => 'kg', ':quantity' => '1.000', ':unit_price' => $lineTotal,
+                ':line_total' => $lineTotal, ':created_at' => '2099-12-31 00:00:01',
+            ]
+        );
+    }
+    Database::run(
+        'INSERT INTO order_items
+            (order_id, item_type, product_id, item_name, sku, unit_name, quantity,
+             unit_price_subunit, line_total_subunit, created_at)
+         VALUES (:order_id, :item_type, :product_id, :item_name, :sku, :unit_name, :quantity,
+                 :unit_price, :line_total, :created_at)',
+        [
+            ':order_id' => $singleOrder, ':item_type' => 'product', ':product_id' => $productId,
+            ':item_name' => 'Single Snapshot ' . $suffix, ':sku' => 'SINGLE-' . $suffix,
+            ':unit_name' => 'kg', ':quantity' => '1.000', ':unit_price' => 2500,
+            ':line_total' => 2500, ':created_at' => '2099-12-20 12:00:00',
+        ]
+    );
     Database::run(
         'INSERT INTO order_items
             (order_id, item_type, item_name, sku, unit_name, quantity, unit_price_subunit, line_total_subunit, created_at)
@@ -93,6 +137,14 @@ try {
             ':order_id' => $comboOrder, ':item_type' => 'combo', ':item_name' => 'M11 Combo ' . $suffix,
             ':sku' => 'M11-C-' . $suffix, ':unit_name' => 'basket', ':quantity' => '1.000',
             ':unit_price' => 8000, ':line_total' => 8000, ':created_at' => '2099-12-30 09:00:00',
+        ]
+    );
+    Database::run(
+        'UPDATE products SET name = :name, category_id = :category_id WHERE id = :id',
+        [
+            ':name' => 'Renamed live produce ' . $suffix,
+            ':category_id' => (int) $fruitCategory['id'],
+            ':id' => $productId,
         ]
     );
     Database::run(
@@ -179,6 +231,18 @@ try {
             ':refunded_at' => '2099-12-31 11:00:00',
         ]
     );
+    foreach ([Refunds::STATUS_PROCESSING, Refunds::STATUS_FAILED] as $refundStatus) {
+        Database::run(
+            'INSERT INTO refunds
+                (payment_transaction_id, order_id, amount_subunit, currency, status, refunded_at)
+             VALUES (:transaction_id, :order_id, :amount, :currency, :status, :refunded_at)',
+            [
+                ':transaction_id' => $revenueTxn, ':order_id' => $todayOrder, ':amount' => 500,
+                ':currency' => Money::CODE, ':status' => $refundStatus,
+                ':refunded_at' => '2099-12-31 11:45:00',
+            ]
+        );
+    }
     Database::run(
         'INSERT INTO refunds
             (payment_transaction_id, order_id, amount_subunit, currency, status, refunded_at)
@@ -223,6 +287,7 @@ try {
     $makePayment($comboOrder, 'due_overdue', 9000, 2000, 'part_paid', '2099-12-30 18:00:00');
     $makePayment($kitchenOrder, 'due_today', 4000, 0, 'unpaid', '2099-12-31 18:00:00');
     $makePayment($manualOrder, 'due_future', 4000, 0, 'unpaid', '2100-01-01 00:00:00');
+    $makePayment($comboOrder, 'due_fully_paid', 3000, 3000, 'paid', '2099-12-29 18:00:00');
     $cancelledPayment = $makePayment($cancelledOrder, 'due_cancelled', 5000, 5000, 'paid', '2099-12-30 18:00:00');
     Database::run(
         'INSERT INTO payment_transactions
@@ -235,6 +300,21 @@ try {
             ':reference' => 'M11-CANCELLED-CASH-' . $suffix, ':domain' => 'test', ':status' => 'success',
             ':requested' => 5000, ':amount' => 5000, ':currency' => Money::CODE,
             ':email' => 'm11@example.test', ':paid_at' => '2099-12-31 08:00:00',
+        ]
+    );
+
+    $singlePayment = $makePayment($singleOrder, 'single_record', 2500, 2500, 'paid', null);
+    Database::run(
+        'INSERT INTO payment_transactions
+            (payment_id, attempt_number, provider, reference, domain, status,
+             requested_amount_subunit, amount_subunit, currency, customer_email, paid_at)
+         VALUES (:payment_id, :attempt, :provider, :reference, :domain, :status,
+                 :requested, :amount, :currency, :email, :paid_at)',
+        [
+            ':payment_id' => $singlePayment, ':attempt' => 1, ':provider' => 'manual',
+            ':reference' => 'M11-SINGLE-' . $suffix, ':domain' => 'test', ':status' => 'success',
+            ':requested' => 2500, ':amount' => 2500, ':currency' => Money::CODE,
+            ':email' => 'm11@example.test', ':paid_at' => '2099-12-20 13:00:00',
         ]
     );
 
@@ -267,31 +347,47 @@ try {
         $businessIds[] = (int) $pdo->lastInsertId();
     }
     foreach ([
-        [$businessIds[0], 'charge', 12000, '2099-12-30'],
-        [$businessIds[0], 'repayment', -5000, null],
-        [$businessIds[1], 'repayment', -9000, null],
-    ] as [$businessId, $type, $amount, $dueDate]) {
+        [$businessIds[0], 'charge', 12000, '2099-12-30', 'overdue'],
+        [$businessIds[0], 'repayment', -5000, null, 'open'],
+        [$businessIds[0], 'charge', 3000, '2099-12-25', 'settled'],
+        [$businessIds[0], 'repayment', -3000, null, 'settled'],
+        [$businessIds[1], 'repayment', -9000, null, 'settled'],
+    ] as [$businessId, $type, $amount, $dueDate, $status]) {
         Database::run(
             'INSERT INTO credit_transactions
                 (business_customer_id, transaction_type, amount_subunit, due_date, status)
              VALUES (:business_id, :transaction_type, :amount, :due_date, :status)',
             [
                 ':business_id' => $businessId, ':transaction_type' => $type,
-                ':amount' => $amount, ':due_date' => $dueDate, ':status' => 'open',
+                ':amount' => $amount, ':due_date' => $dueDate, ':status' => $status,
             ]
         );
     }
 
-    adb_eq(1, AdminDashboard::ordersToday($now), 'today counts the midnight order and excludes the cancelled order');
+    adb_eq(2, AdminDashboard::ordersToday($now), 'Lagos midnight includes 2 orders and counts the order with 2 items only once');
+    Database::run(
+        'UPDATE orders SET order_status = :status WHERE id = :id',
+        [':status' => 'cancelled', ':id' => $multiItemOrder]
+    );
+    adb_eq(1, AdminDashboard::ordersToday($now), 'the second before Lagos midnight stays outside today and cancellation removes the other order');
+
+    $singleNow = new DateTimeImmutable('2099-12-20 16:00:00', new DateTimeZone('Africa/Lagos'));
+    adb_eq(1, AdminDashboard::ordersToday($singleNow), 'one order record returns an exact count of 1');
+    adb_eq(2500, AdminDashboard::revenueToday($singleNow)['revenue_subunit'], 'one credited transaction returns its exact revenue');
+    $singleSales = AdminDashboard::salesOverTime(7, $singleNow);
+    adb_eq(2500, $singleSales['series'][6]['amount_subunit'], 'one database cash movement appears on its exact Lagos day');
+    $singleTop = AdminDashboard::topProducts(7, $singleNow);
+    adb_eq('Single Snapshot ' . $suffix, $singleTop[0]['label'], 'one order line produces one historical top-product row');
+    adb_eq(1, count(AdminDashboard::categoryShare(7, $singleNow)['rows']), 'one categorised order line produces one category row');
 
     $revenue = AdminDashboard::revenueToday($now);
     adb_eq(12000, $revenue['revenue_subunit'], 'revenue keeps real cancelled-order cash and subtracts only the processed refund');
     adb_eq(15000, $revenue['revenue_gross_subunit'], 'gateway fees and a failed retry are not treated as revenue');
-    adb_eq(3000, $revenue['revenue_refund_subunit'], 'a processed refund is recognised while a requested refund is not');
+    adb_eq(3000, $revenue['revenue_refund_subunit'], 'only the processed refund counts; requested, processing and failed refunds do not');
     adb_ok($revenue['undated_receipts_count'] >= 1, 'an undated credited receipt is surfaced for integrity review');
 
     $due = AdminDashboard::paymentsDue($now);
-    adb_eq(2, $due['payments_due_count'], 'only overdue and due-today obligations count');
+    adb_eq(2, $due['payments_due_count'], 'only overdue and due-today obligations count, excluding the fully paid obligation');
     adb_eq(11000, $due['payments_due_subunit'], 'due balances are summed without future or cancelled payments');
     adb_eq(7000, $due['payments_overdue_subunit'], 'the unpaid part of the older obligation is overdue');
     adb_eq(4000, $due['payments_due_today_subunit'], 'the due-today obligation remains separate');
@@ -301,7 +397,7 @@ try {
     adb_eq('overdue', $dueRows[0]['due_state'], 'the oldest obligation is labelled overdue');
     adb_eq(7000, $dueRows[0]['outstanding_subunit'], 'the due-attention row carries its exact unpaid balance');
 
-    adb_eq(7000, AdminDashboard::creditOutstanding($now), 'global credit floors each business before summing');
+    adb_eq(7000, AdminDashboard::creditOutstanding($now), 'open, overdue and settled ledger entries net correctly before each business is floored at zero');
 
     $sales = AdminDashboard::salesOverTime(7, $now);
     adb_eq(7, count($sales['series']), 'the database sales projection returns every day in the preset');
@@ -309,6 +405,7 @@ try {
 
     $top = AdminDashboard::topProducts(7, $now);
     $topByLabel = array_column($top, null, 'label');
+    adb_ok(!isset($topByLabel['Renamed live produce ' . $suffix]), 'a changed current product name does not rewrite its historical order snapshot');
     adb_eq(7000, $topByLabel['M11 Tomatoes ' . $suffix]['amount_subunit'], 'top product value is reduced by the order refund');
     adb_eq('combo', $topByLabel['M11 Combo ' . $suffix]['kind'], 'a Combo stays a separate sellable line');
     adb_eq('kitchen_run', $topByLabel['M11 Pomo ' . $suffix]['kind'], 'a converted Kitchen Run stays a separate sellable line');
@@ -316,7 +413,7 @@ try {
     $share = AdminDashboard::categoryShare(7, $now);
     $shareBySlug = array_column($share['rows'], null, 'category_slug');
     adb_eq(10000, array_sum(array_column($share['rows'], 'share_basis_points')), 'database category share totals 10000 basis points');
-    adb_eq(7000, $shareBySlug['vegetables']['amount_subunit'], 'product sales use the product current category');
+    adb_eq(7000, $shareBySlug['fruits']['amount_subunit'], 'a product moved after sale uses its current category while keeping its historical name');
     adb_eq(8000, $shareBySlug['combos']['amount_subunit'], 'Combo sales use the Combos group');
     adb_eq(6000, $shareBySlug['kitchen-runs']['amount_subunit'], 'Kitchen Run sales use the Kitchen Runs group');
     adb_eq(4000, $share['uncategorised_subunit'], 'an unrelated typed line remains explicitly uncategorised');

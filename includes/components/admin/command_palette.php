@@ -38,18 +38,44 @@ $okv_command_items = okv_admin_nav_commands(
              href="<?= okv_e($okv_command['href']) ?>" role="option" aria-selected="false" tabindex="-1"
              class="okv-command-option"
              data-command-item
+             <?= count($okv_command['shortcut']) === 2 ? 'data-command-shortcut="' . okv_e(implode(' ', $okv_command['shortcut'])) . '"' : '' ?>
              data-command-search-text="<?= okv_e(implode(' ', array_merge(
                  [$okv_command['label'], $okv_command['heading']],
                  $okv_command['keywords']
              ))) ?>">
-            <span class="font-medium text-ink" data-command-label><?= okv_e($okv_command['label']) ?></span>
-            <span class="text-xs text-ink-40"><?= okv_e($okv_command['heading']) ?></span>
+            <span class="min-w-0">
+              <span class="block font-medium text-ink" data-command-label><?= okv_e($okv_command['label']) ?></span>
+              <span class="block text-xs text-ink-40"><?= okv_e($okv_command['heading']) ?></span>
+            </span>
+            <?php if (count($okv_command['shortcut']) === 2): ?>
+              <span class="ml-auto flex shrink-0 gap-1" aria-label="Shortcut <?= okv_e(strtoupper(implode(' then ', $okv_command['shortcut']))) ?>">
+                <?php foreach ($okv_command['shortcut'] as $okv_shortcut_key): ?>
+                  <kbd class="rounded border border-mist px-1.5 py-0.5 font-mono text-[11px] uppercase text-ink-40" aria-hidden="true"><?= okv_e($okv_shortcut_key) ?></kbd>
+                <?php endforeach; ?>
+              </span>
+            <?php endif; ?>
           </a>
         <?php endforeach; ?>
         <p class="px-3 py-6 text-center text-sm text-ink-60" data-command-empty hidden>No permitted page matches that search.</p>
       </div>
-      <p class="mt-3 hidden text-xs text-ink-40 md:block">Use the arrow keys to move, Enter to open and Escape to close.</p>
+      <section class="mt-4 border-t border-mist pt-4" aria-labelledby="okv-shortcuts-title">
+        <h3 id="okv-shortcuts-title" class="text-sm font-semibold text-ink">Keyboard shortcuts</h3>
+        <dl class="mt-2 grid gap-x-5 gap-y-2 text-xs text-ink-60 sm:grid-cols-2">
+          <div class="flex items-center justify-between gap-3"><dt>Find a page</dt><dd><kbd class="font-mono">Ctrl/⌘ K</kbd></dd></div>
+          <div class="flex items-center justify-between gap-3"><dt>Move through results</dt><dd><kbd class="font-mono">↑ ↓</kbd></dd></div>
+          <div class="flex items-center justify-between gap-3"><dt>Open result</dt><dd><kbd class="font-mono">Enter</kbd></dd></div>
+          <div class="flex items-center justify-between gap-3"><dt>Close</dt><dd><kbd class="font-mono">Escape</kbd></dd></div>
+          <?php foreach ($okv_command_items as $okv_shortcut_command): ?>
+            <?php if (count($okv_shortcut_command['shortcut']) !== 2) { continue; } ?>
+            <div class="flex items-center justify-between gap-3" data-shortcut-guide>
+              <dt>Go to <?= okv_e($okv_shortcut_command['label']) ?></dt>
+              <dd><kbd class="font-mono uppercase"><?= okv_e(implode(' ', $okv_shortcut_command['shortcut'])) ?></kbd></dd>
+            </div>
+          <?php endforeach; ?>
+        </dl>
+      </section>
     </div>
   </section>
 </div>
-<?php unset($okv_command_items, $okv_command_index, $okv_command); ?>
+<p class="sr-only" aria-live="polite" aria-atomic="true" data-shortcut-status></p>
+<?php unset($okv_command_items, $okv_command_index, $okv_command, $okv_shortcut_key, $okv_shortcut_command); ?>

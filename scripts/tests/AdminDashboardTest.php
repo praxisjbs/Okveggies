@@ -83,6 +83,34 @@ $sharesBySlug = array_column($shares, null, 'category_slug');
 okv_test_eq(3334, $sharesBySlug['combos']['share_basis_points'], 'an equal rounding remainder is assigned by stable slug order');
 okv_test_eq('foliage', $sharesBySlug['vegetables']['colour_token'], 'the category row carries the canonical token');
 okv_test_eq([], AdminDashboard::categoryShares(['vegetables' => 0]), 'zero category value returns an empty series');
+okv_test_eq([
+    'vegetables' => ['label' => 'Vegetables', 'colour_token' => 'foliage'],
+    'herbs-spices' => ['label' => 'Herbs & Spices', 'colour_token' => 'forest'],
+    'tubers-roots' => ['label' => 'Tubers & Roots', 'colour_token' => 'gold'],
+    'fruits' => ['label' => 'Fruits', 'colour_token' => 'tomato'],
+    'grains-cereals' => ['label' => 'Grains & Cereals', 'colour_token' => 'clay'],
+    'combos' => ['label' => 'Combos', 'colour_token' => 'ink'],
+    'kitchen-runs' => ['label' => 'Kitchen Runs', 'colour_token' => 'gold.ink'],
+], AdminDashboard::SHOPPING_GROUPS, 'all 7 shopping groups keep one fixed label and colour-token mapping');
+
+$oneDay = AdminDashboard::denseSalesSeries(
+    ['start_date' => '2026-09-10', 'end_date' => '2026-09-10'],
+    [['day' => '2026-09-10', 'amount_subunit' => 2500]],
+    []
+);
+okv_test_eq([[
+    'date' => '2026-09-10',
+    'gross_subunit' => 2500,
+    'refund_subunit' => 0,
+    'amount_subunit' => 2500,
+]], $oneDay, 'a one-record cash series retains the exact integer amount');
+
+$emptyDay = AdminDashboard::denseSalesSeries(
+    ['start_date' => '2026-09-10', 'end_date' => '2026-09-10'],
+    [],
+    []
+);
+okv_test_eq(0, $emptyDay[0]['amount_subunit'], 'a zero-record cash series returns an explicit zero day');
 
 $lines = [
     [

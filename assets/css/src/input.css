@@ -282,7 +282,7 @@
   }
   .okv-command-backdrop[hidden] { display: none; }
   .okv-command-panel {
-    @apply w-full max-h-[92vh] overflow-hidden rounded-t-xl bg-white shadow-okv-3 animate-okv-rise sm:mt-16 sm:max-w-xl sm:rounded-xl;
+    @apply w-full max-h-[92vh] overflow-y-auto rounded-t-xl bg-white shadow-okv-3 animate-okv-rise sm:mt-16 sm:max-w-xl sm:rounded-xl;
   }
   .okv-command-option {
     @apply flex min-h-[44px] items-center justify-between gap-4 rounded-md px-3 py-2 text-sm;
