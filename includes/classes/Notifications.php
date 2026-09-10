@@ -111,7 +111,7 @@ final class Notifications
         'admin_new_order'   => ['customer_name', 'order_number', 'order_total', 'delivery_day', 'zone_name', 'payment_choice', 'admin_url'],
         'admin_new_contact' => ['contact_name', 'contact_method', 'source_label', 'subject', 'message_preview', 'admin_url'],
         'contact_acknowledgement' => ['customer_name', 'received_at', 'whatsapp_url'],
-        'issue_report_received' => ['customer_name', 'order_number', 'reported_at', 'issue_url'],
+        'issue_report_received' => ['customer_name', 'order_number', 'category', 'reported_at', 'description_preview', 'issue_url'],
         'issue_report_resolved' => ['customer_name', 'order_number', 'outcome_line', 'amount_line', 'issue_url'],
         'admin_new_issue_report' => ['customer_name', 'order_number', 'category', 'reported_at', 'description_preview', 'admin_url'],
 
@@ -611,6 +611,41 @@ final class Notifications
         return $recipients;
     }
 
+    /** Active staff whose role grants one permission, with the support inbox as fallback. */
+    public static function staffRecipientsForPermission(string $permission): array
+    {
+        $permission = trim($permission);
+        if ($permission === '') {
+            return [];
+        }
+        $rows = Database::all(
+            'SELECT DISTINCT u.id, u.email,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
+               FROM users u
+               JOIN user_roles ur ON ur.user_id = u.id
+               JOIN role_permissions rp ON rp.role_id = ur.role_id
+               JOIN permissions p ON p.id = rp.permission_id
+              WHERE u.status = :status AND u.email IS NOT NULL AND p.`key` = :permission
+           ORDER BY u.id',
+            [':status' => 'active', ':permission' => $permission]
+        );
+        $recipients = [];
+        foreach ($rows as $row) {
+            $recipients[] = [
+                'email' => (string) $row['email'],
+                'user_id' => (int) $row['id'],
+                'name' => (string) $row['name'],
+            ];
+        }
+        if ($recipients === []) {
+            $fallback = Settings::str('support_email', '');
+            if ($fallback !== '') {
+                $recipients[] = ['email' => $fallback, 'user_id' => null, 'name' => 'OK Veggies'];
+            }
+        }
+        return $recipients;
+    }
+
     /**
      * The order facts every customer email needs, gathered once. Returns null
      * when the order is gone, so a caller sends nothing rather than an email
@@ -880,7 +915,9 @@ final class Notifications
         $customerVars = [
             'customer_name' => $firstName,
             'order_number' => (string) $report['order_number'],
+            'category' => IssueReports::CATEGORIES[(string) $report['category']] ?? 'Something else',
             'reported_at' => $reportedAt,
+            'description_preview' => mb_substr(trim((string) $report['description']), 0, 300),
             'issue_url' => $base . '/public/order.php?order=' . (int) $report['order_id'],
         ];
         self::send(
@@ -901,7 +938,7 @@ final class Notifications
                 'description_preview' => mb_substr(trim((string) $report['description']), 0, 300),
                 'admin_url' => $base . '/admin/make_it_right.php?report=' . $issueId,
             ],
-            self::staffRecipients(),
+            self::staffRecipientsForPermission('issues.view'),
             'issue_report',
             $issueId
         );
