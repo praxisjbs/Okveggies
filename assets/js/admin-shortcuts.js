@@ -153,7 +153,7 @@
   }
 
   function closeOverlay(overlay) {
-    var close = overlay.querySelector('[data-history-close], [data-filter-close], [data-add-close], [data-bulk-close], [data-import-close], [data-command-close]');
+    var close = overlay.querySelector('[data-history-close], [data-filter-close], [data-add-close], [data-bulk-close], [data-import-close], [data-command-close], [data-notification-close]');
     if (!close) { return false; }
     close.click();
     return true;

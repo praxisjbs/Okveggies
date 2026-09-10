@@ -20,6 +20,7 @@ if (!defined('OKV_BOOTSTRAPPED')) {
   <script src="<?= okv_e(okv_asset('/assets/js/okv.js')) ?>" defer></script>
   <script src="<?= okv_e(okv_asset('/assets/js/okv-rbac.js')) ?>" defer></script>
   <script src="<?= okv_e(okv_asset('/assets/js/admin-shortcuts.js')) ?>" defer></script>
+  <script src="<?= okv_e(okv_asset('/assets/js/admin-notifications.js')) ?>" defer></script>
   <?php
   // One script, or several. A screen that reuses a shared module (the customer
   // picker, say) alongside its own needs both, and naming them in an array

@@ -13,6 +13,7 @@ const sources = [
   'assets/js/admin-users.js',
   'assets/js/admin-dashboard.js',
   'assets/js/admin-shortcuts.js',
+  'assets/js/admin-notifications.js',
   'assets/js/account.js',
   'assets/js/catalogue.js',
   'assets/js/basket.js',

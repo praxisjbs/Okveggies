@@ -75,7 +75,9 @@ final class Notifications
         'refund_processed'  => ['template' => 'refund_processed',  'label' => 'Refund sent',             'audience' => 'customer'],
         'refund_failed'     => ['template' => 'refund_failed',     'label' => 'Refund failed',           'audience' => 'staff'],
         'admin_new_order'   => ['template' => 'admin_new_order',   'label' => 'New order, for staff',    'audience' => 'staff'],
+        'admin_manual_payment_proof' => ['template' => 'admin_manual_payment_proof', 'label' => 'Payment proof to review, for staff', 'audience' => 'staff'],
         'admin_new_contact' => ['template' => 'admin_new_contact', 'label' => 'New contact message, for staff', 'audience' => 'staff'],
+        'admin_new_issue_report' => ['template' => 'admin_new_issue_report', 'label' => 'Make It Right report, for staff', 'audience' => 'staff'],
         'contact_acknowledgement' => ['template' => 'contact_acknowledgement', 'label' => 'We have your message',  'audience' => 'customer'],
 
         'kitchen_run_received' => ['template' => 'kitchen_run_received', 'label' => 'Kitchen Run received',      'audience' => 'customer'],
@@ -106,7 +108,9 @@ final class Notifications
         'refund_processed'  => ['customer_name', 'order_number', 'amount', 'order_trail_url'],
         'refund_failed'     => ['order_number', 'amount', 'reason', 'admin_url'],
         'admin_new_order'   => ['customer_name', 'order_number', 'order_total', 'delivery_day', 'zone_name', 'payment_choice', 'admin_url'],
+        'admin_manual_payment_proof' => ['order_number', 'amount', 'recorded_by', 'admin_url'],
         'admin_new_contact' => ['contact_name', 'contact_method', 'source_label', 'subject', 'message_preview', 'admin_url'],
+        'admin_new_issue_report' => ['order_number', 'issue_category', 'message_preview', 'admin_url'],
         'contact_acknowledgement' => ['customer_name', 'received_at', 'whatsapp_url'],
 
         'kitchen_run_received' => ['customer_name', 'request_number', 'line_count', 'delivery_day', 'request_url'],
@@ -582,21 +586,45 @@ final class Notifications
         return $templateKey;
     }
 
-    /** Staff who should hear about an order or a money problem. */
-    public static function staffRecipients(): array
+    /** Staff who may open the work named by an alert. */
+    public static function staffRecipients(?string $permission = null): array
     {
-        $rows = Database::all(
-            'SELECT DISTINCT u.id, u.email, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
-               FROM users u
-               JOIN user_roles ur ON ur.user_id = u.id
-               JOIN roles r ON r.id = ur.role_id
-              WHERE u.status = \'active\' AND u.email IS NOT NULL AND r.name IN (\'owner\', \'manager\')'
-        );
+        if ($permission === null || trim($permission) === '') {
+            $rows = Database::all(
+                'SELECT DISTINCT u.id, u.email, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
+                   FROM users u
+                   JOIN user_roles ur ON ur.user_id = u.id
+                   JOIN roles r ON r.id = ur.role_id
+                  WHERE u.status = :status AND u.user_type = :type AND r.name IN (:owner, :manager)',
+                [':status' => 'active', ':type' => 'staff', ':owner' => 'owner', ':manager' => 'manager']
+            );
+        } else {
+            $module = strstr($permission, '.', true);
+            $modulePermission = ($module === false ? $permission : $module) . '.*';
+            $rows = Database::all(
+                'SELECT DISTINCT u.id, u.email, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
+                   FROM users u
+                  WHERE u.status = :status AND u.user_type = :type
+                    AND EXISTS (
+                        SELECT 1
+                          FROM user_roles ur
+                          JOIN roles r ON r.id = ur.role_id
+                          LEFT JOIN role_permissions rp ON rp.role_id = r.id
+                          LEFT JOIN permissions p ON p.id = rp.permission_id
+                         WHERE ur.user_id = u.id
+                           AND (r.name = :owner OR p.`key` = :permission OR p.`key` = :module_permission)
+                    )',
+                [
+                    ':status' => 'active', ':type' => 'staff', ':owner' => 'owner',
+                    ':permission' => $permission, ':module_permission' => $modulePermission,
+                ]
+            );
+        }
         $recipients = [];
         foreach ($rows as $row) {
             $recipients[] = ['email' => (string) $row['email'], 'user_id' => (int) $row['id'], 'name' => (string) $row['name']];
         }
-        if (!$recipients) {
+        if (!$recipients && ($permission === null || trim($permission) === '')) {
             $fallback = Settings::str('support_email', '');
             if ($fallback !== '') {
                 $recipients[] = ['email' => $fallback, 'user_id' => null, 'name' => 'OK Veggies'];
@@ -759,7 +787,7 @@ final class Notifications
 
         $staffVars = $context['vars'];
         unset($staffVars['order_trail_url']);
-        self::send('admin_new_order', $staffVars, self::staffRecipients(), 'order', $orderId);
+        self::send('admin_new_order', $staffVars, self::staffRecipients('orders.view'), 'order', $orderId);
     }
 
     /**
@@ -822,7 +850,7 @@ final class Notifications
                 'message_preview' => mb_substr(trim((string) $message['message']), 0, 300),
                 'admin_url'       => $base . '/admin/content.php?message=' . $messageId,
             ],
-            self::staffRecipients(),
+            self::staffRecipients('messages.view'),
             'contact_message',
             $messageId
         );
@@ -953,7 +981,7 @@ final class Notifications
         if ($context === null) {
             return;
         }
-        self::send('admin_new_kitchen_run', $context['vars'], self::staffRecipients(), 'kitchen_run', $requestId);
+        self::send('admin_new_kitchen_run', $context['vars'], self::staffRecipients('kitchen_runs.view'), 'kitchen_run', $requestId);
     }
 
     /**
@@ -987,7 +1015,7 @@ final class Notifications
         if ($context === null) {
             return;
         }
-        self::send('admin_kitchen_run_approved', $context['vars'], self::staffRecipients(), 'kitchen_run', $requestId, $actorId);
+        self::send('admin_kitchen_run_approved', $context['vars'], self::staffRecipients('kitchen_runs.view'), 'kitchen_run', $requestId, $actorId);
     }
 
     /**
@@ -1001,7 +1029,7 @@ final class Notifications
         if ($context === null) {
             return;
         }
-        self::send('admin_kitchen_run_cancelled', $context['vars'], self::staffRecipients(), 'kitchen_run', $requestId, $actorId);
+        self::send('admin_kitchen_run_cancelled', $context['vars'], self::staffRecipients('kitchen_runs.view'), 'kitchen_run', $requestId, $actorId);
     }
 
     /** We are not taking this one on, and the customer is told why. */
@@ -1150,7 +1178,7 @@ final class Notifications
         if ($context === null) {
             return;
         }
-        self::send('admin_new_credit_application', $context['vars'], self::staffRecipients(), 'credit_application', $applicationId, $actorId);
+        self::send('admin_new_credit_application', $context['vars'], self::staffRecipients('credit.view'), 'credit_application', $applicationId, $actorId);
     }
 
     /** An approved application, customer hears the approved limit and terms. */
@@ -1309,6 +1337,72 @@ final class Notifications
         self::send('payment_recorded', $vars, $context['recipients'], 'order', $orderId, $staffId);
     }
 
+    /** A newly recorded cash or transfer proof that needs a second pair of eyes. */
+    public static function announceManualPaymentProof(array $result, ?int $staffId = null): void
+    {
+        $transactionId = (int) ($result['transaction_id'] ?? 0);
+        if (empty($result['ok']) || $transactionId < 1) {
+            return;
+        }
+        $row = Database::one(
+            'SELECT mp.id, mp.amount_subunit, o.order_number,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS staff_name
+               FROM manual_payment_proofs mp
+               JOIN payment_transactions t ON t.id = mp.payment_transaction_id
+               JOIN payments p ON p.id = t.payment_id
+               JOIN orders o ON o.id = p.order_id
+               LEFT JOIN users u ON u.id = mp.recorded_by
+              WHERE mp.payment_transaction_id = :transaction',
+            [':transaction' => $transactionId]
+        );
+        if (!$row) {
+            return;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        self::send(
+            'admin_manual_payment_proof',
+            [
+                'order_number' => (string) $row['order_number'],
+                'amount' => Money::format((int) $row['amount_subunit']),
+                'recorded_by' => trim((string) $row['staff_name']) ?: 'A colleague',
+                'admin_url' => $base . '/admin/payments.php#queue-heading',
+            ],
+            self::staffRecipients('payments.view'),
+            'payment_proof',
+            (int) $row['id'],
+            $staffId
+        );
+    }
+
+    /** Future-ready M10 hook. Call only after an issue report commits. */
+    public static function announceIssueReport(int $issueId, ?int $actorId = null): void
+    {
+        $row = Database::one(
+            'SELECT i.id, i.category, i.description, o.order_number
+               FROM issue_reports i
+               JOIN orders o ON o.id = i.order_id
+              WHERE i.id = :id',
+            [':id' => $issueId]
+        );
+        if (!$row) {
+            return;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        self::send(
+            'admin_new_issue_report',
+            [
+                'order_number' => (string) $row['order_number'],
+                'issue_category' => trim((string) $row['category']),
+                'message_preview' => mb_substr(trim((string) $row['description']), 0, 300),
+                'admin_url' => $base . '/admin/make_it_right.php?issue=' . (int) $row['id'],
+            ],
+            self::staffRecipients('issues.view'),
+            'issue_report',
+            (int) $row['id'],
+            $actorId
+        );
+    }
+
     /** A refund that landed goes to the customer; one that failed goes to staff. */
     public static function announceRefund(array $result): void
     {
@@ -1335,7 +1429,7 @@ final class Notifications
             'amount' => $amount,
             'reason' => trim((string) ($result['message'] ?? '')) ?: 'No reason was given.',
         ];
-        self::send('refund_failed', $vars, self::staffRecipients(), 'order', $orderId);
+        self::send('refund_failed', $vars, self::staffRecipients('payments.view'), 'order', $orderId);
     }
 
     /** The real work behind send(). */

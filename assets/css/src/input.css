@@ -289,6 +289,15 @@
   }
   .okv-command-option[aria-selected="true"] { @apply bg-forest-tint; }
 
+  /* Admin notifications: a bottom sheet on phones, a compact panel on desktop. */
+  .okv-notification-backdrop {
+    @apply fixed inset-0 z-50 flex items-end bg-ink/50 md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:block md:w-96 md:bg-transparent;
+  }
+  .okv-notification-backdrop[hidden] { display: none; }
+  .okv-notification-panel {
+    @apply w-full max-h-[92vh] overflow-hidden rounded-t-xl bg-white shadow-okv-3 animate-okv-rise md:rounded-xl md:border md:border-mist;
+  }
+
   /* M11 dashboard charts. Group-to-token assignments stay in AdminDashboard;
      these classes only teach each existing design token how to paint a mark. */
   .okv-chart-stage { @apply min-w-0 overflow-hidden; }

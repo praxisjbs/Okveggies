@@ -635,6 +635,13 @@ The task entries below are rewritten from what was actually executed on 9 Septem
   `contact_admin_http_test.php` (42/42), which also covers a staff member with
   neither permission seeing no screen, no sidebar link and a 403 on a direct write.
 - [x] Tests: template render; notification queued on order events (**M6**, `NotificationsTest.php` and `notifications_db_test.php`)
+- [x] Shared admin notification bell: every admin screen now shows a permission-filtered
+  bell beside View shop. Its mobile sheet or desktop panel separates live work queues
+  from the latest 20 updates, supports individual and bulk read state, refreshes on
+  open and every 60 seconds while visible, and links to a filtered 100-message history.
+  The existing dispatcher now selects recipients by the permission for each event and
+  also announces new manual payment proofs. The Make It Right event and template are
+  ready for M10 to call after its currently unbuilt report transaction commits.
 
 ### M10. Trust and Make It Right
 - [ ] Report an issue against an order (category, note, photos)
@@ -692,6 +699,28 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 10 Sep 2026, shared admin notification bell
+
+- Added the shared bell before View shop on every admin route, with a 44px control,
+  an accessible focus-trapped panel, capped `99+` badge, mobile sheet, desktop panel,
+  safe empty and error states, focus return, Escape and backdrop closing, individual
+  read state, Mark all as read and a permission-filtered history page.
+- Live attention counts cover pending orders, submitted Kitchen Runs, pending manual
+  payment proofs, failed refunds, new contact messages, pending credit applications
+  and open Make It Right reports. A queue is not queried or returned unless the staff
+  member may open its destination. Message rows and unread totals use the same server
+  permission boundary, so forbidden content never enters HTML or JSON.
+- Notification recipients now include active Owner, Manager and custom-role staff who
+  carry the related permission. Manual payment proof submission announces itself after
+  the money transaction commits. The issue-report notifier is deliberately future-ready:
+  M10 is still a scaffold on this branch, so there is no unbuilt transaction to hook yet.
+- Verification passed: 2,900/2,900 unit assertions, 15/15 focused MySQL 8 assertions,
+  23/23 focused HTTP and RBAC assertions, 140/140 notification regressions and 43/43
+  payment regressions. PHP and JavaScript syntax, build, brand-check, deploy verify and
+  `git diff --check` passed. Browser checks passed at 390px and 1440px, including the
+  responsive panel, 44px bell, permission-safe contents, Escape and focus restoration.
+  No commit or push was made.
 
 ### 10 Sep 2026, M11 Task G: final audit and handover
 
