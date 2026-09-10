@@ -276,6 +276,19 @@
   .okv-stat-figure { @apply font-mono tabular-nums text-2xl font-semibold text-ink mt-1; }
   .okv-stat-note { @apply text-xs text-ink-60 mt-1; }
 
+  /* Shared admin command palette: a mobile sheet and desktop dialog. */
+  .okv-command-backdrop {
+    @apply fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-0 sm:items-start sm:p-6;
+  }
+  .okv-command-backdrop[hidden] { display: none; }
+  .okv-command-panel {
+    @apply w-full max-h-[92vh] overflow-hidden rounded-t-xl bg-white shadow-okv-3 animate-okv-rise sm:mt-16 sm:max-w-xl sm:rounded-xl;
+  }
+  .okv-command-option {
+    @apply flex min-h-[44px] items-center justify-between gap-4 rounded-md px-3 py-2 text-sm;
+  }
+  .okv-command-option[aria-selected="true"] { @apply bg-forest-tint; }
+
   /* M11 dashboard charts. Group-to-token assignments stay in AdminDashboard;
      these classes only teach each existing design token how to paint a mark. */
   .okv-chart-stage { @apply min-w-0 overflow-hidden; }

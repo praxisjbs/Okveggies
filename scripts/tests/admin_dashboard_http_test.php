@@ -114,6 +114,7 @@ try {
         'orders_no_analytics' => ['dashboard.view', 'orders.view'],
         'analytics_only' => ['dashboard.view', 'dashboard.analytics.view'],
         'dashboard' => ['dashboard.view'],
+        'users' => ['dashboard.view', 'users.view'],
         'blocked' => ['orders.view'],
     ];
 
@@ -255,6 +256,19 @@ try {
     adh_ok(str_contains($full, 'View exact sales figures') && str_contains($full, 'View exact product figures')
         && str_contains($full, 'View exact category figures'), 'every chart has a keyboard-accessible exact table');
     adh_ok(str_contains($full, 'aria-label="Reporting period"') && str_contains($full, 'aria-current="page"'), 'the shared period control names and marks its selection');
+    adh_ok(str_contains($full, 'id="okv-command-palette"')
+        && str_contains($full, 'role="dialog"')
+        && str_contains($full, 'aria-modal="true"'), 'the shared shell renders a named modal command palette');
+    adh_ok(str_contains($full, 'aria-labelledby="okv-command-title"')
+        && str_contains($full, 'aria-describedby="okv-command-description"'), 'the command dialog has an accessible name and description');
+    adh_ok(str_contains($full, 'data-command-open') && str_contains($full, 'Ctrl/⌘ K'), 'the top bar exposes the palette and its shortcut');
+    adh_eq(4, substr_count($full, 'data-command-item'), 'the full fixture receives only its 4 permitted commands');
+    foreach (['/admin/', '/admin/orders.php', '/admin/payments.php', '/admin/credit.php'] as $commandUrl) {
+        adh_ok(str_contains($full, 'href="' . $commandUrl . '"'), 'the command source includes permitted URL ' . $commandUrl);
+    }
+    adh_ok(!str_contains($full, 'href="/admin/users.php"'), 'a role without users.view receives no Users command or sidebar URL');
+    adh_ok(str_contains($full, 'data-command-empty hidden>No permitted page matches that search.'), 'the palette carries a plain no-match state');
+    adh_ok(str_contains($full, '/assets/js/admin-command-palette'), 'every admin response loads the shared command module');
 
     [, $sevenDays] = adh_request($base, $jars['full'], '/admin/?period=7');
     adh_ok(preg_match('/aria-current="page"[^>]*>\s*7 days\s*<\/a>/', $sevenDays) === 1, 'the 7 day GET preset is selected');
@@ -270,6 +284,10 @@ try {
     adh_ok(!str_contains($ordersOnly, Money::format(1234500)), 'a payment amount is absent from orders-only HTML');
     adh_ok(str_contains($ordersOnlyText, 'Top products') && str_contains($ordersOnlyText, 'Order share by category'), 'an analytics and orders role sees both order charts');
     adh_ok(!str_contains($ordersOnly, 'Sales over time') && !str_contains($ordersOnly, 'sales_over_time'), 'an orders-only response contains no sales chart or sales payload');
+    adh_eq(2, substr_count($ordersOnly, 'data-command-item'), 'an Orders role receives only Dashboard and Orders commands');
+    adh_ok(str_contains($ordersOnly, 'data-command-search-text="Orders Selling order basket checkout sales"'), 'approved Orders keywords are rendered only with its permitted command');
+    adh_ok(!str_contains($ordersOnly, 'href="/admin/payments.php"')
+        && !str_contains($ordersOnly, 'href="/admin/users.php"'), 'forbidden command URLs are absent from Orders-role source');
 
     [, $paymentsOnly] = adh_request($base, $jars['payments'], '/admin/');
     $paymentsOnlyText = html_entity_decode($paymentsOnly, ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -279,6 +297,8 @@ try {
     adh_ok(str_contains($paymentsOnlyText, 'Sales over time'), 'an analytics and payments role sees the sales chart');
     adh_ok(!str_contains($paymentsOnly, 'Top products') && !str_contains($paymentsOnly, 'top_products')
         && !str_contains($paymentsOnly, 'Order share by category'), 'a payments-only response contains no order chart data');
+    adh_eq(2, substr_count($paymentsOnly, 'data-command-item'), 'a Payments role receives only Dashboard and Payments commands');
+    adh_ok(str_contains($paymentsOnly, 'payment pay paystack transactions refunds reconciliation'), 'searching pay can match the permitted Payments command');
 
     [, $ordersNoAnalytics] = adh_request($base, $jars['orders_no_analytics'], '/admin/');
     $ordersNoAnalyticsText = html_entity_decode($ordersNoAnalytics, ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -296,6 +316,12 @@ try {
     adh_ok(str_contains($dashboardOnlyText, "Your role does not include today's order or money figures."), 'dashboard-only staff get a useful permission empty state');
     adh_ok(!str_contains($dashboardOnlyText, "Today's orders") && !str_contains($dashboardOnlyText, "Today's revenue"), 'dashboard-only HTML contains no operational cards');
     adh_ok(!str_contains($dashboardOnly, Money::format(1234500)), 'dashboard-only HTML contains no payment amount');
+    adh_eq(1, substr_count($dashboardOnly, 'data-command-item'), 'a dashboard-only role receives only the Dashboard command');
+
+    [, $usersOnly] = adh_request($base, $jars['users'], '/admin/');
+    adh_eq(2, substr_count($usersOnly, 'data-command-item'), 'a Users role receives only Dashboard and Users commands');
+    adh_ok(str_contains($usersOnly, 'href="/admin/users.php"') && str_contains($usersOnly, 'roles staff permissions team'), 'the permitted Users command includes its approved role keywords');
+    adh_ok(!str_contains($usersOnly, 'href="/admin/orders.php"'), 'the Users role receives no forbidden Orders URL');
 
     [$status, $blocked] = adh_request($base, $jars['blocked'], '/admin/');
     adh_eq(403, $status, 'dashboard.view is required even when orders.view is present');
@@ -305,6 +331,8 @@ try {
     adh_ok(str_contains($filteredOrders, 'M11-TODAY-' . $suffix), 'the created-date filter includes an order placed that day');
     adh_ok(!str_contains($filteredOrders, 'M11-YESTERDAY-' . $suffix), 'the created-date filter excludes an earlier order');
     adh_ok(str_contains($filteredOrders, 'name="filter_created" value="' . $today . '"'), 'the Orders form preserves its placed-date filter');
+    adh_ok(str_contains($filteredOrders, 'id="okv-command-palette"')
+        && str_contains($filteredOrders, '/assets/js/admin-command-palette'), 'the shared palette is present beyond the dashboard page');
 
     [, $duePage] = adh_request($base, $jars['payments'], '/admin/payments.php?due=attention#payments-due');
     adh_ok(str_contains($duePage, 'M11-TODAY-' . $suffix), 'the due-attention view lists a payment due today');

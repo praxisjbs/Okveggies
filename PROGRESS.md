@@ -650,6 +650,7 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 - [x] **Task B, read-only analytics service.** `AdminDashboard` now owns the reusable summary and chart aggregation layer outside `admin/index.php`. Its selective overview and public metric methods return integer-kobo, permission-neutral data; use Lagos-local half-open date ranges; keep due today separate from overdue; rebuild credit balances from the signed journal through `Credit`; emit dense zero-filled sales days; rank snapshot sellable lines by refund-adjusted value; and allocate category share to exactly 10,000 basis points using the fixed M11 colour tokens. Focused pure tests passed 2,836/2,836 with the full unit runner, and the fresh MySQL 8 aggregation suite passed 23/23. The headline criteria remain open until the route gates and dashboard presentation consume this service.
 - [x] **Task C, today's operational dashboard.** The temporary catalogue-count row is replaced by 4 permission-layered cards backed only by `AdminDashboard`: non-cancelled orders placed today, net confirmed revenue with completed refunds explained, due and overdue payment balances, and signed-journal credit outstanding. Each card is a keyboard link with a specific zero or isolated error state. Orders gained an exact placed-date filter, and Payments gained a due-attention table that reads the same eligible obligations as the card. Pricing, Catalogue and Combos remain as server-gated quick links. HTTP tests prove `dashboard.view`, partial-role data absence and both filtered destinations, so the first M11 acceptance criterion is closed.
 - [x] **Task D, dashboard charts.** The dashboard now presents the shared 7, 30 and 90 day analytics period through a signed net-sales line chart, a top-10 ranked product view and a fixed-token category-share bar. All query work remains in `AdminDashboard`; the route applies `dashboard.analytics.view` plus Payments or Orders permission before querying or serialising each independent region. Server-rendered exact tables, honest empty and isolated error states, and local integrity notices remain useful without JavaScript. Vanilla JavaScript progressively enhances only permitted non-empty data, uses no dependency or CDN and adds no motion. The full unit suite passed 2,838/2,838, the clean MySQL 8 dashboard suite passed 26/26 and dashboard HTTP permission and rendering checks passed 53/53. Browser checks passed at 390px and 1440px with no overflow, complete chart paint and no undersized visible control. The M11 charts acceptance criterion is closed.
+- [x] **Task E, shared command palette.** Every admin page now receives one accessible command palette from the shared header and footer. Both the sidebar and palette consume `includes/config/nav.php`; approved search keywords live beside each canonical item, and `okv_admin_nav_commands()` removes forbidden destinations before markup reaches the browser. The visible top-bar control and `Ctrl+K` or `Command+K` open a mobile sheet or desktop dialog. Search, Arrow Up, Arrow Down, Enter, Escape, backdrop closing, focus trapping and focus restoration work without a framework or unsafe HTML rendering. The full unit suite passed 2,850/2,850, the dashboard database regression passed 26/26 and the HTTP permission matrix passed 75/75. Browser checks at 390px and 1440px proved search, no-match copy, keyboard wrapping, same-tab navigation, field-level shortcut access, focus containment and 44px controls. The headline command-palette and keyboard-shortcuts criterion remains open until the remaining general shortcuts are completed.
 
 ### M12. Content pages
 - [ ] Home (documentary hero, featured combos, categories)
@@ -689,6 +690,26 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 10 Sep 2026, M11 Task E: shared command palette
+
+- Added a server-filtered command palette to the shared admin shell, so it is
+  available from every admin route without page-specific setup.
+- Added approved search terms to the canonical admin navigation and a pure
+  flattening helper. Forbidden labels, URLs and keywords never reach HTML or
+  JavaScript.
+- Added the visible top-bar trigger, `Ctrl+K` and `Command+K`, deterministic
+  substring search, arrow-key wrapping, Enter navigation, Escape and backdrop
+  closing, a focus trap, focus restoration and a plain no-match state.
+- Verification: 2,850/2,850 unit assertions, 26/26 dashboard database
+  assertions and 75/75 dashboard and palette HTTP assertions passed. PHP and
+  JavaScript syntax, brand-check and `git diff --check` passed.
+- Browser checks passed at 390px and 1440px. The sheet and dialog had no
+  overflow or undersized controls; opening from a form field, search, Arrow Up,
+  Arrow Down, Enter, Escape, Tab containment and backdrop focus restoration all
+  worked. Reduced motion remains covered by the shared media rule.
+- The final M11 checkbox remains open for the remaining keyboard shortcuts. No
+  migration, state-changing command, commit or push was made.
 
 ### 10 Sep 2026, M11 Task C: today's operational dashboard
 
