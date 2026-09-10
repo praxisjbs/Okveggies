@@ -40,6 +40,14 @@ expect_login() { # url  label   (a redirect to the login, or a hard refusal)
   esac
 }
 
+expect_private() { # url  label   (login/refusal, with 404 allowed to avoid existence disclosure)
+  code=$(curl -s -o /dev/null -w "%{http_code}" "$1")
+  case "$code" in
+    301|302|303|307|401|403|404) echo "  ok   [$code] $2 fails closed" ;;
+    *) echo "  FAIL [$code] $2 should fail closed"; fail=1 ;;
+  esac
+}
+
 expect "$BASE/"               "200" "storefront home"
 expect "$BASE/admin/login.php" "200" "admin login page"
 
@@ -74,6 +82,8 @@ expect_login "$BASE/admin/content.php" "the messages screen"
 # M10 customer reporting. Writes require an authenticated POST, and a GET must
 # fail without touching a report or disclosing an order.
 expect_status "$BASE/api/v1/make_it_right.php" "405" "the Make It Right endpoint refuses a GET"
+expect_private "$BASE/public/order.php?order=1" "the private customer order view"
+expect_login "$BASE/admin/make_it_right.php" "the Make It Right staff queue"
 expect "$BASE/public/issue_photo.php?photo=0" "404" "a missing private issue photo"
 
 expect_deny "$BASE/.env"                 ".env"

@@ -109,6 +109,13 @@ $giveRole = static function (int $userId, string $name, array $permissions) use 
     }
     Database::run('INSERT INTO user_roles (user_id, role_id) VALUES (:user, :role)', [':user' => $userId, ':role' => $roleId]);
 };
+$giveSeededRole = static function (int $userId, string $role): void {
+    Database::run(
+        'INSERT INTO user_roles (user_id, role_id)
+         SELECT :user, id FROM roles WHERE name = :role',
+        [':user' => $userId, ':role' => $role]
+    );
+};
 
 try {
     [$customerId] = $makeUser('Customer', 'household');
@@ -118,8 +125,8 @@ try {
     [$colleagueId, $colleagueEmail] = $makeUser('Colleague', 'staff');
     $giveRole($viewerId, 'issue_viewer', ['dashboard.view', 'issues.view']);
     $giveRole($resolverOnlyId, 'issue_resolver_only', ['dashboard.view', 'issues.resolve']);
-    $giveRole($handlerId, 'issue_handler', ['dashboard.view', 'issues.view', 'issues.resolve', 'orders.view']);
-    $giveRole($colleagueId, 'issue_colleague', ['dashboard.view', 'issues.view', 'issues.resolve']);
+    $giveSeededRole($handlerId, 'manager');
+    $giveSeededRole($colleagueId, 'owner');
 
     Database::run(
         'INSERT INTO orders
@@ -193,7 +200,7 @@ try {
     $handlerJar = tempnam(sys_get_temp_dir(), 'okv-iw-handle-'); $jars[] = $handlerJar;
     $handlerCsrf = iwhttp_login($base, $handlerJar, $handlerEmail, $password);
     [$status, $handlerPage] = iwhttp_req($base, $handlerJar, 'GET', '/admin/make_it_right.php?report=' . $issueId);
-    iwhttp_eq(200, $status, 'a fully authorised colleague can read report detail');
+    iwhttp_eq(200, $status, 'the seeded Manager role can read report detail');
     iwhttp_ok(str_contains((string) $handlerPage, 'Take this report'), 'an authorised colleague sees the take action');
     iwhttp_ok(str_contains((string) $handlerPage, '/admin/orders.php?order=' . $orderId), 'report detail links to its admin order');
     [$status, $orderPage] = iwhttp_req($base, $handlerJar, 'GET', '/admin/orders.php?order=' . $orderId);
@@ -220,6 +227,8 @@ try {
 
     $colleagueJar = tempnam(sys_get_temp_dir(), 'okv-iw-colleague-'); $jars[] = $colleagueJar;
     $colleagueCsrf = iwhttp_login($base, $colleagueJar, $colleagueEmail, $password);
+    [$status] = iwhttp_req($base, $colleagueJar, 'GET', '/admin/make_it_right.php?report=' . $issueId);
+    iwhttp_eq(200, $status, 'the seeded Owner role can read report detail');
     [$status] = iwhttp_req($base, $colleagueJar, 'POST', '/api/v1/make_it_right.php', [
         'action' => 'take', 'issue_id' => $issueId, 'expected_status' => 'open', 'okv_csrf' => $colleagueCsrf,
     ], true);

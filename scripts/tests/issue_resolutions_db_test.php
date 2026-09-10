@@ -111,10 +111,19 @@ try {
             ':email' => "household-$suffix@example.test"]
     );
     $transactionId = (int) Database::getInstance()->getConnection()->lastInsertId();
+    $overRefund = IssueResolutions::resolve($refundIssue, 'in_progress', $handlerId, 'refund',
+        'This amount is above the affected item value.', [$refundOrder['item_id']], 900001, $transactionId);
+    irdb_eq('bad_amount', (string) $overRefund['code'], 'a refund cannot exceed the selected immutable order line');
+    irdb_eq(0, (int) Database::one('SELECT COUNT(*) AS n FROM refunds WHERE issue_report_id = :id', [':id' => $refundIssue])['n'], 'an excessive refund writes no M5 refund row');
+
     $refundResult = IssueResolutions::resolve($refundIssue, 'in_progress', $handlerId, 'refund',
         'We raised a refund for the damaged tomatoes.', [$refundOrder['item_id']], 270000, $transactionId);
     irdb_eq('resolved', (string) $refundResult['code'], 'Task D raises the refund through the M5 engine and finishes the report');
     $refundIds[] = (int) ($refundResult['refund_id'] ?? 0);
+    $refundRow = Database::one('SELECT payment_transaction_id, amount_subunit FROM refunds WHERE issue_report_id = :id', [':id' => $refundIssue]);
+    irdb_eq($transactionId, (int) $refundRow['payment_transaction_id'], 'the resolution is linked to the real M5 payment transaction');
+    irdb_eq(270000, (int) $refundRow['amount_subunit'], 'M5 stores exactly the amount staff decided');
+    irdb_eq(270000, (int) Database::one('SELECT resolution_amount_subunit FROM issue_reports WHERE id = :id', [':id' => $refundIssue])['resolution_amount_subunit'], 'the issue outcome records the same exact refund amount');
     irdb_eq(1, (int) Database::one('SELECT COUNT(*) AS n FROM refunds WHERE issue_report_id = :id', [':id' => $refundIssue])['n'], 'refund resolution remains one-to-one and idempotent');
     irdb_eq('terminal', IssueResolutions::resolve($refundIssue, 'in_progress', $handlerId, 'refund',
         'A repeated request must not pay twice.', [$refundOrder['item_id']], 270000, $transactionId)['code'], 'a resolved refund cannot run twice');

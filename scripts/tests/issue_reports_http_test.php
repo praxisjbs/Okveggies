@@ -252,6 +252,9 @@ try {
     irh_eq(200, $status, 'the token trail still opens after an outcome');
     irh_ok(!str_contains($privateTokenPage, $declineReason), 'the public token does not reveal the outcome note');
     irh_ok(!str_contains($privateTokenPage, 'Your reports'), 'the public token does not reveal report history');
+    irh_ok(!str_contains($privateTokenPage, 'Two tomato packs arrived crushed'), 'the public token does not reveal the report description');
+    irh_ok(!str_contains($privateTokenPage, 'Declined'), 'the public token does not reveal the report state');
+    irh_ok(!str_contains($privateTokenPage, 'issue_report'), 'the public token does not reveal an internal issue identifier');
 
     [$plainId, $plainNumber] = $makeOrder($ownerId, 'delivered', date('Y-m-d H:i:s', strtotime('-1 day')));
     Database::run("DELETE FROM rate_limits WHERE bucket LIKE 'issues:%'");

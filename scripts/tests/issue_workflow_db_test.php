@@ -81,6 +81,7 @@ try {
     $firstId = (int) $first['issue_id'];
     $secondId = (int) $second['issue_id'];
     $issueIds[] = $firstId; $issueIds[] = $secondId;
+    $declinedBefore = IssueReports::countForStaff('declined');
     Database::run('UPDATE issue_reports SET created_at = :created_at WHERE id = :id', [':created_at' => '2026-09-01 08:00:00', ':id' => $firstId]);
     Database::run('UPDATE issue_reports SET created_at = :created_at WHERE id = :id', [':created_at' => '2026-09-02 08:00:00', ':id' => $secondId]);
 
@@ -95,6 +96,21 @@ try {
     iwdb_eq('Tomatoes', (string) $detail['items'][0]['item_name'], 'detail includes immutable order items');
     iwdb_eq(1, count($detail['history']), 'report creation starts permanent history');
 
+    iwdb_eq('invalid_take', IssueReports::take($firstId, 'in_progress', $handlerId)['code'], 'open cannot jump to an in-progress take request');
+    iwdb_eq('stale', IssueReports::decline($firstId, 'in_progress', $handlerId, 'This report has not been taken yet.')['code'], 'open cannot jump directly to declined');
+    iwdb_eq('not_handler', IssueResolutions::resolve(
+        $firstId,
+        'in_progress',
+        $handlerId,
+        'replacement',
+        'This report has not been taken yet.',
+        [(int) $detail['items'][0]['id']],
+        0,
+        0,
+        'NOT-USED'
+    )['code'], 'open cannot jump directly to resolved');
+    iwdb_eq(1, count(IssueReports::historyForStaff($firstId)), 'refused open-state moves write no history');
+
     iwdb_eq('taken', IssueReports::take($firstId, 'open', $handlerId)['code'], 'an open report can be taken');
     $taken = Database::one('SELECT status, handled_by, handled_at FROM issue_reports WHERE id = :id', [':id' => $firstId]);
     iwdb_eq('in_progress', (string) $taken['status'], 'take moves the report to in progress');
@@ -103,6 +119,8 @@ try {
     iwdb_eq(2, count(IssueReports::historyForStaff($firstId)), 'take appends one history entry');
     iwdb_eq('already_taken', IssueReports::take($firstId, 'open', $handlerId)['code'], 'same-actor take replay is idempotent');
     iwdb_eq(2, count(IssueReports::historyForStaff($firstId)), 'take replay adds no history');
+    iwdb_eq('invalid_take', IssueReports::take($firstId, 'in_progress', $handlerId)['code'], 'in progress cannot be taken through a different expected state');
+    iwdb_eq('invalid_decline', IssueReports::decline($firstId, 'open', $handlerId, 'The browser carried an obsolete state.')['code'], 'in progress cannot be declined with an obsolete expected state');
     iwdb_eq('stale', IssueReports::take($firstId, 'open', $otherStaffId)['code'], 'another colleague cannot take ownership');
     iwdb_eq('not_handler', IssueReports::decline($firstId, 'in_progress', $otherStaffId, 'We could not verify the reported damage.')['code'], 'only the handler may decline');
     iwdb_eq('resolution_note_too_short', IssueReports::decline($firstId, 'in_progress', $handlerId, 'No proof')['code'], 'short decline reason is refused');
@@ -115,9 +133,22 @@ try {
     iwdb_eq(null, $terminal['active_slot'], 'terminal report releases the active slot');
     iwdb_eq(3, count(IssueReports::historyForStaff($firstId)), 'decline appends terminal history');
     iwdb_eq('terminal', IssueReports::decline($firstId, 'in_progress', $handlerId, 'A replay must not change the result.')['code'], 'terminal report cannot be declined twice');
+    iwdb_eq('terminal', IssueReports::take($firstId, 'open', $handlerId)['code'], 'a terminal report cannot return to in progress');
+    iwdb_eq('terminal', IssueResolutions::resolve(
+        $firstId,
+        'in_progress',
+        $handlerId,
+        'replacement',
+        'A terminal report cannot be resolved again.',
+        [(int) $detail['items'][0]['id']],
+        0,
+        0,
+        'NOT-USED'
+    )['code'], 'a declined report cannot move to resolved');
+    iwdb_eq('terminal', IssueResolutions::reassignToOwner($firstId, 'in_progress', $otherStaffId)['code'], 'a terminal report cannot be reassigned');
     iwdb_eq(3, count(IssueReports::historyForStaff($firstId)), 'terminal replay adds no history');
     iwdb_eq(1, IssueReports::countForStaff('active'), 'active queue excludes declined reports');
-    iwdb_eq(1, IssueReports::countForStaff('declined'), 'declined filter finds the outcome');
+    iwdb_eq($declinedBefore + 1, IssueReports::countForStaff('declined'), 'declined filter adds exactly this outcome');
 
     Database::run("DELETE FROM rate_limits WHERE bucket LIKE 'issues:%'");
     $later = IssueReports::submit($firstOrder, $customerId, 'quality', 'A separate later problem needs checking.', '192.0.2.83');

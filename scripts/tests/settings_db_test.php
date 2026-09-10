@@ -137,6 +137,7 @@ Settings::set('delivery_cutoff_time', '18:00', 'string', $actor);
 Settings::set('delivery_min_lead_days', 1, 'int', $actor);
 Settings::set('kitchen_run_quote_days', 21, 'int', $actor);
 Settings::set('min_order_subunit', 0, 'int', $actor);
+Settings::set('make_it_right_reporting_window_days', 14, 'int', $actor);
 Settings::set('pay_on_delivery_requires_activation', true, 'bool', $actor);
 Settings::set('cancellation_cutoff_time', '18:00', 'string', $actor);
 Settings::set('cancellation_deposit_forfeit_after_cutoff', true, 'bool', $actor);
@@ -156,6 +157,7 @@ $clean = SettingsEditor::validate('order', [
     'delivery_min_lead_days'                    => '3',
     'kitchen_run_quote_days'                    => '10',
     'min_order_subunit'                         => '2,500',
+    'make_it_right_reporting_window_days'       => '7',
     'pay_on_delivery_requires_activation'       => '0',
     'cancellation_cutoff_time'                  => '17:00',
     'cancellation_deposit_forfeit_after_cutoff' => '0',
@@ -173,6 +175,7 @@ t_eq('14:30', Settings::str('delivery_cutoff_time'), 'the cutoff saved with the 
 t_eq(3, Settings::int('delivery_min_lead_days'), 'the days of notice saved');
 t_eq(10, Settings::int('kitchen_run_quote_days'), 'the Kitchen Run quote window saved with the rest of the tab');
 t_eq(250000, Settings::int('min_order_subunit'), 'the smallest order saved in kobo');
+t_eq(7, Settings::int('make_it_right_reporting_window_days'), 'the Make It Right reporting window saved with the rest of the tab');
 t_eq(false, Settings::bool('pay_on_delivery_requires_activation'), 'the pay-on-delivery gate saved as off');
 t_eq('17:00', Settings::str('cancellation_cutoff_time'), 'the cancellation cutoff saved');
 t_eq(false, Settings::bool('cancellation_deposit_forfeit_after_cutoff'), 'the deposit forfeit rule saved as off');
