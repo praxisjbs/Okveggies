@@ -103,12 +103,16 @@ $users = [];
 $jars = [];
 $orders = [];
 $paymentIds = [];
+$transactionIds = [];
+$orderItemIds = [];
 
 try {
     $rolePermissions = [
-        'full' => ['dashboard.view', 'orders.view', 'payments.view', 'credit.view'],
-        'orders' => ['dashboard.view', 'orders.view'],
-        'payments' => ['dashboard.view', 'payments.view'],
+        'full' => ['dashboard.view', 'dashboard.analytics.view', 'orders.view', 'payments.view', 'credit.view'],
+        'orders' => ['dashboard.view', 'dashboard.analytics.view', 'orders.view'],
+        'payments' => ['dashboard.view', 'dashboard.analytics.view', 'payments.view'],
+        'orders_no_analytics' => ['dashboard.view', 'orders.view'],
+        'analytics_only' => ['dashboard.view', 'dashboard.analytics.view'],
         'dashboard' => ['dashboard.view'],
         'blocked' => ['orders.view'],
     ];
@@ -193,6 +197,37 @@ try {
         $paymentIds[] = (int) Database::getInstance()->getConnection()->lastInsertId();
     }
 
+    Database::run(
+        'INSERT INTO order_items
+            (order_id, item_type, item_name, sku, unit_name, quantity,
+             unit_price_subunit, line_total_subunit, created_at)
+         VALUES (:order_id, :item_type, :item_name, :sku, :unit_name, :quantity,
+                 :unit_price, :line_total, :created_at)',
+        [
+            ':order_id' => $orders['TODAY'], ':item_type' => 'combo',
+            ':item_name' => 'M11 HTTP Harvest Basket ' . $suffix, ':sku' => 'M11-COMBO',
+            ':unit_name' => 'basket', ':quantity' => '1.000', ':unit_price' => 777700,
+            ':line_total' => 777700, ':created_at' => $today . ' 08:00:00',
+        ]
+    );
+    $orderItemIds[] = (int) Database::getInstance()->getConnection()->lastInsertId();
+
+    Database::run(
+        'INSERT INTO payment_transactions
+            (payment_id, provider, reference, domain, status, requested_amount_subunit,
+             amount_subunit, currency, customer_email, paid_at)
+         VALUES (:payment_id, :provider, :reference, :domain, :status, :requested,
+                 :amount, :currency, :email, :paid_at)',
+        [
+            ':payment_id' => $paymentIds[0], ':provider' => 'manual',
+            ':reference' => 'M11-HTTP-TXN-' . $suffix, ':domain' => 'test', ':status' => 'success',
+            ':requested' => 777700, ':amount' => 777700, ':currency' => Money::CODE,
+            ':email' => 'm11-http-' . strtolower($suffix) . '@example.test',
+            ':paid_at' => $today . ' 09:00:00',
+        ]
+    );
+    $transactionIds[] = (int) Database::getInstance()->getConnection()->lastInsertId();
+
     $guestJar = tempnam(sys_get_temp_dir(), 'okv-m11-guest-');
     $jars['guest'] = $guestJar;
     [$status] = adh_request($base, $guestJar, '/admin/');
@@ -211,6 +246,20 @@ try {
     adh_ok(str_contains($full, 'filter_created=' . $today), 'today orders links to the exact placed-date filter');
     adh_ok(str_contains($full, 'due=attention#payments-due'), 'payments due links to its attention view');
     adh_ok(str_contains($full, Money::format(1234500)), 'the due card formats its amount through Money');
+    foreach (['Sales over time', 'Top products', 'Order share by category'] as $label) {
+        adh_ok(str_contains($fullText, $label), 'the full dashboard shows ' . $label);
+    }
+    adh_ok(str_contains($full, 'id="okv-dashboard-data"'), 'a permitted non-empty chart response carries JSON data');
+    adh_ok(str_contains($full, '/assets/js/admin-dashboard'), 'a permitted non-empty chart response loads the chart enhancer');
+    adh_ok(str_contains($full, 'M11 HTTP Harvest Basket ' . $suffix), 'top products use the immutable order-item name');
+    adh_ok(str_contains($full, 'View exact sales figures') && str_contains($full, 'View exact product figures')
+        && str_contains($full, 'View exact category figures'), 'every chart has a keyboard-accessible exact table');
+    adh_ok(str_contains($full, 'aria-label="Reporting period"') && str_contains($full, 'aria-current="page"'), 'the shared period control names and marks its selection');
+
+    [, $sevenDays] = adh_request($base, $jars['full'], '/admin/?period=7');
+    adh_ok(preg_match('/aria-current="page"[^>]*>\s*7 days\s*<\/a>/', $sevenDays) === 1, 'the 7 day GET preset is selected');
+    [, $invalidPeriod] = adh_request($base, $jars['full'], '/admin/?period=not-a-period');
+    adh_ok(preg_match('/aria-current="page"[^>]*>\s*30 days\s*<\/a>/', $invalidPeriod) === 1, 'an invalid period safely falls back to 30 days');
 
     [, $ordersOnly] = adh_request($base, $jars['orders'], '/admin/');
     $ordersOnlyText = html_entity_decode($ordersOnly, ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -219,12 +268,28 @@ try {
     adh_ok(!str_contains($ordersOnly, 'Payments due'), 'an orders role receives no due-payment card');
     adh_ok(!str_contains($ordersOnly, 'Credit outstanding'), 'an orders role receives no credit card');
     adh_ok(!str_contains($ordersOnly, Money::format(1234500)), 'a payment amount is absent from orders-only HTML');
+    adh_ok(str_contains($ordersOnlyText, 'Top products') && str_contains($ordersOnlyText, 'Order share by category'), 'an analytics and orders role sees both order charts');
+    adh_ok(!str_contains($ordersOnly, 'Sales over time') && !str_contains($ordersOnly, 'sales_over_time'), 'an orders-only response contains no sales chart or sales payload');
 
     [, $paymentsOnly] = adh_request($base, $jars['payments'], '/admin/');
     $paymentsOnlyText = html_entity_decode($paymentsOnly, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     adh_ok(!str_contains($paymentsOnlyText, "Today's orders"), 'a payments role receives no order metric');
     adh_ok(str_contains($paymentsOnlyText, "Today's revenue") && str_contains($paymentsOnlyText, 'Payments due'), 'a payments role sees both payment metrics');
     adh_ok(!str_contains($paymentsOnly, 'Credit outstanding'), 'a payments role receives no credit metric');
+    adh_ok(str_contains($paymentsOnlyText, 'Sales over time'), 'an analytics and payments role sees the sales chart');
+    adh_ok(!str_contains($paymentsOnly, 'Top products') && !str_contains($paymentsOnly, 'top_products')
+        && !str_contains($paymentsOnly, 'Order share by category'), 'a payments-only response contains no order chart data');
+
+    [, $ordersNoAnalytics] = adh_request($base, $jars['orders_no_analytics'], '/admin/');
+    $ordersNoAnalyticsText = html_entity_decode($ordersNoAnalytics, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    adh_ok(str_contains($ordersNoAnalyticsText, "Today's orders"), 'orders permission still shows its operational card without analytics permission');
+    adh_ok(!str_contains($ordersNoAnalytics, 'How the shop is moving')
+        && !str_contains($ordersNoAnalytics, 'okv-dashboard-data')
+        && !str_contains($ordersNoAnalytics, 'admin-dashboard'), 'missing dashboard.analytics.view removes chart HTML, JSON and JavaScript');
+
+    [, $analyticsOnly] = adh_request($base, $jars['analytics_only'], '/admin/');
+    adh_ok(!str_contains($analyticsOnly, 'How the shop is moving')
+        && !str_contains($analyticsOnly, 'okv-dashboard-data'), 'analytics permission without a domain permission reveals no chart region or data');
 
     [, $dashboardOnly] = adh_request($base, $jars['dashboard'], '/admin/');
     $dashboardOnlyText = html_entity_decode($dashboardOnly, ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -247,6 +312,12 @@ try {
     adh_ok(str_contains($duePage, Money::format(1234500)), 'the due-attention row shows the same formatted balance');
     adh_ok(str_contains($duePage, 'Due today'), 'the due-attention row names its time state');
 } finally {
+    foreach ($transactionIds as $transactionId) {
+        Database::run('DELETE FROM payment_transactions WHERE id = :id', [':id' => $transactionId]);
+    }
+    foreach ($orderItemIds as $orderItemId) {
+        Database::run('DELETE FROM order_items WHERE id = :id', [':id' => $orderItemId]);
+    }
     foreach ($paymentIds as $paymentId) {
         Database::run('DELETE FROM payments WHERE id = :id', [':id' => $paymentId]);
     }

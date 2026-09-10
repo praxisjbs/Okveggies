@@ -16,6 +16,7 @@ $firstName = trim((string) ($me['first_name'] ?? ''));
 $canOrders = Rbac::can('orders.view');
 $canPayments = Rbac::can('payments.view');
 $canCredit = Rbac::can('credit.view');
+$canAnalytics = Rbac::can('dashboard.analytics.view');
 $canProducts = Rbac::can('products.view');
 $canPricing = Rbac::can('pricing.view');
 $canCombos = Rbac::can('combos.view');
@@ -139,6 +140,74 @@ if ($canCredit) {
 }
 
 $hasQuickLinks = $canPricing || $canProducts || $canCombos;
+$period = AdminDashboard::normalisePeriod($_GET['period'] ?? AdminDashboard::DEFAULT_PERIOD);
+$periodBounds = AdminDashboard::periodBounds($period);
+$periodLabel = date('j M Y', strtotime($periodBounds['start_date']))
+    . ' to ' . date('j M Y', strtotime($periodBounds['end_date']));
+$salesChart = null;
+$topProductsChart = null;
+$categoryChart = null;
+$chartPayload = [];
+
+if ($canAnalytics && $canPayments) {
+    try {
+        $sales = AdminDashboard::salesOverTime($period);
+        $hasMovement = false;
+        foreach ($sales['series'] as $day) {
+            if ((int) $day['gross_subunit'] !== 0 || (int) $day['refund_subunit'] !== 0) {
+                $hasMovement = true;
+                break;
+            }
+        }
+        $salesChart = [
+            'status' => $hasMovement ? 'ready' : 'empty',
+            'series' => $sales['series'],
+            'undated_receipts_count' => (int) $sales['undated_receipts_count'],
+        ];
+        if ($hasMovement) {
+            $chartPayload['sales_over_time'] = $sales['series'];
+        }
+    } catch (Throwable $e) {
+        error_log('admin dashboard sales over time: ' . $e->getMessage());
+        $salesChart = ['status' => 'error', 'series' => [], 'undated_receipts_count' => 0];
+    }
+}
+
+if ($canAnalytics && $canOrders) {
+    try {
+        $rows = AdminDashboard::topProducts($period);
+        $topProductsChart = ['status' => $rows === [] ? 'empty' : 'ready', 'rows' => $rows];
+        if ($rows !== []) {
+            $chartPayload['top_products'] = $rows;
+        }
+    } catch (Throwable $e) {
+        error_log('admin dashboard top products: ' . $e->getMessage());
+        $topProductsChart = ['status' => 'error', 'rows' => []];
+    }
+
+    try {
+        $share = AdminDashboard::categoryShare($period);
+        $rows = $share['rows'];
+        $categoryChart = [
+            'status' => $rows === [] ? 'empty' : 'ready',
+            'rows' => $rows,
+            'uncategorised_subunit' => (int) $share['uncategorised_subunit'],
+            'unallocated_refund_subunit' => (int) $share['unallocated_refund_subunit'],
+        ];
+        if ($rows !== []) {
+            $chartPayload['order_share'] = $rows;
+        }
+    } catch (Throwable $e) {
+        error_log('admin dashboard category share: ' . $e->getMessage());
+        $categoryChart = [
+            'status' => 'error', 'rows' => [],
+            'uncategorised_subunit' => 0, 'unallocated_refund_subunit' => 0,
+        ];
+    }
+}
+
+$hasChartRegion = $canAnalytics && ($canPayments || $canOrders);
+$hasChartPayload = $chartPayload !== [];
 $okv_admin_title = 'Dashboard';
 $okv_admin_note = $firstName !== ''
     ? 'Welcome back, ' . $firstName . '. Here is what needs attention today.'
@@ -177,6 +246,172 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <?php endif; ?>
     </section>
 
+    <?php if ($hasChartRegion): ?>
+      <section aria-labelledby="okv-analytics">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p class="okv-eyebrow">Analytics</p>
+            <h2 id="okv-analytics" class="okv-panel-title mt-1">How the shop is moving</h2>
+            <p class="mt-1 text-sm text-ink-60"><?= okv_e($periodLabel) ?>, Lagos time</p>
+          </div>
+          <nav aria-label="Reporting period" class="flex flex-wrap gap-2">
+            <?php foreach (AdminDashboard::PERIODS as $periodOption): ?>
+              <a href="/admin/?<?= okv_e(http_build_query(['period' => $periodOption])) ?>"
+                 class="okv-filter-chip<?= $period === $periodOption ? ' okv-filter-chip-active' : '' ?>"
+                 <?= $period === $periodOption ? 'aria-current="page"' : '' ?>>
+                <?= okv_e((string) $periodOption) ?> days
+              </a>
+            <?php endforeach; ?>
+          </nav>
+        </div>
+
+        <div class="mt-3 grid gap-4 xl:grid-cols-2">
+          <?php if ($salesChart !== null): ?>
+            <article class="okv-panel xl:col-span-2" aria-labelledby="okv-sales-title">
+              <div class="okv-panel-head">
+                <div>
+                  <h3 id="okv-sales-title" class="okv-panel-title">Sales over time</h3>
+                  <p class="mt-1 text-xs text-ink-60">Net confirmed money after completed refunds.</p>
+                </div>
+                <span class="okv-badge okv-badge-neutral"><?= okv_e((string) $period) ?> days</span>
+              </div>
+              <div class="okv-panel-body">
+                <?php if ($salesChart['status'] === 'error'): ?>
+                  <p class="okv-note-bad">Sales could not be loaded. Try again shortly.</p>
+                <?php elseif ($salesChart['status'] === 'empty'): ?>
+                  <p class="text-sm text-ink-60">No confirmed sales or completed refunds in this period.</p>
+                <?php else: ?>
+                  <div class="okv-chart-stage" data-okv-chart="sales" aria-hidden="true">
+                    <p class="text-sm text-ink-60">Preparing the sales chart. Exact figures are available below.</p>
+                  </div>
+                  <details class="okv-chart-details mt-4">
+                    <summary>View exact sales figures</summary>
+                    <div class="okv-table-wrap mt-2">
+                      <table class="okv-table">
+                        <caption class="sr-only">Daily gross receipts, completed refunds and net sales for <?= okv_e($periodLabel) ?></caption>
+                        <thead><tr><th scope="col">Date</th><th scope="col" class="text-right">Gross</th><th scope="col" class="text-right">Refunds</th><th scope="col" class="text-right">Net sales</th></tr></thead>
+                        <tbody>
+                          <?php foreach ($salesChart['series'] as $day): ?>
+                            <tr>
+                              <th scope="row" class="px-3 py-2.5 text-left font-medium"><?= okv_e(date('j M Y', strtotime($day['date']))) ?></th>
+                              <td class="text-right font-mono tabular-nums"><?= okv_e(Money::format((int) $day['gross_subunit'])) ?></td>
+                              <td class="text-right font-mono tabular-nums"><?= okv_e(Money::format((int) $day['refund_subunit'])) ?></td>
+                              <td class="text-right font-mono tabular-nums"><?= okv_e(Money::format((int) $day['amount_subunit'])) ?></td>
+                            </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                <?php endif; ?>
+                <?php if ($salesChart['undated_receipts_count'] > 0): ?>
+                  <p class="okv-note-bad mt-4">
+                    <?= okv_e((string) $salesChart['undated_receipts_count']) ?> confirmed
+                    <?= $salesChart['undated_receipts_count'] === 1 ? 'receipt has' : 'receipts have' ?> no payment date and cannot appear in this chart.
+                  </p>
+                <?php endif; ?>
+              </div>
+            </article>
+          <?php endif; ?>
+
+          <?php if ($topProductsChart !== null): ?>
+            <article class="okv-panel" aria-labelledby="okv-products-title">
+              <div class="okv-panel-head">
+                <div>
+                  <h3 id="okv-products-title" class="okv-panel-title">Top products</h3>
+                  <p class="mt-1 text-xs text-ink-60">Ranked by net sales value after completed refunds.</p>
+                </div>
+              </div>
+              <div class="okv-panel-body">
+                <?php if ($topProductsChart['status'] === 'error'): ?>
+                  <p class="okv-note-bad">Top products could not be loaded. Try again shortly.</p>
+                <?php elseif ($topProductsChart['status'] === 'empty'): ?>
+                  <p class="text-sm text-ink-60">No non-cancelled order lines were sold in this period.</p>
+                <?php else: ?>
+                  <div class="okv-chart-stage" data-okv-chart="products" aria-hidden="true">
+                    <p class="text-sm text-ink-60">Preparing the product ranking. Exact figures are available below.</p>
+                  </div>
+                  <details class="okv-chart-details mt-4">
+                    <summary>View exact product figures</summary>
+                    <div class="okv-table-wrap mt-2">
+                      <table class="okv-table">
+                        <caption class="sr-only">Top products ranked by net sales value for <?= okv_e($periodLabel) ?></caption>
+                        <thead><tr><th scope="col">Product</th><th scope="col">Quantity</th><th scope="col" class="text-right">Orders</th><th scope="col" class="text-right">Net value</th></tr></thead>
+                        <tbody>
+                          <?php foreach ($topProductsChart['rows'] as $index => $row): ?>
+                            <tr>
+                              <th scope="row" class="px-3 py-2.5 text-left">
+                                <span class="okv-table-name"><?= okv_e(($index + 1) . '. ' . $row['label']) ?></span>
+                                <span class="okv-table-sub block"><?= okv_e(ucwords(str_replace('_', ' ', $row['kind']))) ?></span>
+                              </th>
+                              <td class="font-mono tabular-nums"><?= okv_e($row['quantity'] . ' ' . $row['unit_name']) ?></td>
+                              <td class="text-right font-mono tabular-nums"><?= okv_e((string) $row['order_count']) ?></td>
+                              <td class="text-right font-mono tabular-nums"><?= okv_e(Money::format((int) $row['amount_subunit'])) ?></td>
+                            </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                <?php endif; ?>
+              </div>
+            </article>
+          <?php endif; ?>
+
+          <?php if ($categoryChart !== null): ?>
+            <article class="okv-panel" aria-labelledby="okv-category-title">
+              <div class="okv-panel-head">
+                <div>
+                  <h3 id="okv-category-title" class="okv-panel-title">Order share by category</h3>
+                  <p class="mt-1 text-xs text-ink-60">Share of refund-adjusted line value.</p>
+                </div>
+              </div>
+              <div class="okv-panel-body">
+                <?php if ($categoryChart['status'] === 'error'): ?>
+                  <p class="okv-note-bad">Category share could not be loaded. Try again shortly.</p>
+                <?php elseif ($categoryChart['status'] === 'empty'): ?>
+                  <p class="text-sm text-ink-60">No categorised sales are available for this period.</p>
+                <?php else: ?>
+                  <div class="okv-chart-stage" data-okv-chart="categories" aria-hidden="true">
+                    <p class="text-sm text-ink-60">Preparing the category chart. Exact figures are available below.</p>
+                  </div>
+                  <details class="okv-chart-details mt-4">
+                    <summary>View exact category figures</summary>
+                    <div class="okv-table-wrap mt-2">
+                      <table class="okv-table">
+                        <caption class="sr-only">Order share for every fixed shopping group for <?= okv_e($periodLabel) ?></caption>
+                        <thead><tr><th scope="col">Category</th><th scope="col" class="text-right">Share</th><th scope="col" class="text-right">Net value</th></tr></thead>
+                        <tbody>
+                          <?php $shareBySlug = array_column($categoryChart['rows'], null, 'category_slug'); ?>
+                          <?php foreach (AdminDashboard::SHOPPING_GROUPS as $slug => $group): ?>
+                            <?php $row = $shareBySlug[$slug] ?? ['share_basis_points' => 0, 'amount_subunit' => 0]; ?>
+                            <tr>
+                              <th scope="row" class="px-3 py-2.5 text-left">
+                                <span class="okv-chart-key okv-chart-token-<?= okv_e(str_replace('.', '-', $group['colour_token'])) ?>" aria-hidden="true"></span>
+                                <span class="okv-table-name"><?= okv_e($group['label']) ?></span>
+                              </th>
+                              <td class="text-right font-mono tabular-nums"><?= okv_e(intdiv((int) $row['share_basis_points'], 100) . '.' . str_pad((string) ((int) $row['share_basis_points'] % 100), 2, '0', STR_PAD_LEFT) . '%') ?></td>
+                              <td class="text-right font-mono tabular-nums"><?= okv_e(Money::format((int) $row['amount_subunit'])) ?></td>
+                            </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                <?php endif; ?>
+                <?php if ($categoryChart['uncategorised_subunit'] > 0): ?>
+                  <p class="okv-note-bad mt-4"><?= okv_e(Money::format($categoryChart['uncategorised_subunit'])) ?> in manual or retired-product lines could not be assigned to a category and is excluded from the percentages.</p>
+                <?php endif; ?>
+                <?php if ($categoryChart['unallocated_refund_subunit'] > 0): ?>
+                  <p class="okv-note-bad mt-4"><?= okv_e(Money::format($categoryChart['unallocated_refund_subunit'])) ?> in completed refunds exceeds eligible line value and is excluded from this chart.</p>
+                <?php endif; ?>
+              </div>
+            </article>
+          <?php endif; ?>
+        </div>
+      </section>
+    <?php endif; ?>
+
     <?php if ($hasQuickLinks): ?>
       <section aria-labelledby="okv-quick">
         <h2 id="okv-quick" class="okv-eyebrow">Run the week</h2>
@@ -204,4 +439,11 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <?php endif; ?>
 
   </div>
+<?php if ($hasChartPayload): ?>
+  <script id="okv-dashboard-data" type="application/json"><?= json_encode(
+      ['period' => $period, 'charts' => $chartPayload],
+      JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE
+  ) ?></script>
+  <?php $okv_admin_script = '/assets/js/admin-dashboard.js'; ?>
+<?php endif; ?>
 <?php require __DIR__ . '/../includes/components/admin/footer.php';
