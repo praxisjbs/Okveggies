@@ -5,11 +5,18 @@ Rbac::requirePermission('orders.view');
 
 $statusFilter = trim((string) okv_input('filter_status', ''));
 $dateFilter = trim((string) okv_input('filter_date', ''));
+$createdFilter = trim((string) okv_input('filter_created', ''));
 $customerFilter = mb_substr(trim((string) okv_input('filter_customer', '')), 0, 100);
 $validStatuses = ['pending', 'confirmed', 'packed', 'dispatched', 'delivered', 'cancelled'];
 $where = []; $params = [];
 if (in_array($statusFilter, $validStatuses, true)) { $where[] = 'o.order_status = :status'; $params[':status'] = $statusFilter; }
 if (Delivery::validDate($dateFilter)) { $where[] = 'o.preferred_delivery_date = :date'; $params[':date'] = $dateFilter; }
+if (Delivery::validDate($createdFilter)) {
+    $createdStart = new DateTimeImmutable($createdFilter . ' 00:00:00');
+    $where[] = 'o.created_at >= :created_start AND o.created_at < :created_end';
+    $params[':created_start'] = $createdStart->format('Y-m-d H:i:s');
+    $params[':created_end'] = $createdStart->modify('+1 day')->format('Y-m-d H:i:s');
+}
 // One placeholder per position. The connection runs native prepared statements
 // (Database sets ATTR_EMULATE_PREPARES to false), and MySQL will not accept the
 // same named placeholder twice in one statement: reusing :customer here threw
@@ -158,9 +165,10 @@ require __DIR__ . '/../includes/components/admin/header.php';
       : 'The order stage has been updated. The customer has been told.')) ?></p>
 <?php endif; ?>
 
-<form method="get" class="mb-5 grid gap-3 rounded-md border border-mist bg-white p-4 sm:grid-cols-4">
+<form method="get" class="mb-5 grid gap-3 rounded-md border border-mist bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
   <div><label class="okv-label" for="filter-status">Stage</label><select class="okv-input mt-1" id="filter-status" name="filter_status"><option value="">All stages</option><?php foreach ($validStatuses as $status): ?><option value="<?= okv_e($status) ?>" <?= $statusFilter === $status ? 'selected' : '' ?>><?= okv_e(ucfirst($status)) ?></option><?php endforeach; ?></select></div>
   <div><label class="okv-label" for="filter-date">Delivery date</label><input class="okv-input mt-1" id="filter-date" type="date" name="filter_date" value="<?= okv_e($dateFilter) ?>"></div>
+  <div><label class="okv-label" for="filter-created">Order placed</label><input class="okv-input mt-1" id="filter-created" type="date" name="filter_created" value="<?= okv_e($createdFilter) ?>"></div>
   <div><label class="okv-label" for="filter-customer">Customer or order</label><input class="okv-input mt-1" id="filter-customer" name="filter_customer" value="<?= okv_e($customerFilter) ?>"></div>
   <button class="okv-btn min-h-[44px] self-end justify-center">Filter orders</button>
 </form>
