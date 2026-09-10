@@ -109,6 +109,7 @@ require_once __DIR__ . '/classes/ProDashboard.php';
 require_once __DIR__ . '/classes/KitchenLists.php';
 require_once __DIR__ . '/classes/ProOrders.php';
 require_once __DIR__ . '/classes/Credit.php';
+require_once __DIR__ . '/classes/AdminDashboard.php';
 require_once __DIR__ . '/classes/Customers.php';
 // Work the back office starts itself, rather than following on from something a
 // customer did on the storefront: an order taken on the phone, and the customer

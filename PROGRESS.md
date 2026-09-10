@@ -646,6 +646,8 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 - [ ] Today's orders, revenue, payments due, credit outstanding
 - [ ] Charts: sales over time, top products, order-share by category (fixed colours)
 - [ ] Command palette and keyboard shortcuts
+- [x] **Task A, analytics contract.** The Owner fixed the complete M11 metric contract before implementation: non-cancelled orders placed today in the configured Lagos timezone; net cash revenue from credited transaction events less processed refunds on their real movement dates; unpaid payment obligations due today or earlier, with due-today and overdue splits; global credit outstanding as the sum of each business's non-negative signed-journal balance; 7, 30 and 90 day GET presets with 30 days as the default; refund-adjusted top sellable lines ranked by value; and refund-adjusted category share by line value across the 5 product categories plus Combos and Kitchen Runs. Layered server gates pair `dashboard.view` with the relevant Orders, Payments or Credit permission, and every chart additionally needs `dashboard.analytics.view`. `docs/M11_ANALYTICS_CONTRACT.md` records timestamp boundaries, fixed token mapping, empty states, schema limitations and the required verification fixtures. No schema or production code changed, and the 3 headline acceptance criteria remain open.
+- [x] **Task B, read-only analytics service.** `AdminDashboard` now owns the reusable summary and chart aggregation layer outside `admin/index.php`. Its selective overview and public metric methods return integer-kobo, permission-neutral data; use Lagos-local half-open date ranges; keep due today separate from overdue; rebuild credit balances from the signed journal through `Credit`; emit dense zero-filled sales days; rank snapshot sellable lines by refund-adjusted value; and allocate category share to exactly 10,000 basis points using the fixed M11 colour tokens. Focused pure tests passed 2,836/2,836 with the full unit runner, and the fresh MySQL 8 aggregation suite passed 23/23. The headline criteria remain open until the route gates and dashboard presentation consume this service.
 
 ### M12. Content pages
 - [ ] Home (documentary hero, featured combos, categories)
@@ -685,6 +687,47 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 10 Sep 2026, M11 Task B: read-only dashboard analytics
+
+- Added `includes/classes/AdminDashboard.php` and loaded it through the shared
+  bootstrap and test runner. The service exposes separate metric methods plus a
+  selective overview, so a route can avoid running or serialising data a role
+  may not see.
+- Implemented today's order count, net cash revenue, due and overdue payment
+  obligations, journal-derived credit outstanding, dense sales days, top
+  snapshot sellable lines, and refund-adjusted category share. Values remain
+  integer kobo; category shares total 10,000 basis points; missing credited
+  payment timestamps and uncategorised value are explicit integrity fields.
+- Added pure calculation coverage and a MySQL 8 integration fixture covering
+  Lagos date boundaries, cancelled-order cash, multiple payment attempts,
+  processed and non-processed refunds, due-date splits, signed credit journals,
+  Combos, Kitchen Runs, empty sales dates and stable category-share rounding.
+- Verification: `php scripts/tests/run.php` passed 2,836/2,836 assertions; the
+  new MySQL 8 suite passed 23/23; payments passed 43/43, credit orders passed
+  48/48, and Pro Dashboard passed 17/17. All touched PHP files passed `php -l`,
+  the brand check and `git diff --check` passed, and migrations applied cleanly
+  then had nothing pending on rerun. Local HTTP verification passed every
+  application check; only the two Apache static-path checks failed because
+  PHP's built-in server does not apply `.htaccess` protection to `migrations/`
+  or `docs/`.
+- No dashboard UI, permission gate, schema change, commit or push was made.
+
+### 10 Sep 2026, M11 Task A: dashboard analytics contract
+
+- Confirmed the work is on `M11-Admin-dashboard` and read the complete PRD, the
+  repository build contract, the M11 checklist, the completed order, payment,
+  delivery and credit records, and the current admin shell before defining a
+  new query.
+- Recorded the 11 Owner decisions in `docs/M11_ANALYTICS_CONTRACT.md`, including
+  the distinction between cash movement for revenue and order-line value for
+  product and category analysis. This prevents a cancelled paid order and its
+  later refund from being subtracted twice.
+- Kept Task A documentation-only. No migration, analytics service or dashboard
+  presentation was added early. The contract names the exact Task B fixtures
+  needed for Lagos midnight, joins, reversals, refunds, due dates, signed credit
+  journals, mixed sellable lines and partial roles.
+- No commit or push was made.
 
 ### 9 Sep 2026, the back office learns to start work, not only to follow it
 

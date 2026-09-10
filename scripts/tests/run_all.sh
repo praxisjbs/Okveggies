@@ -53,7 +53,7 @@ echo
 echo "[tests] 2. Database suites (MySQL 8 from .env)"
 if php -r 'require "includes/bootstrap.php"; Database::one("SELECT 1");' >/dev/null 2>&1; then
   for suite in \
-    auth_db_test basket_db_test cancellation_db_test checkout_db_test combos_db_test \
+    admin_dashboard_db_test auth_db_test basket_db_test cancellation_db_test checkout_db_test combos_db_test \
     contact_db_test contact_admin_db_test \
     credit_admin_db_test credit_customer_db_test credit_orders_db_test \
     customer_auth_db_test customers_db_test delivery_db_test kitchen_lists_db_test \
