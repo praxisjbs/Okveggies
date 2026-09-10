@@ -158,15 +158,35 @@ final class AdminDashboard
     public static function paymentsDue(?DateTimeImmutable $now = null): array
     {
         $bounds = self::boundsForDays(1, $now);
+        return self::summariseDuePayments(self::duePaymentObligations($now), $bounds['today_start']);
+    }
+
+    /**
+     * The obligations behind the dashboard due total, oldest first.
+     *
+     * Payments uses this same read for its due-attention view, so the card and
+     * destination cannot drift into different definitions of "due".
+     */
+    public static function duePaymentObligations(?DateTimeImmutable $now = null): array
+    {
+        $bounds = self::boundsForDays(1, $now);
         $rows = Database::all(
-            'SELECT p.expected_amount_subunit, p.paid_amount_subunit, p.due_at
+            'SELECT p.id AS payment_id, p.payment_number, p.payment_type,
+                    p.expected_amount_subunit, p.paid_amount_subunit, p.due_at,
+                    o.id AS order_id, o.order_number,
+                    COALESCE(NULLIF(a.recipient_name, \'\'),
+                        NULLIF(TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))), \'\'),
+                        \'Customer\') AS customer_name
                FROM payments p
                JOIN orders o ON o.id = p.order_id
+               LEFT JOIN users u ON u.id = o.user_id
+               LEFT JOIN order_addresses a ON a.order_id = o.id
               WHERE o.order_status <> :cancelled
                 AND p.status IN (:unpaid, :part_paid)
                 AND p.expected_amount_subunit > p.paid_amount_subunit
                 AND p.due_at IS NOT NULL
-                AND p.due_at < :tomorrow_start',
+                AND p.due_at < :tomorrow_start
+              ORDER BY p.due_at, p.id',
             [
                 ':cancelled' => 'cancelled',
                 ':unpaid' => Payments::STATUS_UNPAID,
@@ -174,7 +194,19 @@ final class AdminDashboard
                 ':tomorrow_start' => $bounds['tomorrow_start'],
             ]
         );
-        return self::summariseDuePayments($rows, $bounds['today_start']);
+        foreach ($rows as &$row) {
+            $row['payment_id'] = (int) $row['payment_id'];
+            $row['order_id'] = (int) $row['order_id'];
+            $row['expected_amount_subunit'] = (int) $row['expected_amount_subunit'];
+            $row['paid_amount_subunit'] = (int) $row['paid_amount_subunit'];
+            $row['outstanding_subunit'] = Money::balance(
+                $row['expected_amount_subunit'],
+                $row['paid_amount_subunit']
+            );
+            $row['due_state'] = (string) $row['due_at'] < $bounds['today_start'] ? 'overdue' : 'due_today';
+        }
+        unset($row);
+        return $rows;
     }
 
     public static function creditOutstanding(?DateTimeImmutable $now = null): int

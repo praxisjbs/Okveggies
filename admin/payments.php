@@ -27,6 +27,18 @@ $canRecord         = Rbac::can('payments.record');
 $canReview         = Rbac::can('payments.proof.review');
 $canRequestReversal = Rbac::can('payments.reversal.request');
 $canApproveReversal = Rbac::can('payments.reversal.approve');
+$dueFocus          = (string) okv_input('due', '') === 'attention';
+$dueObligations    = [];
+$dueLoadFailed     = false;
+
+if ($dueFocus) {
+    try {
+        $dueObligations = AdminDashboard::duePaymentObligations();
+    } catch (Throwable $e) {
+        error_log('admin payments due view: ' . $e->getMessage());
+        $dueLoadFailed = true;
+    }
+}
 
 $pendingProofs = Database::all(
     'SELECT mp.id AS proof_id, mp.method, mp.amount_subunit, mp.bank_reference,
@@ -257,6 +269,58 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <p class="rounded-xl border border-foliage bg-foliage-tint px-4 py-3 text-sm text-ink" role="status">
       <?= okv_e($messages[$flash] ?? 'Done.') ?>
     </p>
+  <?php endif; ?>
+
+  <?php if ($dueFocus): ?>
+    <section id="payments-due" class="okv-panel scroll-mt-20" aria-labelledby="payments-due-heading">
+      <div class="okv-panel-head">
+        <div>
+          <h2 id="payments-due-heading" class="okv-panel-title">Payments due</h2>
+          <p class="mt-1 text-sm text-ink-60">Unpaid balances due today or already overdue.</p>
+        </div>
+        <a class="okv-btn-text" href="/admin/payments.php">Clear this view</a>
+      </div>
+      <?php if ($dueLoadFailed): ?>
+        <p class="okv-note-bad m-4 md:m-5" role="alert">These payments are unavailable. Try again shortly.</p>
+      <?php elseif (!$dueObligations): ?>
+        <p class="okv-panel-body text-sm text-ink-60">No payments are due today or overdue.</p>
+      <?php else: ?>
+        <div class="okv-table-wrap">
+          <table class="okv-table">
+            <caption class="sr-only">Payments due today and overdue</caption>
+            <thead>
+              <tr>
+                <th scope="col">Customer</th>
+                <th scope="col">Order</th>
+                <th scope="col">Due</th>
+                <th scope="col">Outstanding</th>
+                <th scope="col"><span class="sr-only">Open</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($dueObligations as $obligation): ?>
+                <tr>
+                  <td><?= okv_e($obligation['customer_name']) ?></td>
+                  <td class="font-mono"><?= okv_e($obligation['order_number']) ?></td>
+                  <td>
+                    <span class="okv-badge <?= $obligation['due_state'] === 'overdue' ? 'okv-badge-out' : 'okv-badge-warn' ?>">
+                      <?= $obligation['due_state'] === 'overdue' ? 'Overdue' : 'Due today' ?>
+                    </span>
+                    <span class="mt-1 block text-xs text-ink-60"><?= okv_e(date('j M Y', strtotime((string) $obligation['due_at']))) ?></span>
+                  </td>
+                  <td class="font-mono tabular-nums"><?= okv_e(Money::format((int) $obligation['outstanding_subunit'])) ?></td>
+                  <td>
+                    <a class="okv-btn-outline-sm" href="/admin/payments.php?<?= okv_e(http_build_query(['q' => $obligation['order_number']])) ?>#record-heading">
+                      Open payment<span class="sr-only"> for order <?= okv_e($obligation['order_number']) ?></span>
+                    </a>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+    </section>
   <?php endif; ?>
 
   <!-- 1. The queue. Everything here is money in limbo. -->

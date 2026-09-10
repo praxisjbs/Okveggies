@@ -77,7 +77,7 @@ echo
 echo "[tests] 3. HTTP suites (the site answering on $BASE)"
 if curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
   for suite in \
-    cancellation_http_test contact_http_test contact_admin_http_test \
+    admin_dashboard_http_test cancellation_http_test contact_http_test contact_admin_http_test \
     credit_checkout_http_test customer_http_test delivery_http_test \
     kitchen_runs_http_test order_lifecycle_http_test order_trail_http_test settings_http_test
   do

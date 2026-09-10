@@ -296,6 +296,11 @@ try {
     adb_eq(7000, $due['payments_overdue_subunit'], 'the unpaid part of the older obligation is overdue');
     adb_eq(4000, $due['payments_due_today_subunit'], 'the due-today obligation remains separate');
 
+    $dueRows = AdminDashboard::duePaymentObligations($now);
+    adb_eq(2, count($dueRows), 'the due-attention destination uses the same eligible obligations');
+    adb_eq('overdue', $dueRows[0]['due_state'], 'the oldest obligation is labelled overdue');
+    adb_eq(7000, $dueRows[0]['outstanding_subunit'], 'the due-attention row carries its exact unpaid balance');
+
     adb_eq(7000, AdminDashboard::creditOutstanding($now), 'global credit floors each business before summing');
 
     $sales = AdminDashboard::salesOverTime(7, $now);

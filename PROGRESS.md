@@ -643,11 +643,12 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 - [ ] Tests: issue lifecycle
 
 ### M11. Admin dashboard and analytics
-- [ ] Today's orders, revenue, payments due, credit outstanding
+- [x] Today's orders, revenue, payments due, credit outstanding
 - [ ] Charts: sales over time, top products, order-share by category (fixed colours)
 - [ ] Command palette and keyboard shortcuts
 - [x] **Task A, analytics contract.** The Owner fixed the complete M11 metric contract before implementation: non-cancelled orders placed today in the configured Lagos timezone; net cash revenue from credited transaction events less processed refunds on their real movement dates; unpaid payment obligations due today or earlier, with due-today and overdue splits; global credit outstanding as the sum of each business's non-negative signed-journal balance; 7, 30 and 90 day GET presets with 30 days as the default; refund-adjusted top sellable lines ranked by value; and refund-adjusted category share by line value across the 5 product categories plus Combos and Kitchen Runs. Layered server gates pair `dashboard.view` with the relevant Orders, Payments or Credit permission, and every chart additionally needs `dashboard.analytics.view`. `docs/M11_ANALYTICS_CONTRACT.md` records timestamp boundaries, fixed token mapping, empty states, schema limitations and the required verification fixtures. No schema or production code changed, and the 3 headline acceptance criteria remain open.
 - [x] **Task B, read-only analytics service.** `AdminDashboard` now owns the reusable summary and chart aggregation layer outside `admin/index.php`. Its selective overview and public metric methods return integer-kobo, permission-neutral data; use Lagos-local half-open date ranges; keep due today separate from overdue; rebuild credit balances from the signed journal through `Credit`; emit dense zero-filled sales days; rank snapshot sellable lines by refund-adjusted value; and allocate category share to exactly 10,000 basis points using the fixed M11 colour tokens. Focused pure tests passed 2,836/2,836 with the full unit runner, and the fresh MySQL 8 aggregation suite passed 23/23. The headline criteria remain open until the route gates and dashboard presentation consume this service.
+- [x] **Task C, today's operational dashboard.** The temporary catalogue-count row is replaced by 4 permission-layered cards backed only by `AdminDashboard`: non-cancelled orders placed today, net confirmed revenue with completed refunds explained, due and overdue payment balances, and signed-journal credit outstanding. Each card is a keyboard link with a specific zero or isolated error state. Orders gained an exact placed-date filter, and Payments gained a due-attention table that reads the same eligible obligations as the card. Pricing, Catalogue and Combos remain as server-gated quick links. HTTP tests prove `dashboard.view`, partial-role data absence and both filtered destinations, so the first M11 acceptance criterion is closed.
 
 ### M12. Content pages
 - [ ] Home (documentary hero, featured combos, categories)
@@ -687,6 +688,35 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 10 Sep 2026, M11 Task C: today's operational dashboard
+
+- Replaced the temporary shop-state counts in `admin/index.php` with Today's
+  orders, Today's revenue, Payments due and Credit outstanding. Every metric is
+  queried only after its Orders, Payments or Credit permission passes, and a
+  failed query is logged and contained to its own card.
+- Kept the 3 useful weekly links below the summary, now rendered on the server
+  only for staff who may open their destinations. A staff member with only
+  `dashboard.view` gets a plain permission empty state and no hidden values.
+- Added `filter_created=YYYY-MM-DD` to Orders using bound half-open timestamps.
+  Added the Payments `due=attention` view and
+  `AdminDashboard::duePaymentObligations()`, so the destination lists the same
+  overdue and due-today balances included in the dashboard total.
+- Verification: 2,838/2,838 unit assertions, 26/26 dashboard MySQL 8
+  assertions and 34/34 dashboard HTTP assertions passed. Payments passed
+  43/43, Credit admin passed 30/30, and Orders lifecycle HTTP passed 26/26.
+  All touched PHP and shell files passed syntax checks; brand-check and
+  `git diff --check` passed.
+- Browser checks at 390px and 1440px found no horizontal overflow. At 390px
+  the 4 cards form 1 column, no visible control is below 44px, and keyboard
+  focus has a visible 2px outline. At 1440px the cards form 4 columns and the
+  desktop sidebar remains visible. The Payments zero state and Orders date
+  filter also fit at 390px.
+- Local `scripts/verify.sh` passed every application check. Its 2 Apache-only
+  static-path checks returned 200 because PHP's built-in server does not apply
+  `.htaccess` to `migrations/` or `docs/`, the same known local limitation from
+  Tasks A and B.
+- No migration, state-changing dashboard action, commit or push was made.
 
 ### 10 Sep 2026, M11 Task B: read-only dashboard analytics
 
