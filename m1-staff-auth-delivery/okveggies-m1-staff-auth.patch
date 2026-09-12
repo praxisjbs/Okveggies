@@ -1,0 +1,2212 @@
+From 77c7a8f2fabc046d15920f475af0416e3fd4d6de Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 27 Aug 2026 11:42:34 +0000
+Subject: [PATCH 1/5] M1: password helper and login throttle primitives
+
+Add includes/classes/Password.php: bcrypt hashing at BCRYPT_COST, verify,
+needs-rehash, and the shared password policy (minimum length from
+PASSWORD_MIN_LENGTH, a common-password block, and not the person's own email
+or phone). Load it from bootstrap.
+
+Extend RateLimiter with isLocked() and retryAfter() for the login lockout,
+and add an okv_role_label() helper for showing staff role names.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WtPSCHa384VpAoViRVU3Z7
+---
+ includes/bootstrap.php           |   1 +
+ includes/classes/Password.php    | 106 +++++++++++++++++++++++++++++++
+ includes/classes/RateLimiter.php |  19 ++++++
+ includes/functions/helpers.php   |   8 +++
+ 4 files changed, 134 insertions(+)
+ create mode 100644 includes/classes/Password.php
+
+diff --git a/includes/bootstrap.php b/includes/bootstrap.php
+index 8028f53..6ad3694 100644
+--- a/includes/bootstrap.php
++++ b/includes/bootstrap.php
+@@ -65,6 +65,7 @@ unset($__okv_autoload);
+ require_once __DIR__ . '/classes/Money.php';
+ require_once __DIR__ . '/classes/OrderNumber.php';
+ require_once __DIR__ . '/classes/Settings.php';
++require_once __DIR__ . '/classes/Password.php';
+ require_once __DIR__ . '/classes/Rbac.php';
+ require_once __DIR__ . '/classes/Otp.php';
+ require_once __DIR__ . '/classes/Mail.php';
+diff --git a/includes/classes/Password.php b/includes/classes/Password.php
+new file mode 100644
+index 0000000..8ccb087
+--- /dev/null
++++ b/includes/classes/Password.php
+@@ -0,0 +1,106 @@
++<?php
++/**
++ * includes/classes/Password.php
++ * -----------------------------------------------------------------------------
++ * OK Veggies. One place to hash, verify and check the strength of a password.
++ * Staff use it now (milestone M1); customer accounts reuse it in Part 2, so the
++ * policy lives here and nowhere else.
++ *
++ * Hashing is bcrypt through PHP's password_hash, with the cost read from
++ * BCRYPT_COST in .env. Verification is password_verify against
++ * users.password_hash. Never store or compare a plain password anywhere else.
++ *
++ * Policy (PRD Section 10.1: a minimum length and not a common password):
++ *   - at least PASSWORD_MIN_LENGTH characters (default 10),
++ *   - not one of the most common passwords,
++ *   - not the person's own email or phone,
++ *   - at most 72 bytes, because bcrypt silently ignores anything past that.
++ * Length carries the weight here; we do not force a mix of character types,
++ * which pushes people towards predictable patterns (Passw0rd!) and is weaker.
++ * -----------------------------------------------------------------------------
++ */
++
++final class Password
++{
++    /** A short list of the passwords attackers try first. Compared lower-cased. */
++    private const COMMON = [
++        'password', 'password1', 'password123', 'passw0rd', 'qwerty', 'qwerty123',
++        'asdfghjkl', '12345678', '123456789', '1234567890', '111111', '000000',
++        'iloveyou', 'admin', 'admin123', 'administrator', 'letmein', 'welcome',
++        'welcome1', 'monkey', 'dragon', 'football', 'abc12345', 'okveggies',
++        'okveggies1', 'changeme', 'default', 'secret', 'sunshine', 'princess',
++        'trustno1', 'whatever', 'superman', 'baseball', 'starwars', 'lagos123',
++    ];
++
++    /** Hash a plain password with bcrypt at the configured cost. */
++    public static function hash(string $plain): string
++    {
++        return password_hash($plain, PASSWORD_BCRYPT, ['cost' => self::cost()]);
++    }
++
++    /** True if the plain password matches the stored hash. */
++    public static function verify(string $plain, string $hash): bool
++    {
++        return $hash !== '' && password_verify($plain, $hash);
++    }
++
++    /** True if the stored hash should be re-made at the current cost. */
++    public static function needsRehash(string $hash): bool
++    {
++        return password_needs_rehash($hash, PASSWORD_BCRYPT, ['cost' => self::cost()]);
++    }
++
++    /** The configured minimum length, floored at 8 so it can never be set weak. */
++    public static function minLength(): int
++    {
++        $min = (int) env('PASSWORD_MIN_LENGTH', 10);
++        return max(8, $min);
++    }
++
++    /**
++     * Check a candidate password against the policy. Returns null when it is
++     * fine, or a plain, ready-to-show message explaining what to change. Pass the
++     * email and phone so a password cannot simply repeat them.
++     */
++    public static function policyError(string $plain, string $email = '', string $phone = ''): ?string
++    {
++        $min = self::minLength();
++
++        if (mb_strlen($plain) < $min) {
++            return 'Use at least ' . $min . ' characters.';
++        }
++        if (strlen($plain) > 72) {
++            return 'That password is too long. Use at most 72 characters.';
++        }
++
++        $lower = strtolower(trim($plain));
++        if ($lower === '' ) {
++            return 'Use at least ' . $min . ' characters.';
++        }
++        if (in_array($lower, self::COMMON, true)) {
++            return 'That password is too common. Pick something harder to guess.';
++        }
++        if ($email !== '' && $lower === strtolower(trim($email))) {
++            return 'Your password cannot be your email address.';
++        }
++        if ($phone !== '' && $lower === strtolower(trim($phone))) {
++            return 'Your password cannot be your phone number.';
++        }
++        return null;
++    }
++
++    /** True if the password passes the policy. */
++    public static function isAcceptable(string $plain, string $email = '', string $phone = ''): bool
++    {
++        return self::policyError($plain, $email, $phone) === null;
++    }
++
++    /** bcrypt cost from .env, clamped to a sane range. */
++    private static function cost(): int
++    {
++        $cost = (int) env('BCRYPT_COST', 12);
++        if ($cost < 10) { $cost = 10; }
++        if ($cost > 14) { $cost = 14; }
++        return $cost;
++    }
++}
+diff --git a/includes/classes/RateLimiter.php b/includes/classes/RateLimiter.php
+index df74a37..29da965 100644
+--- a/includes/classes/RateLimiter.php
++++ b/includes/classes/RateLimiter.php
+@@ -53,6 +53,25 @@ final class RateLimiter
+         Database::run('DELETE FROM rate_limits WHERE bucket = :b', [':b' => $bucket]);
+     }
+ 
++    /** True if the bucket has reached its limit for the current window. */
++    public static function isLocked(string $bucket, int $maxHits): bool
++    {
++        return self::count($bucket) >= $maxHits;
++    }
++
++    /** Seconds until the current window expires, for a Retry-After header. */
++    public static function retryAfter(string $bucket): int
++    {
++        $row = Database::one(
++            'SELECT expires_at FROM rate_limits WHERE bucket = :b AND expires_at >= :now',
++            [':b' => $bucket, ':now' => date('Y-m-d H:i:s')]
++        );
++        if (!$row) {
++            return 0;
++        }
++        return max(0, strtotime($row['expires_at']) - time());
++    }
++
+     /** Housekeeping: drop expired windows. Call from a cron. */
+     public static function gc(): int
+     {
+diff --git a/includes/functions/helpers.php b/includes/functions/helpers.php
+index 8124ce8..48be314 100644
+--- a/includes/functions/helpers.php
++++ b/includes/functions/helpers.php
+@@ -66,6 +66,14 @@ if (!function_exists('okv_action')) {
+     }
+ }
+ 
++if (!function_exists('okv_role_label')) {
++    /** A staff role name shown to people: "owner" becomes "Owner". */
++    function okv_role_label(string $roleName): string
++    {
++        return $roleName === '' ? 'No role' : ucfirst($roleName);
++    }
++}
++
+ if (!function_exists('okv_slug')) {
+     function okv_slug(string $text): string
+     {
+-- 
+2.43.0
+
+
+From 3437a6a38894443ab0ee907ce851921c37988be6 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 27 Aug 2026 11:42:55 +0000
+Subject: [PATCH 2/5] M1: staff sign in, sign out and password change
+
+Build api/v1/auth.php actions login, logout and change_password. Login
+validates CSRF, rate limits by IP and by identifier, treats the identifier as
+email when it contains "@" else phone, verifies against users.password_hash,
+checks the account is active, regenerates the session id, sets the user id,
+loads the RBAC set and records last_login_at, then returns a JSON redirect to
+/admin for staff. A plain form post gets a real redirect, so it works without
+JavaScript. An unknown identifier costs the same time as a real one, and no
+exception ever reaches the client.
+
+Wire admin/login.php with assets/js/auth.js (progressive enhancement, inline
+errors, no-JS fallback).
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WtPSCHa384VpAoViRVU3Z7
+---
+ admin/login.php       |  34 ++++---
+ api/v1/auth.php       | 200 ++++++++++++++++++++++++++++++++++++++++--
+ assets/js/auth.js     |  69 +++++++++++++++
+ assets/js/auth.min.js |   1 +
+ 4 files changed, 285 insertions(+), 19 deletions(-)
+ create mode 100644 assets/js/auth.js
+ create mode 100644 assets/js/auth.min.js
+
+diff --git a/admin/login.php b/admin/login.php
+index d55c35d..15a26b1 100644
+--- a/admin/login.php
++++ b/admin/login.php
+@@ -3,8 +3,9 @@
+  * admin/login.php
+  * OK Veggies staff sign in. The Owner and Manager enter here. The credential is
+  * the phone number or the email address, plus a password. The form posts to
+- * api/v1/auth.php (built in milestone M1). This page renders now so the flow and
+- * the design are in place.
++ * api/v1/auth.php. With JavaScript it posts by fetch and shows any error in
++ * place; without JavaScript the server sends a plain redirect back here with a
++ * short marker. Either way the person only ever sees a plain message.
+  */
+ require_once __DIR__ . '/../includes/bootstrap.php';
+ 
+@@ -12,7 +13,21 @@ require_once __DIR__ . '/../includes/bootstrap.php';
+ if (Rbac::isLoggedIn() && Rbac::isStaff()) {
+     okv_redirect('/admin/');
+ }
+-$error = $_GET['error'] ?? '';
++
++// The no-JS redirect path lands back here with ?error=<code>. Map each code to a
++// plain message. Anything unexpected falls back to the general one.
++$errorMessages = [
++    'invalid_credentials' => 'We could not sign you in. Check your details and try again.',
++    'inactive'            => 'This account is not active. Ask the owner to switch it back on.',
++    'rate_limited'        => 'Too many tries. Wait a few minutes and try again.',
++    'missing_fields'      => 'Enter your phone or email and your password.',
++    'csrf_expired'        => 'Your session expired. Reload the page and try again.',
++    'expired'             => 'Your session expired. Reload the page and try again.',
++];
++$errorCode = (string) ($_GET['error'] ?? '');
++$errorText = $errorCode !== ''
++    ? ($errorMessages[$errorCode] ?? 'We could not sign you in. Check your details and try again.')
++    : '';
+ ?><!doctype html>
+ <html lang="en">
+ <head>
+@@ -26,15 +41,13 @@ $error = $_GET['error'] ?? '';
+     <p class="text-center uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
+     <h1 class="text-center font-display font-extrabold text-2xl text-ink mt-1">Staff sign in</h1>
+ 
+-    <?php if ($error): ?>
+-      <div role="alert" class="mt-5 rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3">
+-        We could not sign you in. Check your details and try again.
+-      </div>
+-    <?php endif; ?>
+-
+-    <form action="/api/v1/auth.php" method="POST" class="mt-6 space-y-4" autocomplete="on">
++    <form action="/api/v1/auth.php" method="POST" class="mt-6 space-y-4" autocomplete="on" data-okv-auth id="okv-login-form">
+       <?= Csrf::field() ?>
+       <input type="hidden" name="action" value="login">
++
++      <div data-okv-error role="alert" aria-live="polite"
++           class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3"<?= $errorText === '' ? ' hidden' : '' ?>><?= okv_e($errorText) ?></div>
++
+       <div>
+         <label for="identifier" class="okv-label">Phone number or email</label>
+         <input id="identifier" name="identifier" type="text" required autofocus autocomplete="username"
+@@ -50,5 +63,6 @@ $error = $_GET['error'] ?? '';
+ 
+     <p class="mt-6 text-center text-xs text-ink-40">Forgot your password? Ask the owner to set a new one for you.</p>
+   </div>
++  <script src="<?= okv_e(okv_asset('/assets/js/auth.js')) ?>" defer></script>
+ </body>
+ </html>
+diff --git a/api/v1/auth.php b/api/v1/auth.php
+index de23854..195fde3 100644
+--- a/api/v1/auth.php
++++ b/api/v1/auth.php
+@@ -1,16 +1,198 @@
+ <?php
+ /**
+  * api/v1/auth.php
+- * OK Veggies. Sign in and out; loads the RBAC session.
+- * Status: scaffold placeholder. Build in milestone M1. See docs/PRD.md Section 10.
+- * Before writing logic here: read the PRD section, then ask at least five
+- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
++ * -----------------------------------------------------------------------------
++ * OK Veggies. Staff sign in and out, and the signed-in password change.
++ * Built in milestone M1. See docs/PRD.md Section 10 and CLAUDE.md.
++ *
++ * Actions (all POST, all CSRF checked):
++ *   login            phone or email plus password. Rate limited by IP and by
++ *                    identifier. On success it regenerates the session id, loads
++ *                    the RBAC set, and returns where to go next.
++ *   logout           destroys the session.
++ *   change_password  a signed-in staff member sets a new password for themselves.
++ *
++ * The login form works with or without JavaScript. A fetch request (the normal
++ * path) gets JSON with a redirect field. A plain form post gets a real 302, so
++ * the page still works if the script does not load. We never put an exception
++ * message in front of the person; the log carries the detail.
++ * -----------------------------------------------------------------------------
+  */
+ require_once __DIR__ . '/../../includes/bootstrap.php';
+-header('Content-Type: application/json; charset=utf-8');
+ 
+-// Public endpoint. Validate CSRF, rate-limit by IP, verify credentials (phone or email + password).
+-// $action = okv_action();
+-// switch ($action) { ... }  gate each action with Rbac::requirePermission or a customer auth check
++/** A constant hash so an unknown identifier costs the same time as a real one. */
++const AUTH_DUMMY_HASH = '$2y$12$t/krnpkJ.HCVfo4qoNCEB.EDDOIhAn8YSk2kUHTHM2yb8w517ZEcS';
+ 
+-okv_json(['status' => 'error', 'code' => 'not_implemented', 'message' => 'This endpoint is scaffolded and not built yet.'], 501);
++if (!function_exists('auth_wants_json')) {
++    /** True when the caller is a fetch or an API client, not a plain form post. */
++    function auth_wants_json(): bool
++    {
++        // Any XHR marker (our OKV.fetch sends "fetch", others send
++        // "xmlhttprequest"), or an explicit JSON Accept, means a script client.
++        $xrw    = trim($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '');
++        $accept = strtolower($_SERVER['HTTP_ACCEPT'] ?? '');
++        return $xrw !== '' || strpos($accept, 'application/json') !== false;
++    }
++}
++
++if (!function_exists('auth_client_ip')) {
++    /** The connecting address. REMOTE_ADDR only, because it cannot be spoofed. */
++    function auth_client_ip(): string
++    {
++        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
++        return is_string($ip) && $ip !== '' ? $ip : '0.0.0.0';
++    }
++}
++
++if (!function_exists('auth_respond')) {
++    /**
++     * Answer the caller. JSON for a fetch, a redirect for a plain form post.
++     * $extra can carry a JSON payload (for example the login redirect target).
++     */
++    function auth_respond(bool $ok, string $message, int $code, string $errorCode, string $redirect, array $extra = []): void
++    {
++        if (auth_wants_json()) {
++            $payload = $ok
++                ? (['status' => 'ok', 'message' => $message] + $extra)
++                : ['status' => 'error', 'code' => $errorCode, 'message' => $message];
++            okv_json($payload, $code);
++        }
++        // No-JS fallback: a real redirect. On success go to the target; on
++        // failure go back to the form with a short, non-revealing marker.
++        $to = $ok ? $redirect : $redirect . (strpos($redirect, '?') === false ? '?' : '&') . 'error=' . rawurlencode($errorCode);
++        okv_redirect($to);
++    }
++}
++
++$action = okv_action();
++
++// Only these actions exist here, and every one is a state change.
++if (!in_array($action, ['login', 'logout', 'change_password'], true)) {
++    okv_error('This action is not available.', 400, 'unknown_action');
++}
++if (!okv_is_post()) {
++    okv_error('Use POST for this action.', 405, 'method_not_allowed');
++}
++if (!Csrf::validate()) {
++    $back = $action === 'change_password' ? '/admin/account.php' : '/admin/login.php';
++    auth_respond(false, 'Your session expired. Reload the page and try again.', 419, 'csrf_expired', $back);
++}
++
++switch ($action) {
++
++    case 'login': {
++        $identifier = trim((string) okv_input('identifier', ''));
++        $password   = (string) okv_input('password', '');
++
++        if ($identifier === '' || $password === '') {
++            auth_respond(false, 'Enter your phone or email and your password.', 422, 'missing_fields', '/admin/login.php');
++        }
++
++        // Throttle by IP and by identifier. Read the window and limits from .env.
++        $ip        = auth_client_ip();
++        $window    = (int) env('LOGIN_WINDOW_SECONDS', 900);
++        $maxId     = (int) env('LOGIN_MAX_PER_IDENTIFIER', 5);
++        $maxIp     = (int) env('LOGIN_MAX_PER_IP', 20);
++        $ipBucket  = 'login:ip:' . $ip;
++        $idBucket  = 'login:id:' . sha1(strtolower($identifier)); // hashed: bounded and not the raw email
++
++        if (RateLimiter::isLocked($idBucket, $maxId) || RateLimiter::isLocked($ipBucket, $maxIp)) {
++            $wait = max(RateLimiter::retryAfter($idBucket), RateLimiter::retryAfter($ipBucket));
++            if ($wait > 0 && auth_wants_json()) {
++                header('Retry-After: ' . $wait);
++            }
++            auth_respond(false, 'Too many tries. Wait a few minutes and try again.', 429, 'rate_limited', '/admin/login.php');
++        }
++
++        // Look the person up by email when the identifier has an "@", else phone.
++        $byEmail = strpos($identifier, '@') !== false;
++        $user = Database::one(
++            'SELECT id, password_hash, status FROM users WHERE ' . ($byEmail ? 'email' : 'phone') . ' = :v LIMIT 1',
++            [':v' => $identifier]
++        );
++
++        $hash  = $user['password_hash'] ?? AUTH_DUMMY_HASH;
++        $valid = Password::verify($password, $hash); // runs even with no user, for constant time
++
++        if (!$user || !$valid) {
++            // Count this failed attempt against both buckets.
++            RateLimiter::hit($idBucket, $maxId, $window);
++            RateLimiter::hit($ipBucket, $maxIp, $window);
++            auth_respond(false, 'We could not sign you in. Check your details and try again.', 401, 'invalid_credentials', '/admin/login.php');
++        }
++
++        if (($user['status'] ?? '') !== 'active') {
++            auth_respond(false, 'This account is not active. Ask the owner to switch it back on.', 403, 'inactive', '/admin/login.php');
++        }
++
++        // Success. Clear the identifier counter, keep the IP counter as a signal.
++        RateLimiter::reset($idBucket);
++
++        // Harden the session: a brand new id, old one deleted.
++        session_regenerate_id(true);
++        $_SESSION['user_id'] = (int) $user['id'];
++        Rbac::loadFromDb((int) $user['id']);
++
++        try {
++            Database::run('UPDATE users SET last_login_at = NOW() WHERE id = :id', [':id' => (int) $user['id']]);
++        } catch (Throwable $e) {
++            error_log('login: last_login_at update failed: ' . $e->getMessage());
++        }
++
++        $dest = Rbac::isStaff() ? '/admin' : '/';
++        auth_respond(true, 'Signed in.', 200, '', $dest, ['redirect' => $dest]);
++        break;
++    }
++
++    case 'logout': {
++        // Validate CSRF (done above), then tear the session down completely.
++        $_SESSION = [];
++        if (ini_get('session.use_cookies')) {
++            $p = session_get_cookie_params();
++            setcookie(session_name(), '', [
++                'expires'  => time() - 42000,
++                'path'     => $p['path'],
++                'domain'   => $p['domain'],
++                'secure'   => $p['secure'],
++                'httponly' => $p['httponly'],
++                'samesite' => $p['samesite'] ?? 'Lax',
++            ]);
++        }
++        session_destroy();
++        auth_respond(true, 'Signed out.', 200, '', '/admin/login.php', ['redirect' => '/admin/login.php']);
++        break;
++    }
++
++    case 'change_password': {
++        // Must be a signed-in staff member changing their own password.
++        if (!Rbac::isLoggedIn() || !Rbac::isStaff()) {
++            auth_respond(false, 'Please sign in first.', 401, 'unauthenticated', '/admin/login.php');
++        }
++
++        $current = (string) okv_input('current_password', '');
++        $new     = (string) okv_input('new_password', '');
++        $confirm = (string) okv_input('confirm_password', '');
++        $userId  = (int) Rbac::userId();
++
++        $row = Database::one('SELECT email, phone, password_hash FROM users WHERE id = :id', [':id' => $userId]);
++        if (!$row) {
++            auth_respond(false, 'Please sign in first.', 401, 'unauthenticated', '/admin/login.php');
++        }
++        if (!Password::verify($current, $row['password_hash'] ?? '')) {
++            auth_respond(false, 'Your current password is not right.', 403, 'wrong_current', '/admin/account.php');
++        }
++        if ($new !== $confirm) {
++            auth_respond(false, 'The two new passwords do not match.', 422, 'mismatch', '/admin/account.php');
++        }
++        $policy = Password::policyError($new, (string) $row['email'], (string) $row['phone']);
++        if ($policy !== null) {
++            auth_respond(false, $policy, 422, 'weak_password', '/admin/account.php');
++        }
++
++        Database::run('UPDATE users SET password_hash = :h WHERE id = :id', [':h' => Password::hash($new), ':id' => $userId]);
++        session_regenerate_id(true); // fresh id after a credential change
++
++        auth_respond(true, 'Your password is changed.', 200, '', '/admin/account.php?changed=1', ['redirect' => '/admin/account.php?changed=1']);
++        break;
++    }
++}
+diff --git a/assets/js/auth.js b/assets/js/auth.js
+new file mode 100644
+index 0000000..e52a813
+--- /dev/null
++++ b/assets/js/auth.js
+@@ -0,0 +1,69 @@
++/**
++ * assets/js/auth.js
++ * OK Veggies. Progressive enhancement for the staff sign-in and password-change
++ * forms. Vanilla JS, no dependencies. Every form it touches also works without
++ * JavaScript: the server answers a plain post with a redirect.
++ *
++ * Mark up a form with data-okv-auth, give it a [data-okv-error] container, and
++ * this script posts it with fetch, shows a plain error inline on failure, and
++ * follows the redirect field on success.
++ */
++(function () {
++  'use strict';
++
++  function ready(fn) {
++    if (document.readyState !== 'loading') { fn(); }
++    else { document.addEventListener('DOMContentLoaded', fn); }
++  }
++
++  function setError(form, message) {
++    var box = form.querySelector('[data-okv-error]');
++    if (box) {
++      box.textContent = message;
++      box.hidden = false;
++    }
++  }
++
++  function clearError(form) {
++    var box = form.querySelector('[data-okv-error]');
++    if (box) { box.hidden = true; box.textContent = ''; }
++  }
++
++  function enhance(form) {
++    form.addEventListener('submit', function (event) {
++      event.preventDefault();
++      clearError(form);
++
++      var button = form.querySelector('button[type="submit"], button:not([type])');
++      if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
++
++      function release() {
++        if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
++      }
++
++      fetch(form.getAttribute('action'), {
++        method: 'POST',
++        credentials: 'same-origin',
++        headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' },
++        body: new URLSearchParams(new FormData(form))
++      }).then(function (res) {
++        return res.json().catch(function () { return {}; }).then(function (data) {
++          if (res.ok && data && data.status === 'ok') {
++            window.location.assign(data.redirect || '/admin/');
++            return;
++          }
++          setError(form, (data && data.message) || 'Something went wrong. Please try again.');
++          release();
++        });
++      }).catch(function () {
++        setError(form, 'We could not reach the server. Check your connection and try again.');
++        release();
++      });
++    });
++  }
++
++  ready(function () {
++    var forms = document.querySelectorAll('form[data-okv-auth]');
++    for (var i = 0; i < forms.length; i++) { enhance(forms[i]); }
++  });
++})();
+diff --git a/assets/js/auth.min.js b/assets/js/auth.min.js
+new file mode 100644
+index 0000000..0f3499a
+--- /dev/null
++++ b/assets/js/auth.min.js
+@@ -0,0 +1 @@
++(function(){"use strict";function u(e){document.readyState!=="loading"?e():document.addEventListener("DOMContentLoaded",e)}function o(e,t){var n=e.querySelector("[data-okv-error]");n&&(n.textContent=t,n.hidden=!1)}function c(e){var t=e.querySelector("[data-okv-error]");t&&(t.hidden=!0,t.textContent="")}function s(e){e.addEventListener("submit",function(t){t.preventDefault(),c(e);var n=e.querySelector('button[type="submit"], button:not([type])');n&&(n.disabled=!0,n.setAttribute("aria-busy","true"));function a(){n&&(n.disabled=!1,n.removeAttribute("aria-busy"))}fetch(e.getAttribute("action"),{method:"POST",credentials:"same-origin",headers:{"X-Requested-With":"fetch",Accept:"application/json"},body:new URLSearchParams(new FormData(e))}).then(function(i){return i.json().catch(function(){return{}}).then(function(r){if(i.ok&&r&&r.status==="ok"){window.location.assign(r.redirect||"/admin/");return}o(e,r&&r.message||"Something went wrong. Please try again."),a()})}).catch(function(){o(e,"We could not reach the server. Check your connection and try again."),a()})})}u(function(){for(var e=document.querySelectorAll("form[data-okv-auth]"),t=0;t<e.length;t++)s(e[t])})})();
+-- 
+2.43.0
+
+
+From 7aa093f61f2f38c4190385434f4c7cdb543d96f9 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 27 Aug 2026 11:42:55 +0000
+Subject: [PATCH 3/5] M1: token-guarded first-Owner setup endpoint
+
+Add public/setup.php, a one-time first-Owner creator for the shell-less host.
+Same fail-closed 404 guard shape as public/migrate.php: 404 when SETUP_TOKEN is
+unset or wrong, CSRF checked on the POST, creates the first Owner only when no
+staff user exists and refuses once one does. Document SETUP_TOKEN and the login
+and password tunables in .env.example.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WtPSCHa384VpAoViRVU3Z7
+---
+ .env.example     |  16 ++++
+ public/setup.php | 205 +++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 221 insertions(+)
+ create mode 100644 public/setup.php
+
+diff --git a/.env.example b/.env.example
+index a82473e..e6fe17d 100644
+--- a/.env.example
++++ b/.env.example
+@@ -31,11 +31,27 @@ CSRF_TOKEN_LENGTH=32
+ # Generate once: openssl rand -base64 32
+ APP_ENCRYPTION_KEY=
+ 
++# Password policy (Password helper). Length carries the weight, so we do not
++# force a character mix. A minimum of 8 is enforced in code even if set lower.
++PASSWORD_MIN_LENGTH=10
++
++# Login throttling (RateLimiter), by identifier and by IP, over a window in
++# seconds. A locked attempt is refused even with the right password.
++LOGIN_MAX_PER_IDENTIFIER=5
++LOGIN_MAX_PER_IP=20
++LOGIN_WINDOW_SECONDS=900
++
+ # Secret for the web migration runner (public/migrate.php) on shell-less hosting.
+ # The deploy workflow sends this to apply migrations after an upload.
+ # Generate a strong value: openssl rand -hex 32
+ MIGRATE_TOKEN=
+ 
++# One-time secret for the first-Owner setup page (public/setup.php) on shell-less
++# hosting. Set it, create the Owner at /public/setup.php?token=... , then REMOVE
++# this line. The page also refuses the moment any staff user exists.
++# Generate a strong value: openssl rand -hex 32
++SETUP_TOKEN=
++
+ # --- SMTP EMAIL (order confirmations, activation codes) ----------------------
+ SMTP_HOST=mail.okveggies.com.ng
+ SMTP_PORT=465
+diff --git a/public/setup.php b/public/setup.php
+new file mode 100644
+index 0000000..1fd5b5a
+--- /dev/null
++++ b/public/setup.php
+@@ -0,0 +1,205 @@
++<?php
++/**
++ * public/setup.php
++ * -----------------------------------------------------------------------------
++ * OK Veggies. One-time first-Owner setup, for a shell-less host. It creates the
++ * very first staff account (the Owner) so there is someone to sign in as. After
++ * that it closes itself.
++ *
++ * Same guard shape as public/migrate.php:
++ *   - Fails closed: if SETUP_TOKEN is not set in .env, this returns 404.
++ *   - A wrong or missing token returns 404, so it does not reveal it exists.
++ *   - The token is compared with hash_equals.
++ *   - It refuses the moment any staff user exists, so it cannot be used twice.
++ *   - The POST is CSRF checked as well.
++ *
++ * Set a strong SETUP_TOKEN in the server .env (openssl rand -hex 32), create the
++ * Owner, then remove SETUP_TOKEN from .env. No exception is ever shown here; the
++ * log carries the detail.
++ * -----------------------------------------------------------------------------
++ */
++require_once __DIR__ . '/../includes/bootstrap.php';
++header('X-Robots-Tag: noindex');
++
++// --- Token guard. Fail closed. ----------------------------------------------
++$expected = (string) env('SETUP_TOKEN', '');
++$given    = $_SERVER['HTTP_X_SETUP_TOKEN'] ?? ($_POST['token'] ?? ($_GET['token'] ?? ''));
++if ($expected === '' || !is_string($given) || $given === '' || !hash_equals($expected, $given)) {
++    http_response_code(404);
++    echo 'Not found.';
++    exit;
++}
++
++/** True if any staff user already exists (by role or by type). */
++function okv_setup_staff_exists(): bool
++{
++    $roleRows = Database::one('SELECT COUNT(*) AS c FROM user_roles');
++    $staffRows = Database::one('SELECT COUNT(*) AS c FROM users WHERE user_type = :t', [':t' => 'staff']);
++    return ((int) ($roleRows['c'] ?? 0) > 0) || ((int) ($staffRows['c'] ?? 0) > 0);
++}
++
++/** Render a small branded page and stop. */
++function okv_setup_page(string $title, string $bodyHtml, int $code = 200): void
++{
++    http_response_code($code);
++    $cssHref = okv_asset('/assets/css/tailwind.css');
++    echo '<!doctype html><html lang="en"><head><meta charset="utf-8">'
++       . '<meta name="viewport" content="width=device-width, initial-scale=1">'
++       . '<title>' . okv_e($title) . ' . OK Veggies</title>'
++       . '<link rel="stylesheet" href="' . okv_e($cssHref) . '"></head>'
++       . '<body class="min-h-screen bg-forest flex items-center justify-center p-4">'
++       . '<div class="w-full max-w-md bg-white rounded-lg shadow-okv-3 p-8">'
++       . '<p class="text-center uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>'
++       . $bodyHtml
++       . '</div></body></html>';
++    exit;
++}
++
++try {
++    // Already set up? Say so and point at sign in. Never create a second Owner.
++    if (okv_setup_staff_exists()) {
++        okv_setup_page(
++            'Setup complete',
++            '<h1 class="text-center font-display font-extrabold text-2xl text-ink mt-1">Setup is already done</h1>'
++          . '<p class="text-ink-60 text-sm mt-3 text-center">A staff account already exists, so this page is closed. '
++          . 'Please remove SETUP_TOKEN from your server .env.</p>'
++          . '<a href="/admin/login.php" class="okv-btn w-full mt-6 text-center">Go to sign in</a>',
++            409
++        );
++    }
++
++    $errors = [];
++    $values = ['first_name' => '', 'last_name' => '', 'email' => '', 'phone' => ''];
++
++    if (okv_is_post()) {
++        if (!Csrf::validate()) {
++            $errors[] = 'Your session expired. Reload the page and try again.';
++        }
++        $values['first_name'] = trim((string) okv_input('first_name', ''));
++        $values['last_name']  = trim((string) okv_input('last_name', ''));
++        $values['email']      = trim((string) okv_input('email', ''));
++        $values['phone']      = trim((string) okv_input('phone', ''));
++        $password             = (string) okv_input('password', '');
++        $confirm              = (string) okv_input('confirm_password', '');
++
++        if ($values['first_name'] === '' || $values['last_name'] === '') {
++            $errors[] = 'Enter the first and last name.';
++        }
++        if (!filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
++            $errors[] = 'Enter a valid email address.';
++        }
++        if ($values['phone'] === '' || strlen(preg_replace('/[^0-9]/', '', $values['phone'])) < 7) {
++            $errors[] = 'Enter a valid phone number.';
++        }
++        if ($password !== $confirm) {
++            $errors[] = 'The two passwords do not match.';
++        }
++        $policy = Password::policyError($password, $values['email'], $values['phone']);
++        if ($policy !== null) {
++            $errors[] = $policy;
++        }
++        if (!$errors) {
++            $clash = Database::one(
++                'SELECT id FROM users WHERE email = :e OR phone = :p LIMIT 1',
++                [':e' => $values['email'], ':p' => $values['phone']]
++            );
++            if ($clash) {
++                $errors[] = 'That email or phone is already in use.';
++            }
++        }
++
++        if (!$errors) {
++            $pdo = Database::getInstance()->getConnection();
++            try {
++                $pdo->beginTransaction();
++                $pdo->prepare(
++                    'INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status, email_verified_at)
++                     VALUES (:fn, :ln, :em, :ph, :pw, :ut, :st, NOW())'
++                )->execute([
++                    ':fn' => $values['first_name'],
++                    ':ln' => $values['last_name'],
++                    ':em' => $values['email'],
++                    ':ph' => $values['phone'],
++                    ':pw' => Password::hash($password),
++                    ':ut' => 'staff',
++                    ':st' => 'active',
++                ]);
++                $userId = (int) $pdo->lastInsertId();
++
++                $role = Database::one('SELECT id FROM roles WHERE name = :n', [':n' => 'owner']);
++                if (!$role) {
++                    throw new RuntimeException('Owner role missing. Run the migrations first.');
++                }
++                // The very first Owner has no one to have assigned them.
++                $pdo->prepare('INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES (:u, :r, NULL)')
++                    ->execute([':u' => $userId, ':r' => (int) $role['id']]);
++
++                $pdo->commit();
++            } catch (Throwable $e) {
++                if ($pdo->inTransaction()) {
++                    $pdo->rollBack();
++                }
++                error_log('setup: owner create failed: ' . $e->getMessage());
++                okv_setup_page(
++                    'Setup',
++                    '<h1 class="text-center font-display font-extrabold text-2xl text-ink mt-1">We could not finish</h1>'
++                  . '<p class="text-ink-60 text-sm mt-3 text-center">Something went wrong while creating the account. '
++                  . 'Please check the server log and try again.</p>'
++                  . '<a href="/public/setup.php?token=' . okv_e(rawurlencode($given)) . '" class="okv-btn w-full mt-6 text-center">Back to setup</a>',
++                    500
++                );
++            }
++
++            okv_setup_page(
++                'Setup complete',
++                '<h1 class="text-center font-display font-extrabold text-2xl text-ink mt-1">Owner account created</h1>'
++              . '<p class="text-ink-60 text-sm mt-3 text-center">You can sign in now. For safety, remove SETUP_TOKEN from your '
++              . 'server .env so this page can never run again.</p>'
++              . '<a href="/admin/login.php" class="okv-btn w-full mt-6 text-center">Go to sign in</a>'
++            );
++        }
++    }
++
++    // Render the form (first load, or after a validation error).
++    $errorHtml = '';
++    if ($errors) {
++        $items = '';
++        foreach ($errors as $e) {
++            $items .= '<li>' . okv_e($e) . '</li>';
++        }
++        $errorHtml = '<div role="alert" class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3 mt-5">'
++                   . '<ul class="list-disc pl-5 space-y-1">' . $items . '</ul></div>';
++    }
++
++    okv_setup_page(
++        'First-time setup',
++        '<h1 class="text-center font-display font-extrabold text-2xl text-ink mt-1">Create the Owner</h1>'
++      . '<p class="text-ink-60 text-sm mt-2 text-center">This runs once, to make the first staff account.</p>'
++      . $errorHtml
++      . '<form method="POST" action="/public/setup.php" class="mt-6 space-y-4" autocomplete="off">'
++      . Csrf::field()
++      . '<input type="hidden" name="token" value="' . okv_e($given) . '">'
++      . '<div class="grid grid-cols-2 gap-4">'
++      . '<div><label for="first_name" class="okv-label">First name</label>'
++      . '<input id="first_name" name="first_name" type="text" required class="okv-input" value="' . okv_e($values['first_name']) . '"></div>'
++      . '<div><label for="last_name" class="okv-label">Last name</label>'
++      . '<input id="last_name" name="last_name" type="text" required class="okv-input" value="' . okv_e($values['last_name']) . '"></div>'
++      . '</div>'
++      . '<div><label for="email" class="okv-label">Email</label>'
++      . '<input id="email" name="email" type="email" required class="okv-input" value="' . okv_e($values['email']) . '"></div>'
++      . '<div><label for="phone" class="okv-label">Phone number</label>'
++      . '<input id="phone" name="phone" type="text" required class="okv-input" value="' . okv_e($values['phone']) . '"></div>'
++      . '<div><label for="password" class="okv-label">Password</label>'
++      . '<input id="password" name="password" type="password" required autocomplete="new-password" class="okv-input"></div>'
++      . '<div><label for="confirm_password" class="okv-label">Confirm password</label>'
++      . '<input id="confirm_password" name="confirm_password" type="password" required autocomplete="new-password" class="okv-input"></div>'
++      . '<button type="submit" class="okv-btn w-full">Create the Owner account</button>'
++      . '</form>'
++    );
++
++} catch (Throwable $e) {
++    error_log('setup: ' . $e->getMessage());
++    http_response_code(500);
++    echo 'Configuration error. Please check the server log.';
++    exit;
++}
+-- 
+2.43.0
+
+
+From 7ad0886c9786ef6d537b24f44d0dcb34893ad3ac Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 27 Aug 2026 11:42:55 +0000
+Subject: [PATCH 4/5] M1: staff management and the admin shell
+
+Add api/v1/users.php (list, create, set or reset password, switch on or off,
+set role) gated by users.*, and api/v1/rbac.php (list_roles) gated by
+rbac.roles.view. Build admin/users.php (Owner only, how the Owner creates the
+Manager), admin/account.php (a staff member changes their own password), the
+shared admin shell (header.php, footer.php) and the permission-gated sidebar
+(renders nav.php, hides what the user cannot reach, carries a CSRF sign out).
+Give admin/index.php the real shell so the dashboard renders. Staff carry
+user_type = staff plus a role. Rebuild tailwind.css and the minified JS.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WtPSCHa384VpAoViRVU3Z7
+---
+ admin/account.php                     |  75 +++++++++
+ admin/index.php                       |  47 ++++--
+ admin/users.php                       | 160 ++++++++++++++++--
+ api/v1/rbac.php                       |  34 +++-
+ api/v1/users.php                      | 231 ++++++++++++++++++++++++++
+ assets/css/tailwind.css               |   2 +-
+ assets/js/admin-users.js              |  65 ++++++++
+ assets/js/admin-users.min.js          |   1 +
+ includes/components/admin/footer.php  |  38 +++++
+ includes/components/admin/header.php  |  39 +++++
+ includes/components/admin/sidebar.php |  99 ++++++++++-
+ scripts/build-js.mjs                  |   7 +-
+ 12 files changed, 753 insertions(+), 45 deletions(-)
+ create mode 100644 admin/account.php
+ create mode 100644 api/v1/users.php
+ create mode 100644 assets/js/admin-users.js
+ create mode 100644 assets/js/admin-users.min.js
+ create mode 100644 includes/components/admin/footer.php
+ create mode 100644 includes/components/admin/header.php
+
+diff --git a/admin/account.php b/admin/account.php
+new file mode 100644
+index 0000000..a835999
+--- /dev/null
++++ b/admin/account.php
+@@ -0,0 +1,75 @@
++<?php
++/**
++ * admin/account.php
++ * OK Veggies. A signed-in staff member's own account: their details and a
++ * change-password form. Any staff role can reach this; the Owner resets other
++ * people's passwords in Users and Roles. See docs/PRD.md Section 10.
++ */
++require_once __DIR__ . '/../includes/bootstrap.php';
++Rbac::requireAuth();
++
++$me = Database::one('SELECT first_name, last_name, email, phone FROM users WHERE id = :id', [':id' => (int) Rbac::userId()]);
++$fullName  = trim(((string) ($me['first_name'] ?? '')) . ' ' . ((string) ($me['last_name'] ?? '')));
++$roleLabel = in_array('owner', Rbac::roles(), true) ? 'Owner' : (in_array('manager', Rbac::roles(), true) ? 'Manager' : 'Staff');
++
++$changed = isset($_GET['changed']);
++$errorMessages = [
++    'wrong_current' => 'Your current password is not right.',
++    'mismatch'      => 'The two new passwords do not match.',
++    'weak_password' => 'Please choose a stronger password.',
++    'csrf_expired'  => 'Your session expired. Reload the page and try again.',
++];
++$errorCode = (string) ($_GET['error'] ?? '');
++$errorText = $errorCode !== '' ? ($errorMessages[$errorCode] ?? 'We could not change your password. Try again.') : '';
++
++$okv_admin_title = 'Your account';
++require __DIR__ . '/../includes/components/admin/header.php';
++?>
++  <div class="grid gap-6 lg:grid-cols-2 max-w-4xl">
++
++    <div class="okv-card">
++      <h2 class="font-display font-extrabold text-xl text-ink">Your details</h2>
++      <dl class="mt-4 space-y-3 text-sm">
++        <div class="flex justify-between gap-4"><dt class="text-ink-60">Name</dt><dd class="text-ink font-medium text-right"><?= okv_e($fullName) ?></dd></div>
++        <div class="flex justify-between gap-4"><dt class="text-ink-60">Email</dt><dd class="text-ink font-medium text-right break-all"><?= okv_e($me['email'] ?? '') ?></dd></div>
++        <div class="flex justify-between gap-4"><dt class="text-ink-60">Phone</dt><dd class="text-ink font-medium text-right"><?= okv_e($me['phone'] ?? '') ?></dd></div>
++        <div class="flex justify-between gap-4"><dt class="text-ink-60">Role</dt><dd class="text-ink font-medium text-right"><?= okv_e($roleLabel) ?></dd></div>
++      </dl>
++      <p class="text-xs text-ink-40 mt-4">To change your name, email or phone, ask the Owner in Users and Roles.</p>
++    </div>
++
++    <div class="okv-card">
++      <h2 class="font-display font-extrabold text-xl text-ink">Change your password</h2>
++
++      <?php if ($changed): ?>
++        <div role="status" class="rounded-md bg-foliage-tint text-forest text-sm px-4 py-3 mt-4">Your password is changed.</div>
++      <?php endif; ?>
++
++      <form action="/api/v1/auth.php" method="POST" class="mt-4 space-y-4" data-okv-auth autocomplete="off">
++        <?= Csrf::field() ?>
++        <input type="hidden" name="action" value="change_password">
++
++        <div data-okv-error role="alert" aria-live="polite"
++             class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3"<?= $errorText === '' ? ' hidden' : '' ?>><?= okv_e($errorText) ?></div>
++
++        <div>
++          <label for="current_password" class="okv-label">Current password</label>
++          <input id="current_password" name="current_password" type="password" required autocomplete="current-password" class="okv-input">
++        </div>
++        <div>
++          <label for="new_password" class="okv-label">New password</label>
++          <input id="new_password" name="new_password" type="password" required autocomplete="new-password" class="okv-input">
++          <p class="text-xs text-ink-40 mt-1">At least <?= (int) Password::minLength() ?> characters. Not a common password.</p>
++        </div>
++        <div>
++          <label for="confirm_password" class="okv-label">Confirm new password</label>
++          <input id="confirm_password" name="confirm_password" type="password" required autocomplete="new-password" class="okv-input">
++        </div>
++        <button type="submit" class="okv-btn w-full">Change password</button>
++      </form>
++    </div>
++
++  </div>
++<?php
++$okv_admin_script = '/assets/js/auth.js';
++require __DIR__ . '/../includes/components/admin/footer.php';
+diff --git a/admin/index.php b/admin/index.php
+index 75fc3fc..5445ad0 100644
+--- a/admin/index.php
++++ b/admin/index.php
+@@ -1,23 +1,38 @@
+ <?php
+ /**
+  * admin/index.php
+- * OK Veggies. Today at a glance plus analytics.
+- * Status: scaffold placeholder. Build in milestone M11. See docs/PRD.md Section 17.
+- * Before writing logic here: read the PRD section, then ask at least five
+- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
++ * OK Veggies. The admin home. The full "today at a glance" dashboard with
++ * charts is milestone M11; this milestone gives it the real admin shell so sign
++ * in, roles and the permission-gated navigation are in place and testable.
++ * See docs/PRD.md Section 17.
+  */
+ require_once __DIR__ . '/../includes/bootstrap.php';
+ Rbac::requirePermission('dashboard.view');
++
++$me = Database::one('SELECT first_name FROM users WHERE id = :id', [':id' => (int) Rbac::userId()]);
++$firstName = trim((string) ($me['first_name'] ?? ''));
++
++$okv_admin_title = 'Dashboard';
++require __DIR__ . '/../includes/components/admin/header.php';
+ ?>
+-<!doctype html>
+-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+-<title>Dashboard . OK Veggies</title>
+-<link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
+-<body class="bg-forest-tint min-h-screen">
+-<div class="okv-container py-16">
+-  <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
+-  <h1 class="font-display font-extrabold text-3xl text-ink mt-2">Dashboard</h1>
+-  <p class="text-ink-60 mt-3 max-w-xl">This screen is scaffolded and waiting to be built in milestone M11. The plan for it is in docs/PRD.md Section 17.</p>
+-  <a href="/" class="okv-btn mt-6">Back to the shop</a>
+-</div>
+-</body></html>
++  <div class="okv-card max-w-2xl">
++    <h2 class="font-display font-extrabold text-2xl text-ink">Welcome<?= $firstName !== '' ? ', ' . okv_e($firstName) : '' ?></h2>
++    <p class="text-ink-60 mt-2">You are signed in to the OK Veggies admin panel. The full dashboard, with today's orders, revenue, payments due and the sales charts, arrives in a later milestone. Use the menu to reach what you can manage.</p>
++  </div>
++
++  <div class="grid gap-4 mt-6 sm:grid-cols-2 lg:grid-cols-3">
++    <a href="/admin/orders.php" class="okv-card block" data-perm="orders.view">
++      <p class="font-display font-bold text-ink">Orders</p>
++      <p class="text-sm text-ink-60 mt-1">See and move orders through their stages.</p>
++    </a>
++    <a href="/admin/products.php" class="okv-card block" data-perm="products.view">
++      <p class="font-display font-bold text-ink">Products</p>
++      <p class="text-sm text-ink-60 mt-1">Manage the produce catalogue and prices.</p>
++    </a>
++    <a href="/admin/users.php" class="okv-card block" data-perm="users.view">
++      <p class="font-display font-bold text-ink">Users and Roles</p>
++      <p class="text-sm text-ink-60 mt-1">Add staff and set who can do what.</p>
++    </a>
++  </div>
++<?php
++require __DIR__ . '/../includes/components/admin/footer.php';
+diff --git a/admin/users.php b/admin/users.php
+index c97443e..ec5814d 100644
+--- a/admin/users.php
++++ b/admin/users.php
+@@ -1,23 +1,151 @@
+ <?php
+ /**
+  * admin/users.php
+- * OK Veggies. Staff accounts.
+- * Status: scaffold placeholder. Build in milestone M1. See docs/PRD.md Section 17.
+- * Before writing logic here: read the PRD section, then ask at least five
+- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
++ * OK Veggies. Staff accounts and roles, Owner only. This is where the Owner adds
++ * the Manager, resets a password, switches an account on or off, and sets a
++ * person's role. Every change posts to api/v1/users.php, which re-checks the
++ * users.* and rbac.* permissions on the server. See docs/PRD.md Section 17.
+  */
+ require_once __DIR__ . '/../includes/bootstrap.php';
+ Rbac::requirePermission('users.view');
++
++$meId  = (int) Rbac::userId();
++$roles = Database::all('SELECT id, name, description FROM roles ORDER BY name');
++
++$staff = Database::all(
++    "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.status, u.last_login_at,
++            GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR ',') AS roles
++       FROM users u
++       LEFT JOIN user_roles ur ON ur.user_id = u.id
++       LEFT JOIN roles r ON r.id = ur.role_id
++      WHERE u.user_type = 'staff'
++      GROUP BY u.id
++      ORDER BY u.created_at ASC"
++);
++
++$okv_admin_title = 'Users and Roles';
++require __DIR__ . '/../includes/components/admin/header.php';
+ ?>
+-<!doctype html>
+-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+-<title>Users and Roles . OK Veggies</title>
+-<link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
+-<body class="bg-forest-tint min-h-screen">
+-<div class="okv-container py-16">
+-  <p class="uppercase tracking-[0.2em] text-gold text-xs font-semibold">OK Veggies</p>
+-  <h1 class="font-display font-extrabold text-3xl text-ink mt-2">Users and Roles</h1>
+-  <p class="text-ink-60 mt-3 max-w-xl">This screen is scaffolded and waiting to be built in milestone M1. The plan for it is in docs/PRD.md Section 17.</p>
+-  <a href="/" class="okv-btn mt-6">Back to the shop</a>
+-</div>
+-</body></html>
++  <div class="grid gap-6 lg:grid-cols-3">
++
++    <!-- Add a staff member -->
++    <section class="lg:col-span-1">
++      <div class="okv-card" data-perm="users.create">
++        <h2 class="font-display font-extrabold text-xl text-ink">Add a staff member</h2>
++        <p class="text-sm text-ink-60 mt-1">They can change their own password after they sign in.</p>
++
++        <form action="/api/v1/users.php" method="POST" class="mt-4 space-y-4" data-okv-json autocomplete="off">
++          <?= Csrf::field() ?>
++          <input type="hidden" name="action" value="create">
++
++          <div data-okv-error role="alert" aria-live="polite" class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" hidden></div>
++
++          <div class="grid grid-cols-2 gap-3">
++            <div><label for="first_name" class="okv-label">First name</label>
++              <input id="first_name" name="first_name" type="text" required class="okv-input"></div>
++            <div><label for="last_name" class="okv-label">Last name</label>
++              <input id="last_name" name="last_name" type="text" required class="okv-input"></div>
++          </div>
++          <div><label for="email" class="okv-label">Email</label>
++            <input id="email" name="email" type="email" required class="okv-input"></div>
++          <div><label for="phone" class="okv-label">Phone number</label>
++            <input id="phone" name="phone" type="text" required class="okv-input"></div>
++          <div><label for="role" class="okv-label">Role</label>
++            <select id="role" name="role" required class="okv-input">
++              <?php foreach ($roles as $r): ?>
++                <option value="<?= okv_e($r['name']) ?>"><?= okv_e(okv_role_label($r['name'])) ?></option>
++              <?php endforeach; ?>
++            </select>
++          </div>
++          <div><label for="password" class="okv-label">Starting password</label>
++            <input id="password" name="password" type="text" required autocomplete="off" class="okv-input">
++            <p class="text-xs text-ink-40 mt-1">At least <?= (int) Password::minLength() ?> characters. Give it to them to change later.</p>
++          </div>
++          <button type="submit" class="okv-btn w-full">Add staff member</button>
++        </form>
++      </div>
++    </section>
++
++    <!-- The staff list -->
++    <section class="lg:col-span-2 space-y-4">
++      <h2 class="font-display font-extrabold text-xl text-ink">Staff</h2>
++
++      <?php if (!$staff): ?>
++        <div class="okv-card"><p class="text-ink-60">No staff yet. Add the first person on the left.</p></div>
++      <?php endif; ?>
++
++      <?php foreach ($staff as $s):
++          $id       = (int) $s['id'];
++          $name     = trim(((string) $s['first_name']) . ' ' . ((string) $s['last_name']));
++          $roleName = (string) ($s['roles'] ?? '');
++          $isSelf   = $id === $meId;
++          $isActive = $s['status'] === 'active';
++      ?>
++        <div class="okv-card">
++          <div class="flex flex-wrap items-start justify-between gap-3">
++            <div class="min-w-0">
++              <p class="font-display font-bold text-ink"><?= okv_e($name) ?><?php if ($isSelf): ?> <span class="text-xs text-ink-40 font-sans">(you)</span><?php endif; ?></p>
++              <p class="text-sm text-ink-60 break-all"><?= okv_e($s['email']) ?></p>
++              <p class="text-sm text-ink-60 font-mono"><?= okv_e($s['phone']) ?></p>
++            </div>
++            <div class="text-right shrink-0">
++              <span class="okv-badge <?= $isActive ? 'okv-badge-available' : 'okv-badge-out' ?>"><?= $isActive ? 'Active' : 'Switched off' ?></span>
++              <p class="text-xs text-ink-60 mt-2"><?= okv_e(okv_role_label($roleName)) ?></p>
++              <p class="text-xs text-ink-40 mt-1"><?= $s['last_login_at'] ? 'Last in ' . okv_e((string) $s['last_login_at']) : 'Not signed in yet' ?></p>
++            </div>
++          </div>
++
++          <?php if ($isSelf): ?>
++            <p class="text-sm text-ink-60 mt-4">This is your own account. <a href="/admin/account.php" class="text-forest underline underline-offset-2">Change your password</a>.</p>
++          <?php else: ?>
++            <details class="mt-4 group">
++              <summary class="okv-btn-text text-sm cursor-pointer select-none">Manage</summary>
++              <div class="mt-4 grid gap-4 sm:grid-cols-2">
++
++                <!-- Reset password -->
++                <form action="/api/v1/users.php" method="POST" class="space-y-2" data-okv-json autocomplete="off">
++                  <?= Csrf::field() ?>
++                  <input type="hidden" name="action" value="set_password">
++                  <input type="hidden" name="user_id" value="<?= $id ?>">
++                  <div data-okv-error role="alert" aria-live="polite" class="rounded-md bg-tomato-tint text-tomato text-xs px-3 py-2" hidden></div>
++                  <label class="okv-label" for="pw-<?= $id ?>">New password</label>
++                  <input id="pw-<?= $id ?>" name="new_password" type="text" required class="okv-input" placeholder="At least <?= (int) Password::minLength() ?> characters">
++                  <button type="submit" class="okv-btn-outline w-full">Set password</button>
++                </form>
++
++                <div class="space-y-4">
++                  <!-- Change role -->
++                  <form action="/api/v1/users.php" method="POST" class="space-y-2" data-okv-json>
++                    <?= Csrf::field() ?>
++                    <input type="hidden" name="action" value="set_role">
++                    <input type="hidden" name="user_id" value="<?= $id ?>">
++                    <label class="okv-label" for="role-<?= $id ?>">Role</label>
++                    <select id="role-<?= $id ?>" name="role" class="okv-input">
++                      <?php foreach ($roles as $r): $sel = ($r['name'] === $roleName) ? ' selected' : ''; ?>
++                        <option value="<?= okv_e($r['name']) ?>"<?= $sel ?>><?= okv_e(okv_role_label($r['name'])) ?></option>
++                      <?php endforeach; ?>
++                    </select>
++                    <button type="submit" class="okv-btn-outline w-full">Update role</button>
++                  </form>
++
++                  <!-- Switch on/off -->
++                  <form action="/api/v1/users.php" method="POST" data-okv-json>
++                    <?= Csrf::field() ?>
++                    <input type="hidden" name="action" value="set_status">
++                    <input type="hidden" name="user_id" value="<?= $id ?>">
++                    <input type="hidden" name="status" value="<?= $isActive ? 'disabled' : 'active' ?>">
++                    <button type="submit" class="okv-btn-outline w-full"><?= $isActive ? 'Switch off this account' : 'Switch this account on' ?></button>
++                  </form>
++                </div>
++
++              </div>
++            </details>
++          <?php endif; ?>
++        </div>
++      <?php endforeach; ?>
++    </section>
++
++  </div>
++<?php
++$okv_admin_script = '/assets/js/admin-users.js';
++require __DIR__ . '/../includes/components/admin/footer.php';
+diff --git a/api/v1/rbac.php b/api/v1/rbac.php
+index a4d3937..2b4cfba 100644
+--- a/api/v1/rbac.php
++++ b/api/v1/rbac.php
+@@ -1,16 +1,32 @@
+ <?php
+ /**
+  * api/v1/rbac.php
+- * OK Veggies. Roles and permissions.
+- * Status: scaffold placeholder. Build in milestone M1. See docs/PRD.md Section 17.
+- * Before writing logic here: read the PRD section, then ask at least five
+- * clarifying questions (see CLAUDE.md). No em dash, no jargon, on brand.
++ * -----------------------------------------------------------------------------
++ * OK Veggies. Roles and permissions, Owner only (rbac.*). For milestone M1 this
++ * serves the role list that the Users screen needs. Editing the role to
++ * permission map at runtime is a later milestone; the permission catalogue and
++ * the two launch roles are seeded in migration 002.
++ * See docs/PRD.md Section 17.
++ * -----------------------------------------------------------------------------
+  */
+ require_once __DIR__ . '/../../includes/bootstrap.php';
+-header('Content-Type: application/json; charset=utf-8');
+ 
+-// Owner only (rbac.*).
+-// $action = okv_action();
+-// switch ($action) { ... }  gate each action with Rbac::requirePermission or a customer auth check
++$action = okv_action();
+ 
+-okv_json(['status' => 'error', 'code' => 'not_implemented', 'message' => 'This endpoint is scaffolded and not built yet.'], 501);
++switch ($action) {
++
++    case 'list_roles': {
++        Rbac::requirePermission('rbac.roles.view');
++        $roles = Database::all('SELECT id, name, description FROM roles ORDER BY name');
++        $out = array_map(static fn($r) => [
++            'id'          => (int) $r['id'],
++            'name'        => $r['name'],
++            'description' => $r['description'],
++        ], $roles);
++        okv_json(['status' => 'ok', 'roles' => $out]);
++        break;
++    }
++
++    default:
++        okv_error('This action is not available.', 400, 'unknown_action');
++}
+diff --git a/api/v1/users.php b/api/v1/users.php
+new file mode 100644
+index 0000000..83391c1
+--- /dev/null
++++ b/api/v1/users.php
+@@ -0,0 +1,231 @@
++<?php
++/**
++ * api/v1/users.php
++ * -----------------------------------------------------------------------------
++ * OK Veggies. Staff accounts. This is how the Owner adds the Manager, resets a
++ * password, switches an account on or off, and sets a person's role. Built in
++ * milestone M1. See docs/PRD.md Section 17.
++ *
++ * Every action is gated on the server with the users.* permissions (the Owner
++ * holds them; the Manager does not). Reads are GET; every change is a POST with
++ * a valid CSRF token. Prepared statements only. No exception ever reaches the
++ * client.
++ *
++ * Actions:
++ *   list          (GET,  users.view)         staff users with their roles
++ *   create        (POST, users.create)       add a staff user and give them a role
++ *   set_password  (POST, users.edit)         set a new password for a staff user
++ *   set_status    (POST, users.edit)         switch an account active or disabled
++ *   set_role      (POST, users.roles.edit)   change a staff user's role
++ * -----------------------------------------------------------------------------
++ */
++require_once __DIR__ . '/../../includes/bootstrap.php';
++
++$action = okv_action();
++
++/** Guard a write: must be POST with a valid CSRF token and the permission. */
++function users_guard_write(string $permission): void
++{
++    if (!okv_is_post()) {
++        okv_error('Use POST for this action.', 405, 'method_not_allowed');
++    }
++    Rbac::requirePermission($permission); // stops with 401 or 403 JSON
++    if (!Csrf::validate()) {
++        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
++    }
++}
++
++/** The staff user matching an id, or null. Customers are never returned here. */
++function users_find_staff(int $id): ?array
++{
++    return Database::one(
++        "SELECT id, first_name, last_name, email, phone, status, user_type FROM users WHERE id = :id AND user_type = 'staff'",
++        [':id' => $id]
++    );
++}
++
++/** True if this staff user is the only active Owner left. */
++function users_is_last_active_owner(int $id): bool
++{
++    $row = Database::one(
++        "SELECT COUNT(*) AS c
++           FROM user_roles ur
++           JOIN roles r ON r.id = ur.role_id
++           JOIN users u ON u.id = ur.user_id
++          WHERE r.name = 'owner' AND u.status = 'active'",
++        []
++    );
++    $activeOwners = (int) ($row['c'] ?? 0);
++    $isOwner = Database::one(
++        "SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = :id AND r.name = 'owner'",
++        [':id' => $id]
++    );
++    return $isOwner !== null && $activeOwners <= 1;
++}
++
++switch ($action) {
++
++    case 'list': {
++        Rbac::requirePermission('users.view');
++        $rows = Database::all(
++            "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.status, u.last_login_at,
++                    GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR ',') AS roles
++               FROM users u
++               LEFT JOIN user_roles ur ON ur.user_id = u.id
++               LEFT JOIN roles r ON r.id = ur.role_id
++              WHERE u.user_type = 'staff'
++              GROUP BY u.id
++              ORDER BY u.created_at ASC"
++        );
++        $staff = array_map(static function ($r) {
++            return [
++                'id'            => (int) $r['id'],
++                'first_name'    => $r['first_name'],
++                'last_name'     => $r['last_name'],
++                'email'         => $r['email'],
++                'phone'         => $r['phone'],
++                'status'        => $r['status'],
++                'last_login_at' => $r['last_login_at'],
++                'roles'         => $r['roles'] ? explode(',', $r['roles']) : [],
++            ];
++        }, $rows);
++        okv_json(['status' => 'ok', 'staff' => $staff]);
++        break;
++    }
++
++    case 'create': {
++        users_guard_write('users.create');
++
++        $first = trim((string) okv_input('first_name', ''));
++        $last  = trim((string) okv_input('last_name', ''));
++        $email = trim((string) okv_input('email', ''));
++        $phone = trim((string) okv_input('phone', ''));
++        $pass  = (string) okv_input('password', '');
++        $role  = trim((string) okv_input('role', ''));
++
++        if ($first === '' || $last === '') {
++            okv_error('Enter the first and last name.', 422, 'missing_name');
++        }
++        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
++            okv_error('Enter a valid email address.', 422, 'bad_email');
++        }
++        if ($phone === '' || strlen(preg_replace('/[^0-9]/', '', $phone)) < 7) {
++            okv_error('Enter a valid phone number.', 422, 'bad_phone');
++        }
++        $policy = Password::policyError($pass, $email, $phone);
++        if ($policy !== null) {
++            okv_error($policy, 422, 'weak_password');
++        }
++        $roleRow = Database::one('SELECT id FROM roles WHERE name = :n', [':n' => $role]);
++        if (!$roleRow) {
++            okv_error('Choose a role for this person.', 422, 'bad_role');
++        }
++        // Assigning a role needs the role permission too.
++        if (!Rbac::can('users.roles.edit')) {
++            okv_error('You cannot assign roles.', 403, 'forbidden');
++        }
++        if (Database::one('SELECT id FROM users WHERE email = :e OR phone = :p LIMIT 1', [':e' => $email, ':p' => $phone])) {
++            okv_error('That email or phone is already in use.', 409, 'duplicate');
++        }
++
++        $pdo = Database::getInstance()->getConnection();
++        try {
++            $pdo->beginTransaction();
++            $pdo->prepare(
++                "INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status, email_verified_at)
++                 VALUES (:fn, :ln, :em, :ph, :pw, 'staff', 'active', NOW())"
++            )->execute([
++                ':fn' => $first, ':ln' => $last, ':em' => $email, ':ph' => $phone, ':pw' => Password::hash($pass),
++            ]);
++            $newId = (int) $pdo->lastInsertId();
++            $pdo->prepare('INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES (:u, :r, :by)')
++                ->execute([':u' => $newId, ':r' => (int) $roleRow['id'], ':by' => (int) Rbac::userId()]);
++            $pdo->commit();
++        } catch (Throwable $e) {
++            if ($pdo->inTransaction()) { $pdo->rollBack(); }
++            error_log('users.create failed: ' . $e->getMessage());
++            okv_error('We could not add this person. Please try again.', 500, 'create_failed');
++        }
++        okv_json(['status' => 'ok', 'message' => 'Staff member added.', 'id' => $newId], 201);
++        break;
++    }
++
++    case 'set_password': {
++        users_guard_write('users.edit');
++        $id   = (int) okv_input('user_id', 0);
++        $pass = (string) okv_input('new_password', '');
++
++        $target = users_find_staff($id);
++        if (!$target) {
++            okv_error('That staff member was not found.', 404, 'not_found');
++        }
++        $policy = Password::policyError($pass, (string) $target['email'], (string) $target['phone']);
++        if ($policy !== null) {
++            okv_error($policy, 422, 'weak_password');
++        }
++        Database::run('UPDATE users SET password_hash = :h WHERE id = :id', [':h' => Password::hash($pass), ':id' => $id]);
++        okv_json(['status' => 'ok', 'message' => 'Password set for ' . ($target['first_name'] ?? 'that person') . '.']);
++        break;
++    }
++
++    case 'set_status': {
++        users_guard_write('users.edit');
++        $id     = (int) okv_input('user_id', 0);
++        $status = (string) okv_input('status', '');
++
++        if (!in_array($status, ['active', 'disabled'], true)) {
++            okv_error('Choose active or disabled.', 422, 'bad_status');
++        }
++        $target = users_find_staff($id);
++        if (!$target) {
++            okv_error('That staff member was not found.', 404, 'not_found');
++        }
++        if ($id === (int) Rbac::userId()) {
++            okv_error('You cannot change your own account here.', 422, 'self');
++        }
++        if ($status === 'disabled' && users_is_last_active_owner($id)) {
++            okv_error('You cannot switch off the last active Owner.', 422, 'last_owner');
++        }
++        Database::run('UPDATE users SET status = :s WHERE id = :id', [':s' => $status, ':id' => $id]);
++        okv_json(['status' => 'ok', 'message' => 'Account ' . ($status === 'active' ? 'switched on.' : 'switched off.')]);
++        break;
++    }
++
++    case 'set_role': {
++        users_guard_write('users.roles.edit');
++        $id   = (int) okv_input('user_id', 0);
++        $role = trim((string) okv_input('role', ''));
++
++        $target = users_find_staff($id);
++        if (!$target) {
++            okv_error('That staff member was not found.', 404, 'not_found');
++        }
++        $roleRow = Database::one('SELECT id FROM roles WHERE name = :n', [':n' => $role]);
++        if (!$roleRow) {
++            okv_error('Choose a valid role.', 422, 'bad_role');
++        }
++        if ($id === (int) Rbac::userId()) {
++            okv_error('You cannot change your own role here.', 422, 'self');
++        }
++        if ($role !== 'owner' && users_is_last_active_owner($id)) {
++            okv_error('You cannot move the last active Owner off the Owner role.', 422, 'last_owner');
++        }
++        $pdo = Database::getInstance()->getConnection();
++        try {
++            $pdo->beginTransaction();
++            $pdo->prepare('DELETE FROM user_roles WHERE user_id = :u')->execute([':u' => $id]);
++            $pdo->prepare('INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES (:u, :r, :by)')
++                ->execute([':u' => $id, ':r' => (int) $roleRow['id'], ':by' => (int) Rbac::userId()]);
++            $pdo->commit();
++        } catch (Throwable $e) {
++            if ($pdo->inTransaction()) { $pdo->rollBack(); }
++            error_log('users.set_role failed: ' . $e->getMessage());
++            okv_error('We could not change the role. Please try again.', 500, 'role_failed');
++        }
++        okv_json(['status' => 'ok', 'message' => 'Role updated.']);
++        break;
++    }
++
++    default:
++        okv_error('This action is not available.', 400, 'unknown_action');
++}
+diff --git a/assets/css/tailwind.css b/assets/css/tailwind.css
+index 91579b7..949bc7a 100644
+--- a/assets/css/tailwind.css
++++ b/assets/css/tailwind.css
+@@ -1,3 +1,3 @@
+ *,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }
+ 
+-/*! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:Hanken Grotesk,Segoe UI,-apple-system,sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:JetBrains Mono,SF Mono,Consolas,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}input:where(:not([type])),input:where([type=date]),input:where([type=datetime-local]),input:where([type=email]),input:where([type=month]),input:where([type=number]),input:where([type=password]),input:where([type=search]),input:where([type=tel]),input:where([type=text]),input:where([type=time]),input:where([type=url]),input:where([type=week]),select,select:where([multiple]),textarea{-webkit-appearance:none;-moz-appearance:none;appearance:none;background-color:#fff;border-color:#6b7280;border-width:1px;border-radius:0;padding:.5rem .75rem;font-size:1rem;line-height:1.5rem;--tw-shadow:0 0 #0000}input:where(:not([type])):focus,input:where([type=date]):focus,input:where([type=datetime-local]):focus,input:where([type=email]):focus,input:where([type=month]):focus,input:where([type=number]):focus,input:where([type=password]):focus,input:where([type=search]):focus,input:where([type=tel]):focus,input:where([type=text]):focus,input:where([type=time]):focus,input:where([type=url]):focus,input:where([type=week]):focus,select:focus,select:where([multiple]):focus,textarea:focus{outline:2px solid transparent;outline-offset:2px;--tw-ring-inset:var(--tw-empty,/*!*/ /*!*/);--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:#2563eb;--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);border-color:#2563eb}input::-moz-placeholder,textarea::-moz-placeholder{color:#6b7280;opacity:1}input::placeholder,textarea::placeholder{color:#6b7280;opacity:1}::-webkit-datetime-edit-fields-wrapper{padding:0}::-webkit-date-and-time-value{min-height:1.5em;text-align:inherit}::-webkit-datetime-edit{display:inline-flex}::-webkit-datetime-edit,::-webkit-datetime-edit-day-field,::-webkit-datetime-edit-hour-field,::-webkit-datetime-edit-meridiem-field,::-webkit-datetime-edit-millisecond-field,::-webkit-datetime-edit-minute-field,::-webkit-datetime-edit-month-field,::-webkit-datetime-edit-second-field,::-webkit-datetime-edit-year-field{padding-top:0;padding-bottom:0}select{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");background-position:right .5rem center;background-repeat:no-repeat;background-size:1.5em 1.5em;padding-right:2.5rem;-webkit-print-color-adjust:exact;print-color-adjust:exact}select:where([multiple]),select:where([size]:not([size="1"])){background-image:none;background-position:0 0;background-repeat:unset;background-size:initial;padding-right:.75rem;-webkit-print-color-adjust:unset;print-color-adjust:unset}input:where([type=checkbox]),input:where([type=radio]){-webkit-appearance:none;-moz-appearance:none;appearance:none;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;display:inline-block;vertical-align:middle;background-origin:border-box;-webkit-user-select:none;-moz-user-select:none;user-select:none;flex-shrink:0;height:1rem;width:1rem;color:#2563eb;background-color:#fff;border-color:#6b7280;border-width:1px;--tw-shadow:0 0 #0000}input:where([type=checkbox]){border-radius:0}input:where([type=radio]){border-radius:100%}input:where([type=checkbox]):focus,input:where([type=radio]):focus{outline:2px solid transparent;outline-offset:2px;--tw-ring-inset:var(--tw-empty,/*!*/ /*!*/);--tw-ring-offset-width:2px;--tw-ring-offset-color:#fff;--tw-ring-color:#2563eb;--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow)}input:where([type=checkbox]):checked,input:where([type=radio]):checked{border-color:transparent;background-color:currentColor;background-size:100% 100%;background-position:50%;background-repeat:no-repeat}input:where([type=checkbox]):checked{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0'/%3E%3C/svg%3E")}@media (forced-colors:active) {input:where([type=checkbox]):checked{-webkit-appearance:auto;-moz-appearance:auto;appearance:auto}}input:where([type=radio]):checked{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E")}@media (forced-colors:active) {input:where([type=radio]):checked{-webkit-appearance:auto;-moz-appearance:auto;appearance:auto}}input:where([type=checkbox]):checked:focus,input:where([type=checkbox]):checked:hover,input:where([type=radio]):checked:focus,input:where([type=radio]):checked:hover{border-color:transparent;background-color:currentColor}input:where([type=checkbox]):indeterminate{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3E%3Cpath stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 8h8'/%3E%3C/svg%3E");border-color:transparent;background-color:currentColor;background-size:100% 100%;background-position:50%;background-repeat:no-repeat}@media (forced-colors:active) {input:where([type=checkbox]):indeterminate{-webkit-appearance:auto;-moz-appearance:auto;appearance:auto}}input:where([type=checkbox]):indeterminate:focus,input:where([type=checkbox]):indeterminate:hover{border-color:transparent;background-color:currentColor}input:where([type=file]){background:unset;border-color:inherit;border-width:0;border-radius:0;padding:0;font-size:unset;line-height:inherit}input:where([type=file]):focus{outline:1px solid ButtonText;outline:1px auto -webkit-focus-ring-color}html{-webkit-text-size-adjust:100%}body{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1));font-family:Hanken Grotesk,Segoe UI,-apple-system,sans-serif;--tw-text-opacity:1;color:rgb(3 16 10/var(--tw-text-opacity,1));-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}:where(a,button,input,select,textarea,[tabindex]):focus-visible{outline:2.5px solid #c9922b;outline-offset:2px;border-radius:3px}h1,h2,h3,h4{font-family:Plus Jakarta Sans,Hanken Grotesk,Segoe UI,-apple-system,sans-serif;text-wrap:balance}.okv-btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:.5rem;border-radius:6px;--tw-bg-opacity:1;background-color:rgb(15 81 50/var(--tw-bg-opacity,1));padding-left:1.5rem;padding-right:1.5rem;font-weight:500;--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1));transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-duration:.24s;transition-timing-function:cubic-bezier(.4,0,.2,1)}.okv-btn:hover{--tw-bg-opacity:1;background-color:rgb(13 71 44/var(--tw-bg-opacity,1))}.okv-btn:active{--tw-bg-opacity:1;background-color:rgb(12 63 39/var(--tw-bg-opacity,1))}.okv-btn:disabled{cursor:not-allowed;--tw-bg-opacity:1;background-color:rgb(234 232 232/var(--tw-bg-opacity,1));color:rgba(3,16,10,.4)}.okv-btn-outline{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:.5rem;border-radius:6px;border-width:1px;--tw-border-opacity:1;border-color:rgb(15 81 50/var(--tw-border-opacity,1));--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1));padding-left:1.5rem;padding-right:1.5rem;font-weight:500;--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1));transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-duration:.24s;transition-timing-function:cubic-bezier(.4,0,.2,1)}.okv-btn-outline:hover{--tw-bg-opacity:1;background-color:rgb(231 238 234/var(--tw-bg-opacity,1))}.okv-btn-outline:disabled{opacity:.5}.okv-btn-text{display:inline-flex;min-height:44px;align-items:center;gap:.25rem;font-weight:500;--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1));transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.okv-btn-text:hover{--tw-text-opacity:1;color:rgb(201 146 43/var(--tw-text-opacity,1))}.okv-label{margin-bottom:.375rem;display:block;font-size:.875rem;line-height:1.25rem;font-weight:500;color:rgba(3,16,10,.62)}.okv-input{min-height:48px;width:100%;border-radius:6px;border-width:1px;--tw-border-opacity:1;border-color:rgb(234 232 232/var(--tw-border-opacity,1));--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1));padding-left:1rem;padding-right:1rem;--tw-text-opacity:1;color:rgb(3 16 10/var(--tw-text-opacity,1))}.okv-input::-moz-placeholder{color:rgba(3,16,10,.4)}.okv-input::placeholder{color:rgba(3,16,10,.4)}.okv-input:focus{--tw-border-opacity:1;border-color:rgb(15 81 50/var(--tw-border-opacity,1));--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.okv-card{border-radius:12px;--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1));padding:1rem;--tw-shadow:0 1px 2px rgba(3,16,10,.07);--tw-shadow-colored:0 1px 2px var(--tw-shadow-color);transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-duration:.24s;transition-timing-function:cubic-bezier(.4,0,.2,1)}.okv-card,.okv-card:hover{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.okv-card:hover{--tw-translate-y:-0.25rem;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));--tw-shadow:0 2px 8px rgba(3,16,10,.08),0 1px 2px rgba(3,16,10,.06);--tw-shadow-colored:0 2px 8px var(--tw-shadow-color),0 1px 2px var(--tw-shadow-color)}.okv-badge{display:inline-flex;align-items:center;gap:.25rem;border-radius:9999px;padding:.25rem .625rem;font-size:.75rem;line-height:1rem;font-weight:500}.okv-badge-available{--tw-bg-opacity:1;background-color:rgb(236 243 237/var(--tw-bg-opacity,1));--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1))}.okv-container{margin-left:auto;margin-right:auto;max-width:1280px;padding-left:1rem;padding-right:1rem}@media (min-width:768px){.okv-container{padding-left:2rem;padding-right:2rem}}.fixed{position:fixed}.sticky{position:sticky}.bottom-5{bottom:1.25rem}.right-5{right:1.25rem}.top-0{top:0}.z-30{z-index:30}.z-40{z-index:40}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}.mt-5{margin-top:1.25rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}.block{display:block}.inline{display:inline}.flex{display:flex}.grid{display:grid}.contents{display:contents}.hidden{display:none}.h-14{height:3.5rem}.h-16{height:4rem}.h-40{height:10rem}.h-56{height:14rem}.min-h-\[40px\]{min-height:40px}.min-h-screen{min-height:100vh}.w-14{width:3.5rem}.w-full{width:100%}.max-w-md{max-width:28rem}.max-w-sm{max-width:24rem}.max-w-xl{max-width:36rem}@keyframes okv-rise{0%{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.animate-okv-rise{animation:okv-rise .24s cubic-bezier(.4,0,.2,1)}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-10{gap:2.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.gap-8{gap:2rem}.space-y-2>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.5rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.5rem*var(--tw-space-y-reverse))}.space-y-4>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem*var(--tw-space-y-reverse))}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:12px}.rounded-md{border-radius:6px}.border-b{border-bottom-width:1px}.border-mist{--tw-border-opacity:1;border-color:rgb(234 232 232/var(--tw-border-opacity,1))}.border-white{--tw-border-opacity:1;border-color:rgb(255 255 255/var(--tw-border-opacity,1))}.bg-foliage{--tw-bg-opacity:1;background-color:rgb(62 139 74/var(--tw-bg-opacity,1))}.bg-forest{--tw-bg-opacity:1;background-color:rgb(15 81 50/var(--tw-bg-opacity,1))}.bg-forest-tint{--tw-bg-opacity:1;background-color:rgb(231 238 234/var(--tw-bg-opacity,1))}.bg-gold{--tw-bg-opacity:1;background-color:rgb(201 146 43/var(--tw-bg-opacity,1))}.bg-ink{--tw-bg-opacity:1;background-color:rgb(3 16 10/var(--tw-bg-opacity,1))}.bg-tomato-tint{--tw-bg-opacity:1;background-color:rgb(250 234 232/var(--tw-bg-opacity,1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.object-cover{-o-object-fit:cover;object-fit:cover}.p-0{padding:0}.p-4{padding:1rem}.p-8{padding:2rem}.px-4{padding-left:1rem;padding-right:1rem}.py-12{padding-top:3rem;padding-bottom:3rem}.py-14{padding-top:3.5rem;padding-bottom:3.5rem}.py-16{padding-top:4rem;padding-bottom:4rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.pb-16{padding-bottom:4rem}.pb-8{padding-bottom:2rem}.text-center{text-align:center}.font-display{font-family:Plus Jakarta Sans,Hanken Grotesk,Segoe UI,-apple-system,sans-serif}.font-mono{font-family:JetBrains Mono,SF Mono,Consolas,monospace}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:.75rem;line-height:1rem}.font-bold{font-weight:700}.font-extrabold{font-weight:800}.font-medium{font-weight:500}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.leading-tight{line-height:1.25}.tracking-\[0\.2em\]{letter-spacing:.2em}.tracking-tight{letter-spacing:-.025em}.tracking-wider{letter-spacing:.05em}.text-forest{--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1))}.text-gold{--tw-text-opacity:1;color:rgb(201 146 43/var(--tw-text-opacity,1))}.text-ink{--tw-text-opacity:1;color:rgb(3 16 10/var(--tw-text-opacity,1))}.text-ink-40{color:rgba(3,16,10,.4)}.text-ink-60{color:rgba(3,16,10,.62)}.text-tomato{--tw-text-opacity:1;color:rgb(200 50 30/var(--tw-text-opacity,1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.text-white\/40{color:hsla(0,0%,100%,.4)}.text-white\/60{color:hsla(0,0%,100%,.6)}.text-white\/80{color:hsla(0,0%,100%,.8)}.text-white\/85{color:hsla(0,0%,100%,.85)}.shadow-okv-3{--tw-shadow:0 12px 32px rgba(3,16,10,.14),0 2px 8px rgba(3,16,10,.08);--tw-shadow-colored:0 12px 32px var(--tw-shadow-color),0 2px 8px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.transition{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}.hover\:bg-foliage-hover:hover{--tw-bg-opacity:1;background-color:rgb(55 122 65/var(--tw-bg-opacity,1))}.hover\:bg-gold-hover:hover{--tw-bg-opacity:1;background-color:rgb(177 128 38/var(--tw-bg-opacity,1))}.hover\:bg-white\/10:hover{background-color:hsla(0,0%,100%,.1)}.hover\:text-forest:hover{--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1))}.hover\:text-gold:hover{--tw-text-opacity:1;color:rgb(201 146 43/var(--tw-text-opacity,1))}@media (min-width:768px){.md\:block{display:block}.md\:flex{display:flex}.md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.md\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.md\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.md\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.md\:py-24{padding-top:6rem;padding-bottom:6rem}.md\:text-5xl{font-size:3rem;line-height:1}}
+\ No newline at end of file
++/*! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:Hanken Grotesk,Segoe UI,-apple-system,sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:JetBrains Mono,SF Mono,Consolas,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}input:where(:not([type])),input:where([type=date]),input:where([type=datetime-local]),input:where([type=email]),input:where([type=month]),input:where([type=number]),input:where([type=password]),input:where([type=search]),input:where([type=tel]),input:where([type=text]),input:where([type=time]),input:where([type=url]),input:where([type=week]),select,select:where([multiple]),textarea{-webkit-appearance:none;-moz-appearance:none;appearance:none;background-color:#fff;border-color:#6b7280;border-width:1px;border-radius:0;padding:.5rem .75rem;font-size:1rem;line-height:1.5rem;--tw-shadow:0 0 #0000}input:where(:not([type])):focus,input:where([type=date]):focus,input:where([type=datetime-local]):focus,input:where([type=email]):focus,input:where([type=month]):focus,input:where([type=number]):focus,input:where([type=password]):focus,input:where([type=search]):focus,input:where([type=tel]):focus,input:where([type=text]):focus,input:where([type=time]):focus,input:where([type=url]):focus,input:where([type=week]):focus,select:focus,select:where([multiple]):focus,textarea:focus{outline:2px solid transparent;outline-offset:2px;--tw-ring-inset:var(--tw-empty,/*!*/ /*!*/);--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:#2563eb;--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);border-color:#2563eb}input::-moz-placeholder,textarea::-moz-placeholder{color:#6b7280;opacity:1}input::placeholder,textarea::placeholder{color:#6b7280;opacity:1}::-webkit-datetime-edit-fields-wrapper{padding:0}::-webkit-date-and-time-value{min-height:1.5em;text-align:inherit}::-webkit-datetime-edit{display:inline-flex}::-webkit-datetime-edit,::-webkit-datetime-edit-day-field,::-webkit-datetime-edit-hour-field,::-webkit-datetime-edit-meridiem-field,::-webkit-datetime-edit-millisecond-field,::-webkit-datetime-edit-minute-field,::-webkit-datetime-edit-month-field,::-webkit-datetime-edit-second-field,::-webkit-datetime-edit-year-field{padding-top:0;padding-bottom:0}select{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");background-position:right .5rem center;background-repeat:no-repeat;background-size:1.5em 1.5em;padding-right:2.5rem;-webkit-print-color-adjust:exact;print-color-adjust:exact}select:where([multiple]),select:where([size]:not([size="1"])){background-image:none;background-position:0 0;background-repeat:unset;background-size:initial;padding-right:.75rem;-webkit-print-color-adjust:unset;print-color-adjust:unset}input:where([type=checkbox]),input:where([type=radio]){-webkit-appearance:none;-moz-appearance:none;appearance:none;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;display:inline-block;vertical-align:middle;background-origin:border-box;-webkit-user-select:none;-moz-user-select:none;user-select:none;flex-shrink:0;height:1rem;width:1rem;color:#2563eb;background-color:#fff;border-color:#6b7280;border-width:1px;--tw-shadow:0 0 #0000}input:where([type=checkbox]){border-radius:0}input:where([type=radio]){border-radius:100%}input:where([type=checkbox]):focus,input:where([type=radio]):focus{outline:2px solid transparent;outline-offset:2px;--tw-ring-inset:var(--tw-empty,/*!*/ /*!*/);--tw-ring-offset-width:2px;--tw-ring-offset-color:#fff;--tw-ring-color:#2563eb;--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow)}input:where([type=checkbox]):checked,input:where([type=radio]):checked{border-color:transparent;background-color:currentColor;background-size:100% 100%;background-position:50%;background-repeat:no-repeat}input:where([type=checkbox]):checked{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0'/%3E%3C/svg%3E")}@media (forced-colors:active) {input:where([type=checkbox]):checked{-webkit-appearance:auto;-moz-appearance:auto;appearance:auto}}input:where([type=radio]):checked{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E")}@media (forced-colors:active) {input:where([type=radio]):checked{-webkit-appearance:auto;-moz-appearance:auto;appearance:auto}}input:where([type=checkbox]):checked:focus,input:where([type=checkbox]):checked:hover,input:where([type=radio]):checked:focus,input:where([type=radio]):checked:hover{border-color:transparent;background-color:currentColor}input:where([type=checkbox]):indeterminate{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3E%3Cpath stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 8h8'/%3E%3C/svg%3E");border-color:transparent;background-color:currentColor;background-size:100% 100%;background-position:50%;background-repeat:no-repeat}@media (forced-colors:active) {input:where([type=checkbox]):indeterminate{-webkit-appearance:auto;-moz-appearance:auto;appearance:auto}}input:where([type=checkbox]):indeterminate:focus,input:where([type=checkbox]):indeterminate:hover{border-color:transparent;background-color:currentColor}input:where([type=file]){background:unset;border-color:inherit;border-width:0;border-radius:0;padding:0;font-size:unset;line-height:inherit}input:where([type=file]):focus{outline:1px solid ButtonText;outline:1px auto -webkit-focus-ring-color}html{-webkit-text-size-adjust:100%}body{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1));font-family:Hanken Grotesk,Segoe UI,-apple-system,sans-serif;--tw-text-opacity:1;color:rgb(3 16 10/var(--tw-text-opacity,1));-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}:where(a,button,input,select,textarea,[tabindex]):focus-visible{outline:2.5px solid #c9922b;outline-offset:2px;border-radius:3px}h1,h2,h3,h4{font-family:Plus Jakarta Sans,Hanken Grotesk,Segoe UI,-apple-system,sans-serif;text-wrap:balance}.container{width:100%}@media (min-width:640px){.container{max-width:640px}}@media (min-width:768px){.container{max-width:768px}}@media (min-width:1024px){.container{max-width:1024px}}@media (min-width:1280px){.container{max-width:1280px}}@media (min-width:1536px){.container{max-width:1536px}}.okv-btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:.5rem;border-radius:6px;--tw-bg-opacity:1;background-color:rgb(15 81 50/var(--tw-bg-opacity,1));padding-left:1.5rem;padding-right:1.5rem;font-weight:500;--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1));transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-duration:.24s;transition-timing-function:cubic-bezier(.4,0,.2,1)}.okv-btn:hover{--tw-bg-opacity:1;background-color:rgb(13 71 44/var(--tw-bg-opacity,1))}.okv-btn:active{--tw-bg-opacity:1;background-color:rgb(12 63 39/var(--tw-bg-opacity,1))}.okv-btn:disabled{cursor:not-allowed;--tw-bg-opacity:1;background-color:rgb(234 232 232/var(--tw-bg-opacity,1));color:rgba(3,16,10,.4)}.okv-btn-outline{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:.5rem;border-radius:6px;border-width:1px;--tw-border-opacity:1;border-color:rgb(15 81 50/var(--tw-border-opacity,1));--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1));padding-left:1.5rem;padding-right:1.5rem;font-weight:500;--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1));transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-duration:.24s;transition-timing-function:cubic-bezier(.4,0,.2,1)}.okv-btn-outline:hover{--tw-bg-opacity:1;background-color:rgb(231 238 234/var(--tw-bg-opacity,1))}.okv-btn-outline:disabled{opacity:.5}.okv-btn-text{display:inline-flex;min-height:44px;align-items:center;gap:.25rem;font-weight:500;--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1));transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.okv-btn-text:hover{--tw-text-opacity:1;color:rgb(201 146 43/var(--tw-text-opacity,1))}.okv-label{margin-bottom:.375rem;display:block;font-size:.875rem;line-height:1.25rem;font-weight:500;color:rgba(3,16,10,.62)}.okv-input{min-height:48px;width:100%;border-radius:6px;border-width:1px;--tw-border-opacity:1;border-color:rgb(234 232 232/var(--tw-border-opacity,1));--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1));padding-left:1rem;padding-right:1rem;--tw-text-opacity:1;color:rgb(3 16 10/var(--tw-text-opacity,1))}.okv-input::-moz-placeholder{color:rgba(3,16,10,.4)}.okv-input::placeholder{color:rgba(3,16,10,.4)}.okv-input:focus{--tw-border-opacity:1;border-color:rgb(15 81 50/var(--tw-border-opacity,1));--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.okv-card{border-radius:12px;--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1));padding:1rem;--tw-shadow:0 1px 2px rgba(3,16,10,.07);--tw-shadow-colored:0 1px 2px var(--tw-shadow-color);transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-duration:.24s;transition-timing-function:cubic-bezier(.4,0,.2,1)}.okv-card,.okv-card:hover{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.okv-card:hover{--tw-translate-y:-0.25rem;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));--tw-shadow:0 2px 8px rgba(3,16,10,.08),0 1px 2px rgba(3,16,10,.06);--tw-shadow-colored:0 2px 8px var(--tw-shadow-color),0 1px 2px var(--tw-shadow-color)}.okv-badge{display:inline-flex;align-items:center;gap:.25rem;border-radius:9999px;padding:.25rem .625rem;font-size:.75rem;line-height:1rem;font-weight:500}.okv-badge-available{--tw-bg-opacity:1;background-color:rgb(236 243 237/var(--tw-bg-opacity,1));--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1))}.okv-badge-out{--tw-bg-opacity:1;background-color:rgb(250 234 232/var(--tw-bg-opacity,1));--tw-text-opacity:1;color:rgb(200 50 30/var(--tw-text-opacity,1))}.okv-container{margin-left:auto;margin-right:auto;max-width:1280px;padding-left:1rem;padding-right:1rem}@media (min-width:768px){.okv-container{padding-left:2rem;padding-right:2rem}}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}.visible{visibility:visible}.static{position:static}.fixed{position:fixed}.sticky{position:sticky}.bottom-5{bottom:1.25rem}.right-5{right:1.25rem}.top-0{top:0}.z-10{z-index:10}.z-30{z-index:30}.z-40{z-index:40}.mx-2{margin-left:.5rem;margin-right:.5rem}.-ml-2{margin-left:-.5rem}.mb-1{margin-bottom:.25rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.ml-auto{margin-left:auto}.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}.mt-4{margin-top:1rem}.mt-5{margin-top:1.25rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}.block{display:block}.inline{display:inline}.flex{display:flex}.inline-flex{display:inline-flex}.grid{display:grid}.contents{display:contents}.\!hidden{display:none!important}.hidden{display:none}.h-11{height:2.75rem}.h-14{height:3.5rem}.h-16{height:4rem}.h-40{height:10rem}.h-56{height:14rem}.min-h-\[40px\]{min-height:40px}.min-h-screen{min-height:100vh}.w-11{width:2.75rem}.w-14{width:3.5rem}.w-full{width:100%}.min-w-0{min-width:0}.max-w-2xl{max-width:42rem}.max-w-4xl{max-width:56rem}.max-w-md{max-width:28rem}.max-w-sm{max-width:24rem}.max-w-xl{max-width:36rem}.flex-1{flex:1 1 0%}.shrink-0{flex-shrink:0}@keyframes okv-rise{0%{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.animate-okv-rise{animation:okv-rise .24s cubic-bezier(.4,0,.2,1)}.cursor-pointer{cursor:pointer}.select-none{-webkit-user-select:none;-moz-user-select:none;user-select:none}.list-disc{list-style-type:disc}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-start{align-items:flex-start}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-10{gap:2.5rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.gap-8{gap:2rem}.space-y-1>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.25rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.25rem*var(--tw-space-y-reverse))}.space-y-2>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.5rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.5rem*var(--tw-space-y-reverse))}.space-y-3>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.75rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.75rem*var(--tw-space-y-reverse))}.space-y-4>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem*var(--tw-space-y-reverse))}.overflow-y-auto{overflow-y:auto}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.break-all{word-break:break-all}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:12px}.rounded-md{border-radius:6px}.border-b{border-bottom-width:1px}.border-t{border-top-width:1px}.border-mist{--tw-border-opacity:1;border-color:rgb(234 232 232/var(--tw-border-opacity,1))}.border-white{--tw-border-opacity:1;border-color:rgb(255 255 255/var(--tw-border-opacity,1))}.border-white\/10{border-color:hsla(0,0%,100%,.1)}.bg-foliage{--tw-bg-opacity:1;background-color:rgb(62 139 74/var(--tw-bg-opacity,1))}.bg-foliage-tint{--tw-bg-opacity:1;background-color:rgb(236 243 237/var(--tw-bg-opacity,1))}.bg-forest{--tw-bg-opacity:1;background-color:rgb(15 81 50/var(--tw-bg-opacity,1))}.bg-forest-tint{--tw-bg-opacity:1;background-color:rgb(231 238 234/var(--tw-bg-opacity,1))}.bg-gold{--tw-bg-opacity:1;background-color:rgb(201 146 43/var(--tw-bg-opacity,1))}.bg-ink{--tw-bg-opacity:1;background-color:rgb(3 16 10/var(--tw-bg-opacity,1))}.bg-tomato-tint{--tw-bg-opacity:1;background-color:rgb(250 234 232/var(--tw-bg-opacity,1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.bg-white\/15{background-color:hsla(0,0%,100%,.15)}.object-cover{-o-object-fit:cover;object-fit:cover}.p-0{padding:0}.p-4{padding:1rem}.p-8{padding:2rem}.px-3{padding-left:.75rem;padding-right:.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.py-12{padding-top:3rem;padding-bottom:3rem}.py-14{padding-top:3.5rem;padding-bottom:3.5rem}.py-16{padding-top:4rem;padding-bottom:4rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-4{padding-top:1rem;padding-bottom:1rem}.py-8{padding-top:2rem;padding-bottom:2rem}.pb-16{padding-bottom:4rem}.pb-8{padding-bottom:2rem}.pl-5{padding-left:1.25rem}.text-center{text-align:center}.text-right{text-align:right}.font-display{font-family:Plus Jakarta Sans,Hanken Grotesk,Segoe UI,-apple-system,sans-serif}.font-mono{font-family:JetBrains Mono,SF Mono,Consolas,monospace}.font-sans{font-family:Hanken Grotesk,Segoe UI,-apple-system,sans-serif}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-\[11px\]{font-size:11px}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:.75rem;line-height:1rem}.font-bold{font-weight:700}.font-extrabold{font-weight:800}.font-medium{font-weight:500}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.leading-tight{line-height:1.25}.tracking-\[0\.14em\]{letter-spacing:.14em}.tracking-\[0\.2em\]{letter-spacing:.2em}.tracking-tight{letter-spacing:-.025em}.tracking-wider{letter-spacing:.05em}.text-forest{--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1))}.text-gold{--tw-text-opacity:1;color:rgb(201 146 43/var(--tw-text-opacity,1))}.text-ink{--tw-text-opacity:1;color:rgb(3 16 10/var(--tw-text-opacity,1))}.text-ink-40{color:rgba(3,16,10,.4)}.text-ink-60{color:rgba(3,16,10,.62)}.text-tomato{--tw-text-opacity:1;color:rgb(200 50 30/var(--tw-text-opacity,1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.text-white\/40{color:hsla(0,0%,100%,.4)}.text-white\/50{color:hsla(0,0%,100%,.5)}.text-white\/60{color:hsla(0,0%,100%,.6)}.text-white\/80{color:hsla(0,0%,100%,.8)}.text-white\/85{color:hsla(0,0%,100%,.85)}.underline{text-decoration-line:underline}.underline-offset-2{text-underline-offset:2px}.shadow-okv-3{--tw-shadow:0 12px 32px rgba(3,16,10,.14),0 2px 8px rgba(3,16,10,.08);--tw-shadow-colored:0 12px 32px var(--tw-shadow-color),0 2px 8px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.transition{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-colors{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.duration-botanical{transition-duration:.24s}@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}.hover\:bg-foliage-hover:hover{--tw-bg-opacity:1;background-color:rgb(55 122 65/var(--tw-bg-opacity,1))}.hover\:bg-forest-tint:hover{--tw-bg-opacity:1;background-color:rgb(231 238 234/var(--tw-bg-opacity,1))}.hover\:bg-gold-hover:hover{--tw-bg-opacity:1;background-color:rgb(177 128 38/var(--tw-bg-opacity,1))}.hover\:bg-white\/10:hover{background-color:hsla(0,0%,100%,.1)}.hover\:text-forest:hover{--tw-text-opacity:1;color:rgb(15 81 50/var(--tw-text-opacity,1))}.hover\:text-gold:hover{--tw-text-opacity:1;color:rgb(201 146 43/var(--tw-text-opacity,1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}@media (min-width:640px){.sm\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (min-width:768px){.md\:block{display:block}.md\:flex{display:flex}.md\:hidden{display:none}.md\:min-h-screen{min-height:100vh}.md\:w-64{width:16rem}.md\:shrink-0{flex-shrink:0}.md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.md\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.md\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.md\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.md\:flex-col{flex-direction:column}.md\:px-8{padding-left:2rem;padding-right:2rem}.md\:py-24{padding-top:6rem;padding-bottom:6rem}.md\:text-5xl{font-size:3rem;line-height:1}}@media (min-width:1024px){.lg\:col-span-1{grid-column:span 1/span 1}.lg\:col-span-2{grid-column:span 2/span 2}.lg\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.lg\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+\ No newline at end of file
+diff --git a/assets/js/admin-users.js b/assets/js/admin-users.js
+new file mode 100644
+index 0000000..155e4d0
+--- /dev/null
++++ b/assets/js/admin-users.js
+@@ -0,0 +1,65 @@
++/**
++ * assets/js/admin-users.js
++ * OK Veggies. The Users and Roles screen. Every form marked data-okv-json posts
++ * to api/v1/users.php by fetch, shows a plain error on failure, and reloads the
++ * list on success so it always reflects the server. Without JavaScript the list
++ * still renders; only the in-place actions need the script. The server re-checks
++ * every permission and CSRF token regardless.
++ */
++(function () {
++  'use strict';
++
++  function ready(fn) {
++    if (document.readyState !== 'loading') { fn(); }
++    else { document.addEventListener('DOMContentLoaded', fn); }
++  }
++
++  function toast(message, type) {
++    if (window.OKV && OKV.toast) { OKV.toast(message, type); }
++  }
++
++  function submit(form) {
++    var errBox = form.querySelector('[data-okv-error]');
++    var button = form.querySelector('button[type="submit"], button:not([type])');
++    if (errBox) { errBox.hidden = true; errBox.textContent = ''; }
++    if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
++
++    function release() {
++      if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
++    }
++
++    fetch(form.getAttribute('action'), {
++      method: 'POST',
++      credentials: 'same-origin',
++      headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' },
++      body: new URLSearchParams(new FormData(form))
++    }).then(function (res) {
++      return res.json().catch(function () { return {}; }).then(function (data) {
++        if (res.ok && data && data.status === 'ok') {
++          toast(data.message || 'Saved.', 'ok');
++          setTimeout(function () { window.location.reload(); }, 400);
++          return;
++        }
++        var msg = (data && data.message) || 'Something went wrong. Please try again.';
++        if (errBox) { errBox.textContent = msg; errBox.hidden = false; }
++        else { toast(msg, 'error'); }
++        release();
++      });
++    }).catch(function () {
++      var msg = 'We could not reach the server. Check your connection and try again.';
++      if (errBox) { errBox.textContent = msg; errBox.hidden = false; }
++      else { toast(msg, 'error'); }
++      release();
++    });
++  }
++
++  ready(function () {
++    var forms = document.querySelectorAll('form[data-okv-json]');
++    for (var i = 0; i < forms.length; i++) {
++      forms[i].addEventListener('submit', function (event) {
++        event.preventDefault();
++        submit(event.currentTarget);
++      });
++    }
++  });
++})();
+diff --git a/assets/js/admin-users.min.js b/assets/js/admin-users.min.js
+new file mode 100644
+index 0000000..26f5016
+--- /dev/null
++++ b/assets/js/admin-users.min.js
+@@ -0,0 +1 @@
++(function(){"use strict";function s(t){document.readyState!=="loading"?t():document.addEventListener("DOMContentLoaded",t)}function a(t,e){window.OKV&&OKV.toast&&OKV.toast(t,e)}function c(t){var e=t.querySelector("[data-okv-error]"),n=t.querySelector('button[type="submit"], button:not([type])');e&&(e.hidden=!0,e.textContent=""),n&&(n.disabled=!0,n.setAttribute("aria-busy","true"));function i(){n&&(n.disabled=!1,n.removeAttribute("aria-busy"))}fetch(t.getAttribute("action"),{method:"POST",credentials:"same-origin",headers:{"X-Requested-With":"fetch",Accept:"application/json"},body:new URLSearchParams(new FormData(t))}).then(function(o){return o.json().catch(function(){return{}}).then(function(r){if(o.ok&&r&&r.status==="ok"){a(r.message||"Saved.","ok"),setTimeout(function(){window.location.reload()},400);return}var u=r&&r.message||"Something went wrong. Please try again.";e?(e.textContent=u,e.hidden=!1):a(u,"error"),i()})}).catch(function(){var o="We could not reach the server. Check your connection and try again.";e?(e.textContent=o,e.hidden=!1):a(o,"error"),i()})}s(function(){for(var t=document.querySelectorAll("form[data-okv-json]"),e=0;e<t.length;e++)t[e].addEventListener("submit",function(n){n.preventDefault(),c(n.currentTarget)})})})();
+diff --git a/includes/components/admin/footer.php b/includes/components/admin/footer.php
+new file mode 100644
+index 0000000..80b7535
+--- /dev/null
++++ b/includes/components/admin/footer.php
+@@ -0,0 +1,38 @@
++<?php
++/**
++ * includes/components/admin/footer.php
++ * -----------------------------------------------------------------------------
++ * OK Veggies. Closes the admin document opened by header.php. Loads the core JS,
++ * exposes the CSRF token and the permission set to the browser (UX gating only,
++ * the server re-checks every action), and any per-page script named in
++ * $okv_admin_script.
++ * -----------------------------------------------------------------------------
++ */
++if (!defined('OKV_BOOTSTRAPPED')) {
++    exit;
++}
++?>
++      </main>
++    </div>
++  </div>
++  <?= Rbac::jsBootstrap() ?>
++  <script>window.OKV=window.OKV||{};window.OKV.csrf=<?= json_encode(Csrf::token(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
++  <script src="<?= okv_e(okv_asset('/assets/js/okv.js')) ?>" defer></script>
++  <script src="<?= okv_e(okv_asset('/assets/js/okv-rbac.js')) ?>" defer></script>
++  <?php if (!empty($okv_admin_script)): ?>
++  <script src="<?= okv_e(okv_asset($okv_admin_script)) ?>" defer></script>
++  <?php endif; ?>
++  <script>
++  (function () {
++    var toggle = document.querySelector('[data-okv-nav-toggle]');
++    var side = document.getElementById('okv-admin-sidebar');
++    if (toggle && side) {
++      toggle.addEventListener('click', function () {
++        var hidden = side.classList.toggle('hidden');
++        toggle.setAttribute('aria-expanded', String(!hidden));
++      });
++    }
++  })();
++  </script>
++</body>
++</html>
+diff --git a/includes/components/admin/header.php b/includes/components/admin/header.php
+new file mode 100644
+index 0000000..ce056a3
+--- /dev/null
++++ b/includes/components/admin/header.php
+@@ -0,0 +1,39 @@
++<?php
++/**
++ * includes/components/admin/header.php
++ * -----------------------------------------------------------------------------
++ * OK Veggies. Opens the admin document: the head, the forest sidebar (from
++ * sidebar.php, permission gated) and a sticky top bar. A page sets
++ * $okv_admin_title before including this, and later includes footer.php to
++ * close. The page must already have run its own Rbac::requirePermission check.
++ * -----------------------------------------------------------------------------
++ */
++if (!defined('OKV_BOOTSTRAPPED')) {
++    http_response_code(500);
++    exit;
++}
++$okv_admin_title = $okv_admin_title ?? 'OK Veggies';
++?><!doctype html>
++<html lang="en">
++<head>
++  <meta charset="utf-8">
++  <meta name="viewport" content="width=device-width, initial-scale=1">
++  <title><?= okv_e($okv_admin_title) ?> . OK Veggies</title>
++  <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
++</head>
++<body class="min-h-screen bg-forest-tint text-ink">
++  <div class="md:flex min-h-screen">
++    <?php require __DIR__ . '/sidebar.php'; ?>
++    <div class="flex-1 min-w-0 flex flex-col">
++      <header class="sticky top-0 z-10 bg-white border-b border-mist">
++        <div class="flex items-center gap-3 h-16 px-4 md:px-8">
++          <button type="button" data-okv-nav-toggle aria-controls="okv-admin-sidebar" aria-expanded="false"
++                  class="md:hidden inline-flex items-center justify-center w-11 h-11 -ml-2 rounded-md text-ink hover:bg-forest-tint">
++            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
++            <span class="sr-only">Open the menu</span>
++          </button>
++          <h1 class="font-display font-extrabold text-xl text-ink truncate"><?= okv_e($okv_admin_title) ?></h1>
++          <a href="/" class="ml-auto okv-btn-text text-sm">View shop</a>
++        </div>
++      </header>
++      <main class="okv-container w-full py-8 flex-1">
+diff --git a/includes/components/admin/sidebar.php b/includes/components/admin/sidebar.php
+index 869ba51..770601e 100644
+--- a/includes/components/admin/sidebar.php
++++ b/includes/components/admin/sidebar.php
+@@ -1,7 +1,102 @@
+ <?php
+ /**
+  * includes/components/admin/sidebar.php
+- * OK Veggies component. Admin sidebar rendered from includes/config/nav.php. Scaffold placeholder, build in M1.
++ * -----------------------------------------------------------------------------
++ * OK Veggies. Admin sidebar, rendered from includes/config/nav.php so the nav
++ * and any future command palette can never disagree about what a user can reach.
++ * Each item names the permission it needs; an item the current user cannot use
++ * is not rendered, and a whole section is dropped when all of its items are
++ * hidden. This is a real server-side gate, not only the UX one in okv-rbac.js.
++ * -----------------------------------------------------------------------------
+  */
++
++require_once __DIR__ . '/../../config/nav.php';
++
++if (!function_exists('okv_admin_nav_icon')) {
++    /** A small line icon (24px, 2px stroke) for a Heroicon-style name. */
++    function okv_admin_nav_icon(string $name): string
++    {
++        $paths = [
++            'home'      => '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/>',
++            'clipboard' => '<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4h6v3H9z"/>',
++            'list'      => '<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
++            'squares'   => '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
++            'leaf'      => '<path d="M5 19c0-8 6-13 14-13 0 8-6 13-14 13Z"/><path d="M5 19c3-4 6-6 10-8"/>',
++            'tag'       => '<path d="M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8-8-8Z"/><circle cx="8.5" cy="8.5" r="1.5"/>',
++            'users'     => '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M17 15c2 0 4 2 4 5"/>',
++            'card'      => '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
++            'scale'     => '<path d="M12 4v16M6 20h12"/><path d="m6 8 6-2 6 2"/><path d="M4 13 6 8l2 5a2 2 0 0 1-4 0Z"/><path d="M16 13l2-5 2 5a2 2 0 0 1-4 0Z"/>',
++            'truck'     => '<path d="M3 7h11v8H3z"/><path d="M14 10h4l3 3v2h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
++            'heart'     => '<path d="M12 20s-7-4.5-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.5-7 9-7 9Z"/>',
++            'chat'      => '<path d="M5 5h14v10H9l-4 4V5Z"/>',
++            'cog'       => '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
++            'shield'    => '<path d="M12 3 5 6v6c0 4 3 6.5 7 9 4-2.5 7-5 7-9V6Z"/>',
++        ];
++        $inner = $paths[$name] ?? '<rect x="5" y="5" width="14" height="14" rx="2"/>';
++        return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" '
++             . 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $inner . '</svg>';
++    }
++}
++
++if (!function_exists('okv_admin_current_path')) {
++    function okv_admin_current_path(): string
++    {
++        return (string) parse_url($_SERVER['REQUEST_URI'] ?? '/admin/', PHP_URL_PATH);
++    }
++}
++
++if (!function_exists('okv_admin_nav_is_active')) {
++    function okv_admin_nav_is_active(string $href): bool
++    {
++        $path = okv_admin_current_path();
++        if ($href === '/admin/') {
++            return $path === '/admin/' || $path === '/admin' || $path === '/admin/index.php';
++        }
++        return $path === $href;
++    }
++}
++
++// Uniquely named so nothing leaks into the including page's scope.
++$okv_sb_me   = Database::one('SELECT first_name, last_name FROM users WHERE id = :id', [':id' => (int) Rbac::userId()]);
++$okv_sb_name = trim(((string) ($okv_sb_me['first_name'] ?? '')) . ' ' . ((string) ($okv_sb_me['last_name'] ?? '')));
++if ($okv_sb_name === '') { $okv_sb_name = 'Signed in'; }
++$okv_sb_role = in_array('owner', Rbac::roles(), true) ? 'Owner' : (in_array('manager', Rbac::roles(), true) ? 'Manager' : 'Staff');
+ ?>
+-<!-- Admin sidebar rendered from includes/config/nav.php. -->
++<aside id="okv-admin-sidebar"
++       class="hidden md:flex md:flex-col md:w-64 md:shrink-0 bg-forest text-white md:min-h-screen">
++  <div class="flex items-center gap-2 px-5 h-16 border-b border-white/10">
++    <span class="font-display font-extrabold text-lg">OK Veggies</span>
++  </div>
++
++  <nav class="flex-1 overflow-y-auto py-4" aria-label="Admin">
++    <?php foreach ($OKV_ADMIN_NAV as $group):
++        $visible = array_filter($group['items'], static fn($it) => Rbac::can($it['permission']));
++        if (!$visible) { continue; }
++    ?>
++      <p class="px-5 mt-4 mb-1 text-[11px] uppercase tracking-[0.14em] text-white/50"><?= okv_e($group['heading']) ?></p>
++      <?php foreach ($visible as $item):
++          $active = okv_admin_nav_is_active($item['href']);
++      ?>
++        <a href="<?= okv_e($item['href']) ?>"
++           class="flex items-center gap-3 mx-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-botanical <?= $active ? 'bg-white/15 text-white' : 'text-white/85 hover:bg-white/10 hover:text-white' ?>"
++           <?= $active ? 'aria-current="page"' : '' ?>>
++          <?= okv_admin_nav_icon($item['icon']) ?>
++          <span><?= okv_e($item['label']) ?></span>
++        </a>
++      <?php endforeach; ?>
++    <?php endforeach; ?>
++  </nav>
++
++  <div class="border-t border-white/10 px-5 py-4">
++    <p class="text-sm font-medium leading-tight"><?= okv_e($okv_sb_name) ?></p>
++    <p class="text-xs text-white/60"><?= okv_e($okv_sb_role) ?></p>
++    <div class="mt-3 flex items-center gap-4">
++      <a href="/admin/account.php" class="text-xs text-white/80 hover:text-white underline underline-offset-2">Your account</a>
++      <form method="POST" action="/api/v1/auth.php" class="inline">
++        <?= Csrf::field() ?>
++        <input type="hidden" name="action" value="logout">
++        <button type="submit" class="text-xs text-white/80 hover:text-white underline underline-offset-2">Sign out</button>
++      </form>
++    </div>
++  </div>
++</aside>
+diff --git a/scripts/build-js.mjs b/scripts/build-js.mjs
+index 70bd1e2..172c177 100644
+--- a/scripts/build-js.mjs
++++ b/scripts/build-js.mjs
+@@ -6,7 +6,12 @@
+ import { build } from 'esbuild';
+ import { existsSync } from 'node:fs';
+ 
+-const sources = ['assets/js/okv.js', 'assets/js/okv-rbac.js'].filter(existsSync);
++const sources = [
++  'assets/js/okv.js',
++  'assets/js/okv-rbac.js',
++  'assets/js/auth.js',
++  'assets/js/admin-users.js',
++].filter(existsSync);
+ 
+ if (sources.length === 0) {
+   console.log('[build-js] no source files yet, nothing to do.');
+-- 
+2.43.0
+
+
+From a9a9efd5abd899952bf1a2b8410217674b0dcbb6 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 27 Aug 2026 11:42:55 +0000
+Subject: [PATCH 5/5] M1: tests for password, lockout, RBAC and roles; update
+ PROGRESS
+
+Add PasswordTest.php (unit, under the runner), auth_db_test.php (password
+verify, rate-limit lockout and RBAC gating against a scratch database) and
+smoke_roles.sh (setup endpoint, guest redirect, Owner reaches the dashboard,
+Manager refused Users and absent from the nav, password change, login lockout).
+All green: 42 unit, 26 database, 26 smoke. Tick the M1 Part 1 boxes and log the
+session in PROGRESS.md.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WtPSCHa384VpAoViRVU3Z7
+---
+ PROGRESS.md                    |  17 ++-
+ scripts/smoke_roles.sh         | 182 +++++++++++++++++++++++++++++++++
+ scripts/tests/PasswordTest.php |  39 +++++++
+ scripts/tests/auth_db_test.php | 110 ++++++++++++++++++++
+ 4 files changed, 344 insertions(+), 4 deletions(-)
+ create mode 100755 scripts/smoke_roles.sh
+ create mode 100644 scripts/tests/PasswordTest.php
+ create mode 100644 scripts/tests/auth_db_test.php
+
+diff --git a/PROGRESS.md b/PROGRESS.md
+index 2c04f89..aa9b6de 100644
+--- a/PROGRESS.md
++++ b/PROGRESS.md
+@@ -44,10 +44,11 @@ The host is a Truehost shared cPanel account with **SFTP only, no SSH shell**, s
+ - [x] Tests: Money and OrderNumber unit tests pass (28 assertions); full-stack integration verified; storefront home renders live data
+ 
+ ### M1. Authentication and RBAC
+-- [ ] Login by phone or email plus password; hardened sessions
+-- [ ] OTP activation (email now), required before pay-on-delivery
+-- [ ] Owner and Manager roles seeded; permission checks on admin and pro
+-- [ ] Smoke tests for guest, household, business, Manager, Owner
++Delivered in two parts. Part 1 is staff sign in and RBAC (done below). Part 2 is customer accounts (household and business), OTP activation and guest-cart merge.
++- [x] Login by phone or email plus password; hardened sessions. Staff, Part 1. Customer login reuses the same endpoint in Part 2
++- [ ] OTP activation (email now), required before pay-on-delivery. Part 2, with customer accounts
++- [x] Owner and Manager roles seeded; permission checks on admin. Part 1. The Pro Portal reuses the same RBAC engine when it is built (M8)
++- [~] Smoke tests for guest, household, business, Manager, Owner. Guest, Manager and Owner staff paths done in Part 1; household and business arrive with customer accounts in Part 2
+ 
+ ### M2. Catalogue and pricing
+ - [ ] Categories (5) and units seeded; products seeded (Garlic unit corrected to kg)
+@@ -136,6 +137,14 @@ The host is a Truehost shared cPanel account with **SFTP only, no SSH shell**, s
+ 
+ ## Session log (newest first)
+ 
++### 27 Aug 2026, M1 Part 1: staff authentication and RBAC
++- Built staff sign in (`api/v1/auth.php`: login, logout, change_password). Login validates CSRF, rate limits by IP and by identifier (5 per identifier, 20 per IP over 15 minutes, all tunable in `.env`), treats the identifier as email when it contains "@" else phone, verifies with `password_verify` against `users.password_hash`, checks the account is active, regenerates the session id, sets `$_SESSION['user_id']`, loads the RBAC set, records `last_login_at`, and returns a JSON redirect to `/admin` for staff. A plain form post still works with no JavaScript (the server sends a real redirect), and an unknown identifier costs the same time as a real one. Wired `admin/login.php` with `assets/js/auth.js`.
++- Added a `Password` helper (`includes/classes/Password.php`): bcrypt at `BCRYPT_COST`, verify, needs-rehash, and the shared policy (at least 10 characters, not a common password, not the person's own email or phone). Customers reuse it in Part 2.
++- First Owner on a shell-less host: `public/setup.php`, a token-guarded one-time endpoint with the same fail-closed 404 shape as `public/migrate.php`. It creates the first Owner from name, email, phone and password only when no staff user exists, and refuses once one does. Added `SETUP_TOKEN` to `.env.example`. Remove `SETUP_TOKEN` from the server `.env` once the Owner is made.
++- Staff management: `api/v1/users.php` (list, create, set or reset password, switch on or off, set role) gated by `users.*`, and `api/v1/rbac.php` (`list_roles`) gated by `rbac.roles.view`. Built `admin/users.php` (Owner only, this is how the Owner creates the Manager), `admin/account.php` (a staff member changes their own password), the shared admin shell (`header.php`, `footer.php`), and the permission-gated sidebar (`sidebar.php` renders `nav.php`, hides what the user cannot reach, and carries a CSRF sign out). Staff records carry `user_type = 'staff'` plus a role.
++- Tests: `scripts/tests/PasswordTest.php` (unit, under the runner), `scripts/tests/auth_db_test.php` (password verify, rate-limit lockout, RBAC gating against a scratch database) and `scripts/smoke_roles.sh` (the setup endpoint, a guest at `/admin/` redirected to sign in, the Owner reaching the dashboard and Users and Roles, the Manager refused Users and not seeing it in the nav, the password change, and the login lockout). All green: 42 unit assertions, 26 database assertions, 26 smoke checks. `php -l` clean on every touched file. No em dash, no banned words. Rebuilt `assets/css/tailwind.css` and the minified JS in the cloud, as before.
++- No schema change (the `users`, `roles` and `user_roles` tables were already in place from M0) and no change to the deployment pipeline. Built and verified against MariaDB 10.11 on branch `m1-staff-auth`. Not for customer accounts, which are Part 2.
++
+ ### 26 Aug 2026, deployment pipeline and first push
+ - Pushed M0 to GitHub `main` (`praxisjbs/Okveggies`).
+ - The host turned out to be SFTP-only with no shell, so built a shell-less deploy path: a shared `Migrator` engine, a token-guarded web migration runner (`public/migrate.php`), and an SFTP GitHub Actions workflow that uploads then calls the runner. Verified end to end against MariaDB (404 without the token, applies migrations with it); the refactor kept the unit tests at 28/28. Added `docs/DEPLOYMENT.md`.
+diff --git a/scripts/smoke_roles.sh b/scripts/smoke_roles.sh
+new file mode 100755
+index 0000000..0333379
+--- /dev/null
++++ b/scripts/smoke_roles.sh
+@@ -0,0 +1,182 @@
++#!/usr/bin/env bash
++# =============================================================================
++# scripts/smoke_roles.sh
++# OK Veggies. Role smoke test for M1 staff auth. Starts a local PHP server and
++# checks the whole flow over HTTP:
++#   - the first-Owner setup endpoint (fail closed, create once, refuse twice),
++#   - a guest hitting /admin/ is redirected to sign in,
++#   - the Owner signs in and reaches the dashboard and Users and Roles,
++#   - the Manager signs in, is refused Users and Roles (403), and never sees it
++#     in the navigation,
++#   - the login rate-limit locks an identifier after five failed tries.
++#
++# Needs the scratch database migrated and the app .env in place.
++#   bash scripts/smoke_roles.sh
++# =============================================================================
++set -uo pipefail
++
++ROOT="$(cd "$(dirname "$0")/.." && pwd)"
++PORT="${PORT:-8123}"
++BASE="http://127.0.0.1:${PORT}"
++SETUP="$(grep -E '^SETUP_TOKEN=' "$ROOT/.env" | head -1 | cut -d= -f2-)"
++
++OWNER_EMAIL="owner@okveggies.com.ng"; OWNER_PW="owner-strong-777"; OWNER_PH="08030000001"
++MGR_EMAIL="manager@okveggies.com.ng"; MGR_PW="manager-strong-777";  MGR_PH="08030000002"
++
++fail=0
++pass() { echo "  ok   $1"; }
++bad()  { echo "  FAIL $1"; fail=1; }
++
++jar() { mktemp; }
++OJAR="$(jar)"; MJAR="$(jar)"; SJAR="$(jar)"; RJAR="$(jar)"
++
++# GET a page (keeping cookies) and pull its CSRF token out of the form.
++csrf_from() { # jar url
++  curl -s -c "$1" -b "$1" "$2" \
++    | grep -oE 'name="okv_csrf" value="[^"]+"' | head -1 | sed -E 's/.*value="([^"]+)".*/\1/'
++}
++code_of() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
++
++# --- Clean the staff slate so the setup endpoint has work to do ---------------
++mysql -h 127.0.0.1 -u okv -pokv_test_pw okveggies_test \
++  -e "DELETE FROM users WHERE user_type='staff'; DELETE FROM rate_limits;" 2>/dev/null
++
++# --- Start the local server --------------------------------------------------
++php -S 127.0.0.1:"${PORT}" -t "$ROOT" >/tmp/okv_smoke_server.log 2>&1 &
++SRV=$!
++trap 'kill "$SRV" 2>/dev/null; rm -f "$OJAR" "$MJAR" "$SJAR" "$RJAR"' EXIT
++for _ in $(seq 1 30); do
++  [ "$(code_of "$BASE/admin/login.php")" != "000" ] && break
++  sleep 0.3
++done
++if [ "$(code_of "$BASE/admin/login.php")" = "000" ]; then echo "[smoke] server did not start"; exit 2; fi
++echo "[smoke] base: $BASE"
++
++echo "[setup] first-Owner endpoint"
++[ "$(code_of "$BASE/public/setup.php")" = "404" ] && pass "no token is a 404" || bad "no token should be 404"
++[ "$(code_of "$BASE/public/setup.php?token=wrong")" = "404" ] && pass "a wrong token is a 404" || bad "wrong token should be 404"
++
++setup_form="$(curl -s -c "$SJAR" -b "$SJAR" "$BASE/public/setup.php?token=${SETUP}")"
++echo "$setup_form" | grep -q "Create the Owner" && pass "the right token shows the form" || bad "the right token should show the form"
++scsrf="$(echo "$setup_form" | grep -oE 'name="okv_csrf" value="[^"]+"' | head -1 | sed -E 's/.*value="([^"]+)".*/\1/')"
++
++created="$(curl -s -c "$SJAR" -b "$SJAR" \
++  --data-urlencode "token=${SETUP}" --data-urlencode "okv_csrf=${scsrf}" \
++  --data-urlencode "first_name=Kumbish" --data-urlencode "last_name=Putleh" \
++  --data-urlencode "email=${OWNER_EMAIL}" --data-urlencode "phone=${OWNER_PH}" \
++  --data-urlencode "password=${OWNER_PW}" --data-urlencode "confirm_password=${OWNER_PW}" \
++  "$BASE/public/setup.php")"
++echo "$created" | grep -q "Owner account created" && pass "the Owner is created" || bad "the Owner should be created"
++[ "$(code_of "$BASE/public/setup.php?token=${SETUP}")" = "409" ] && pass "setup refuses once an Owner exists" || bad "setup should refuse the second time"
++
++echo "[login] Owner"
++ocsrf="$(csrf_from "$OJAR" "$BASE/admin/login.php")"
++olog="$(curl -s -c "$OJAR" -b "$OJAR" -w $'\n%{http_code}' \
++  -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++  --data-urlencode "action=login" --data-urlencode "identifier=${OWNER_EMAIL}" \
++  --data-urlencode "password=${OWNER_PW}" --data-urlencode "okv_csrf=${ocsrf}" \
++  "$BASE/api/v1/auth.php")"
++ocode="$(printf '%s' "$olog" | tail -1)"; obody="$(printf '%s' "$olog" | sed '$d')"
++{ [ "$ocode" = "200" ] && echo "$obody" | grep -q '"status":"ok"'; } && pass "Owner signs in" || bad "Owner sign in failed ($ocode)"
++
++odash="$(curl -s -c "$OJAR" -b "$OJAR" "$BASE/admin/")"
++echo "$odash" | grep -q "Dashboard" && pass "Owner reaches the dashboard" || bad "Owner should reach the dashboard"
++echo "$odash" | grep -q "<span>Users</span>" && pass "Owner sees Users in the nav" || bad "Owner should see Users in the nav"
++ousers="$(curl -s -c "$OJAR" -b "$OJAR" "$BASE/admin/users.php")"
++{ echo "$ousers" | grep -q "Add a staff member" && echo "$ousers" | grep -q "</html>"; } \
++  && pass "Owner Users and Roles renders fully" || bad "Owner Users and Roles should render fully (not truncate mid-page)"
++
++echo "[create] Owner adds the Manager through the API"
++ucsrf="$(csrf_from "$OJAR" "$BASE/admin/users.php")"
++mk="$(curl -s -c "$OJAR" -b "$OJAR" -w $'\n%{http_code}' \
++  -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++  --data-urlencode "action=create" --data-urlencode "first_name=Manny" --data-urlencode "last_name=Gerard" \
++  --data-urlencode "email=${MGR_EMAIL}" --data-urlencode "phone=${MGR_PH}" \
++  --data-urlencode "password=${MGR_PW}" --data-urlencode "role=manager" --data-urlencode "okv_csrf=${ucsrf}" \
++  "$BASE/api/v1/users.php")"
++mkcode="$(printf '%s' "$mk" | tail -1)"
++[ "$mkcode" = "201" ] && pass "Owner creates the Manager" || bad "Owner should create the Manager ($mkcode)"
++
++echo "[guest] no session"
++[ "$(code_of "$BASE/admin/")" = "302" ] && pass "guest at /admin/ is redirected" || bad "guest at /admin/ should redirect"
++[ "$(code_of "$BASE/admin/users.php")" = "302" ] && pass "guest at Users is redirected" || bad "guest at Users should redirect"
++
++echo "[login] Manager"
++mcsrf="$(csrf_from "$MJAR" "$BASE/admin/login.php")"
++mlog="$(curl -s -c "$MJAR" -b "$MJAR" -w $'\n%{http_code}' \
++  -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++  --data-urlencode "action=login" --data-urlencode "identifier=${MGR_EMAIL}" \
++  --data-urlencode "password=${MGR_PW}" --data-urlencode "okv_csrf=${mcsrf}" \
++  "$BASE/api/v1/auth.php")"
++mcode="$(printf '%s' "$mlog" | tail -1)"; mbody="$(printf '%s' "$mlog" | sed '$d')"
++{ [ "$mcode" = "200" ] && echo "$mbody" | grep -q '"status":"ok"'; } && pass "Manager signs in" || bad "Manager sign in failed ($mcode)"
++
++mdash="$(curl -s -c "$MJAR" -b "$MJAR" "$BASE/admin/")"
++echo "$mdash" | grep -q "<span>Orders</span>" && pass "Manager sees Orders in the nav" || bad "Manager should see Orders in the nav"
++echo "$mdash" | grep -q "<span>Users</span>" && bad "Manager should NOT see Users in the nav" || pass "Manager does not see Users in the nav"
++[ "$(code_of -c "$MJAR" -b "$MJAR" "$BASE/admin/users.php")" = "403" ] && pass "Manager is refused Users and Roles (403)" || bad "Manager should get 403 on Users"
++
++mmk="$(curl -s -c "$MJAR" -b "$MJAR" -w $'\n%{http_code}' \
++  -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++  --data-urlencode "action=create" --data-urlencode "first_name=X" --data-urlencode "last_name=Y" \
++  --data-urlencode "email=x@okveggies.com.ng" --data-urlencode "phone=08030000009" \
++  --data-urlencode "password=some-strong-9999" --data-urlencode "role=manager" --data-urlencode "okv_csrf=${mcsrf}" \
++  "$BASE/api/v1/users.php")"
++mmkcode="$(printf '%s' "$mmk" | tail -1)"
++[ "$mmkcode" = "403" ] && pass "Manager cannot create staff through the API (403)" || bad "Manager create should be 403 ($mmkcode)"
++
++echo "[account] Owner changes own password"
++oacct="$(curl -s -c "$OJAR" -b "$OJAR" "$BASE/admin/account.php")"
++{ echo "$oacct" | grep -q "Change your password" && echo "$oacct" | grep -q "</html>"; } \
++  && pass "Owner account page renders fully" || bad "Owner account page should render fully"
++acsrf="$(csrf_from "$OJAR" "$BASE/admin/account.php")"
++NEWPW="owner-brandnew-4242"
++chg="$(curl -s -c "$OJAR" -b "$OJAR" -w $'\n%{http_code}' -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++  --data-urlencode "action=change_password" --data-urlencode "current_password=${OWNER_PW}" \
++  --data-urlencode "new_password=${NEWPW}" --data-urlencode "confirm_password=${NEWPW}" \
++  --data-urlencode "okv_csrf=${acsrf}" "$BASE/api/v1/auth.php")"
++[ "$(printf '%s' "$chg" | tail -1)" = "200" ] && pass "Owner changes their password" || bad "change password should succeed"
++
++NJAR="$(jar)"; ncsrf="$(csrf_from "$NJAR" "$BASE/admin/login.php")"
++newcode="$(curl -s -c "$NJAR" -b "$NJAR" -o /dev/null -w '%{http_code}' -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++  --data-urlencode "action=login" --data-urlencode "identifier=${OWNER_EMAIL}" \
++  --data-urlencode "password=${NEWPW}" --data-urlencode "okv_csrf=${ncsrf}" "$BASE/api/v1/auth.php")"
++[ "$newcode" = "200" ] && pass "the new password signs in" || bad "the new password should sign in ($newcode)"
++
++OJAR2="$(jar)"; ocsrf2="$(csrf_from "$OJAR2" "$BASE/admin/login.php")"
++oldcode="$(curl -s -c "$OJAR2" -b "$OJAR2" -o /dev/null -w '%{http_code}' -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++  --data-urlencode "action=login" --data-urlencode "identifier=${OWNER_EMAIL}" \
++  --data-urlencode "password=${OWNER_PW}" --data-urlencode "okv_csrf=${ocsrf2}" "$BASE/api/v1/auth.php")"
++[ "$oldcode" = "401" ] && pass "the old password no longer works" || bad "the old password should fail ($oldcode)"
++
++echo "[throttle] login lockout"
++rcsrf="$(csrf_from "$RJAR" "$BASE/admin/login.php")"
++for i in 1 2 3 4 5; do
++  curl -s -o /dev/null -c "$RJAR" -b "$RJAR" -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++    --data-urlencode "action=login" --data-urlencode "identifier=locktest@okveggies.com.ng" \
++    --data-urlencode "password=wrong-guess-${i}" --data-urlencode "okv_csrf=${rcsrf}" \
++    "$BASE/api/v1/auth.php"
++done
++sixth="$(curl -s -c "$RJAR" -b "$RJAR" -w $'\n%{http_code}' -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++  --data-urlencode "action=login" --data-urlencode "identifier=locktest@okveggies.com.ng" \
++  --data-urlencode "password=wrong-guess-6" --data-urlencode "okv_csrf=${rcsrf}" \
++  "$BASE/api/v1/auth.php")"
++scode="$(printf '%s' "$sixth" | tail -1)"; sbody="$(printf '%s' "$sixth" | sed '$d')"
++{ [ "$scode" = "429" ] && echo "$sbody" | grep -q '"code":"rate_limited"'; } && pass "identifier locks after 5 failed tries" || bad "6th try should be rate limited ($scode)"
++
++echo "[logout] ends the session"
++LJAR="$(jar)"; lcsrf="$(csrf_from "$LJAR" "$BASE/admin/login.php")"
++curl -s -o /dev/null -c "$LJAR" -b "$LJAR" -H 'X-Requested-With: fetch' -H 'Accept: application/json' \
++  --data-urlencode "action=login" --data-urlencode "identifier=${OWNER_EMAIL}" \
++  --data-urlencode "password=${NEWPW}" --data-urlencode "okv_csrf=${lcsrf}" "$BASE/api/v1/auth.php"
++before="$(code_of -c "$LJAR" -b "$LJAR" "$BASE/admin/")"
++locsrf="$(csrf_from "$LJAR" "$BASE/admin/")"
++curl -s -o /dev/null -c "$LJAR" -b "$LJAR" \
++  --data-urlencode "action=logout" --data-urlencode "okv_csrf=${locsrf}" "$BASE/api/v1/auth.php"
++after="$(code_of -c "$LJAR" -b "$LJAR" "$BASE/admin/")"
++{ [ "$before" = "200" ] && [ "$after" = "302" ]; } \
++  && pass "logout ends the session (dashboard then redirect)" || bad "logout should end the session (before=$before after=$after)"
++
++echo ""
++if [ "$fail" -eq 0 ]; then echo "[smoke] all green."; else echo "[smoke] failures above."; fi
++exit $fail
+diff --git a/scripts/tests/PasswordTest.php b/scripts/tests/PasswordTest.php
+new file mode 100644
+index 0000000..f07b102
+--- /dev/null
++++ b/scripts/tests/PasswordTest.php
+@@ -0,0 +1,39 @@
++<?php
++/**
++ * scripts/tests/PasswordTest.php
++ * The Password helper is the one place a staff password is hashed, verified and
++ * checked against the policy. It must never be wrong. Pure unit test, no DB.
++ */
++
++require_once dirname(__DIR__, 2) . '/includes/config/env.php';
++require_once dirname(__DIR__, 2) . '/includes/classes/Password.php';
++
++// Minimum length comes from .env (10 for these tests).
++okv_test_eq(10, Password::minLength(), 'minimum length reads from config');
++
++// Policy: too short is rejected, a good password is accepted.
++okv_test_ok(Password::policyError('short') !== null,               'a short password is rejected');
++okv_test_ok(Password::policyError('ridged-lantern-92') === null,   'a long, uncommon password is accepted');
++okv_test_ok(Password::isAcceptable('ridged-lantern-92'),           'isAcceptable agrees with policyError');
++
++// Policy: the most common passwords are rejected even when long enough.
++okv_test_ok(Password::policyError('password123') !== null,         'a common password is rejected');
++okv_test_ok(Password::policyError('okveggies1') !== null,          'an obvious brand password is rejected');
++
++// Policy: a password cannot simply be the email or the phone.
++okv_test_ok(Password::policyError('owner@okveggies.com.ng', 'owner@okveggies.com.ng') !== null, 'the email cannot be the password');
++okv_test_ok(Password::policyError('08031234567', 'a@b.com', '08031234567') !== null,            'the phone cannot be the password');
++
++// Policy: bcrypt ignores bytes past 72, so a longer password is rejected up front.
++okv_test_ok(Password::policyError(str_repeat('a', 73)) !== null,   'a password over 72 characters is rejected');
++
++// Hash and verify round-trip.
++$hash = Password::hash('ridged-lantern-92');
++okv_test_ok(Password::verify('ridged-lantern-92', $hash),          'verify accepts the right password');
++okv_test_ok(!Password::verify('wrong-password-00', $hash),         'verify rejects the wrong password');
++okv_test_ok(!Password::verify('ridged-lantern-92', ''),            'verify rejects an empty hash');
++
++// A hash made at a weaker cost is flagged for a rehash at the current cost.
++$weak = password_hash('ridged-lantern-92', PASSWORD_BCRYPT, ['cost' => 10]);
++okv_test_ok(Password::needsRehash($weak),                          'a weaker-cost hash needs a rehash');
++okv_test_ok(!Password::needsRehash($hash),                         'a current-cost hash does not need a rehash');
+diff --git a/scripts/tests/auth_db_test.php b/scripts/tests/auth_db_test.php
+new file mode 100644
+index 0000000..14fc307
+--- /dev/null
++++ b/scripts/tests/auth_db_test.php
+@@ -0,0 +1,110 @@
++<?php
++/**
++ * scripts/tests/auth_db_test.php
++ * -----------------------------------------------------------------------------
++ * OK Veggies. Auth checks that need the database: password verification against
++ * a stored hash, the login rate-limit lockout, and RBAC gating for the Owner and
++ * the Manager. Run against a scratch database:
++ *
++ *   php scripts/tests/auth_db_test.php
++ *
++ * It creates two throwaway staff users, asserts, then removes them. It never
++ * touches real accounts. The guest redirect is proved by scripts/smoke_roles.sh.
++ * -----------------------------------------------------------------------------
++ */
++
++$root = dirname(__DIR__, 2);
++require_once $root . '/includes/config/db.php';
++require_once $root . '/includes/classes/Database.php';
++require_once $root . '/includes/classes/RateLimiter.php';
++require_once $root . '/includes/classes/Password.php';
++require_once $root . '/includes/classes/Rbac.php';
++
++$GLOBALS['t'] = 0; $GLOBALS['p'] = 0; $GLOBALS['f'] = [];
++function t_ok($cond, string $label): void {
++    $GLOBALS['t']++;
++    if ($cond) { $GLOBALS['p']++; } else { $GLOBALS['f'][] = $label; fwrite(STDERR, "  FAIL: $label\n"); }
++}
++function t_eq($expected, $actual, string $label): void {
++    $ok = ($expected === $actual);
++    if (!$ok) { $label .= '  (expected ' . var_export($expected, true) . ', got ' . var_export($actual, true) . ')'; }
++    t_ok($ok, $label);
++}
++
++$_SESSION = [];
++$pdo = Database::getInstance()->getConnection();
++
++$ownerEmail = 'dbtest-owner@okveggies.com.ng';
++$mgrEmail   = 'dbtest-manager@okveggies.com.ng';
++
++/** Create a staff user with a role and return the new id. */
++function make_staff(PDO $pdo, string $fn, string $ln, string $em, string $ph, string $pw, string $role): int {
++    $pdo->prepare(
++        "INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status, email_verified_at)
++         VALUES (?, ?, ?, ?, ?, 'staff', 'active', NOW())"
++    )->execute([$fn, $ln, $em, $ph, Password::hash($pw)]);
++    $id = (int) $pdo->lastInsertId();
++    $role = Database::one('SELECT id FROM roles WHERE name = :n', [':n' => $role]);
++    $pdo->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)')->execute([$id, (int) $role['id']]);
++    return $id;
++}
++
++// Clean slate for the two test users (cascade removes their roles).
++$pdo->prepare('DELETE FROM users WHERE email IN (?, ?)')->execute([$ownerEmail, $mgrEmail]);
++
++$ownerId = make_staff($pdo, 'Test', 'Owner',   $ownerEmail, '0800test001', 'owner-strong-777',   'owner');
++$mgrId   = make_staff($pdo, 'Test', 'Manager', $mgrEmail,   '0800test002', 'manager-strong-777', 'manager');
++
++// --- 1. Password verification against the stored hash (the login check) ------
++$row = Database::one('SELECT password_hash FROM users WHERE id = :id', [':id' => $ownerId]);
++t_ok(Password::verify('owner-strong-777', $row['password_hash']), 'the right password verifies against the stored hash');
++t_ok(!Password::verify('not-the-password', $row['password_hash']), 'the wrong password does not verify');
++
++// --- 2. Rate-limit lockout (5 tries per identifier) --------------------------
++$bucket = 'dbtest:login:lockme';
++$max = 5; $window = 900;
++RateLimiter::reset($bucket);
++t_ok(!RateLimiter::isLocked($bucket, $max), 'a fresh identifier is not locked');
++for ($i = 1; $i <= 5; $i++) {
++    RateLimiter::hit($bucket, $max, $window);
++    if ($i < 5) {
++        t_ok(!RateLimiter::isLocked($bucket, $max), "not locked after $i failed tries");
++    }
++}
++t_ok(RateLimiter::isLocked($bucket, $max), 'locked after 5 failed tries');
++t_ok(RateLimiter::retryAfter($bucket) > 0, 'a lockout reports seconds to wait');
++RateLimiter::reset($bucket);
++t_ok(!RateLimiter::isLocked($bucket, $max), 'a reset clears the lockout (a correct sign in would do this)');
++
++// --- 3. RBAC gating: Owner is a superuser, Manager is scoped -----------------
++Rbac::loadFromDb($ownerId);
++t_ok(Rbac::isStaff(), 'owner counts as staff');
++t_ok(in_array('owner', Rbac::roles(), true), 'owner holds the owner role');
++t_ok(Rbac::hasPermission('users.view'), 'owner can view users');
++t_ok(Rbac::hasPermission('rbac.roles.view'), 'owner can view roles');
++t_ok(Rbac::hasPermission('anything.not.seeded'), 'owner is a superuser (star permission)');
++
++Rbac::loadFromDb($mgrId);
++t_ok(Rbac::isStaff(), 'manager counts as staff');
++t_ok(!Rbac::hasPermission('users.view'), 'manager cannot view users');
++t_ok(!Rbac::hasPermission('users.create'), 'manager cannot create users');
++t_ok(!Rbac::hasPermission('rbac.roles.view'), 'manager cannot view roles');
++t_ok(!Rbac::hasPermission('settings.edit'), 'manager cannot edit settings');
++t_ok(!Rbac::hasPermission('payments.refund'), 'manager cannot issue refunds');
++t_ok(Rbac::hasPermission('orders.view'), 'manager can view orders');
++t_ok(Rbac::hasPermission('pricing.update'), 'manager can update pricing');
++t_ok(Rbac::hasPermission('delivery.manifest.view'), 'manager can view the delivery manifest');
++
++// --- 4. A guest holds no session identity ------------------------------------
++$_SESSION = [];
++t_ok(Rbac::userId() === null, 'no session means no user id');
++t_ok(!Rbac::isLoggedIn(), 'a guest is not logged in');
++
++// Cleanup.
++$pdo->prepare('DELETE FROM users WHERE email IN (?, ?)')->execute([$ownerEmail, $mgrEmail]);
++
++$t = $GLOBALS['t']; $p = $GLOBALS['p'];
++fwrite(STDOUT, "\n$p / $t assertions passed.\n");
++if ($p !== $t) { fwrite(STDERR, count($GLOBALS['f']) . " failed.\n"); exit(1); }
++fwrite(STDOUT, "All green.\n");
++exit(0);
+-- 
+2.43.0
+

@@ -145,7 +145,7 @@ if (!function_exists('okv_document_letterhead')) {
     <table class="okv-doc-head">
       <tr>
         <td>
-          <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup-mono-green.svg')) ?>"
+          <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup.svg')) ?>"
                alt="<?= okv_e($name) ?>" class="okv-doc-mark" width="260" height="68">
         </td>
         <td class="okv-doc-org">

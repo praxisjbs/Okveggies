@@ -53,7 +53,7 @@ $balance = Money::balance($total, $paid);
 okv_document_open(['title' => 'Invoice ' . (string) $order['order_number'], 'print' => true]);
 okv_document_letterhead([
     'kind'      => 'Invoice',
-    'title'     => $balance > 0 ? 'What is owed on this order' : 'This order is fully paid',
+    'title'     => $balance > 0 ? 'Amount due for this order' : 'This order is fully paid',
     'reference' => okv_document_reference((string) $order['order_number']),
     'issued_on' => date('j M Y', strtotime((string) $order['created_at'])),
 ]);
