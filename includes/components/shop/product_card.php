@@ -25,7 +25,7 @@ if (!function_exists('okv_product_card')) {
             <div class="aspect-square overflow-hidden rounded-md bg-forest-tint">
               <?php if (!empty($product['image'])): ?>
                 <img src="<?= okv_e(okv_image_url($product['image'])) ?>"
-                     alt="<?= okv_e($product['name']) ?>, <?= okv_e($unit) ?>, sourced from <?= okv_e($sourceRegions) ?>"
+                     alt="<?= okv_e(okv_produce_alt((string) $product['name'], $unit, $sourceRegions)) ?>"
                      class="h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105" loading="lazy">
               <?php else: ?>
                 <div class="flex h-full items-center justify-center p-4 text-center text-sm text-ink-40">Photo coming soon</div>
