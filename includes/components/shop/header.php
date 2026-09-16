@@ -37,6 +37,7 @@ if (!function_exists('okv_shop_header')) {
               <a href="/kitchen-runs.php" class="okv-btn-outline px-4">Kitchen Runs</a>
             </nav>
             <div class="flex items-center gap-2">
+              <?php require __DIR__ . '/notification_bell.php'; ?>
               <a href="/account.php" class="okv-btn-text hidden sm:inline-flex"><?= okv_e($accountLabel) ?></a>
               <a href="/cart.php" class="okv-btn px-4" aria-label="Basket, <?= $basketCount ?> items" data-basket-open>
                 Basket <span class="okv-basket-count rounded-full bg-white px-2 py-0.5 text-xs text-forest" aria-live="polite"><?= $basketCount ?></span>
