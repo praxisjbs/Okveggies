@@ -131,13 +131,20 @@ final class ContactMessages
                 ]
             );
             $messageId = (int) $pdo->lastInsertId();
+            $actorId = null;
+            if ($customerId !== null && $customerId > 0) {
+                $userExists = (bool) Database::one('SELECT id FROM users WHERE id = :id', [':id' => $customerId]);
+                if ($userExists) {
+                    $actorId = $customerId;
+                }
+            }
             Audit::record(
                 'contact_messages.create',
                 'contact_message',
                 $messageId,
                 null,
                 ['source' => $source, 'customer_id' => $customerId],
-                $customerId
+                $actorId
             );
             $pdo->commit();
         } catch (Throwable $e) {

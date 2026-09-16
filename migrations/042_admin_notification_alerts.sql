@@ -1,25 +1,21 @@
--- Admin bell templates for the two PRD Section 15 alerts that had no copy.
+-- Admin bell copy for the manual payment proof alert that had none.
+-- The Make It Right staff alert (admin_new_issue_report) is owned by M10's
+-- migration 045; it is not defined here so this migration cannot overwrite it
+-- or an Owner's edited copy. INSERT IGNORE keeps a later staff edit intact if
+-- this migration is ever re-applied.
 START TRANSACTION;
 
-INSERT INTO notification_templates
+INSERT IGNORE INTO notification_templates
     (template_key, channel, subject_template, body_template, is_active)
 VALUES
     ('admin_manual_payment_proof', 'email',
      'Payment proof to review for {{order_number}}',
      '{{recorded_by}} recorded {{amount}} against order {{order_number}}. Open Payments and check the proof against the money received.',
-     TRUE),
-    ('admin_new_issue_report', 'email',
-     'Make It Right report for {{order_number}}',
-     'A customer reported {{issue_category}} against order {{order_number}}.\n\n{{message_preview}}\n\nOpen the report and decide how we will put it right.',
-     TRUE)
-ON DUPLICATE KEY UPDATE
-    subject_template = VALUES(subject_template),
-    body_template = VALUES(body_template),
-    is_active = VALUES(is_active);
+     TRUE);
 
 COMMIT;
 
 -- Verification:
 --   SELECT template_key, is_active FROM notification_templates
---    WHERE template_key IN ('admin_manual_payment_proof','admin_new_issue_report');
---   Expect 2 active rows.
+--    WHERE template_key = 'admin_manual_payment_proof';
+--   Expect 1 active row.

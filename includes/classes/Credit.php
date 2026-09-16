@@ -905,6 +905,59 @@ final class Credit
     }
 
     /**
+     * Put a Make It Right value on an approved business account. The negative
+     * journal entry reduces what is owed now or offsets the next credit draw.
+     * The issue source key makes a replay return the original entry.
+     */
+    public static function grantIssueCredit(int $userId, int $orderId, int $issueId, int $amount): array
+    {
+        if ($userId < 1 || $orderId < 1 || $issueId < 1 || $amount < 1) {
+            throw new DomainException('invalid_issue_credit');
+        }
+        $pdo = Database::getInstance()->getConnection();
+        if (!$pdo->inTransaction()) {
+            throw new LogicException('issue credit called outside a transaction');
+        }
+
+        $key = 'issue:' . $issueId . ':credit';
+        $existing = Database::one(
+            'SELECT id, amount_subunit FROM credit_transactions WHERE source_key = :key',
+            [':key' => $key]
+        );
+        if ($existing !== null) {
+            return [
+                'id' => (int) $existing['id'],
+                'amount_subunit' => abs((int) $existing['amount_subunit']),
+                'already' => true,
+            ];
+        }
+
+        $business = Database::one(
+            'SELECT id, credit_status FROM business_customers
+              WHERE user_id = :user_id FOR UPDATE',
+            [':user_id' => $userId]
+        );
+        if ($business === null || (string) $business['credit_status'] !== 'approved') {
+            throw new DomainException('credit_not_available');
+        }
+
+        Database::run(
+            'INSERT INTO credit_transactions
+                (business_customer_id, order_id, transaction_type, source_key, amount_subunit, status)
+             VALUES (:business, :order_id, :type, :source_key, :amount, :status)',
+            [
+                ':business' => (int) $business['id'],
+                ':order_id' => $orderId,
+                ':type' => 'adjustment',
+                ':source_key' => $key,
+                ':amount' => -$amount,
+                ':status' => 'posted',
+            ]
+        );
+        return ['id' => (int) $pdo->lastInsertId(), 'amount_subunit' => $amount, 'already' => false];
+    }
+
+    /**
      * Write one signed adjustment against an on-account order, never more than
      * the order still has open and never twice for the same reason. The source
      * key is what makes a repeated cancellation or a replayed refund a no-op.

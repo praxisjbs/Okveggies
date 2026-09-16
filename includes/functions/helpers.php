@@ -239,6 +239,20 @@ if (!function_exists('okv_sourced_line')) {
     }
 }
 
+if (!function_exists('okv_produce_alt')) {
+    /** Build truthful produce-photo text from whichever source fields exist. */
+    function okv_produce_alt(string $name, string $unit = '', string $regions = ''): string
+    {
+        $parts = array_values(array_filter([
+            trim($name),
+            trim($unit),
+        ], static fn(string $part): bool => $part !== ''));
+        $alt = implode(', ', $parts);
+        $regions = trim($regions);
+        return $regions === '' ? $alt : $alt . ', sourced from ' . $regions;
+    }
+}
+
 if (!function_exists('okv_send_account_code')) {
     /**
      * Issue a one-time code and email it from a notification template, in one

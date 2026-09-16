@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="464" height="100" viewBox="0 0 464 100" role="img" aria-labelledby="title">
+  <title id="title">Paystack</title>
+  <g fill="#00C3F7">
+    <rect width="72" height="16" rx="3"/><rect y="28" width="72" height="16" rx="3"/>
+    <rect y="56" width="54" height="16" rx="3"/><rect y="84" width="36" height="16" rx="3"/>
+  </g>
+  <text x="94" y="72" fill="#03100A" font-family="Arial, sans-serif" font-size="68" font-weight="700">Paystack</text>
+</svg>
