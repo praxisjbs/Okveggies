@@ -710,6 +710,15 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 
 ## Session log (newest first)
 
+### 16 Sep 2026, customer and Pro notification bell
+
+- Gave the storefront and Pro shells the in-app notification bell that until now existed only for staff (M11). A signed-in customer sees an unread badge in the sticky top header on every page that renders a shell, opens an accessible focus-trapped panel, reads updates per item or marks all as read, and sees a "Needs you" strip of what they can still act on (payments to complete, Kitchen Run quotes to review). Guests never see it: the in-app feed is keyed to a user id.
+- `CustomerNotifications` mirrors `AdminNotifications` but is scoped to the customer-audience events, read straight from the `Notifications` catalogue so the two cannot drift, and surfaces only delivered (`sent`) in-app rows so a held receipt such as the pay-in-full confirmation never shows before it is true. `api/v1/notifications.php` is the customer feed: a signed-in GET reads it, and mark read and mark all read are POST with CSRF, each scoped to the customer's own deliveries.
+- The bell component is self-contained (the storefront has no single shared footer): it renders only for a signed-in customer, emits its own CSRF bootstrap and loads `assets/js/notifications.js` once. The controller is vanilla, builds rows with `textContent` (no `innerHTML`), loads on open without polling, and closes on Escape.
+- The account page keeps its Updates list but no longer marks everything read on view; the bell owns the read state now, so the badge stays honest. It reads the same scoped feed, so the list and the bell always agree.
+- This was built to answer clarifying questions 1A, 2C, 3B, 4A, 5A. It is an enhancement beyond PRD Section 15 (which specifies email and staff alerts), agreed with the owner before building.
+- Verification: 3,114/3,114 unit assertions passed (including the new `CustomerNotificationsTest`), `php -l` clean on every touched file, `node -c` clean, the JS and CSS built, all 8 brand checks green, `git diff --check` clean. The database and HTTP suites (`customer_notifications_db_test`, `customer_notifications_http_test`) are added to `run_all.sh` and need MySQL and the running site, so they were not run in this environment; they run in CI and before deploy.
+
 ### 16 Sep 2026, M11 senior review and integration on pull request 48
 
 - Reviewed the milestone against PRD Sections 2 and 17 and `CLAUDE.md`. The money arithmetic (integer kobo, floor-plus-remainder refund allocation, exact 10,000 basis-point category share), the layered dashboard permissions, the server-filtered command palette and the accessible notification bell are all strong. The senior review is `docs/M11_REVIEW.md`; the junior's delivery evidence is kept as `docs/M11_HANDOVER.md`.

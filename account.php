@@ -78,12 +78,12 @@ $csrf = Csrf::token();
           LIMIT 20',
         [':user' => (int) Customer::id()]
     );
-    // The in-app copy of every email this customer has been sent. Reading the
-    // page marks them read, which is what read_at is for on an in-app row;
-    // email rows never carry it, because open tracking is out of Phase 1.
+    // The in-app copy of every email this customer has been sent. The bell in
+    // the header owns the read state now, per item or mark all as read, so this
+    // list no longer marks everything read on view: that kept the unread badge
+    // honest instead of silently zeroing it whenever the account page opened.
     try {
-        $updates = Notifications::inboxFor((int) Customer::id(), 15);
-        Notifications::markInboxRead((int) Customer::id());
+        $updates = CustomerNotifications::recent((int) Customer::id(), 15);
     } catch (Throwable $e) {
         error_log('account updates: ' . $e->getMessage());
         $updates = [];
@@ -190,8 +190,8 @@ $csrf = Csrf::token();
       </section>
 
       <!-- Updates. The same words the emails carry, in the app, so a customer
-           who never opens email still sees every step of their own order.
-           Reading the page marks them read; nothing here is another person's. -->
+           who never opens email still sees every step of their own order. The
+           header bell owns the read state; nothing here is another person's. -->
       <section class="okv-card lg:col-span-3" aria-labelledby="updates-h">
         <h2 id="updates-h" class="font-editorial text-okv-h6 text-ink">Updates</h2>
         <?php if (!$updates): ?>
@@ -205,8 +205,16 @@ $csrf = Csrf::token();
                   <time class="text-xs text-ink-60" datetime="<?= okv_e((string) $update['created_at']) ?>"><?= okv_e(date('j M, H:i', strtotime((string) $update['created_at']))) ?></time>
                 </div>
                 <p class="mt-1 text-sm text-ink-60"><?= nl2br(okv_e((string) $update['body'])) ?></p>
-                <?php if ($update['related_id']): ?>
-                  <a class="okv-btn-text mt-1 inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $update['related_id'] ?>">Open this order</a>
+                <?php
+                  $updateLabel = match ((string) ($update['related_type'] ?? '')) {
+                      'order' => 'Open this order',
+                      'kitchen_run' => 'Open this Kitchen Run',
+                      'credit_application' => 'Open Pro Credit',
+                      default => '',
+                  };
+                ?>
+                <?php if ($updateLabel !== '' && (int) ($update['related_id'] ?? 0) > 0): ?>
+                  <a class="okv-btn-text mt-1 inline-flex min-h-[44px] items-center" href="<?= okv_e((string) $update['href']) ?>"><?= okv_e($updateLabel) ?></a>
                 <?php endif; ?>
               </li>
             <?php endforeach; ?>

@@ -102,6 +102,7 @@ require_once __DIR__ . '/classes/OrderLifecycle.php';
 require_once __DIR__ . '/classes/DeliveryManifest.php';
 require_once __DIR__ . '/classes/Notifications.php';
 require_once __DIR__ . '/classes/AdminNotifications.php';
+require_once __DIR__ . '/classes/CustomerNotifications.php';
 require_once __DIR__ . '/classes/OrderDocument.php';
 require_once __DIR__ . '/classes/PaymentHealth.php';
 require_once __DIR__ . '/classes/KitchenRuns.php';
