@@ -68,6 +68,8 @@ require_once $appRoot . '/includes/classes/KitchenLists.php';
 require_once $appRoot . '/includes/classes/ProOrders.php';
 require_once $appRoot . '/includes/classes/Credit.php';
 require_once $appRoot . '/includes/classes/IssueResolutions.php';
+require_once $appRoot . '/includes/classes/AdminDashboard.php';
+require_once $appRoot . '/includes/classes/AdminNotifications.php';
 require_once $appRoot . '/includes/classes/Customers.php';
 require_once $appRoot . '/includes/classes/Customer.php';
 require_once $appRoot . '/includes/classes/StaffCustomers.php';

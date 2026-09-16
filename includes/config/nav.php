@@ -17,45 +17,71 @@ $OKV_ADMIN_NAV = [
     [
         'heading' => 'Overview',
         'items' => [
-            ['label' => 'Dashboard', 'href' => '/admin/',                 'icon' => 'home',           'permission' => 'dashboard.view'],
+            ['label' => 'Dashboard', 'href' => '/admin/',                 'icon' => 'home',           'permission' => 'dashboard.view', 'keywords' => ['overview', 'home', 'today', 'analytics'], 'shortcut' => ['g', 'd']],
         ],
     ],
     [
         'heading' => 'Selling',
         'items' => [
-            ['label' => 'Orders',        'href' => '/admin/orders.php',       'icon' => 'clipboard',   'permission' => 'orders.view'],
-            ['label' => 'Kitchen Runs',  'href' => '/admin/kitchen_runs.php', 'icon' => 'list',        'permission' => 'kitchen_runs.view'],
-            ['label' => 'Combos',        'href' => '/admin/combos.php',       'icon' => 'squares',     'permission' => 'combos.view'],
-            ['label' => 'Products',      'href' => '/admin/products.php',     'icon' => 'leaf',        'permission' => 'products.view'],
-            ['label' => 'Pricing',       'href' => '/admin/pricing.php',      'icon' => 'tag',         'permission' => 'pricing.view'],
+            ['label' => 'Orders',        'href' => '/admin/orders.php',       'icon' => 'clipboard',   'permission' => 'orders.view', 'keywords' => ['order', 'basket', 'checkout', 'sales'], 'shortcut' => ['g', 'o']],
+            ['label' => 'Kitchen Runs',  'href' => '/admin/kitchen_runs.php', 'icon' => 'list',        'permission' => 'kitchen_runs.view', 'keywords' => ['kitchen', 'quote', 'procurement', 'list']],
+            ['label' => 'Combos',        'href' => '/admin/combos.php',       'icon' => 'squares',     'permission' => 'combos.view', 'keywords' => ['combo', 'deals', 'baskets']],
+            ['label' => 'Products',      'href' => '/admin/products.php',     'icon' => 'leaf',        'permission' => 'products.view', 'keywords' => ['product', 'catalogue', 'produce', 'inventory', 'photos'], 'shortcut' => ['g', 'p']],
+            ['label' => 'Pricing',       'href' => '/admin/pricing.php',      'icon' => 'tag',         'permission' => 'pricing.view', 'keywords' => ['price', 'prices', 'spreadsheet', 'import', 'export']],
         ],
     ],
     [
         'heading' => 'Customers and money',
         'items' => [
-            ['label' => 'Customers',     'href' => '/admin/customers.php',    'icon' => 'users',       'permission' => 'customers.view'],
-            ['label' => 'Payments',      'href' => '/admin/payments.php',     'icon' => 'card',        'permission' => 'payments.view'],
-            ['label' => 'Credit',        'href' => '/admin/credit.php',       'icon' => 'scale',       'permission' => 'credit.view'],
+            ['label' => 'Customers',     'href' => '/admin/customers.php',    'icon' => 'users',       'permission' => 'customers.view', 'keywords' => ['customer', 'household', 'business', 'addresses'], 'shortcut' => ['g', 'c']],
+            ['label' => 'Payments',      'href' => '/admin/payments.php',     'icon' => 'card',        'permission' => 'payments.view', 'keywords' => ['payment', 'pay', 'paystack', 'transactions', 'refunds', 'reconciliation'], 'shortcut' => ['g', 'm']],
+            ['label' => 'Credit',        'href' => '/admin/credit.php',       'icon' => 'scale',       'permission' => 'credit.view', 'keywords' => ['credit', 'applications', 'limits', 'outstanding', 'ageing', 'repayment']],
         ],
     ],
     [
         'heading' => 'Delivery and care',
         'items' => [
-            ['label' => 'Delivery',      'href' => '/admin/delivery.php',     'icon' => 'truck',       'permission' => 'delivery.view'],
-            ['label' => 'Make It Right', 'href' => '/admin/make_it_right.php','icon' => 'heart',       'permission' => 'issues.view'],
+            ['label' => 'Delivery',      'href' => '/admin/delivery.php',     'icon' => 'truck',       'permission' => 'delivery.view', 'keywords' => ['delivery', 'manifest', 'packing', 'zones', 'schedule'], 'shortcut' => ['g', 'l']],
+            ['label' => 'Make It Right', 'href' => '/admin/make_it_right.php','icon' => 'heart',       'permission' => 'issues.view', 'keywords' => ['issues', 'reports', 'replacement', 'complaints']],
             // `count` names a counter the sidebar resolves once per render, so
             // staff carry the number of unanswered messages on every screen.
-            ['label' => 'Messages',      'href' => '/admin/content.php',      'icon' => 'chat',        'permission' => 'messages.view', 'count' => 'messages.new'],
+            ['label' => 'Messages',      'href' => '/admin/content.php',      'icon' => 'chat',        'permission' => 'messages.view', 'count' => 'messages.new', 'keywords' => ['messages', 'contact', 'enquiries', 'inbox']],
         ],
     ],
     [
         'heading' => 'Setup',
         'items' => [
-            ['label' => 'Settings',      'href' => '/admin/settings.php',     'icon' => 'cog',         'permission' => 'settings.view'],
-            ['label' => 'Users',         'href' => '/admin/users.php',        'icon' => 'shield',      'permission' => 'users.view'],
+            ['label' => 'Settings',      'href' => '/admin/settings.php',     'icon' => 'cog',         'permission' => 'settings.view', 'keywords' => ['settings', 'order cutoff', 'notifications', 'site']],
+            ['label' => 'Users',         'href' => '/admin/users.php',        'icon' => 'shield',      'permission' => 'users.view', 'keywords' => ['users', 'roles', 'staff', 'permissions', 'team']],
         ],
     ],
 ];
+
+if (!function_exists('okv_admin_nav_commands')) {
+    /** Flatten only server-permitted admin destinations for shared navigation tools. */
+    function okv_admin_nav_commands(array $groups, callable $can): array
+    {
+        $commands = [];
+        foreach ($groups as $group) {
+            foreach (($group['items'] ?? []) as $item) {
+                if (!$can((string) ($item['permission'] ?? ''))) {
+                    continue;
+                }
+                $item['heading'] = (string) ($group['heading'] ?? 'Admin');
+                $item['keywords'] = array_values(array_filter(
+                    array_map('strval', (array) ($item['keywords'] ?? [])),
+                    static fn(string $keyword): bool => trim($keyword) !== ''
+                ));
+                $item['shortcut'] = array_values(array_filter(
+                    array_map('strval', (array) ($item['shortcut'] ?? [])),
+                    static fn(string $key): bool => trim($key) !== ''
+                ));
+                $commands[] = $item;
+            }
+        }
+        return $commands;
+    }
+}
 
 // Pro Portal (/pro), for logged-in business customers -------------------------
 $OKV_PRO_NAV = [

@@ -29,6 +29,7 @@ $okv_admin_title   = $okv_admin_title ?? 'OK Veggies';
 $okv_admin_note    = $okv_admin_note ?? '';
 $okv_admin_crumbs  = $okv_admin_crumbs ?? [];
 $okv_admin_actions = $okv_admin_actions ?? '';
+require_once __DIR__ . '/../../config/nav.php';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -41,6 +42,7 @@ $okv_admin_actions = $okv_admin_actions ?? '';
 </head>
 <body class="min-h-screen bg-forest-tint text-ink">
   <a href="#okv-admin-main" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-white focus:px-4 focus:py-2 focus:text-forest">Skip to the screen</a>
+  <?php require __DIR__ . '/command_palette.php'; ?>
   <div class="md:flex min-h-screen">
     <?php require __DIR__ . '/sidebar.php'; ?>
     <div class="flex-1 min-w-0 flex flex-col">
@@ -66,9 +68,20 @@ $okv_admin_actions = $okv_admin_actions ?? '';
 
           <p class="md:hidden font-display font-extrabold text-lg text-ink truncate"><?= okv_e($okv_admin_title) ?></p>
 
-          <a href="/" class="ml-auto okv-btn-text text-sm shrink-0">
-            <span>View shop</span>
+          <button type="button" data-command-open aria-controls="okv-command-palette" aria-haspopup="dialog" aria-expanded="false"
+                  class="ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-md border border-mist bg-white px-3 text-sm font-medium text-ink-60 hover:border-forest hover:text-forest md:px-4">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+            <span class="hidden md:inline">Find a page</span>
+            <kbd class="hidden rounded border border-mist px-1.5 py-0.5 font-mono text-[11px] text-ink-40 lg:inline">Ctrl/⌘ K</kbd>
+            <span class="sr-only md:hidden">Find a page</span>
+          </button>
+
+          <?php require __DIR__ . '/notification_bell.php'; ?>
+
+          <a href="/" class="okv-btn-text text-sm shrink-0">
+            <span class="hidden sm:inline">View shop</span>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+            <span class="sr-only sm:hidden">View shop</span>
           </a>
         </div>
       </header>

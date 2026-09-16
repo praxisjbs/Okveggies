@@ -15,6 +15,11 @@ module.exports = {
     './includes/components/**/*.php',
     './assets/js/**/*.js',
   ],
+  // Category marks are assembled from AdminDashboard's trusted token names at
+  // runtime, so the scanner cannot see their complete class names in markup.
+  safelist: [
+    { pattern: /^okv-chart-token-(foliage|forest|gold|tomato|clay|ink|gold-ink)$/ },
+  ],
   theme: {
     extend: {
       colors: {

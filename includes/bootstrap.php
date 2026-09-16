@@ -101,6 +101,7 @@ require_once __DIR__ . '/classes/OrderCancellation.php';
 require_once __DIR__ . '/classes/OrderLifecycle.php';
 require_once __DIR__ . '/classes/DeliveryManifest.php';
 require_once __DIR__ . '/classes/Notifications.php';
+require_once __DIR__ . '/classes/AdminNotifications.php';
 require_once __DIR__ . '/classes/OrderDocument.php';
 require_once __DIR__ . '/classes/PaymentHealth.php';
 require_once __DIR__ . '/classes/KitchenRuns.php';
@@ -111,6 +112,7 @@ require_once __DIR__ . '/classes/KitchenLists.php';
 require_once __DIR__ . '/classes/ProOrders.php';
 require_once __DIR__ . '/classes/Credit.php';
 require_once __DIR__ . '/classes/IssueResolutions.php';
+require_once __DIR__ . '/classes/AdminDashboard.php';
 require_once __DIR__ . '/classes/Customers.php';
 // Work the back office starts itself, rather than following on from something a
 // customer did on the storefront: an order taken on the phone, and the customer
