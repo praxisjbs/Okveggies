@@ -88,6 +88,9 @@ try {
     cpdb_eq("A changed draft.\n\nLine breaks stay.", ContentPages::findPreview('about')['body'], 'draft storage preserves meaningful line breaks');
     cpdb_eq('Original public body.', ContentPages::findPublished('about')['body'], 'saving a draft leaves the public snapshot unchanged');
     cpdb_eq($actorId, ContentPages::findForAdmin('about')['updated_by'], 'draft mutation records the responsible staff member');
+    cpdb_eq('Content Editor', ContentPages::findForAdmin('about')['updated_by_name'], 'admin detail resolves the updater display name');
+    $listedAbout = array_values(array_filter(ContentPages::listForAdmin(), static fn(array $page): bool => $page['slug'] === 'about'))[0];
+    cpdb_eq('Content Editor', $listedAbout['updated_by_name'], 'admin listing resolves updater names without controller SQL');
     cpdb_eq($privacyBefore, Database::one('SELECT * FROM content_pages WHERE slug = :slug', [':slug' => 'privacy']), 'updating Our Story does not modify Privacy');
 
     $audit = Database::one(
@@ -157,7 +160,11 @@ try {
     cpdb_ok(is_array($history[0]['old_values']) && is_array($history[0]['new_values']), 'history returns decoded presentation-neutral snapshots');
     cpdb_ok(!in_array(ContentPages::ACTION_PUBLISH, array_column(ContentPages::history('privacy'), 'action'), true), 'one page history does not leak another page events');
 
-    $unpublished = ContentPages::unpublish('about', $actorId);
+    $currentAbout = ContentPages::findForAdmin('about');
+    $staleUnpublish = ContentPages::unpublish('about', $actorId, $about['fingerprint']);
+    cpdb_eq('stale_draft', $staleUnpublish['code'], 'stale publication controls cannot unpublish newer work');
+    cpdb_ok(ContentPages::findPublished('about') !== null, 'a refused stale unpublish leaves the public page available');
+    $unpublished = ContentPages::unpublish('about', $actorId, $currentAbout['fingerprint']);
     cpdb_eq('unpublished', $unpublished['code'], 'a published page can be unpublished');
     cpdb_eq(null, ContentPages::findPublished('about'), 'unpublishing immediately removes public retrieval');
     cpdb_eq('Our Story, edited', ContentPages::findPreview('about')['title'], 'unpublishing retains the current draft for authorised preview');

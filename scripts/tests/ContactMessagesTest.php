@@ -115,11 +115,12 @@ foreach (['account.php', 'page.php', 'public/auth/activate.php', 'public/auth/pa
 
 $adminPage = file_get_contents(dirname(__DIR__, 2) . '/admin/content.php');
 okv_test_ok(str_contains($adminPage, "'page-copy'"), 'the screen keeps a page-copy tab for M12');
-okv_test_ok(str_contains($adminPage, 'milestone M12'), 'and says plainly that M12 owns it');
+okv_test_ok(str_contains($adminPage, 'ContentPages::listForAdmin()'), 'the M12 page-copy tab uses the shared content service');
 okv_test_ok(str_contains($adminPage, "\$okv_admin_title = 'Content and Messages'"), 'the screen is titled as the nav and PRD 4.3 name it');
 okv_test_ok(!preg_match('/UPDATE\s+content_pages/i', $adminPage), 'M9 leaves the page-copy half untouched');
 okv_test_ok(str_contains($adminPage, "Rbac::requirePermission('messages.view')"), 'every message workspace read requires messages.view');
-okv_test_ok(!str_contains($adminPage, "content.view"), 'the message workspace never substitutes content.view');
+okv_test_ok(str_contains($adminPage, "Rbac::requirePermission('content.view')"), 'the shared route independently gates page-copy reads');
+okv_test_ok(strpos($adminPage, "Rbac::requirePermission('messages.view')") < strpos($adminPage, '$search ='), 'messages.view is enforced before message queries run');
 okv_test_ok(str_contains($adminPage, 'okv_pagination'), 'the message list uses the shared accessible pagination');
 okv_test_ok(str_contains($adminPage, 'okv_e($selected[\'message\'])'), 'message content is escaped when rendered');
 okv_test_ok(str_contains($adminPage, 'The website does not send or record a reply.'), 'response links do not imply the website sent anything');

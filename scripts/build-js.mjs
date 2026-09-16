@@ -21,6 +21,7 @@ const sources = [
   'assets/js/admin-pricing.js',
   'assets/js/admin-combos.js',
   'assets/js/admin-settings.js',
+  'assets/js/admin-content.js',
   'assets/js/admin-payments.js',
   'assets/js/kitchen-runs.js',
   'assets/js/pro-kitchen-lists.js',

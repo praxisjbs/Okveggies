@@ -83,6 +83,12 @@ final class ContentPages
         return self::PAGES[$slug]['path'] ?? null;
     }
 
+    /** Homepage field names and their maximum lengths, for neutral admin forms. */
+    public static function homeFields(): array
+    {
+        return self::HOME_FIELDS;
+    }
+
     /** List only fixed, seeded pages. Missing fixed rows simply do not appear. */
     public static function listForAdmin(): array
     {
@@ -97,9 +103,10 @@ final class ContentPages
             'SELECT ' . self::SELECT_COLUMNS . ' FROM content_pages WHERE slug IN (' . implode(', ', $marks) . ')',
             $params
         );
+        $staff = self::staffNames($rows);
         $bySlug = [];
         foreach ($rows as $row) {
-            $bySlug[(string) $row['slug']] = self::adminProjection($row);
+            $bySlug[(string) $row['slug']] = self::adminProjection($row, $staff);
         }
         $ordered = [];
         foreach (self::supportedSlugs() as $slug) {
@@ -114,7 +121,7 @@ final class ContentPages
     public static function findForAdmin(string $slug): ?array
     {
         $row = self::findStored($slug, false);
-        return $row === null ? null : self::adminProjection($row);
+        return $row === null ? null : self::adminProjection($row, self::staffNames([$row]));
     }
 
     /** Published snapshot only. Unknown and unpublished slugs are indistinguishable. */
@@ -397,12 +404,12 @@ final class ContentPages
         });
     }
 
-    public static function unpublish(string $slug, int $actorId): array
+    public static function unpublish(string $slug, int $actorId, ?string $expectedFingerprint = null): array
     {
         if (!self::isSupportedSlug($slug)) {
             return self::failure('unknown_page', ['slug' => 'That page is not managed here.']);
         }
-        return self::mutate($slug, null, $actorId, function (array $row) use ($actorId): array {
+        return self::mutate($slug, $expectedFingerprint, $actorId, function (array $row) use ($actorId): array {
             if (!(bool) $row['is_published']) {
                 return ['ok' => true, 'code' => 'unchanged', 'changed' => false, 'page' => self::adminProjection($row)];
             }
@@ -502,7 +509,7 @@ final class ContentPages
         ) !== null;
     }
 
-    private static function adminProjection(array $row): array
+    private static function adminProjection(array $row, array $staffNames = []): array
     {
         $draft = self::draftProjection($row);
         return $draft + [
@@ -512,10 +519,46 @@ final class ContentPages
             'is_published' => (bool) $row['is_published'],
             'published_at' => self::nullableString($row['published_at'] ?? null),
             'published_by' => isset($row['published_by']) ? (int) $row['published_by'] : null,
+            'published_by_name' => isset($row['published_by']) ? ($staffNames[(int) $row['published_by']] ?? null) : null,
             'updated_at' => (string) ($row['updated_at'] ?? ''),
             'updated_by' => isset($row['updated_by']) ? (int) $row['updated_by'] : null,
+            'updated_by_name' => isset($row['updated_by']) ? ($staffNames[(int) $row['updated_by']] ?? null) : null,
             'published' => self::publishedProjection($row),
         ];
+    }
+
+    /** Resolve staff display names without exposing account data to callers. */
+    private static function staffNames(array $pages): array
+    {
+        $ids = [];
+        foreach ($pages as $page) {
+            foreach (['updated_by', 'published_by'] as $column) {
+                $id = (int) ($page[$column] ?? 0);
+                if ($id > 0) {
+                    $ids[$id] = $id;
+                }
+            }
+        }
+        if (!$ids) {
+            return [];
+        }
+        $params = [];
+        $marks = [];
+        foreach (array_values($ids) as $index => $id) {
+            $key = ':staff_' . $index;
+            $marks[] = $key;
+            $params[$key] = $id;
+        }
+        $rows = Database::all(
+            'SELECT id, first_name, last_name FROM users WHERE id IN (' . implode(', ', $marks) . ')',
+            $params
+        );
+        $names = [];
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['first_name'] ?? '') . ' ' . (string) ($row['last_name'] ?? ''));
+            $names[(int) $row['id']] = $name !== '' ? $name : 'Staff member';
+        }
+        return $names;
     }
 
     private static function draftProjection(array $row): array

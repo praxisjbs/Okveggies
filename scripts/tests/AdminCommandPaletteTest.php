@@ -24,6 +24,17 @@ okv_test_eq(['Payments'], array_column($paymentCommands, 'label'), 'a single per
 okv_test_ok(in_array('pay', $paymentCommands[0]['keywords'], true), 'Payments carries its approved pay search keyword');
 okv_test_eq([], okv_admin_nav_commands($OKV_ADMIN_NAV, static fn(string $permission): bool => false), 'no permissions produces no commands or shortcuts');
 
+$contentCommands = okv_admin_nav_commands(
+    $OKV_ADMIN_NAV,
+    static fn(string $permission): bool => $permission === 'content.view'
+);
+okv_test_eq(['Content and Messages'], array_column($contentCommands, 'label'), 'content.view alone exposes the shared canonical destination');
+$messageCommands = okv_admin_nav_commands(
+    $OKV_ADMIN_NAV,
+    static fn(string $permission): bool => $permission === 'messages.view'
+);
+okv_test_eq(['Content and Messages'], array_column($messageCommands, 'label'), 'messages.view alone exposes the shared canonical destination');
+
 $paletteJs = (string) file_get_contents(dirname(__DIR__, 2) . '/assets/js/admin-shortcuts.js');
 $paletteCss = (string) file_get_contents(dirname(__DIR__, 2) . '/assets/css/src/input.css');
 okv_test_ok(!str_contains($paletteJs, 'innerHTML'), 'the palette never renders command data through innerHTML');

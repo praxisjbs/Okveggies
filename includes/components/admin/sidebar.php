@@ -80,7 +80,7 @@ if (Rbac::can('messages.view')) {
 
   <nav class="flex-1 overflow-y-auto py-4" aria-label="Admin">
     <?php foreach ($OKV_ADMIN_NAV as $group):
-        $visible = array_filter($group['items'], static fn($it) => Rbac::can($it['permission']));
+        $visible = array_filter($group['items'], static fn($it) => okv_admin_nav_item_allowed($it, static fn(string $permission): bool => Rbac::can($permission)));
         if (!$visible) { continue; }
     ?>
       <p class="px-5 mt-4 mb-1 text-[11px] uppercase tracking-[0.14em] text-white/50"><?= okv_e($group['heading']) ?></p>
