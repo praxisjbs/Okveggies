@@ -9,6 +9,12 @@ Options -Indexes
 # --- Force HTTPS -------------------------------------------------------------
 <IfModule mod_rewrite.c>
     RewriteEngine On
+
+    # Fail closed before any front-controller or HTTPS rewrite. This is kept in
+    # mod_rewrite as well as RedirectMatch below because shared hosts do not
+    # always permit mod_alias directives in per-directory configuration.
+    RewriteRule ^(?:includes|migrations|scripts|docs|vendor|node_modules)(?:/|$) - [F,L,NC]
+
     RewriteCond %{HTTPS} !=on
     RewriteCond %{HTTP:X-Forwarded-Proto} !https
     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]

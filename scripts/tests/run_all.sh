@@ -55,7 +55,7 @@ db_probe="$(php -r 'require "includes/bootstrap.php"; Database::one("SELECT 1");
 if [ "$db_probe" = "OKV_DB_READY" ]; then
   for suite in \
     admin_dashboard_db_test admin_notifications_db_test auth_db_test basket_db_test cancellation_db_test checkout_db_test combos_db_test \
-    contact_db_test contact_admin_db_test \
+    contact_db_test contact_admin_db_test content_pages_db_test \
     credit_admin_db_test credit_customer_db_test credit_orders_db_test \
     customer_auth_db_test customers_db_test delivery_db_test kitchen_lists_db_test \
     issue_reports_db_test issue_workflow_db_test issue_resolutions_db_test issue_customer_outcome_db_test issue_notifications_db_test \
