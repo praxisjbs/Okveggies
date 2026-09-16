@@ -205,17 +205,25 @@ final class IssueReports
         ?string $ipAddress = null,
         array $photos = []
     ): array {
-        $limited = self::spendRateAllowance($userId, $ipAddress);
-        if ($limited !== null) {
-            return $limited;
-        }
-
+        // Validate the cheap, in-memory fields before spending a rate token.
+        // A customer who forgets a category or types too little is fixing a
+        // mistake, not attacking us, and must not burn their hourly allowance
+        // and lock themselves out of reporting a genuine problem. The token is
+        // spent only once an attempt is well formed enough to reach the
+        // database work the limit is actually there to protect. This is the
+        // M9 contact lesson (a refused submission spending the allowance)
+        // carried into Make It Right.
         $clean = self::validateFields($category, $description);
         if (empty($clean['ok'])) {
             return $clean;
         }
         if (count($photos) > self::MAX_PHOTOS) {
             return self::failure('too_many_photos', 'Choose no more than 5 photos.', 'photos');
+        }
+
+        $limited = self::spendRateAllowance($userId, $ipAddress);
+        if ($limited !== null) {
+            return $limited;
         }
 
         $pdo = Database::getInstance()->getConnection();

@@ -150,12 +150,18 @@ try {
     $clearRate($ownerId, '192.0.2.45');
     irdb_eq('missing_timestamp', IssueReports::submit($missingOrder, $ownerId, 'quality', 'There is no lifecycle evidence.', '192.0.2.45')['code'], 'an eligible status without a recorded timestamp fails closed');
 
+    // A well-formed attempt still counts even when the order lookup then fails,
+    // because it reached the database work the limit protects. A malformed one
+    // (bad category, too-short description) is refused before the allowance is
+    // touched, so a customer fixing a typo is never locked out. See the reorder
+    // in IssueReports::submit().
     $rateIp = '192.0.2.46';
     $clearRate($otherId, $rateIp);
+    irdb_eq('category_required', IssueReports::submit(0, $otherId, 'bad', 'A malformed attempt does not spend the allowance.', $rateIp)['code'], 'a malformed attempt is refused on its fields');
     for ($attempt = 0; $attempt < IssueReports::ACCOUNT_LIMIT; $attempt++) {
-        IssueReports::submit(0, $otherId, 'bad', 'This attempt still counts.', $rateIp);
+        IssueReports::submit(0, $otherId, 'quality', 'This well-formed attempt still counts.', $rateIp);
     }
-    irdb_eq('rate_limited', IssueReports::submit(0, $otherId, 'bad', 'This attempt is over the cap.', $rateIp)['code'], 'the sixth account attempt in 1 hour is rate limited');
+    irdb_eq('rate_limited', IssueReports::submit(0, $otherId, 'quality', 'This attempt is over the cap.', $rateIp)['code'], 'the sixth well-formed account attempt in 1 hour is rate limited');
 
     $ipLimited = '192.0.2.47';
     $clearRate($ownerId, $ipLimited);
@@ -163,7 +169,7 @@ try {
     for ($attempt = 0; $attempt < IssueReports::IP_LIMIT; $attempt++) {
         RateLimiter::hit($ipBucket, IssueReports::IP_LIMIT, IssueReports::RATE_WINDOW);
     }
-    irdb_eq('rate_limited', IssueReports::submit(0, $ownerId, 'bad', 'This connection is over its cap.', $ipLimited)['code'], 'the separate IP allowance is enforced');
+    irdb_eq('rate_limited', IssueReports::submit(0, $ownerId, 'quality', 'This connection is over its cap.', $ipLimited)['code'], 'the separate IP allowance is enforced');
 
     $oldPort = $_ENV['SMTP_PORT'] ?? null;
     $_ENV['SMTP_PORT'] = 1;

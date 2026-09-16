@@ -694,6 +694,13 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 
 ## Session log (newest first)
 
+### 16 Sep 2026, M10 senior review on pull request 47
+
+- Reviewed the whole milestone against PRD Sections 2, 16 and 17 and `CLAUDE.md`. The security, money and migration work is strong; the privacy boundary on the public token trail is better than the brief asked for. The written review is `docs/M10_REVIEW.md`.
+- Fixed one real defect and one accessibility violation on the branch. `IssueReports::submit()` spent the rate-limit allowance before validating the form, so a customer fixing a typo could lock themselves out of reporting a genuine problem. This repeated the M9 contact lesson, and a passing test had encoded it as correct. Validation now runs before the allowance is spent, and the test was corrected to prove the right behaviour.
+- Removed `focus:outline-none` from the Make It Right photo links in `public/order.php` and `admin/make_it_right.php`. The global gold focus ring is defined with zero-specificity `:where(...)`, so the utility suppressed the ring the brand calls non-negotiable. The global ring now shows on keyboard focus.
+- Verification: 2,970/2,970 unit assertions passed, `php -l` clean on every touched file, all 8 brand checks green, `git diff --check` clean. The database and HTTP suites need MySQL and were not run in the review environment; they were green in the delivery runs recorded below.
+
 ### 10 Sep 2026, M10 Task I: milestone closure and handover
 
 - Closed Milestone 10 and added `docs/M10_HANDOVER.md`, a concise operating and deployment guide covering the delivered customer and staff flows, permission gates, privacy boundary, migrations, verification commands, post-deploy checks and the ownership of notification retries and refund progress.

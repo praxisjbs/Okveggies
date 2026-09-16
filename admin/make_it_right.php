@@ -186,7 +186,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
             <div class="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               <?php foreach ($selected['photos'] as $photoIndex => $photo): ?>
                 <a href="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
-                   class="block min-h-[44px] rounded-md focus:outline-none"
+                   class="block min-h-[44px] rounded-md"
                    aria-label="Open customer photo <?= $photoIndex + 1 ?> for order <?= okv_e($selected['order_number']) ?> at full size">
                   <img src="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
                        alt="Customer photo <?= $photoIndex + 1 ?> for order <?= okv_e($selected['order_number']) ?>"

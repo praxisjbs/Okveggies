@@ -345,7 +345,7 @@ $publicStatus = [
                 <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <?php foreach ($customerReport['photos'] as $photoIndex => $photo): ?>
                     <a href="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
-                       class="block min-h-[44px] rounded-md focus:outline-none"
+                       class="block min-h-[44px] rounded-md"
                        aria-label="Open photo <?= $photoIndex + 1 ?> for order <?= okv_e($order['order_number']) ?> at full size">
                       <img src="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
                            alt="Photo <?= $photoIndex + 1 ?> supplied for order <?= okv_e($order['order_number']) ?>"
