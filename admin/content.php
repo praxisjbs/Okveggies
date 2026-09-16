@@ -72,6 +72,8 @@ if ($tab === 'page-copy') {
         'updated' => 'The draft was saved.',
         'published' => 'The saved draft is now public.',
         'unpublished' => 'The page is no longer public.',
+        'image_updated' => 'The documentary photograph was prepared and saved to the draft.',
+        'image_removed' => 'The draft photograph was removed.',
         'unchanged' => 'Nothing changed.',
     ];
     $errors = [
@@ -82,6 +84,11 @@ if ($tab === 'page-copy') {
         'page_not_seeded' => 'That managed page has not been seeded.',
         'unknown_page' => 'That page is not managed here.',
         'csrf_expired' => 'Your session expired. Reload the page and try again.',
+        'invalid_image' => 'Choose a complete JPEG, PNG or WebP photograph within the upload limit.',
+        'image_too_small' => 'Choose a photograph at least 640px wide and 360px high.',
+        'image_processing_unavailable' => 'This server cannot prepare responsive photographs yet. Ask the host to enable PHP GD with WebP support.',
+        'image_alt_required' => 'Describe the photograph before uploading it.',
+        'image_not_supported' => 'Photography is managed only for the Homepage and Our Story.',
         'failed' => 'We could not update that page. Nothing was changed.',
     ];
     $fieldLabels = [
@@ -129,10 +136,12 @@ if ($tab === 'page-copy') {
           <form class="mt-5 space-y-5" action="/api/v1/content.php" method="post" data-content-form data-save-form>
             <?= Csrf::field() ?><input type="hidden" name="action" value="save_draft"><input type="hidden" name="slug" value="<?= okv_e($selected['slug']) ?>"><input type="hidden" name="fingerprint" value="<?= okv_e($selected['fingerprint']) ?>">
             <div><label class="okv-label" for="content-title">Page title</label><input class="okv-input" id="content-title" name="title" maxlength="<?= ContentPages::TITLE_MAX ?>" value="<?= okv_e($selected['title']) ?>" <?= $canEdit ? '' : 'disabled' ?> data-content-field><p class="mt-1 hidden text-xs text-tomato" data-field-error="title"></p></div>
-            <div><label class="okv-label" for="content-body">Body copy</label><textarea class="okv-input font-mono text-sm" id="content-body" name="body" rows="18" maxlength="<?= ContentPages::BODY_MAX ?>" <?= $canEdit ? '' : 'disabled' ?> data-content-field><?= okv_e($selected['body']) ?></textarea><p class="mt-1 text-xs text-ink-60">Restricted Markdown only: paragraphs, lists, emphasis and links. HTML is displayed as text.</p><p class="mt-1 hidden text-xs text-tomato" data-field-error="body"></p></div>
+            <div><label class="okv-label" for="content-body"><?= $selected['slug'] === 'faq' ? 'Questions and answers' : 'Body copy' ?></label><textarea class="okv-input font-mono text-sm" id="content-body" name="body" rows="18" maxlength="<?= ContentPages::BODY_MAX ?>" <?= $canEdit ? '' : 'disabled' ?> data-content-field aria-describedby="content-body-help"><?= okv_e($selected['body']) ?></textarea><p class="mt-1 text-xs text-ink-60" id="content-body-help">Restricted Markdown only: paragraphs, lists, emphasis and links. HTML is displayed as text.</p><p class="mt-1 hidden text-xs text-tomato" data-field-error="body"></p></div>
             <?php if ($selected['slug'] === 'faq'): ?>
-              <aside class="rounded-md border border-mist bg-forest-tint p-4"><h3 class="text-sm font-semibold">FAQ format</h3><pre class="mt-2 whitespace-pre-wrap font-mono text-xs">## Question goes here
-Answer copy goes here.</pre><p class="mt-2 text-sm <?= $faq['ok'] ? 'text-forest' : 'text-clay-ink' ?>"><?= count($faq['items']) ?> complete question<?= count($faq['items']) === 1 ? '' : 's' ?> found<?= $faq['ok'] ? '.' : '; fix the format before publishing.' ?></p></aside>
+              <aside class="rounded-md border border-mist bg-forest-tint p-4" aria-labelledby="faq-format-heading"><h3 class="text-sm font-semibold" id="faq-format-heading">FAQ format</h3><pre class="mt-2 whitespace-pre-wrap font-mono text-xs">## Question goes here
+Answer copy goes here.</pre><p class="mt-2 text-sm"><?= count($faq['items']) ?> question<?= count($faq['items']) === 1 ? '' : 's' ?> found in document order.</p><?php if (!$faq['ok']): ?><div class="okv-note-bad mt-3" role="alert"><p class="font-semibold">This draft can be saved, but it cannot be published yet.</p><ul class="mt-2 list-disc space-y-1 pl-5"><?php foreach ($faq['errors'] as $message): ?><li><?= okv_e($message) ?></li><?php endforeach; ?></ul></div><?php else: ?><p class="okv-note-ok mt-3">Every question has an answer and no duplicates were found.</p><?php endif; ?></aside>
+              <aside class="rounded-md border border-mist p-4" aria-labelledby="faq-order-heading"><h3 class="text-sm font-semibold" id="faq-order-heading">Published order</h3><?php if (!$faq['items']): ?><p class="mt-2 text-sm text-ink-60">No questions have been started. Begin with <code class="font-mono">##</code>.</p><?php else: ?><ol class="mt-2 list-decimal space-y-2 pl-5 text-sm"><?php foreach ($faq['items'] as $item): ?><li><?= okv_e((string) $item['question']) ?><?= trim((string) $item['answer']) === '' ? ' (answer missing)' : '' ?></li><?php endforeach; ?></ol><?php endif; ?><p class="mt-3 text-xs text-ink-60">Move a complete question section in the editor to change its public position.</p></aside>
+              <aside class="rounded-md border border-mist p-4" aria-labelledby="faq-token-heading"><h3 class="text-sm font-semibold" id="faq-token-heading">Current operational values</h3><p class="mt-2 text-sm text-ink-60">Place a token in an answer. The public page reads its current value when the page opens.</p><dl class="mt-3 space-y-3"><?php foreach (FaqContent::tokenDefinitions() as $token => [$label, $help]): ?><div><dt><code class="font-mono text-xs">{{<?= okv_e($token) ?>}}</code> <span class="text-sm font-semibold"><?= okv_e($label) ?></span></dt><dd class="mt-1 text-xs text-ink-60"><?= okv_e($help) ?></dd></div><?php endforeach; ?></dl></aside>
             <?php endif; ?>
             <?php if ($selected['slug'] === 'home'): ?>
               <fieldset><legend class="okv-panel-title">Homepage sections</legend><p class="mt-1 text-sm text-ink-60">Photography is managed separately. These fields control the documentary hero and section copy.</p><div class="mt-4 grid gap-4 md:grid-cols-2">
@@ -146,7 +155,27 @@ Answer copy goes here.</pre><p class="mt-2 text-sm <?= $faq['ok'] ? 'text-forest
           </form>
         </section>
 
-        <section class="okv-panel okv-panel-body" aria-labelledby="photo-heading"><h2 id="photo-heading" class="okv-panel-title">Documentary photograph</h2><?php if ($selected['image_url'] !== ''): ?><img class="mt-4 max-h-64 rounded-md object-cover" src="<?= okv_e(okv_image_url($selected['image_url'])) ?>" alt="<?= okv_e($selected['image_alt']) ?>"><dl class="mt-3 grid gap-2 text-sm"><div><dt class="text-ink-60">Path</dt><dd class="font-mono text-xs"><?= okv_e($selected['image_url']) ?></dd></div><div><dt class="text-ink-60">Alternative text</dt><dd><?= okv_e($selected['image_alt']) ?></dd></div></dl><?php else: ?><p class="mt-2 text-sm text-ink-60">No draft photograph is assigned. Uploads are deferred to the later media task, and stock photography is not permitted.</p><?php endif; ?></section>
+        <?php if (in_array($selected['slug'], ['home', 'about'], true)): ?>
+          <section class="okv-panel okv-panel-body" aria-labelledby="photo-heading">
+            <h2 id="photo-heading" class="okv-panel-title">Documentary photograph</h2>
+            <p class="mt-2 text-sm text-ink-60">Use a rights-cleared photograph of the real OK Veggies operation. Stock and synthetic documentary images are not accepted. The upload is converted into responsive WebP files.</p>
+            <?php if ($selected['image_url'] !== ''): ?>
+              <img class="mt-4 max-h-64 rounded-md object-cover" src="<?= okv_e(okv_image_url($selected['image_url'])) ?>" alt="<?= okv_e($selected['image_alt']) ?>">
+              <dl class="mt-3 grid gap-2 text-sm"><div><dt class="text-ink-60">Path</dt><dd class="break-all font-mono text-xs"><?= okv_e($selected['image_url']) ?></dd></div><div><dt class="text-ink-60">Alternative text</dt><dd><?= okv_e($selected['image_alt']) ?></dd></div></dl>
+            <?php else: ?>
+              <p class="mt-3 rounded-md border border-mist bg-forest-tint p-4 text-sm text-ink-60">No draft documentary photograph is assigned. The public page will use its branded no-photo state.</p>
+            <?php endif; ?>
+            <?php if ($canEdit): ?>
+              <form class="mt-5 space-y-4" action="/api/v1/content.php" method="post" enctype="multipart/form-data">
+                <?= Csrf::field() ?><input type="hidden" name="action" value="upload_image"><input type="hidden" name="slug" value="<?= okv_e($selected['slug']) ?>"><input type="hidden" name="fingerprint" value="<?= okv_e($selected['fingerprint']) ?>">
+                <div><label class="okv-label" for="content-image">Approved photograph</label><input class="okv-input min-h-[48px] py-2" id="content-image" name="image" type="file" accept="image/jpeg,image/png,image/webp" required><p class="mt-1 text-xs text-ink-60">JPEG, PNG or WebP, at least 640px by 360px, up to <?= okv_e((string) round(Uploads::maxBytes() / 1048576, 1)) ?>MB.</p></div>
+                <div><label class="okv-label" for="content-image-alt">Photograph description</label><input class="okv-input" id="content-image-alt" name="image_alt" maxlength="255" value="<?= okv_e($selected['image_alt']) ?>" required><p class="mt-1 text-xs text-ink-60">Describe the people, place and activity that matter in the photograph.</p></div>
+                <button class="okv-btn" type="submit">Prepare draft photograph</button>
+              </form>
+              <?php if ($selected['image_url'] !== ''): ?><form class="mt-3" action="/api/v1/content.php" method="post"><?= Csrf::field() ?><input type="hidden" name="action" value="remove_image"><input type="hidden" name="slug" value="<?= okv_e($selected['slug']) ?>"><input type="hidden" name="fingerprint" value="<?= okv_e($selected['fingerprint']) ?>"><button class="okv-btn-outline" type="submit">Remove draft photograph</button></form><?php endif; ?>
+            <?php endif; ?>
+          </section>
+        <?php endif; ?>
 
         <section class="okv-panel okv-panel-body" aria-labelledby="publication-heading"><div class="flex flex-wrap items-center justify-between gap-3"><h2 id="publication-heading" class="okv-panel-title">Publication</h2><span class="okv-badge <?= $selected['is_published'] ? 'okv-badge-available' : 'okv-badge-warn' ?>"><?= $selected['is_published'] ? 'Published' : 'Unpublished' ?></span></div><?php if ($selected['published_at']): ?><p class="mt-2 text-sm text-ink-60">Published <?= okv_e(date('j M Y, H:i', strtotime((string) $selected['published_at']))) ?> by <?= okv_e((string) ($selected['published_by_name'] ?: 'staff not recorded')) ?>.</p><?php endif; ?>
           <?php if ($canEdit): ?><form class="mt-4 space-y-3" action="/api/v1/content.php" method="post" data-content-form><?= Csrf::field() ?><input type="hidden" name="action" value="<?= $selected['is_published'] ? 'unpublish' : 'publish' ?>"><input type="hidden" name="slug" value="<?= okv_e($selected['slug']) ?>"><input type="hidden" name="fingerprint" value="<?= okv_e($selected['fingerprint']) ?>"><label class="flex min-h-[44px] items-start gap-3"><input class="mt-1 h-5 w-5" type="checkbox" name="confirm" value="1"><span class="text-sm"><?= $selected['is_published'] ? 'I understand that guessed and saved public links will stop working.' : 'I have checked the saved draft and want to make it public.' ?></span></label><?php if ($selected['legal'] && !$selected['is_published']): ?><label class="flex min-h-[44px] items-start gap-3"><input class="mt-1 h-5 w-5" type="checkbox" name="legal_approved" value="1"><span class="text-sm">I confirm this is client-approved legal copy, not placeholder text or legal advice invented by the team.</span></label><?php endif; ?><button class="<?= $selected['is_published'] ? 'okv-btn-outline' : 'okv-btn' ?>" type="submit"><?= $selected['is_published'] ? 'Unpublish page' : 'Publish saved draft' ?></button></form><?php endif; ?>

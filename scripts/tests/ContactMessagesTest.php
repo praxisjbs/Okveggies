@@ -108,10 +108,13 @@ foreach (Notifications::TOKENS['contact_acknowledgement'] as $ackToken) {
 
 $footer = file_get_contents(dirname(__DIR__, 2) . '/includes/components/shop/footer.php');
 okv_test_eq(1, substr_count($footer, 'okv_support_widget();'), 'shared shop chrome renders the widget exactly once');
-foreach (['account.php', 'page.php', 'public/auth/activate.php', 'public/auth/password_reset.php'] as $route) {
+foreach (['account.php', 'public/auth/activate.php', 'public/auth/password_reset.php'] as $route) {
     $source = file_get_contents(dirname(__DIR__, 2) . '/' . $route);
     okv_test_eq(1, substr_count($source, 'okv_support_widget();'), "$route renders one widget outside shared shop chrome");
 }
+$contentPage = file_get_contents(dirname(__DIR__, 2) . '/page.php');
+okv_test_eq(0, substr_count($contentPage, 'okv_support_widget();'), 'page.php delegates its widget to the shared footer');
+okv_test_ok(str_contains($contentPage, 'okv_shop_footer('), 'page.php renders the shared footer and its single widget');
 
 $adminPage = file_get_contents(dirname(__DIR__, 2) . '/admin/content.php');
 okv_test_ok(str_contains($adminPage, "'page-copy'"), 'the screen keeps a page-copy tab for M12');

@@ -1,13 +1,18 @@
 <?php
 /** Authorised, non-shareable preview of the current saved content draft. */
 require_once __DIR__ . '/../includes/bootstrap.php';
+require_once __DIR__ . '/../includes/components/shop/faq_disclosures.php';
 Rbac::requirePermission('content.view');
 
 $slug = trim((string) okv_input('page', ''));
 $page = null;
+$previewFaq = null;
 $loadFailed = false;
 try {
     $page = ContentPages::findPreview($slug);
+    if ($page !== null && $slug === 'faq') {
+        $previewFaq = FaqContent::present((string) $page['body']);
+    }
 } catch (Throwable $e) {
     error_log('content.preview.read failed: ' . $e->getMessage());
     $loadFailed = true;
@@ -40,7 +45,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <h1 class="mt-3 font-editorial text-4xl text-forest"><?= okv_e($page['title'] !== '' ? $page['title'] : 'Untitled draft') ?></h1>
       <?php if ($page['image_url'] !== ''): ?><img class="mt-6 max-h-96 w-full rounded-md object-cover" src="<?= okv_e(okv_image_url($page['image_url'])) ?>" alt="<?= okv_e($page['image_alt']) ?>"><?php endif; ?>
       <?php if ($slug === 'faq'): $faq = ContentPages::validateFaq((string) $page['body']); ?>
-        <?php if (!$faq['ok']): ?><p class="okv-note-bad mt-6">This FAQ draft is incomplete. Its raw saved copy is shown below.</p><div class="mt-6 whitespace-pre-wrap text-okv-body"><?= okv_e($page['body']) ?></div><?php else: ?><div class="mt-6 divide-y divide-mist"><?php foreach ($faq['items'] as $item): ?><details class="py-4"><summary class="min-h-[44px] cursor-pointer font-semibold text-forest"><?= okv_e($item['question']) ?></summary><div class="mt-2 whitespace-pre-wrap text-okv-body"><?= okv_e($item['answer']) ?></div></details><?php endforeach; ?></div><?php endif; ?>
+        <?php if (!$faq['ok']): ?><div class="okv-note-bad mt-6" role="alert"><p class="font-semibold">This FAQ draft is incomplete. Its saved source is shown safely below.</p><ul class="mt-2 list-disc space-y-1 pl-5"><?php foreach ($faq['errors'] as $message): ?><li><?= okv_e($message) ?></li><?php endforeach; ?></ul></div><div class="mt-6 whitespace-pre-wrap text-okv-body"><?= okv_e($page['body']) ?></div><?php else: ?><div class="mt-6"><?php okv_faq_disclosures($previewFaq ?? [], false); ?></div><?php endif; ?>
       <?php else: ?><div class="mt-6 whitespace-pre-wrap text-okv-body"><?= okv_e($page['body']) ?></div><?php endif; ?>
     </article>
     <?php if ($slug === 'home'): ?><section class="okv-panel okv-panel-body"><h2 class="okv-panel-title">Homepage structured copy</h2><dl class="mt-4 grid gap-4 md:grid-cols-2"><?php foreach ($page['content_data'] as $key => $value): ?><div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-60"><?= okv_e(str_replace('_', ' ', (string) $key)) ?></dt><dd class="mt-1 whitespace-pre-wrap text-sm"><?= okv_e((string) $value) ?></dd></div><?php endforeach; ?></dl></section><?php endif; ?>

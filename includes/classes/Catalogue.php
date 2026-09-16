@@ -300,13 +300,21 @@ final class Catalogue
 
     /**
      * Featured combos, for the home page. A small list, buyable now, featured
-     * first, ordered by name after that. Falls back to unfeatured combos when
-     * there are not enough featured ones to fill $limit.
+     * first, ordered by name after that. The featured flag is intentional:
+     * an empty selection is returned honestly instead of silently promoting a
+     * combo the team did not choose for the home page.
      */
     public static function featuredCombos(int $limit = 3): array
     {
         $limit = max(1, min(24, $limit));
-        return array_slice(self::combos(), 0, $limit);
+        return array_slice(
+            array_values(array_filter(
+                self::combos(),
+                static fn (array $combo): bool => (bool) ($combo['is_featured'] ?? false)
+            )),
+            0,
+            $limit
+        );
     }
 
     /**

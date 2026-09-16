@@ -43,7 +43,7 @@ if (!Csrf::validate()) {
 $action = okv_action();
 $slug = trim((string) okv_input('slug', ''));
 $returnTo = content_return_path($slug);
-if (!in_array($action, ['save_draft', 'publish', 'unpublish'], true)) {
+if (!in_array($action, ['save_draft', 'upload_image', 'remove_image', 'publish', 'unpublish'], true)) {
     content_fail(['code' => 'unknown_action', 'message' => 'That content action is not available.'], 400, $returnTo);
 }
 if (!ContentPages::isSupportedSlug($slug)) {
@@ -61,6 +61,48 @@ try {
             'meta_description' => okv_input('meta_description', ''),
             'content_data' => is_array($contentData) ? $contentData : [],
         ], $fingerprint, (int) Rbac::userId());
+    } elseif ($action === 'upload_image') {
+        if (!in_array($slug, ['home', 'about'], true)) {
+            content_fail(['code' => 'image_not_supported', 'message' => 'Photography is not managed for that page.'], 422, $returnTo);
+        }
+        $alt = trim((string) okv_input('image_alt', ''));
+        if ($alt === '') {
+            content_fail(['code' => 'image_alt_required', 'message' => 'Describe the photograph before uploading it.'], 422, $returnTo);
+        }
+        $beforePage = ContentPages::findForAdmin($slug);
+        $stored = ContentImages::storeUploaded($_FILES['image'] ?? []);
+        if (empty($stored['ok'])) {
+            content_fail([
+                'code' => (string) ($stored['code'] ?? 'invalid_image'),
+                'message' => 'That photograph could not be prepared. Check its type, size and dimensions.',
+            ], 422, $returnTo);
+        }
+        $newPath = (string) $stored['path'];
+        $result = ContentPages::updateImage($slug, $newPath, $alt, $fingerprint, (int) Rbac::userId());
+        if (empty($result['ok'])) {
+            ContentImages::removeSet($newPath);
+        } else {
+            $oldDraft = (string) ($beforePage['image_url'] ?? '');
+            $oldPublished = (string) ($beforePage['published']['image_url'] ?? '');
+            if ($oldDraft !== '' && $oldDraft !== $oldPublished && $oldDraft !== $newPath) {
+                ContentImages::removeSet($oldDraft);
+            }
+            $result['code'] = 'image_updated';
+        }
+    } elseif ($action === 'remove_image') {
+        if (!in_array($slug, ['home', 'about'], true)) {
+            content_fail(['code' => 'image_not_supported', 'message' => 'Photography is not managed for that page.'], 422, $returnTo);
+        }
+        $beforePage = ContentPages::findForAdmin($slug);
+        $result = ContentPages::updateImage($slug, '', '', $fingerprint, (int) Rbac::userId());
+        if (!empty($result['ok'])) {
+            $oldDraft = (string) ($beforePage['image_url'] ?? '');
+            $oldPublished = (string) ($beforePage['published']['image_url'] ?? '');
+            if ($oldDraft !== '' && $oldDraft !== $oldPublished) {
+                ContentImages::removeSet($oldDraft);
+            }
+            $result['code'] = 'image_removed';
+        }
     } elseif ($action === 'publish') {
         if ((string) okv_input('confirm', '') !== '1') {
             content_fail(['code' => 'confirmation_required', 'message' => 'Confirm publication before continuing.'], 422, $returnTo);

@@ -119,11 +119,11 @@ $OKV_SHOP_NAV = [
 
 // Footer links (reached from the footer, not the top nav) ---------------------
 $OKV_FOOTER_NAV = [
-    ['label' => 'Our Story',       'href' => '/page.php?slug=about'],
-    ['label' => 'How It Works',    'href' => '/page.php?slug=how-it-works'],
-    ['label' => 'Questions',       'href' => '/page.php?slug=faq'],
-    ['label' => 'Terms',           'href' => '/page.php?slug=terms'],
-    ['label' => 'Privacy',         'href' => '/page.php?slug=privacy'],
-    ['label' => 'Delivery Policy', 'href' => '/page.php?slug=delivery-policy'],
-    ['label' => 'Contact',         'href' => '/contact.php'],
+    ['label' => 'Our Story',       'href' => '/our-story',      'slug' => 'about',           'group' => 'Company', 'public_ready' => true],
+    ['label' => 'How It Works',    'href' => '/how-it-works',   'slug' => 'how-it-works',    'group' => 'Company', 'public_ready' => true],
+    ['label' => 'Questions',       'href' => '/faq',            'slug' => 'faq',             'group' => 'Company', 'public_ready' => true],
+    ['label' => 'Terms',           'href' => '/terms',          'slug' => 'terms',           'group' => 'Legal',   'public_ready' => true],
+    ['label' => 'Privacy',         'href' => '/privacy',        'slug' => 'privacy',         'group' => 'Legal',   'public_ready' => true],
+    ['label' => 'Delivery Policy', 'href' => '/delivery-policy','slug' => 'delivery-policy', 'group' => 'Legal',   'public_ready' => true],
+    ['label' => 'Contact',         'href' => '/contact.php',                               'group' => 'Company', 'public_ready' => true],
 ];

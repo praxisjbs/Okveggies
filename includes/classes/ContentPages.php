@@ -22,6 +22,16 @@ final class ContentPages
     public const META_DESCRIPTION_MAX = 160;
     public const FAQ_MAX = 50;
     public const FAQ_QUESTION_MAX = 200;
+    public const FAQ_TOKENS = [
+        'deposit_percentage',
+        'household_delivery_schedule',
+        'business_delivery_schedule',
+        'cancellation_policy',
+        'make_it_right_window',
+        'kitchen_run_quote_window',
+        'support_whatsapp_number',
+        'support_email',
+    ];
 
     private const PAGES = [
         'home' => ['label' => 'Homepage', 'path' => '/', 'legal' => false],
@@ -139,6 +149,48 @@ final class ContentPages
         return $row === null ? null : self::publishedProjection($row);
     }
 
+    /** Published footer destinations only, in fixed registry order. */
+    public static function publishedNavigation(array $slugs): array
+    {
+        $wanted = [];
+        foreach ($slugs as $slug) {
+            $slug = (string) $slug;
+            if ($slug !== 'home' && self::isSupportedSlug($slug)) {
+                $wanted[$slug] = true;
+            }
+        }
+        if (!$wanted) {
+            return [];
+        }
+        $params = [':published' => 1];
+        $marks = [];
+        foreach (array_keys($wanted) as $index => $slug) {
+            $key = ':nav_slug_' . $index;
+            $marks[] = $key;
+            $params[$key] = $slug;
+        }
+        $rows = Database::all(
+            'SELECT slug FROM content_pages WHERE is_published = :published AND slug IN (' . implode(', ', $marks) . ')',
+            $params
+        );
+        $published = [];
+        foreach ($rows as $row) {
+            $published[(string) $row['slug']] = true;
+        }
+        $navigation = [];
+        foreach (self::supportedSlugs() as $slug) {
+            if (isset($wanted[$slug], $published[$slug])) {
+                $navigation[] = [
+                    'slug' => $slug,
+                    'label' => self::PAGES[$slug]['label'],
+                    'path' => self::PAGES[$slug]['path'],
+                    'legal' => self::PAGES[$slug]['legal'],
+                ];
+            }
+        }
+        return $navigation;
+    }
+
     /** Current draft only. The caller must enforce content.view on every request. */
     public static function findPreview(string $slug): ?array
     {
@@ -254,6 +306,29 @@ final class ContentPages
         }
         if (count($items) > self::FAQ_MAX) {
             $errors['count'] = 'FAQ can contain no more than ' . self::FAQ_MAX . ' questions.';
+        }
+        $seen = [];
+        foreach ($items as $index => $item) {
+            $normalised = self::normaliseFaqQuestion((string) $item['question']);
+            if ($normalised !== '' && isset($seen[$normalised])) {
+                $errors['duplicate_' . ($index + 1)] = 'Question ' . ($index + 1)
+                    . ' repeats question ' . $seen[$normalised] . '.';
+            } elseif ($normalised !== '') {
+                $seen[$normalised] = $index + 1;
+            }
+            if (preg_match_all('/\{\{([a-z0-9_]+)\}\}/u', (string) $item['answer'], $tokens)) {
+                foreach (array_unique($tokens[1]) as $token) {
+                    if (!in_array($token, self::FAQ_TOKENS, true)) {
+                        $errors['token_' . ($index + 1)] = 'Question ' . ($index + 1)
+                            . ' uses an unsupported operational token: {{' . $token . '}}.';
+                    }
+                }
+            }
+            $withoutKnown = preg_replace('/\{\{[a-z0-9_]+\}\}/u', '', (string) $item['answer']) ?? '';
+            if (str_contains($withoutKnown, '{{') || str_contains($withoutKnown, '}}')) {
+                $errors['token_' . ($index + 1)] = 'Question ' . ($index + 1)
+                    . ' contains an incomplete operational token.';
+            }
         }
         return ['ok' => !$errors, 'code' => $errors ? 'invalid_faq' : 'ok', 'items' => $items, 'errors' => $errors];
     }
@@ -713,6 +788,14 @@ final class ContentPages
             $errors['answer_' . $index] = 'Each FAQ question needs an answer.';
         }
         $items[] = ['question' => $question, 'answer' => $answer];
+    }
+
+    /** Case, spacing and terminal question punctuation do not make a new FAQ. */
+    private static function normaliseFaqQuestion(string $question): string
+    {
+        $question = mb_strtolower(trim($question));
+        $question = (string) preg_replace('/\s+/u', ' ', $question);
+        return trim($question, " \t\n\r\0\x0B?.!");
     }
 
     private static function normaliseText($value): string

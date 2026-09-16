@@ -75,6 +75,12 @@ try {
     cpdb_eq('FAQ', ContentPages::findPreview('faq')['title'], 'an authorised caller can retrieve an unpublished draft');
     cpdb_ok(!array_key_exists('draft_title', ContentPages::findPublished('about')), 'public projection contains no draft column');
     cpdb_ok(!array_key_exists('updated_by', ContentPages::findPublished('about')), 'public projection contains no internal actor');
+    cpdb_eq(
+        ['about'],
+        array_column(ContentPages::publishedNavigation(['about', 'faq', 'unknown-page']), 'slug'),
+        'footer navigation returns only allow-listed published pages'
+    );
+    cpdb_eq('/our-story', ContentPages::publishedNavigation(['about'])[0]['path'], 'footer navigation returns the canonical clean path');
 
     $privacyBefore = Database::one('SELECT * FROM content_pages WHERE slug = :slug', [':slug' => 'privacy']);
     $about = ContentPages::findForAdmin('about');
@@ -151,7 +157,10 @@ try {
     $faqBadSave = ContentPages::updateDraft('faq', ['title' => 'FAQ', 'body' => "## Empty answer?"], $faq['fingerprint'], $actorId);
     cpdb_eq('updated', $faqBadSave['code'], 'incomplete FAQ structure can remain in a working draft');
     cpdb_eq('validation_failed', ContentPages::publish('faq', $faqBadSave['page']['fingerprint'], $actorId)['code'], 'invalid FAQ structure cannot publish');
-    $faqSaved = ContentPages::updateDraft('faq', ['title' => 'FAQ', 'body' => "## When do you deliver?\n\nOn the day selected."], $faqBadSave['page']['fingerprint'], $actorId);
+    $faqDuplicate = ContentPages::updateDraft('faq', ['title' => 'FAQ', 'body' => "## When do you deliver?\n\nOne answer.\n\n## WHEN DO YOU DELIVER\n\nAnother answer."], $faqBadSave['page']['fingerprint'], $actorId);
+    cpdb_eq('updated', $faqDuplicate['code'], 'duplicate questions can remain visible in a working draft');
+    cpdb_eq('validation_failed', ContentPages::publish('faq', $faqDuplicate['page']['fingerprint'], $actorId)['code'], 'duplicate FAQ questions cannot publish');
+    $faqSaved = ContentPages::updateDraft('faq', ['title' => 'FAQ', 'body' => "## When do you deliver?\n\nOn the day selected."], $faqDuplicate['page']['fingerprint'], $actorId);
     cpdb_eq('updated', $faqSaved['code'], 'valid structured FAQ data updates');
     cpdb_eq('published', ContentPages::publish('faq', $faqSaved['page']['fingerprint'], $actorId)['code'], 'valid FAQ data publishes');
 

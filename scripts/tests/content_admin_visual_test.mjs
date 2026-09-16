@@ -63,6 +63,12 @@ try {
     const editorBox = await page.locator('#editor-heading').locator('xpath=ancestor::section[1]').boundingBox();
     check(width === 390 ? editorBox.y > listBox.y : editorBox.x > listBox.x, `list and editor use the agreed ${width === 390 ? 'stacked' : 'two-column'} layout`);
     await inspect(page, 'Page Copy editor', width);
+    const faqResponse = await page.goto(BASE + '/admin/content.php?tab=page-copy&page=faq', { waitUntil: 'networkidle' });
+    check(faqResponse.status() === 200, `FAQ editor loads at ${width}px`, String(faqResponse.status()));
+    check(await page.getByRole('heading', { name: 'FAQ format' }).count() === 1, `FAQ format guidance is present at ${width}px`);
+    check(await page.getByRole('heading', { name: 'Published order' }).count() === 1, `FAQ source ordering is visible at ${width}px`);
+    check(await page.getByRole('heading', { name: 'Current operational values' }).count() === 1, `FAQ operational tokens are documented at ${width}px`);
+    await inspect(page, 'FAQ editor', width);
     const previewResponse = await page.goto(BASE + '/admin/content-preview.php?page=about', { waitUntil: 'networkidle' });
     check(previewResponse.status() === 200, `saved-draft preview loads at ${width}px`, String(previewResponse.status()));
     check(await page.getByText('Staff preview only.', { exact: false }).count() === 1, `preview is visibly marked staff-only at ${width}px`);

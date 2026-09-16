@@ -78,6 +78,14 @@ for ($i = 1; $i <= ContentPages::FAQ_MAX + 1; $i++) {
     $manyFaq[] = "## Question $i?\nAnswer $i.";
 }
 okv_test_ok(!ContentPages::validateFaq(implode("\n\n", $manyFaq))['ok'], 'FAQ question count is capped');
+$duplicateFaq = ContentPages::validateFaq("## How do deposits work?\n\nFirst answer.\n\n##  HOW   DO DEPOSITS WORK  \n\nSecond answer.");
+okv_test_ok(!$duplicateFaq['ok'] && isset($duplicateFaq['errors']['duplicate_2']), 'FAQ duplicate detection ignores case, spacing and terminal punctuation');
+$tokenFaq = ContentPages::validateFaq("## How much is the deposit?\n\nThe deposit is {{deposit_percentage}}.");
+okv_test_ok($tokenFaq['ok'], 'an allowlisted operational token is accepted');
+$unknownTokenFaq = ContentPages::validateFaq("## What changes?\n\nThe value is {{anything_from_settings}}.");
+okv_test_ok(!$unknownTokenFaq['ok'] && isset($unknownTokenFaq['errors']['token_1']), 'a generic or unknown operational token is refused');
+$brokenTokenFaq = ContentPages::validateFaq("## What changes?\n\nThe value is {{deposit_percentage}.");
+okv_test_ok(!$brokenTokenFaq['ok'], 'an incomplete operational token is refused');
 
 $homeFields = [
     'hero_eyebrow' => 'Est. 2026. Lagos',

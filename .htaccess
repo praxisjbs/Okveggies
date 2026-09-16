@@ -18,6 +18,34 @@ Options -Indexes
     RewriteCond %{HTTPS} !=on
     RewriteCond %{HTTP:X-Forwarded-Proto} !https
     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # M12 canonical content routes. THE_REQUEST limits these redirects to old
+    # browser-facing URLs, so the internal clean-route rewrites cannot loop.
+    RewriteCond %{THE_REQUEST} \s/+page\.php\? [NC]
+    RewriteCond %{QUERY_STRING} (^|&)slug=about(&|$) [NC]
+    RewriteRule ^page\.php$ /our-story? [R=301,L]
+    RewriteCond %{THE_REQUEST} \s/+page\.php\? [NC]
+    RewriteCond %{QUERY_STRING} (^|&)slug=how-it-works(&|$) [NC]
+    RewriteRule ^page\.php$ /how-it-works? [R=301,L]
+    RewriteCond %{THE_REQUEST} \s/+page\.php\? [NC]
+    RewriteCond %{QUERY_STRING} (^|&)slug=faq(&|$) [NC]
+    RewriteRule ^page\.php$ /faq? [R=301,L]
+    RewriteCond %{THE_REQUEST} \s/+page\.php\? [NC]
+    RewriteCond %{QUERY_STRING} (^|&)slug=terms(&|$) [NC]
+    RewriteRule ^page\.php$ /terms? [R=301,L]
+    RewriteCond %{THE_REQUEST} \s/+page\.php\? [NC]
+    RewriteCond %{QUERY_STRING} (^|&)slug=privacy(&|$) [NC]
+    RewriteRule ^page\.php$ /privacy? [R=301,L]
+    RewriteCond %{THE_REQUEST} \s/+page\.php\? [NC]
+    RewriteCond %{QUERY_STRING} (^|&)slug=delivery-policy(&|$) [NC]
+    RewriteRule ^page\.php$ /delivery-policy? [R=301,L]
+
+    RewriteRule ^our-story/?$ page.php?slug=about [END,QSA]
+    RewriteRule ^how-it-works/?$ page.php?slug=how-it-works [END,QSA]
+    RewriteRule ^faq/?$ page.php?slug=faq [END,QSA]
+    RewriteRule ^terms/?$ page.php?slug=terms [END,QSA]
+    RewriteRule ^privacy/?$ page.php?slug=privacy [END,QSA]
+    RewriteRule ^delivery-policy/?$ page.php?slug=delivery-policy [END,QSA]
 </IfModule>
 
 # --- Security headers (bootstrap.php also sets these from PHP) ----------------

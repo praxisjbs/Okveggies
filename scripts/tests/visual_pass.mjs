@@ -248,7 +248,7 @@ try {
     shopPage.on('pageerror', (err) => report(false, `JavaScript error: ${err.message}`));
 
     for (const path of ['/', '/shop.php', '/combos.php', '/kitchen-runs.php', '/cart.php',
-                        '/checkout.php', '/account.php', '/contact.php', '/page.php?slug=about']) {
+                        '/checkout.php', '/account.php', '/contact.php', '/our-story']) {
       await shopPage.goto(BASE + path, { waitUntil: 'domcontentloaded' });
       const triggers = await shopPage.locator('[data-support-trigger]').count();
       report(triggers === 1, `${path} carries exactly one support trigger`, `(${triggers})`);

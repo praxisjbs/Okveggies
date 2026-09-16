@@ -673,9 +673,10 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 
 ### M12. Content pages
 - [ ] Home (documentary hero, featured combos, categories)
-- [ ] Our Story, How It Works, FAQ, Terms, Privacy, Delivery Policy (editable in admin)
+- [x] Our Story, How It Works, FAQ, Terms, Privacy, Delivery Policy (editable in admin)
 - [x] **Task A, content contract.** The Owner fixed the 7-page inventory, clean URLs, restricted Markdown and structured FAQ rules, separate draft and published snapshots, authenticated staff preview, SEO fields, homepage editing boundary, real-operation photography, legal approval gate, footer-only navigation, separate Content and Messages permissions, append-only audit history and honest empty and error states. `docs/M12_CONTENT_CONTRACT.md` records the complete contract and the minimum additive schema change.
 - [~] **Task B, shared content service.** `ContentPages` now owns the fixed slug registry, prepared public, admin and preview reads, pure validation, structured FAQ parsing, stable draft fingerprints, transactional draft and image updates, legal-gated publication, unpublishing and page-scoped audit history. Migration `049` adds only the approved draft, SEO, homepage, image and publication fields, seeds `home` and unpublishes only unchanged legal placeholders. MySQL 8.0.46 applied migration `049`, the second run was a no-op and the focused database suite passed 43/43. The database-independent suite is green at 3,160 assertions and the brand gate passes. The protected-directory deployment fix is implemented and tested, but Task B remains in progress until that uncommitted change is deployed and the live smoke confirms `/migrations/` and `/docs/` are denied.
+- [x] **FAQ page and editor.** The fixed Markdown model now rejects incomplete, duplicate and unsupported-token entries at publication while retaining unfinished drafts. `/faq` uses native disclosures in stored order, opens the first answer, provides optional Expand all and Collapse all controls, works with JavaScript disabled, exposes stable question fragments and offers Contact and WhatsApp. Allowlisted tokens read current deposit, delivery, cancellation, Make It Right, Kitchen Run and support values. Migration `050` unpublishes only the untouched invalid FAQ seed. Unit, MySQL 8, HTTP, admin regression, brand, Apache smoke and browser checks at 390px and 1440px are green.
 
 ### M13. Hardening, QA and go-live
 - [ ] Full role smoke suite green
@@ -711,6 +712,14 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 16 Sep 2026, M12 FAQ page and editable question structure
+
+- Kept the approved `## Question` Markdown source as the single editable model. Publication now blocks empty answers, normalised duplicates, unknown operational tokens and incomplete token syntax. Draft saves remain permissive so staff can keep unfinished work.
+- Added a fixed operational-token vocabulary rather than generic Settings access. Deposit percentage, household and business delivery schedules, cancellation wording, Make It Right reporting time, Kitchen Run quote life, WhatsApp number and support email resolve from the same application rules the live journeys use.
+- Built `/faq` with native `details` and `summary` controls, deterministic question fragments, the first answer open, text and icon state signals, progressive Expand all and Collapse all buttons, restricted-Markdown answers, metadata, canonical URL and direct Contact and WhatsApp routes. A published snapshot with no valid questions shows a useful help state; an unpublished FAQ remains a 404.
+- Improved the FAQ editor with format guidance, document-order outline, specific publish blockers and documented tokens. Staff preview uses the same safe disclosure renderer. Migration `050_unpublish_placeholder_faq.sql` withdraws only the exact prose placeholder from migration `006` and leaves later staff copy untouched.
+- Verification passed: 3,260/3,260 unit assertions, 51/51 ContentPages MySQL assertions, 27/27 public HTTP assertions, 37/37 Content admin HTTP assertions, 42/42 Messages HTTP assertions, 40/40 public browser checks, 42/42 Content admin browser checks, PHP lint, the brand gate and the full Apache deployment smoke. JavaScript-disabled disclosure operation passed at both 390px and 1440px.
 
 ### 16 Sep 2026, M12 Tasks A and B: contract and shared content service
 
