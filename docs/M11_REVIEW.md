@@ -1,75 +1,159 @@
-# Milestone 11 final review
+# Milestone 11, senior review
 
-**Branch:** `M11-Admin-dashboard`  
-**Reviewed:** 10 September 2026  
-**Scope:** Admin dashboard and analytics, command palette and keyboard shortcuts
+**Branch reviewed:** `M11-Admin-dashboard` (pull request 48). Six commits, 38
+files, about 4,400 lines added.
+**Reviewed against:** `docs/PRD.md` Sections 2 and 17, `CLAUDE.md`, and the M11
+checklist.
+**Date:** 16 September 2026.
+**Finished on:** the same branch. I merged current `main` into it and resolved
+the collision described in Section 1, so the history and the authorship stay
+yours. Your own delivery write-up is kept as `docs/M11_HANDOVER.md`.
 
-## Outcome
+This is written for you, directly. Section 1 is the one that matters.
 
-Milestone 11 is complete. All 3 acceptance criteria are implemented and proved
-against a fresh MySQL 8 database, real HTTP responses, the seeded Owner and
-Manager roles, restricted custom roles, and a live browser at 390px and 1440px.
-No migration was needed and no financial record is changed by the dashboard.
+---
 
-## Requirement to evidence
+## 1. The one thing to take from this
 
-| Requirement | Final behaviour | Evidence |
-|---|---|---|
-| Today's orders | Counts each non-cancelled order placed inside the Lagos-local half-open day once, irrespective of item or payment joins | MySQL tests cover the second before midnight, exact midnight, multiple items and cancellation |
-| Revenue | Successful credited transaction amounts minus processed refunds on each real movement date | MySQL tests cover successful, reversed and undated receipts plus requested, processing, failed and processed refunds |
-| Payments due | Counts the remaining balance of non-cancelled obligations due today or earlier and separates due today from overdue | MySQL and HTTP tests cover unpaid, part-paid, fully paid, future and cancelled obligations |
-| Credit outstanding | Sums each business customer's append-only signed journal, floors each account at zero, then sums the accounts | MySQL tests cover open, overdue and settled labels, charges, negative repayments and a net-credit account |
-| Sales over time | Returns a dense 7, 30 or 90 day net-cash series, with 30 days as the default | Pure and MySQL tests cover zero, one and multiple records; HTTP tests cover valid and invalid period selection |
-| Top products | Ranks the top 10 immutable order-item names by refund-adjusted line value | MySQL tests prove a later live product rename does not rewrite the historical label |
-| Category share | Uses refund-adjusted line value and a canonical mapping for the 5 product categories, Combos and Kitchen Runs | Pure tests assert all 7 token mappings and exact 10,000-basis-point allocation; MySQL tests cover a live category move |
-| Command palette | Uses the canonical navigation, removes forbidden commands on the server, searches approved keywords and provides a named accessible dialog | HTTP tests compare the exact ordered palette and sidebar URLs for Owner, Manager and restricted roles; browser tests cover search, arrows, Enter, Escape and focus |
-| Keyboard shortcuts | Supports Control or Command K and permitted two-key `G` navigation without overriding editable fields or overlays | Source, HTTP and browser tests cover input protection, focus restoration, missing permissions and same-page safety |
+**You branched M11 off `main` before M10 merged, and then rebuilt a thing M10
+already owned, with different names. When the two met, they collided.**
 
-## Permissions
+Concretely, M10 shipped the `admin_new_issue_report` staff alert: an events
+entry, a token list of `category` and `description_preview`, a template in
+migration `045`, and a real sender, `announceIssueReportReceived()`, that the
+Make It Right controller actually calls. You could not see any of that, because
+on the branch you cut, Make It Right was still a scaffold. So you built your own
+version of the same alert:
 
-`dashboard.view` gates the route. Operational data is independently gated by
-`orders.view`, `payments.view` or `credit.view`. Chart markup, chart bootstrap
-data and its JavaScript are absent without `dashboard.analytics.view`; the sales
-chart also requires `payments.view`, while product and category charts require
-`orders.view`. The palette is built only from server-filtered canonical
-navigation. The HTTP role matrix proves these rules for the seeded Owner,
-seeded Manager and restricted custom roles.
+- a second `admin_new_issue_report` entry in `EVENTS` and `TOKENS`, with the
+  tokens named `issue_category` and `message_preview`;
+- the same template key again in migration `042`, with a body that reads
+  `{{issue_category}}` and `{{message_preview}}`, written with
+  `ON DUPLICATE KEY UPDATE`;
+- a new sender, `announceIssueReport()`, that nothing ever calls.
 
-## Accessibility and responsive behaviour
+Every one of those looks harmless on your branch. Here is what they do together
+on a live database that already ran M10. Migration `042` runs before `045` is
+already applied, so `ON DUPLICATE KEY UPDATE` **overwrites** M10's template with
+your `{{issue_category}}` / `{{message_preview}}` body. But the code that sends
+that alert is M10's, and it supplies `category` and `description_preview`. The
+tokens no longer match the copy, so every staff Make It Right email goes out with
+a blank category and a blank preview. A feature that was working breaks, and
+nothing in your milestone tests it, because on your branch the sender that fills
+those tokens did not exist yet. On top of that, `ON DUPLICATE KEY UPDATE` wipes
+any wording an Owner had edited, which is the exact thing M10's migrations went
+out of their way to avoid.
 
-- Every chart has an exact-value HTML table and identifies data with text, not
-  colour alone.
-- The canonical category colours are design tokens and remain stable.
-- The palette has an accessible name and description, traps focus, restores
-  focus to its opener and has a plain no-match state.
-- Live browser checks at 390px and 1440px found no horizontal overflow. At
-  390px, no visible control was under 44px.
-- The browser-loaded stylesheet contains the shared reduced-motion rule, and
-  the chart enhancer introduces no animation.
-- The browser console reported no warning or error during the audit.
+I resolved it on the merge: dropped your duplicate `EVENTS`/`TOKENS` keys and the
+uncalled `announceIssueReport()`, and reduced migration `042` to the one template
+that is genuinely new, `admin_manual_payment_proof`, with `INSERT IGNORE`. M10's
+alert stands untouched.
 
-## Verification results
+**The habit to build.** This is the same root cause the M9 review named: a branch
+cut from a `main` that had already moved on. The fix is a discipline, not a
+cleverness. Before you start a milestone, `git fetch` and rebase or merge the
+current `main`. Before you add a template, a permission, a migration or a
+notification event, `grep` the key you are about to introduce. If it already
+exists, you are extending someone's work, not starting your own, and the tokens
+and copy are theirs to match. A name is a contract with the rest of the codebase.
 
-- Unit runner: **2,861 / 2,861 assertions passed**.
-- Fresh MySQL 8 M11 aggregation suite: **41 / 41 assertions passed**.
-- M11 HTTP, permissions and role suite: **96 / 96 assertions passed**.
-- Payments regression: **43 / 43 assertions passed**.
-- Credit admin regression: **30 / 30 assertions passed**.
-- Credit order regression: **48 / 48 assertions passed**.
-- Cancellation regression: **28 / 28 assertions passed**.
-- PHP lint: all M11 PHP files passed.
-- JavaScript syntax: dashboard, shortcut controller and build script passed.
-- `scripts/brand-check.sh`: all green.
-- `scripts/verify.sh http://127.0.0.1:8124`: all green, including protected paths.
-- `git diff --check`: passed.
+---
 
-## Known schema boundary
+## 2. What was strong
 
-Order-item names, quantities and values are immutable snapshots. The current
-schema does not snapshot a product's category on an order item, so historical
-product lines use the product's current category for category share. Combos and
-Kitchen Runs are stable because their order-item type is itself the grouping.
-This agreed limitation is documented in `docs/M11_ANALYTICS_CONTRACT.md`; no
-speculative schema change was introduced.
+This milestone is, the collision aside, the most disciplined engineering on the
+project so far.
 
-No Milestone 11 feature or test is deferred.
+- **The money is exact and never leaves integers.** `AdminDashboard` works in
+  kobo throughout. Refunds are allocated across immutable order lines by floor
+  plus a remainder walk in ascending line id, never a float. Category share is
+  allocated to exactly 10,000 basis points by the largest-remainder method. Net
+  revenue is confirmed receipts less processed refunds on their real movement
+  dates. This is precisely how the house rules ask money to be handled.
+- **The RBAC is layered, not a single gate.** The route opens on
+  `dashboard.view`, then each figure re-checks its own permission
+  (`orders.view`, `payments.view`, `credit.view`) before its query runs, and
+  every chart additionally needs `dashboard.analytics.view` plus the relevant
+  data permission. A forbidden figure is never queried, so it cannot leak. The
+  service itself holds no user and does no permission logic, which keeps the
+  boundary in one readable place.
+- **The command palette and bell are genuinely accessible and safe.** Forbidden
+  destinations are removed on the server by `okv_admin_nav_commands()` before any
+  markup is produced. Both surfaces are real dialogs with focus trapping and
+  restoration, `aria-live` announcements, 44px controls, and no `innerHTML`
+  anywhere: the charts are built as inline SVG through `createElementNS`, with no
+  dependency and no CDN. That is the storefront's standard held in the admin.
+- **The analytics contract is written down first.** `docs/M11_ANALYTICS_CONTRACT.md`
+  fixes every boundary (Lagos midnight, token mapping, empty states, the current
+  category-snapshot limitation) before the code. Deciding the meaning of a
+  number before computing it is exactly right, and it is why the money code reads
+  so cleanly.
+- **Progressive enhancement is honest.** Every chart has an exact-value HTML
+  table and works with JavaScript off; the enhancer only decorates permitted,
+  non-empty, server-rendered data and adds no motion.
+
+---
+
+## 3. What I changed on your branch
+
+All of it is the Section 1 resolution, applied on the merge of `main` into this
+branch. Nothing in your dashboard, analytics, palette or bell logic was altered.
+
+- `includes/classes/Notifications.php`: removed the duplicate
+  `admin_new_issue_report` keys from `EVENTS` and `TOKENS`, and removed the
+  uncalled `announceIssueReport()`. Kept your `admin_manual_payment_proof` entries
+  and `announceManualPaymentProof()`, which are new and correctly wired from
+  `api/v1/payments.php`.
+- `migrations/042_admin_notification_alerts.sql`: removed the
+  `admin_new_issue_report` block and switched to `INSERT IGNORE`, so it adds only
+  the new payment-proof template and can never clobber M10's template or an
+  Owner's edit.
+- `includes/bootstrap.php`, `scripts/tests/run.php`: load the M10 and M11 classes
+  side by side.
+- Rebuilt `assets/css/tailwind.css` and the JS bundles from the merged source.
+
+Verification after the merge: the combined unit suite passes 3,066 of 3,066
+assertions, `php -l` is clean on every touched file, all 8 brand checks are green,
+and `git diff --check` is clean. The MySQL and HTTP suites need a database and
+were green in your delivery runs; they will run in CI against the merged base.
+
+---
+
+## 4. Gaps and improvements for the next milestones
+
+Not blocking, worth your attention.
+
+- **Two ways to find staff recipients now exist.** You refactored
+  `staffRecipients()` to take an optional permission; M10 had added
+  `staffRecipientsForPermission()` for the same purpose. They have slightly
+  different matching rules (yours treats Owner and a module wildcard as a match,
+  M10's is an exact permission match). Both work for their own callers, but the
+  next person will not know which to reach for. Pick one, fold the other into it,
+  and delete the loser.
+- **A couple of arbitrary text sizes slipped in.** The bell badge uses
+  `text-[10px]` and the palette shortcut keys use `text-[11px]`. The brand guard
+  does not catch these, but `CLAUDE.md` asks for design tokens only. Add the two
+  sizes to the scale in `tailwind.config.js` and reference them, or use the
+  nearest existing token.
+- **The category-snapshot boundary is real and you documented it honestly.**
+  Historical order lines borrow the product's current category, so a category
+  move rewrites past share. That is the right call for now, but when M12 or later
+  touches the order-item schema, snapshot the category slug on the line so the
+  history stops moving under you.
+- **The dashboard fires several independent queries per load.** Each is bounded
+  and indexed, so this is fine at today's volume. If the dashboard ever grows
+  more cards, consider whether the per-figure reads can share a pass.
+
+---
+
+## 5. Close
+
+The engineering inside this milestone is excellent: the money arithmetic, the
+layered permissions, the accessible palette and the write-it-down-first contract
+are all at the level I want to see. The one real problem was not in the code you
+wrote but in where you started from, and it is the same lesson as M9: a branch
+cut from a stale `main` will quietly rebuild what has landed since, and names are
+how those rebuilds collide. Fetch first, grep the name before you claim it, and
+this class of defect disappears.
+
+Merged with the integration fixes above.
