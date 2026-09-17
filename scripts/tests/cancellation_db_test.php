@@ -5,6 +5,8 @@
  */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 $tests = 0; $passed = 0;
 function c_ok($condition, string $label): void {
     global $tests, $passed;

@@ -2,6 +2,8 @@
 /** M10 Task D resolution integration tests on a migrated scratch database. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 if (!Paystack::isTestMode() || !Paystack::isOverridden()) {
     fwrite(STDERR, "Start the local fake Paystack server and provide a test key plus PAYSTACK_BASE_URL.\n");
     exit(2);

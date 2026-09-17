@@ -2,6 +2,8 @@
 /** M12 ContentPages transactional behavior against a migrated MySQL 8 database. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 $tests = 0; $passed = 0;
 function cpdb_ok($condition, string $label): void
 {

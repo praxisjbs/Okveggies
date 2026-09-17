@@ -21,6 +21,8 @@
  */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 if (!function_exists('curl_init')) {
     fwrite(STDERR, "This test needs PHP curl.\n");
     exit(2);

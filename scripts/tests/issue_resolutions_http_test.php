@@ -1,6 +1,8 @@
 <?php
 /** M10 Task D permission and replacement resolution through the real endpoint. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
+
+require_once __DIR__ . '/lib/scratch_guard.php';
 if (!function_exists('curl_init')) { fwrite(STDERR, "This test needs the PHP curl extension.\n"); exit(2); }
 
 $root = dirname(__DIR__, 2); $base = 'http://127.0.0.1:8214'; $tests = 0; $passed = 0;
