@@ -69,7 +69,7 @@ $noticeMessages = [
         </div>
       </div>
       <h1 class="mt-8 font-editorial text-okv-h4 md:text-okv-h2">We are bringing the other half home.</h1>
-      <p class="mt-5 max-w-md text-okv-lead text-white/85">Fresh produce from farms we have checked ourselves in Ogun State and Jos. Weighed right, and brought on the day you pick.</p>
+      <p class="mt-5 max-w-md text-okv-lead text-white/85">Freshness You Can Trust. From Farm to Your Kitchen.</p>
       <div class="mt-8 flex flex-wrap gap-3">
         <a href="/shop.php" class="okv-btn border border-white bg-white text-forest hover:bg-forest-tint">Start shopping</a>
         <a href="/combos.php" class="okv-btn-outline-invert">See the combos</a>
