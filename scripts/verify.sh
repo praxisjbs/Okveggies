@@ -18,22 +18,26 @@ if [ -z "$BASE" ]; then echo "[verify] no base URL"; exit 2; fi
 echo "[verify] base: $BASE"
 
 fail=0
+curl_headers=()
+if [ "${VERIFY_FORWARDED_PROTO:-}" = "https" ]; then
+  curl_headers=(-H "X-Forwarded-Proto: https")
+fi
 expect() { # url  expected_code  label
-  code=$(curl -s -o /dev/null -w "%{http_code}" -L "$1")
+  code=$(curl -s "${curl_headers[@]}" -o /dev/null -w "%{http_code}" -L "$1")
   if [ "$code" = "$2" ]; then echo "  ok   [$code] $3"; else echo "  FAIL [$code, wanted $2] $3"; fail=1; fi
 }
 expect_deny() { # url  label   (403 or 404 both acceptable)
-  code=$(curl -s -o /dev/null -w "%{http_code}" "$1")
+  code=$(curl -s "${curl_headers[@]}" -o /dev/null -w "%{http_code}" "$1")
   if [ "$code" = "403" ] || [ "$code" = "404" ]; then echo "  ok   [$code] $2 is denied"; else echo "  FAIL [$code] $2 should be denied"; fail=1; fi
 }
 
 expect_status() { # url  expected_code  label   (does not follow redirects)
-  code=$(curl -s -o /dev/null -w "%{http_code}" "$1")
+  code=$(curl -s "${curl_headers[@]}" -o /dev/null -w "%{http_code}" "$1")
   if [ "$code" = "$2" ]; then echo "  ok   [$code] $3"; else echo "  FAIL [$code, wanted $2] $3"; fail=1; fi
 }
 
 expect_login() { # url  label   (a redirect to the login, or a hard refusal)
-  code=$(curl -s -o /dev/null -w "%{http_code}" "$1")
+  code=$(curl -s "${curl_headers[@]}" -o /dev/null -w "%{http_code}" "$1")
   case "$code" in
     301|302|303|307|401|403) echo "  ok   [$code] $2 asks for a login" ;;
     *) echo "  FAIL [$code] $2 should ask for a login"; fail=1 ;;
@@ -41,7 +45,7 @@ expect_login() { # url  label   (a redirect to the login, or a hard refusal)
 }
 
 expect_private() { # url  label   (login/refusal, with 404 allowed to avoid existence disclosure)
-  code=$(curl -s -o /dev/null -w "%{http_code}" "$1")
+  code=$(curl -s "${curl_headers[@]}" -o /dev/null -w "%{http_code}" "$1")
   case "$code" in
     301|302|303|307|401|403|404) echo "  ok   [$code] $2 fails closed" ;;
     *) echo "  FAIL [$code] $2 should fail closed"; fail=1 ;;
@@ -59,6 +63,10 @@ expect "$BASE/assets/img/brand/icons/apple-touch-icon.png" "200" "apple touch ic
 expect "$BASE/assets/fonts/hanken-grotesk-latin.woff2"      "200" "brand font (Hanken Grotesk)"
 expect "$BASE/assets/img/payments/paystack.svg"             "200" "Paystack checkout mark"
 expect "$BASE/how-it-works#make-it-right" "200" "published Make It Right guidance"
+expect "$BASE/sitemap.xml" "200" "public sitemap"
+expect "$BASE/robots.txt" "200" "crawler discovery file"
+expect_status "$BASE/our-story/" "301" "content trailing slash normalises"
+expect_status "$BASE/page.php?slug=about&next=https%3A%2F%2Fattacker.example" "301" "legacy content redirect stays local"
 # M6 routes. A staff screen must send a signed-out visitor to the login rather
 # than answering, and a trail token that does not exist must be a clean 404
 # rather than a 500. expect_login is separate from expect_deny on purpose: an

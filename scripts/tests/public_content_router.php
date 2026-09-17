@@ -12,10 +12,18 @@ $routes = [
     '/privacy' => 'privacy',
     '/delivery-policy' => 'delivery-policy',
 ];
-if (isset($routes[rtrim($path, '/') ?: '/'])) {
-    $_GET['slug'] = $routes[rtrim($path, '/') ?: '/'];
+$normalisedPath = rtrim($path, '/') ?: '/';
+if ($path !== $normalisedPath && isset($routes[$normalisedPath])) {
+    header('Location: ' . $normalisedPath, true, 301);
+    return true;
+}
+if ($path === '/sitemap.xml') {
+    require dirname(__DIR__, 2) . '/sitemap.php';
+    return true;
+}
+if (isset($routes[$normalisedPath])) {
+    $_GET['slug'] = $routes[$normalisedPath];
     require dirname(__DIR__, 2) . '/page.php';
     return true;
 }
 return false;
-

@@ -19,6 +19,9 @@ Options -Indexes
     RewriteCond %{HTTP:X-Forwarded-Proto} !https
     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
+    # One slashless public form for every M12 content route.
+    RewriteRule ^(our-story|how-it-works|faq|terms|privacy|delivery-policy)/$ /$1 [R=301,L,NE]
+
     # M12 canonical content routes. THE_REQUEST limits these redirects to old
     # browser-facing URLs, so the internal clean-route rewrites cannot loop.
     RewriteCond %{THE_REQUEST} \s/+page\.php\? [NC]
@@ -46,6 +49,7 @@ Options -Indexes
     RewriteRule ^terms/?$ page.php?slug=terms [END,QSA]
     RewriteRule ^privacy/?$ page.php?slug=privacy [END,QSA]
     RewriteRule ^delivery-policy/?$ page.php?slug=delivery-policy [END,QSA]
+    RewriteRule ^sitemap\.xml$ sitemap.php [END]
 </IfModule>
 
 # --- Security headers (bootstrap.php also sets these from PHP) ----------------

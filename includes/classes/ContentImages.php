@@ -102,6 +102,11 @@ final class ContentImages
                 $created[$width] = $candidate;
             }
         }
+        $mainWidth = (int) $match[2];
+        if (is_file(dirname(__DIR__, 2) . $path)) {
+            $created[$mainWidth] = $path;
+        }
+        ksort($created);
         $absolute = dirname(__DIR__, 2) . $path;
         $size = is_file($absolute) ? @getimagesize($absolute) : false;
         return [
@@ -114,10 +119,11 @@ final class ContentImages
 
     public static function removeSet(string $path): void
     {
-        if (preg_match('#^/uploads/content/([a-f0-9]{32})-[0-9]{3,4}\.webp$#', $path, $match) !== 1) {
+        if (preg_match('#^/uploads/content/([a-f0-9]{32})-([0-9]{3,4})\.webp$#', $path, $match) !== 1) {
             return;
         }
-        foreach (self::WIDTHS as $width) {
+        $widths = array_values(array_unique(array_merge(self::WIDTHS, [(int) $match[2]])));
+        foreach ($widths as $width) {
             $candidate = dirname(__DIR__, 2) . '/uploads/content/' . $match[1] . '-' . $width . '.webp';
             if (is_file($candidate)) {
                 @unlink($candidate);

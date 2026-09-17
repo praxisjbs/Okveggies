@@ -53,6 +53,7 @@ if ($databaseFailed || $page === null) {
     if ($databaseFailed) {
         header('Retry-After: 300');
     }
+    header('X-Robots-Tag: noindex, nofollow');
     $errorTitle = $databaseFailed ? 'Page temporarily unavailable' : 'Page not found';
     $errorHeading = $databaseFailed ? 'We cannot open that page just now' : 'That page is not on the stall';
     $errorCopy = $databaseFailed

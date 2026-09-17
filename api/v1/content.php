@@ -78,7 +78,12 @@ try {
             ], 422, $returnTo);
         }
         $newPath = (string) $stored['path'];
-        $result = ContentPages::updateImage($slug, $newPath, $alt, $fingerprint, (int) Rbac::userId());
+        try {
+            $result = ContentPages::updateDraftImage($slug, $newPath, $alt, $fingerprint, (int) Rbac::userId());
+        } catch (Throwable $e) {
+            ContentImages::removeSet($newPath);
+            throw $e;
+        }
         if (empty($result['ok'])) {
             ContentImages::removeSet($newPath);
         } else {
@@ -94,7 +99,7 @@ try {
             content_fail(['code' => 'image_not_supported', 'message' => 'Photography is not managed for that page.'], 422, $returnTo);
         }
         $beforePage = ContentPages::findForAdmin($slug);
-        $result = ContentPages::updateImage($slug, '', '', $fingerprint, (int) Rbac::userId());
+        $result = ContentPages::updateDraftImage($slug, '', '', $fingerprint, (int) Rbac::userId());
         if (!empty($result['ok'])) {
             $oldDraft = (string) ($beforePage['image_url'] ?? '');
             $oldPublished = (string) ($beforePage['published']['image_url'] ?? '');

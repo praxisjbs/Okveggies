@@ -191,6 +191,52 @@ final class ContentPages
         return $navigation;
     }
 
+    /** Published managed pages for sitemap generation, never drafts. */
+    public static function publishedForSitemap(): array
+    {
+        $slugs = array_values(array_filter(
+            self::supportedSlugs(),
+            static fn(string $slug): bool => $slug !== 'home'
+        ));
+        $params = [':published' => 1];
+        $marks = [];
+        foreach ($slugs as $index => $slug) {
+            $key = ':sitemap_slug_' . $index;
+            $marks[] = $key;
+            $params[$key] = $slug;
+        }
+        $rows = Database::all(
+            'SELECT slug, published_at FROM content_pages '
+            . 'WHERE is_published = :published AND slug IN (' . implode(', ', $marks) . ')',
+            $params
+        );
+        $published = [];
+        foreach ($rows as $row) {
+            $slug = (string) ($row['slug'] ?? '');
+            if (isset(self::PAGES[$slug])) {
+                $published[$slug] = $row['published_at'] ?? null;
+            }
+        }
+        $pages = [];
+        foreach ($slugs as $slug) {
+            if (!array_key_exists($slug, $published)) {
+                continue;
+            }
+            $pages[] = [
+                'slug' => $slug,
+                'path' => self::PAGES[$slug]['path'],
+                'lastmod' => self::dateOnly($published[$slug]),
+            ];
+        }
+        return $pages;
+    }
+
+    private static function dateOnly(mixed $value): ?string
+    {
+        $value = trim((string) ($value ?? ''));
+        return preg_match('/^\d{4}-\d{2}-\d{2}/', $value) ? substr($value, 0, 10) : null;
+    }
+
     /** Current draft only. The caller must enforce content.view on every request. */
     public static function findPreview(string $slug): ?array
     {

@@ -26,25 +26,23 @@ if (!function_exists('okv_shop_footer')) {
         global $OKV_FOOTER_NAV;
         if ($contentNavigation === null) {
             try {
-                $readySlugs = [];
-                foreach ($OKV_FOOTER_NAV as $item) {
-                    if (!empty($item['slug']) && !empty($item['public_ready'])) {
-                        $readySlugs[] = (string) $item['slug'];
-                    }
-                }
-                $contentNavigation = ContentPages::publishedNavigation($readySlugs);
+                $contentNavigation = ContentPages::publishedNavigation($OKV_FOOTER_NAV['content_slugs'] ?? []);
             } catch (Throwable $e) {
                 error_log('content.footer_navigation failed: ' . $e->getMessage());
                 $contentNavigation = [];
             }
         }
-        $publishedSlugs = array_fill_keys(array_column($contentNavigation, 'slug'), true);
         $company = [];
         $legal = [];
-        foreach ($OKV_FOOTER_NAV as $item) {
-            if (isset($item['slug']) && !isset($publishedSlugs[(string) $item['slug']])) {
-                continue;
+        foreach ($contentNavigation as $item) {
+            $link = [(string) $item['path'], (string) $item['label']];
+            if (!empty($item['legal'])) {
+                $legal[] = $link;
+            } else {
+                $company[] = $link;
             }
+        }
+        foreach (($OKV_FOOTER_NAV['static'] ?? []) as $item) {
             $link = [(string) $item['href'], (string) $item['label']];
             if (($item['group'] ?? '') === 'Legal') {
                 $legal[] = $link;

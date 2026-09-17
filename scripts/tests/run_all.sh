@@ -79,7 +79,7 @@ echo
 echo "[tests] 3. HTTP suites (the site answering on $BASE)"
 if curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
   for suite in \
-    admin_dashboard_http_test admin_notifications_http_test cancellation_http_test contact_http_test contact_admin_http_test content_admin_http_test public_content_http_test \
+    admin_dashboard_http_test admin_notifications_http_test cancellation_http_test contact_http_test contact_admin_http_test content_admin_http_test public_content_http_test m12_storefront_access_http_test sitemap_http_test homepage_http_test \
     credit_checkout_http_test customer_http_test delivery_http_test \
     issue_reports_http_test issue_photos_http_test issue_workflow_http_test issue_resolutions_http_test \
     kitchen_runs_http_test order_lifecycle_http_test order_trail_http_test settings_http_test
@@ -98,6 +98,7 @@ elif ! curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
   skip "visual_pass.mjs" "nothing answering on $BASE"
 else
   run "visual_pass.mjs" node scripts/tests/visual_pass.mjs
+  run "homepage_visual_test.mjs" node scripts/tests/homepage_visual_test.mjs
   run "content_admin_visual_test.mjs" node scripts/tests/content_admin_visual_test.mjs
   run "public_content_visual_test.mjs" php scripts/tests/public_content_visual_fixture.php
 fi

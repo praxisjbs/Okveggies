@@ -118,12 +118,11 @@ $OKV_SHOP_NAV = [
 ];
 
 // Footer links (reached from the footer, not the top nav) ---------------------
+// Managed-page labels, paths and legal grouping belong to ContentPages. This
+// list only selects their footer order and keeps independent public routes.
 $OKV_FOOTER_NAV = [
-    ['label' => 'Our Story',       'href' => '/our-story',      'slug' => 'about',           'group' => 'Company', 'public_ready' => true],
-    ['label' => 'How It Works',    'href' => '/how-it-works',   'slug' => 'how-it-works',    'group' => 'Company', 'public_ready' => true],
-    ['label' => 'Questions',       'href' => '/faq',            'slug' => 'faq',             'group' => 'Company', 'public_ready' => true],
-    ['label' => 'Terms',           'href' => '/terms',          'slug' => 'terms',           'group' => 'Legal',   'public_ready' => true],
-    ['label' => 'Privacy',         'href' => '/privacy',        'slug' => 'privacy',         'group' => 'Legal',   'public_ready' => true],
-    ['label' => 'Delivery Policy', 'href' => '/delivery-policy','slug' => 'delivery-policy', 'group' => 'Legal',   'public_ready' => true],
-    ['label' => 'Contact',         'href' => '/contact.php',                               'group' => 'Company', 'public_ready' => true],
+    'content_slugs' => ['about', 'how-it-works', 'faq', 'terms', 'privacy', 'delivery-policy'],
+    'static' => [
+        ['label' => 'Contact', 'href' => '/contact.php', 'group' => 'Company'],
+    ],
 ];

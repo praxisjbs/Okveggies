@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/components/shop/faq_disclosures.php';
 Rbac::requirePermission('content.view');
+header('X-Robots-Tag: noindex, nofollow');
 
 $slug = trim((string) okv_input('page', ''));
 $page = null;
