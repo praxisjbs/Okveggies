@@ -108,18 +108,22 @@ foreach (Notifications::TOKENS['contact_acknowledgement'] as $ackToken) {
 
 $footer = file_get_contents(dirname(__DIR__, 2) . '/includes/components/shop/footer.php');
 okv_test_eq(1, substr_count($footer, 'okv_support_widget();'), 'shared shop chrome renders the widget exactly once');
-foreach (['account.php', 'page.php', 'public/auth/activate.php', 'public/auth/password_reset.php'] as $route) {
+foreach (['account.php', 'public/auth/activate.php', 'public/auth/password_reset.php'] as $route) {
     $source = file_get_contents(dirname(__DIR__, 2) . '/' . $route);
     okv_test_eq(1, substr_count($source, 'okv_support_widget();'), "$route renders one widget outside shared shop chrome");
 }
+$contentPage = file_get_contents(dirname(__DIR__, 2) . '/page.php');
+okv_test_eq(0, substr_count($contentPage, 'okv_support_widget();'), 'page.php delegates its widget to the shared footer');
+okv_test_ok(str_contains($contentPage, 'okv_shop_footer('), 'page.php renders the shared footer and its single widget');
 
 $adminPage = file_get_contents(dirname(__DIR__, 2) . '/admin/content.php');
 okv_test_ok(str_contains($adminPage, "'page-copy'"), 'the screen keeps a page-copy tab for M12');
-okv_test_ok(str_contains($adminPage, 'milestone M12'), 'and says plainly that M12 owns it');
+okv_test_ok(str_contains($adminPage, 'ContentPages::listForAdmin()'), 'the M12 page-copy tab uses the shared content service');
 okv_test_ok(str_contains($adminPage, "\$okv_admin_title = 'Content and Messages'"), 'the screen is titled as the nav and PRD 4.3 name it');
 okv_test_ok(!preg_match('/UPDATE\s+content_pages/i', $adminPage), 'M9 leaves the page-copy half untouched');
 okv_test_ok(str_contains($adminPage, "Rbac::requirePermission('messages.view')"), 'every message workspace read requires messages.view');
-okv_test_ok(!str_contains($adminPage, "content.view"), 'the message workspace never substitutes content.view');
+okv_test_ok(str_contains($adminPage, "Rbac::requirePermission('content.view')"), 'the shared route independently gates page-copy reads');
+okv_test_ok(strpos($adminPage, "Rbac::requirePermission('messages.view')") < strpos($adminPage, '$search ='), 'messages.view is enforced before message queries run');
 okv_test_ok(str_contains($adminPage, 'okv_pagination'), 'the message list uses the shared accessible pagination');
 okv_test_ok(str_contains($adminPage, 'okv_e($selected[\'message\'])'), 'message content is escaped when rendered');
 okv_test_ok(str_contains($adminPage, 'The website does not send or record a reply.'), 'response links do not imply the website sent anything');

@@ -43,7 +43,6 @@ if (!function_exists('okv_head_meta')) {
   <link rel="apple-touch-icon" sizes="180x180" href="<?= okv_e(okv_asset('/assets/img/brand/icons/apple-touch-icon.png')) ?>">
   <link rel="manifest" href="<?= okv_e(okv_asset('/site.webmanifest')) ?>">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="<?= okv_e(okv_asset('/assets/fonts/hanken-grotesk-latin.woff2')) ?>">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="<?= okv_e(okv_asset('/assets/fonts/jetbrains-mono-latin.woff2')) ?>">
   <meta property="og:site_name" content="OK Veggies">
   <meta property="og:type" content="<?= okv_e($ogType) ?>">
   <meta property="og:title" content="<?= okv_e($ogTitle) ?>">

@@ -148,8 +148,14 @@ The reminder delay is a setting, not a constant: `payment_reminder_minutes` in
   customer has uploaded to `uploads/` are safe across deploys. The trade-off is
   that a file deleted from the repo is not removed from the server; delete those
   by hand if it ever matters.
+- The main SFTP upload uses a wildcard, so the workflow uploads `.htaccess` and
+  `.user.ini` again as explicit single files. Do not remove those 2 steps.
+  Without them, the host can retain stale access rules while the visible app
+  still deploys successfully.
 - HTTPS is forced by `.htaccess`, and `.env`, `migrations/`, `includes/`,
   `scripts/`, `docs/` and `vendor/` are all denied over the web.
+- The final workflow step runs `scripts/verify.sh` against the deployed URL.
+  A deployment is not successful when a protected path is publicly readable.
 
 ## If something is wrong
 

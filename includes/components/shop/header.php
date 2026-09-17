@@ -18,7 +18,7 @@ if (!function_exists('okv_shop_header')) {
         ?>
         <header class="sticky top-0 z-30 border-b border-mist bg-white/95 backdrop-blur">
           <div class="okv-container flex h-16 items-center justify-between gap-4">
-            <a href="/" class="inline-flex items-center rounded-md" aria-label="OK Veggies, home">
+            <a href="/" class="inline-flex min-h-[44px] items-center rounded-md" aria-label="OK Veggies, home">
               <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup.svg')) ?>" alt="OK Veggies, Fresh Picks" width="183" height="48" class="hidden h-12 w-auto sm:block">
               <!--
                 The narrow header takes the compact lockup, not the seal shrunk

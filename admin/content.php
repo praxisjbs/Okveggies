@@ -7,24 +7,36 @@
  * Messages, built in M9: the contact submissions from the widget and the
  * contact page, read under `messages.view` and acted on under `messages.handle`.
  *
- * Page copy, which M12 builds: Our Story, How It Works, the questions and the
- * legal pages. M9 does not touch it. The tab is here so the screen matches the
- * nav and the PRD, and so M12 has somewhere to land without moving anything.
+ * Page copy, built in M12: the homepage, Our Story, How It Works, FAQ and the
+ * legal pages. The two modules share a route, but not a permission boundary.
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/components/pagination.php';
-Rbac::requirePermission('messages.view');
-
-$tab = okv_input('tab', '') === 'page-copy' ? 'page-copy' : 'messages';
+$canMessages = Rbac::can('messages.view');
+$canContent = Rbac::can('content.view');
+if (!$canMessages && !$canContent) {
+    Rbac::requirePermission('messages.view');
+}
+$requestedTab = (string) okv_input('tab', '');
+$tab = $requestedTab === 'page-copy' || (!$canMessages && $canContent) ? 'page-copy' : 'messages';
+if ($tab === 'page-copy' && !$canContent) {
+    Rbac::requirePermission('content.view');
+}
+if ($tab === 'messages' && !$canMessages) {
+    Rbac::requirePermission('messages.view');
+}
 
 /** The tab strip both halves of this screen render. */
-function okv_content_tabs(string $tab, int $newCount): void
+function okv_content_tabs(string $tab, int $newCount, bool $canMessages, bool $canContent): void
 {
-    $tabs = [
-        'messages'  => 'Messages' . ($newCount > 0 ? ' (' . $newCount . ' new)' : ''),
-        'page-copy' => 'Page copy',
-    ];
+    $tabs = [];
+    if ($canMessages) {
+        $tabs['messages'] = 'Messages' . ($newCount > 0 ? ' (' . $newCount . ' new)' : '');
+    }
+    if ($canContent) {
+        $tabs['page-copy'] = 'Page copy';
+    }
     ?>
     <nav class="mb-5 flex flex-wrap gap-2 border-b border-mist" aria-label="Content and Messages sections">
       <?php foreach ($tabs as $key => $label): ?>
@@ -37,25 +49,143 @@ function okv_content_tabs(string $tab, int $newCount): void
 }
 
 if ($tab === 'page-copy') {
+    $contentError = false;
+    $pages = [];
+    $selected = null;
+    $history = [];
+    try {
+        $pages = ContentPages::listForAdmin();
+        $requestedSlug = trim((string) okv_input('page', ''));
+        $selectedSlug = $requestedSlug !== '' ? $requestedSlug : (string) ($pages[0]['slug'] ?? '');
+        $selected = $selectedSlug !== '' ? ContentPages::findForAdmin($selectedSlug) : null;
+        $history = $selected ? ContentPages::history($selectedSlug, 20) : [];
+    } catch (Throwable $e) {
+        error_log('content.admin.read failed: ' . $e->getMessage());
+        $contentError = true;
+        $selectedSlug = '';
+    }
+    $canEdit = Rbac::can('content.edit');
+    $newCount = $canMessages ? ContactMessages::countNew() : 0;
+    $noticeCode = trim((string) okv_input('notice', ''));
+    $errorCode = trim((string) okv_input('error', ''));
+    $notices = [
+        'updated' => 'The draft was saved.',
+        'published' => 'The saved draft is now public.',
+        'unpublished' => 'The page is no longer public.',
+        'image_updated' => 'The documentary photograph was prepared and saved to the draft.',
+        'image_removed' => 'The draft photograph was removed.',
+        'unchanged' => 'Nothing changed.',
+    ];
+    $errors = [
+        'validation_failed' => 'Some fields need attention. Nothing was changed.',
+        'stale_draft' => 'Another staff member changed this draft. Reload it before saving.',
+        'legal_approval_required' => 'Confirm that the legal wording is client-approved before publishing.',
+        'confirmation_required' => 'Tick the confirmation box before changing publication status.',
+        'page_not_seeded' => 'That managed page has not been seeded.',
+        'unknown_page' => 'That page is not managed here.',
+        'csrf_expired' => 'Your session expired. Reload the page and try again.',
+        'invalid_image' => 'Choose a complete JPEG, PNG or WebP photograph within the upload limit.',
+        'image_too_small' => 'Choose a photograph at least 640px wide and 360px high.',
+        'image_processing_unavailable' => 'This server cannot prepare responsive photographs yet. Ask the host to enable PHP GD with WebP support.',
+        'image_alt_required' => 'Describe the photograph before uploading it.',
+        'image_not_supported' => 'Photography is managed only for the Homepage and Our Story.',
+        'failed' => 'We could not update that page. Nothing was changed.',
+    ];
+    $fieldLabels = [
+        'hero_eyebrow' => 'Hero eyebrow', 'hero_heading' => 'Hero heading', 'hero_intro' => 'Hero introduction',
+        'primary_cta_label' => 'Primary button label', 'primary_cta_path' => 'Primary button destination',
+        'secondary_cta_label' => 'Secondary button label', 'secondary_cta_path' => 'Secondary button destination',
+        'promise_heading' => 'Promise heading', 'promise_body' => 'Promise copy',
+        'combos_eyebrow' => 'Combos eyebrow', 'combos_heading' => 'Combos heading',
+        'categories_eyebrow' => 'Categories eyebrow', 'categories_heading' => 'Categories heading',
+        'products_eyebrow' => 'Products eyebrow', 'products_heading' => 'Products heading',
+    ];
+    $faq = $selected && $selected['slug'] === 'faq' ? ContentPages::validateFaq((string) $selected['body']) : null;
     $okv_admin_title = 'Content and Messages';
     $okv_admin_note  = 'The messages customers send you, and the page copy they read.';
+    $okv_admin_script = '/assets/js/admin-content.js';
     require __DIR__ . '/../includes/components/admin/header.php';
-    okv_content_tabs($tab, ContactMessages::countNew());
+    okv_content_tabs($tab, $newCount, $canMessages, $canContent);
     ?>
-  <section class="okv-panel okv-panel-body" aria-labelledby="page-copy-heading">
-    <h2 id="page-copy-heading" class="okv-panel-title">Page copy</h2>
-    <p class="mt-2 max-w-2xl text-sm text-ink-60">
-      Our Story, How It Works, the questions and answers and the legal pages are
-      edited here rather than in code. That half of this screen is built in
-      milestone M12, which owns the storefront pages it feeds. Nothing on the
-      Messages tab depends on it, and M12 can land here without moving anything.
-    </p>
-    <p class="mt-3 max-w-2xl text-sm text-ink-60">The plan for it is in <code>docs/PRD.md</code> Section 18.</p>
-    <div class="mt-5 flex flex-wrap gap-3">
-      <a class="okv-btn-outline" href="/admin/content.php">Read the messages</a>
-      <a class="okv-btn-text min-h-[44px]" href="/">See the shop as a customer does</a>
-    </div>
-  </section>
+<?php if ($noticeCode !== ''): ?><p class="okv-note okv-note-ok mb-5" role="status"><?= okv_e($notices[$noticeCode] ?? 'The page was updated.') ?></p><?php endif; ?>
+<?php if ($errorCode !== ''): ?><p class="okv-note-bad mb-5" role="alert"><?= okv_e($errors[$errorCode] ?? $errors['failed']) ?></p><?php endif; ?>
+<?php if ($contentError): ?>
+  <section class="okv-panel okv-panel-body" role="alert"><h2 class="okv-panel-title">Page copy is temporarily unavailable</h2><p class="mt-2 text-sm text-ink-60">We could not load the content store. No public copy was changed. Please try again.</p></section>
+<?php elseif (!$pages): ?>
+  <section class="okv-panel okv-panel-body"><h2 class="okv-panel-title">No managed pages are available</h2><p class="mt-2 text-sm text-ink-60">The fixed M12 pages have not been seeded. Run the approved migrations before editing content.</p></section>
+<?php else: ?>
+  <div class="grid gap-5 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.5fr)]">
+    <section class="okv-panel" aria-labelledby="page-list-heading">
+      <div class="okv-panel-head"><h2 id="page-list-heading" class="okv-panel-title">Managed pages</h2><span class="text-xs text-ink-60"><?= count($pages) ?> pages</span></div>
+      <ul class="divide-y divide-mist">
+        <?php foreach ($pages as $page): $pageUrl = '/admin/content.php?tab=page-copy&page=' . rawurlencode((string) $page['slug']); ?>
+          <li><a class="block min-h-[44px] px-4 py-3 hover:bg-forest-tint <?= $selected && $selected['slug'] === $page['slug'] ? 'bg-forest-tint' : '' ?>" href="<?= okv_e($pageUrl) ?>" <?= $selected && $selected['slug'] === $page['slug'] ? 'aria-current="page"' : '' ?>><span class="flex items-center justify-between gap-3"><strong class="text-sm"><?= okv_e($page['label']) ?></strong><span class="okv-badge <?= $page['is_published'] ? 'okv-badge-available' : 'okv-badge-warn' ?>"><?= $page['is_published'] ? 'Published' : 'Unpublished' ?></span></span><span class="mt-1 block font-mono text-xs text-ink-60"><?= okv_e($page['canonical_path']) ?></span></a></li>
+        <?php endforeach; ?>
+      </ul>
+    </section>
+
+    <?php if (!$selected): ?>
+      <section class="okv-panel okv-panel-body"><h2 class="okv-panel-title">Page not found</h2><p class="mt-2 text-sm text-ink-60">Choose one of the managed pages from the list.</p></section>
+    <?php else: ?>
+      <div class="space-y-5">
+        <section class="okv-panel okv-panel-body" aria-labelledby="editor-heading">
+          <div class="flex flex-wrap items-start justify-between gap-3"><div><h2 id="editor-heading" class="okv-panel-title"><?= okv_e($selected['label']) ?></h2><p class="mt-1 font-mono text-xs text-ink-60"><?= okv_e($selected['canonical_path']) ?></p></div><a class="okv-btn-outline" data-content-preview href="/admin/content-preview.php?page=<?= rawurlencode((string) $selected['slug']) ?>" target="_blank" rel="noopener">Preview saved draft</a></div>
+          <p class="mt-3 text-xs text-ink-60">Last updated <?= $selected['updated_at'] !== '' ? okv_e(date('j M Y, H:i', strtotime((string) $selected['updated_at']))) : 'time not recorded' ?> by <?= okv_e((string) ($selected['updated_by_name'] ?: 'staff not recorded')) ?>.</p>
+          <?php if (!$canEdit): ?><p class="okv-note mt-4 bg-gold-tint text-gold-ink">You can read and preview this copy. A staff member with content.edit is needed to save or publish it.</p><?php endif; ?>
+          <p class="okv-note-bad mt-4 hidden" data-content-error role="alert"></p>
+          <form class="mt-5 space-y-5" action="/api/v1/content.php" method="post" data-content-form data-save-form>
+            <?= Csrf::field() ?><input type="hidden" name="action" value="save_draft"><input type="hidden" name="slug" value="<?= okv_e($selected['slug']) ?>"><input type="hidden" name="fingerprint" value="<?= okv_e($selected['fingerprint']) ?>">
+            <div><label class="okv-label" for="content-title">Page title</label><input class="okv-input" id="content-title" name="title" maxlength="<?= ContentPages::TITLE_MAX ?>" value="<?= okv_e($selected['title']) ?>" <?= $canEdit ? '' : 'disabled' ?> data-content-field><p class="mt-1 hidden text-xs text-tomato" data-field-error="title"></p></div>
+            <div><label class="okv-label" for="content-body"><?= $selected['slug'] === 'faq' ? 'Questions and answers' : 'Body copy' ?></label><textarea class="okv-input font-mono text-sm" id="content-body" name="body" rows="18" maxlength="<?= ContentPages::BODY_MAX ?>" <?= $canEdit ? '' : 'disabled' ?> data-content-field aria-describedby="content-body-help"><?= okv_e($selected['body']) ?></textarea><p class="mt-1 text-xs text-ink-60" id="content-body-help">Restricted Markdown only: paragraphs, lists, emphasis and links. HTML is not accepted.</p><p class="mt-1 hidden text-xs text-tomato" data-field-error="body"></p></div>
+            <?php if ($selected['slug'] === 'faq'): ?>
+              <aside class="rounded-md border border-mist bg-forest-tint p-4" aria-labelledby="faq-format-heading"><h3 class="text-sm font-semibold" id="faq-format-heading">FAQ format</h3><pre class="mt-2 whitespace-pre-wrap font-mono text-xs">## Question goes here
+Answer copy goes here.</pre><p class="mt-2 text-sm"><?= count($faq['items']) ?> question<?= count($faq['items']) === 1 ? '' : 's' ?> found in document order.</p><?php if (!$faq['ok']): ?><div class="okv-note-bad mt-3" role="alert"><p class="font-semibold">This draft can be saved, but it cannot be published yet.</p><ul class="mt-2 list-disc space-y-1 pl-5"><?php foreach ($faq['errors'] as $message): ?><li><?= okv_e($message) ?></li><?php endforeach; ?></ul></div><?php else: ?><p class="okv-note-ok mt-3">Every question has an answer and no duplicates were found.</p><?php endif; ?></aside>
+              <aside class="rounded-md border border-mist p-4" aria-labelledby="faq-order-heading"><h3 class="text-sm font-semibold" id="faq-order-heading">Published order</h3><?php if (!$faq['items']): ?><p class="mt-2 text-sm text-ink-60">No questions have been started. Begin with <code class="font-mono">##</code>.</p><?php else: ?><ol class="mt-2 list-decimal space-y-2 pl-5 text-sm"><?php foreach ($faq['items'] as $item): ?><li><?= okv_e((string) $item['question']) ?><?= trim((string) $item['answer']) === '' ? ' (answer missing)' : '' ?></li><?php endforeach; ?></ol><?php endif; ?><p class="mt-3 text-xs text-ink-60">Move a complete question section in the editor to change its public position.</p></aside>
+              <aside class="rounded-md border border-mist p-4" aria-labelledby="faq-token-heading"><h3 class="text-sm font-semibold" id="faq-token-heading">Current operational values</h3><p class="mt-2 text-sm text-ink-60">Place a token in an answer. The public page reads its current value when the page opens.</p><dl class="mt-3 space-y-3"><?php foreach (FaqContent::tokenDefinitions() as $token => [$label, $help]): ?><div><dt><code class="font-mono text-xs">{{<?= okv_e($token) ?>}}</code> <span class="text-sm font-semibold"><?= okv_e($label) ?></span></dt><dd class="mt-1 text-xs text-ink-60"><?= okv_e($help) ?></dd></div><?php endforeach; ?></dl></aside>
+            <?php endif; ?>
+            <?php if ($selected['slug'] === 'home'): ?>
+              <fieldset><legend class="okv-panel-title">Homepage sections</legend><p class="mt-1 text-sm text-ink-60">Photography is managed separately. These fields control the documentary hero and section copy.</p><div class="mt-4 grid gap-4 md:grid-cols-2">
+                <?php foreach (ContentPages::homeFields() as $key => $max): $isLong = $key === 'promise_body' || $key === 'hero_intro'; ?>
+                  <div class="<?= $isLong ? 'md:col-span-2' : '' ?>"><label class="okv-label" for="home-<?= okv_e($key) ?>"><?= okv_e($fieldLabels[$key] ?? $key) ?></label><?php if ($isLong): ?><textarea class="okv-input" id="home-<?= okv_e($key) ?>" name="content_data[<?= okv_e($key) ?>]" rows="4" maxlength="<?= (int) $max ?>" <?= $canEdit ? '' : 'disabled' ?> data-content-field><?= okv_e((string) ($selected['content_data'][$key] ?? '')) ?></textarea><?php else: ?><input class="okv-input" id="home-<?= okv_e($key) ?>" name="content_data[<?= okv_e($key) ?>]" maxlength="<?= (int) $max ?>" value="<?= okv_e((string) ($selected['content_data'][$key] ?? '')) ?>" <?= $canEdit ? '' : 'disabled' ?> data-content-field><?php endif; ?><p class="mt-1 hidden text-xs text-tomato" data-field-error="content_data.<?= okv_e($key) ?>"></p></div>
+                <?php endforeach; ?>
+              </div></fieldset>
+            <?php endif; ?>
+            <fieldset><legend class="okv-panel-title">Search and sharing</legend><div class="mt-4 grid gap-4 md:grid-cols-2"><div><label class="okv-label" for="meta-title">SEO title</label><input class="okv-input" id="meta-title" name="meta_title" maxlength="<?= ContentPages::META_TITLE_MAX ?>" value="<?= okv_e($selected['meta_title']) ?>" <?= $canEdit ? '' : 'disabled' ?> data-content-field><p class="mt-1 hidden text-xs text-tomato" data-field-error="meta_title"></p></div><div><label class="okv-label" for="meta-description">SEO description</label><textarea class="okv-input" id="meta-description" name="meta_description" rows="3" maxlength="<?= ContentPages::META_DESCRIPTION_MAX ?>" <?= $canEdit ? '' : 'disabled' ?> data-content-field><?= okv_e($selected['meta_description']) ?></textarea><p class="mt-1 hidden text-xs text-tomato" data-field-error="meta_description"></p></div></div></fieldset>
+            <?php if ($canEdit): ?><div class="flex flex-wrap items-center gap-3"><button class="okv-btn" type="submit">Save draft</button><span class="hidden text-sm text-gold-ink" data-content-dirty>Unsaved changes</span></div><?php endif; ?>
+          </form>
+        </section>
+
+        <?php if (in_array($selected['slug'], ['home', 'about'], true)): ?>
+          <section class="okv-panel okv-panel-body" aria-labelledby="photo-heading">
+            <h2 id="photo-heading" class="okv-panel-title">Documentary photograph</h2>
+            <p class="mt-2 text-sm text-ink-60">Use a rights-cleared photograph of the real OK Veggies operation. Stock and synthetic documentary images are not accepted. The upload is converted into responsive WebP files.</p>
+            <?php if ($selected['image_url'] !== ''): ?>
+              <img class="mt-4 max-h-64 rounded-md object-cover" src="<?= okv_e(okv_image_url($selected['image_url'])) ?>" alt="<?= okv_e($selected['image_alt']) ?>">
+              <dl class="mt-3 grid gap-2 text-sm"><div><dt class="text-ink-60">Path</dt><dd class="break-all font-mono text-xs"><?= okv_e($selected['image_url']) ?></dd></div><div><dt class="text-ink-60">Alternative text</dt><dd><?= okv_e($selected['image_alt']) ?></dd></div></dl>
+            <?php else: ?>
+              <p class="mt-3 rounded-md border border-mist bg-forest-tint p-4 text-sm text-ink-60">No draft documentary photograph is assigned. The public page will use its branded no-photo state.</p>
+            <?php endif; ?>
+            <?php if ($canEdit): ?>
+              <form class="mt-5 space-y-4" action="/api/v1/content.php" method="post" enctype="multipart/form-data">
+                <?= Csrf::field() ?><input type="hidden" name="action" value="upload_image"><input type="hidden" name="slug" value="<?= okv_e($selected['slug']) ?>"><input type="hidden" name="fingerprint" value="<?= okv_e($selected['fingerprint']) ?>">
+                <div><label class="okv-label" for="content-image">Approved photograph</label><input class="okv-input min-h-[48px] py-2" id="content-image" name="image" type="file" accept="image/jpeg,image/png,image/webp" required><p class="mt-1 text-xs text-ink-60">JPEG, PNG or WebP, at least 640px by 360px, up to <?= okv_e((string) round(Uploads::maxBytes() / 1048576, 1)) ?>MB.</p></div>
+                <div><label class="okv-label" for="content-image-alt">Photograph description</label><input class="okv-input" id="content-image-alt" name="image_alt" maxlength="255" value="<?= okv_e($selected['image_alt']) ?>" required><p class="mt-1 text-xs text-ink-60">Describe the people, place and activity that matter in the photograph.</p></div>
+                <button class="okv-btn" type="submit">Prepare draft photograph</button>
+              </form>
+              <?php if ($selected['image_url'] !== ''): ?><form class="mt-3" action="/api/v1/content.php" method="post"><?= Csrf::field() ?><input type="hidden" name="action" value="remove_image"><input type="hidden" name="slug" value="<?= okv_e($selected['slug']) ?>"><input type="hidden" name="fingerprint" value="<?= okv_e($selected['fingerprint']) ?>"><button class="okv-btn-outline" type="submit">Remove draft photograph</button></form><?php endif; ?>
+            <?php endif; ?>
+          </section>
+        <?php endif; ?>
+
+        <section class="okv-panel okv-panel-body" aria-labelledby="publication-heading"><div class="flex flex-wrap items-center justify-between gap-3"><h2 id="publication-heading" class="okv-panel-title">Publication</h2><span class="okv-badge <?= $selected['is_published'] ? 'okv-badge-available' : 'okv-badge-warn' ?>"><?= $selected['is_published'] ? 'Published' : 'Unpublished' ?></span></div><?php if ($selected['published_at']): ?><p class="mt-2 text-sm text-ink-60">Published <?= okv_e(date('j M Y, H:i', strtotime((string) $selected['published_at']))) ?> by <?= okv_e((string) ($selected['published_by_name'] ?: 'staff not recorded')) ?>.</p><?php endif; ?>
+          <?php if ($canEdit): ?><form class="mt-4 space-y-3" action="/api/v1/content.php" method="post" data-content-form><?= Csrf::field() ?><input type="hidden" name="action" value="<?= $selected['is_published'] ? 'unpublish' : 'publish' ?>"><input type="hidden" name="slug" value="<?= okv_e($selected['slug']) ?>"><input type="hidden" name="fingerprint" value="<?= okv_e($selected['fingerprint']) ?>"><label class="flex min-h-[44px] items-start gap-3"><input class="mt-1 h-5 w-5" type="checkbox" name="confirm" value="1"><span class="text-sm"><?= $selected['is_published'] ? 'I understand that guessed and saved public links will stop working.' : 'I have checked the saved draft and want to make it public.' ?></span></label><?php if ($selected['legal'] && !$selected['is_published']): ?><label class="flex min-h-[44px] items-start gap-3"><input class="mt-1 h-5 w-5" type="checkbox" name="legal_approved" value="1"><span class="text-sm">I confirm this is client-approved legal copy, not placeholder text or legal advice invented by the team.</span></label><?php endif; ?><button class="<?= $selected['is_published'] ? 'okv-btn-outline' : 'okv-btn' ?>" type="submit"><?= $selected['is_published'] ? 'Unpublish page' : 'Publish saved draft' ?></button></form><?php endif; ?>
+        </section>
+
+        <section class="okv-panel" aria-labelledby="history-heading"><div class="okv-panel-head"><h2 id="history-heading" class="okv-panel-title">Recent content history</h2><span class="text-xs text-ink-60">Latest 20</span></div><?php if (!$history): ?><p class="p-5 text-sm text-ink-60">No content changes have been recorded yet.</p><?php else: ?><ol class="divide-y divide-mist"><?php foreach ($history as $event): $actionLabel = match ($event['action']) { ContentPages::ACTION_DRAFT => 'Draft saved', ContentPages::ACTION_IMAGE => 'Photograph changed', ContentPages::ACTION_PUBLISH => 'Published', ContentPages::ACTION_UNPUBLISH => 'Unpublished', default => 'Content changed' }; ?><li class="px-4 py-3"><p class="text-sm font-medium"><?= okv_e($actionLabel) ?></p><p class="mt-1 text-xs text-ink-60"><?= okv_e(trim((string) $event['actor_name']) ?: 'Staff member') ?>, <?= okv_e(date('j M Y, H:i', strtotime((string) $event['created_at']))) ?></p></li><?php endforeach; ?></ol><?php endif; ?></section>
+      </div>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
     <?php
     require __DIR__ . '/../includes/components/admin/footer.php';
     return;
@@ -106,7 +236,7 @@ $okv_admin_title = 'Content and Messages';
 $okv_admin_note = 'The messages customers send you, and the page copy they read.';
 require __DIR__ . '/../includes/components/admin/header.php';
 
-okv_content_tabs($tab, ContactMessages::countNew());
+okv_content_tabs($tab, ContactMessages::countNew(), $canMessages, $canContent);
 ?>
 
 

@@ -1,13 +1,5 @@
 <?php
-/**
- * index.php
- * OK Veggies storefront home. The public front door. Boots the app, reads the
- * featured combo, the categories and the week's picks, and renders them on
- * brand. The hero is one of the two places the full seal has room to read at
- * 120px, so it carries the mark as a trust stamp rather than a decoration
- * (bible 3.1, CLAUDE.md). Basket and checkout land in M4; this page is the
- * anchor the rest hangs off.
- */
+/** OK Veggies storefront home. */
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/activation_banner.php';
 require_once __DIR__ . '/includes/components/shop/brand.php';
@@ -17,22 +9,89 @@ require_once __DIR__ . '/includes/components/shop/support_widget.php';
 require_once __DIR__ . '/includes/components/shop/product_card.php';
 require_once __DIR__ . '/includes/components/shop/combo_card.php';
 
-// If a staff member is signed in, send them to the admin panel.
 if (Rbac::isLoggedIn() && Rbac::isStaff()) {
     Rbac::redirectToLanding();
 }
 
-$categories = Catalogue::categories();
+$fallback = [
+    'hero_eyebrow' => 'Est. 2026. Lagos',
+    'hero_heading' => 'We are bringing the other half home.',
+    'hero_intro' => 'Freshness You Can Trust. From Farm to Your Kitchen.',
+    'primary_cta_label' => 'Start shopping',
+    'primary_cta_path' => '/shop.php',
+    'secondary_cta_label' => 'See the combos',
+    'secondary_cta_path' => '/combos.php',
+    'promise_heading' => 'Sourced right. Priced right. Delivered right.',
+    'promise_body' => 'Farms we have visited. Prices we can explain. A delivery day you picked.',
+    'combos_eyebrow' => 'Cooked together, priced together',
+    'combos_heading' => "This week's combos",
+    'categories_eyebrow' => 'Five aisles, one stall',
+    'categories_heading' => 'Shop by category',
+    'products_eyebrow' => 'Picked this week',
+    'products_heading' => "This week's picks",
+];
 
-$featuredCombos = Catalogue::featuredCombos(3);
-$featuredCombo = $featuredCombos[0] ?? null;
+$home = null;
+try {
+    $home = ContentPages::findPublished('home');
+    if ($home === null) {
+        error_log('content.home published snapshot is unavailable; reviewed defaults are in use');
+    }
+} catch (Throwable $e) {
+    error_log('content.home read failed: ' . $e->getMessage());
+}
+$copy = $fallback;
+if ($home !== null) {
+    foreach ((array) ($home['content_data'] ?? []) as $key => $value) {
+        if (array_key_exists($key, $copy) && trim((string) $value) !== '') {
+            $copy[$key] = (string) $value;
+        }
+    }
+}
 
-$featured = Catalogue::featuredProducts(8);
+$categories = [];
+$categoriesError = false;
+try {
+    $categories = Catalogue::categories();
+} catch (Throwable $e) {
+    error_log('home.categories failed: ' . $e->getMessage());
+    $categoriesError = true;
+}
+$featuredCombos = [];
+$combosError = false;
+try {
+    $featuredCombos = Catalogue::featuredCombos(3);
+} catch (Throwable $e) {
+    error_log('home.featured_combos failed: ' . $e->getMessage());
+    $combosError = true;
+}
+$featured = [];
+$productsError = false;
+try {
+    $featured = Catalogue::featuredProducts(8);
+} catch (Throwable $e) {
+    error_log('home.featured_products failed: ' . $e->getMessage());
+    $productsError = true;
+}
 
 $tagline = Settings::str('business_tagline', 'Sourced right. Priced right. Delivered right.');
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
 $sourceDay = Settings::str('source_day', '');
 $returnTo = '/';
+$promise = ContentRenderer::render($copy['promise_body']);
+
+$visibleTitle = trim((string) ($home['title'] ?? 'Fresh from farms we can name'));
+$seoTitle = trim((string) ($home['meta_title'] ?? '')) ?: $visibleTitle;
+$description = trim((string) ($home['meta_description'] ?? ''));
+if ($description === '') {
+    $description = ContentRenderer::plainText($copy['hero_intro'], 155);
+}
+$documentTitle = $seoTitle . '. OK Veggies';
+$canonical = rtrim((string) APP_URL, '/') . '/';
+$heroPath = trim((string) ($home['image_url'] ?? ''));
+$heroAlt = trim((string) ($home['image_alt'] ?? ''));
+$heroImage = $heroPath !== '' && $heroAlt !== '' ? ContentImages::presentation($heroPath) : null;
+$ogImage = $heroImage !== null ? rtrim((string) APP_URL, '/') . okv_image_url($heroPath) : '';
 
 $basketNotice = (string) okv_input('basket', '');
 $noticeMessages = [
@@ -47,9 +106,12 @@ $noticeMessages = [
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OK Veggies. Fresh from farms we can name.</title>
-  <meta name="description" content="Fresh produce from verified farms in Ogun State and Jos, delivered on the day you pick. Sourced right. Priced right. Delivered right.">
-  <?php okv_head_meta(); ?>
+  <title><?= okv_e($documentTitle) ?></title>
+  <meta name="description" content="<?= okv_e($description) ?>">
+  <link rel="canonical" href="<?= okv_e($canonical) ?>">
+  <meta property="og:url" content="<?= okv_e($canonical) ?>">
+  <?php if ($heroImage !== null): ?><link rel="preload" as="image" href="<?= okv_e(okv_image_url($heroPath)) ?>"<?= $heroImage['srcset'] !== '' ? ' imagesrcset="' . okv_e($heroImage['srcset']) . '" imagesizes="(min-width: 768px) 50vw, 100vw"' : '' ?>><?php endif; ?>
+  <?php okv_head_meta(['og_title' => $documentTitle, 'og_description' => $description, 'og_image' => $ogImage]); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen">
@@ -57,124 +119,97 @@ $noticeMessages = [
 <?php okv_shop_header('home'); ?>
 
 <main>
-<!-- Hero. The seal sits at 120px, where the ring's lettering still reads. -->
-<section class="bg-forest text-white">
-  <div class="okv-container grid items-center gap-10 py-16 md:grid-cols-2 md:py-24">
+<section class="bg-forest text-white" aria-labelledby="home-heading">
+  <div class="okv-container grid items-center gap-10 py-12 md:grid-cols-2 md:py-20">
     <div class="animate-okv-rise">
       <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
         <?php okv_seal(120, 'flex-none', 'The OK Veggies seal'); ?>
         <div>
-          <p class="okv-eyebrow-invert">Est. 2026 . Lagos</p>
+          <p class="okv-eyebrow-invert"><?= okv_e($copy['hero_eyebrow']) ?></p>
           <p class="mt-2 max-w-xs text-sm text-white/75">A trust stamp, not a logo. Every basket is weighed and checked before it leaves us.</p>
         </div>
       </div>
-      <h1 class="mt-8 font-editorial text-okv-h4 md:text-okv-h2">We are bringing the other half home.</h1>
-      <p class="mt-5 max-w-md text-okv-lead text-white/85">Freshness You Can Trust. From Farm to Your Kitchen.</p>
+      <h1 id="home-heading" class="mt-8 font-editorial text-okv-h4 md:text-okv-h2"><?= okv_e($copy['hero_heading']) ?></h1>
+      <p class="mt-5 max-w-xl text-okv-lead text-white/85"><?= okv_e($copy['hero_intro']) ?></p>
       <div class="mt-8 flex flex-wrap gap-3">
-        <a href="/shop.php" class="okv-btn border border-white bg-white text-forest hover:bg-forest-tint">Start shopping</a>
-        <a href="/combos.php" class="okv-btn-outline-invert">See the combos</a>
+        <a href="<?= okv_e($copy['primary_cta_path']) ?>" class="okv-btn border border-white bg-white text-forest hover:bg-forest-tint"><?= okv_e($copy['primary_cta_label']) ?></a>
+        <a href="<?= okv_e($copy['secondary_cta_path']) ?>" class="okv-btn-outline-invert"><?= okv_e($copy['secondary_cta_label']) ?></a>
       </div>
       <p class="mt-8 border-t-2 border-gold pt-4 text-sm font-semibold uppercase tracking-wider text-white"><?= okv_e($tagline) ?></p>
     </div>
 
-    <?php if ($featuredCombo): ?>
-      <?php
-        // Use the same image-fallback helper as okv_combo_card so the hero
-        // never renders a blank card for a combo whose Manager has not yet
-        // uploaded a hero photo. Catalogue::featuredCombos precomputes the
-        // fallback in one round-trip.
-        $heroImage = okv_combo_card_image($featuredCombo, [
-          ['image' => (string) ($featuredCombo['fallback_image'] ?? '')],
-        ]);
-        $heroUrl = '/combo.php?slug=' . rawurlencode((string) $featuredCombo['slug']);
-      ?>
-      <a href="<?= okv_e($heroUrl) ?>" class="group hidden text-ink md:block">
-        <article class="okv-card p-5">
-          <div class="aspect-[4/3] overflow-hidden rounded-md bg-forest-tint">
-            <?php if ($heroImage !== ''): ?>
-              <img src="<?= okv_e(okv_image_url($heroImage)) ?>"
-                   alt="<?= okv_e($featuredCombo['name']) ?>, ready basket of <?= (int) $featuredCombo['component_count'] ?> items, sourced from <?= okv_e($sourceRegions) ?>"
-                   class="h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105">
-            <?php else: ?>
-              <div class="flex h-full items-center justify-center text-sm text-ink-40">Photo coming soon</div>
-            <?php endif; ?>
-          </div>
-          <span class="okv-badge okv-badge-available mt-4">This week</span>
-          <h2 class="mt-2 font-editorial text-okv-h6 text-ink"><?= okv_e($featuredCombo['name']) ?></h2>
-          <?php if (trim((string) $featuredCombo['description']) !== ''): ?>
-            <p class="mt-1 line-clamp-2 text-sm text-ink-60"><?= okv_e($featuredCombo['description']) ?></p>
-          <?php endif; ?>
-          <p class="mt-4 font-mono text-okv-h6 font-semibold text-forest"><?= okv_e(Money::format((int) $featuredCombo['price_subunit'])) ?></p>
-          <p class="okv-btn-text mt-2">See what is inside <span aria-hidden="true">&rarr;</span></p>
-        </article>
-      </a>
+    <?php if ($heroImage !== null): ?>
+      <figure class="overflow-hidden rounded-xl bg-white/10 shadow-okv-2">
+        <img src="<?= okv_e(okv_image_url($heroPath)) ?>"<?= $heroImage['srcset'] !== '' ? ' srcset="' . okv_e($heroImage['srcset']) . '" sizes="(min-width: 768px) 50vw, 100vw"' : '' ?>
+             alt="<?= okv_e($heroAlt) ?>"<?= $heroImage['width'] > 0 ? ' width="' . (int) $heroImage['width'] . '" height="' . (int) $heroImage['height'] . '"' : '' ?>
+             class="aspect-[4/3] h-full w-full object-cover" fetchpriority="high" decoding="async">
+      </figure>
+    <?php else: ?>
+      <aside class="rounded-xl border border-white/25 bg-white/10 p-6 text-center md:p-10" aria-label="Documentary photograph pending">
+        <?php okv_seal(120, 'mx-auto', ''); ?>
+        <p class="mt-6 text-sm font-semibold uppercase tracking-wider text-white">Documentary photograph pending</p>
+        <p class="mt-3 text-sm leading-6 text-white/75">A rights-cleared photograph of the real OK Veggies operation has not been published yet. We will not replace it with stock photography.</p>
+      </aside>
     <?php endif; ?>
   </div>
 </section>
 
 <?php if (isset($noticeMessages[$basketNotice])): ?>
-  <div class="okv-container pt-6">
-    <p class="rounded-md border <?= $basketNotice === 'added' ? 'border-foliage bg-foliage-tint text-forest' : 'border-tomato bg-tomato-tint text-tomato' ?> px-4 py-3 text-sm" role="status"><?= okv_e($noticeMessages[$basketNotice]) ?></p>
-  </div>
+  <div class="okv-container pt-6"><p class="rounded-md border <?= $basketNotice === 'added' ? 'border-foliage bg-foliage-tint text-forest' : 'border-tomato bg-tomato-tint text-tomato' ?> px-4 py-3 text-sm" role="status"><?= okv_e($noticeMessages[$basketNotice]) ?></p></div>
 <?php endif; ?>
 
-<!-- Featured combos strip -->
-<?php if ($featuredCombos): ?>
-<section class="okv-container pt-14">
-  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+<section class="bg-forest-tint" aria-labelledby="promise-heading">
+  <div class="okv-container grid gap-8 py-14 lg:grid-cols-2 lg:items-center">
     <div>
-      <p class="okv-eyebrow">Cooked together, priced together</p>
-      <h2 class="mt-2 font-editorial text-okv-h5 text-ink md:text-okv-h4">This week's combos</h2>
+      <p class="okv-eyebrow">The OK Veggies promise</p>
+      <h2 id="promise-heading" class="mt-2 font-editorial text-okv-h5 text-ink md:text-okv-h4"><?= okv_e($copy['promise_heading']) ?></h2>
+      <div class="max-w-2xl"><?= $promise['html'] ?></div>
+      <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-5 text-sm text-ink-60'); ?>
     </div>
-    <a href="/combos.php" class="okv-btn-text">See all combos <span aria-hidden="true">&rarr;</span></a>
-  </div>
-  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    <?php foreach ($featuredCombos as $combo): ?>
-      <?php okv_combo_card($combo, $returnTo, $sourceRegions, $sourceDay); ?>
-    <?php endforeach; ?>
-  </div>
-</section>
-<?php endif; ?>
-
-<!-- Categories -->
-<section class="okv-container py-14">
-  <p class="okv-eyebrow">Five aisles, one stall</p>
-  <h2 class="mt-2 font-editorial text-okv-h5 text-ink md:text-okv-h4">Shop by category</h2>
-  <div class="mt-6 grid grid-cols-2 gap-4 md:grid-cols-5">
-    <?php foreach ($categories as $c): ?>
-      <a href="/shop.php?category=<?= okv_e($c['slug']) ?>" class="okv-card group text-ink hover:text-forest">
-        <span class="block font-semibold leading-tight"><?= okv_e($c['name']) ?></span>
-        <span class="mt-1 flex items-center gap-2 text-sm text-ink-60">
-          <span class="font-mono"><?= (int) $c['product_count'] ?></span>
-          <?= (int) $c['product_count'] === 1 ? 'item' : 'items' ?>
-          <span class="ml-auto transition-transform duration-botanical ease-botanical group-hover:translate-x-1" aria-hidden="true">&rarr;</span>
-        </span>
-      </a>
-    <?php endforeach; ?>
+    <nav class="grid gap-3 sm:grid-cols-3 lg:grid-cols-1" aria-label="Start an order">
+      <a class="okv-card min-h-[72px] text-ink hover:text-forest" href="/shop.php"><strong class="block">Shop produce</strong><span class="mt-1 block text-sm text-ink-60">Choose individual items for your basket.</span></a>
+      <a class="okv-card min-h-[72px] text-ink hover:text-forest" href="/combos.php"><strong class="block">Choose a Combo</strong><span class="mt-1 block text-sm text-ink-60">Start with a ready basket for the pot.</span></a>
+      <a class="okv-card min-h-[72px] text-ink hover:text-forest" href="/kitchen-runs.php"><strong class="block">Send a Kitchen Run</strong><span class="mt-1 block text-sm text-ink-60">Send your list and let us source it.</span></a>
+    </nav>
   </div>
 </section>
 
-<!-- This week's picks -->
-<?php if ($featured): ?>
-<section class="okv-container pb-16">
-  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
-    <div>
-      <p class="okv-eyebrow">Picked this week</p>
-      <h2 class="mt-2 font-editorial text-okv-h5 text-ink md:text-okv-h4">This week's picks</h2>
-    </div>
-    <a href="/shop.php" class="okv-btn-text">See all produce <span aria-hidden="true">&rarr;</span></a>
-  </div>
-  <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
-    <?php foreach ($featured as $p): ?>
-      <?php okv_product_card($p, $sourceRegions, $returnTo, $sourceDay); ?>
-    <?php endforeach; ?>
-  </div>
+<section class="okv-container pt-14" aria-labelledby="combos-heading">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p class="okv-eyebrow"><?= okv_e($copy['combos_eyebrow']) ?></p><h2 id="combos-heading" class="mt-2 font-editorial text-okv-h5 text-ink md:text-okv-h4"><?= okv_e($copy['combos_heading']) ?></h2></div><a href="/combos.php" class="okv-btn-text">See all combos <span aria-hidden="true">&rarr;</span></a></div>
+  <?php if ($combosError): ?>
+    <div class="rounded-xl border border-mist bg-forest-tint p-6" role="status"><h3 class="font-semibold text-ink">Featured combos are temporarily unavailable</h3><p class="mt-2 text-sm text-ink-60">You can still browse the full combo list or send us your own kitchen list.</p><div class="mt-4 flex flex-wrap gap-3"><a class="okv-btn-outline" href="/combos.php">Browse combos</a><a class="okv-btn-text" href="/kitchen-runs.php">Send a Kitchen Run</a></div></div>
+  <?php elseif (!$featuredCombos): ?>
+    <div class="rounded-xl border border-mist bg-forest-tint p-6"><h3 class="font-semibold text-ink">No featured combo is on the stall today</h3><p class="mt-2 text-sm text-ink-60">Browse every available combo, or send the exact list your kitchen needs.</p><div class="mt-4 flex flex-wrap gap-3"><a class="okv-btn-outline" href="/combos.php">Browse combos</a><a class="okv-btn-text" href="/kitchen-runs.php">Send a Kitchen Run</a></div></div>
+  <?php else: ?>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"><?php foreach ($featuredCombos as $combo): ?><?php okv_combo_card($combo, $returnTo, $sourceRegions, $sourceDay); ?><?php endforeach; ?></div>
+  <?php endif; ?>
 </section>
-<?php endif; ?>
+
+<section class="okv-container py-14" aria-labelledby="categories-heading">
+  <p class="okv-eyebrow"><?= okv_e($copy['categories_eyebrow']) ?></p>
+  <h2 id="categories-heading" class="mt-2 font-editorial text-okv-h5 text-ink md:text-okv-h4"><?= okv_e($copy['categories_heading']) ?></h2>
+  <?php if ($categoriesError): ?>
+    <div class="mt-6 rounded-xl border border-mist bg-forest-tint p-6" role="status"><h3 class="font-semibold text-ink">Categories are temporarily unavailable</h3><p class="mt-2 text-sm text-ink-60">The full shop is still open while we reconnect the category list.</p><a class="okv-btn-outline mt-4" href="/shop.php">Browse all produce</a></div>
+  <?php elseif (!$categories): ?>
+    <div class="mt-6 rounded-xl border border-mist bg-forest-tint p-6"><h3 class="font-semibold text-ink">The category list is being prepared</h3><p class="mt-2 text-sm text-ink-60">Browse the shop or send a Kitchen Run while the aisles are organised.</p><div class="mt-4 flex flex-wrap gap-3"><a class="okv-btn-outline" href="/shop.php">Browse the shop</a><a class="okv-btn-text" href="/kitchen-runs.php">Send a Kitchen Run</a></div></div>
+  <?php else: ?>
+    <div class="mt-6 grid grid-cols-2 gap-4 md:grid-cols-5"><?php foreach ($categories as $category): $count = (int) $category['product_count']; ?><a href="/shop.php?category=<?= okv_e($category['slug']) ?>" class="okv-card group text-ink hover:text-forest"><span class="block font-semibold leading-tight"><?= okv_e($category['name']) ?></span><span class="mt-1 flex items-center gap-2 text-sm text-ink-60"><?php if ($count === 0): ?><span>Being sourced</span><?php else: ?><span class="font-mono"><?= $count ?></span> <?= $count === 1 ? 'item' : 'items' ?><?php endif; ?><span class="ml-auto transition-transform duration-botanical ease-botanical group-hover:translate-x-1" aria-hidden="true">&rarr;</span></span></a><?php endforeach; ?></div>
+  <?php endif; ?>
+</section>
+
+<section class="okv-container pb-16" aria-labelledby="products-heading">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p class="okv-eyebrow"><?= okv_e($copy['products_eyebrow']) ?></p><h2 id="products-heading" class="mt-2 font-editorial text-okv-h5 text-ink md:text-okv-h4"><?= okv_e($copy['products_heading']) ?></h2></div><a href="/shop.php" class="okv-btn-text">See all produce <span aria-hidden="true">&rarr;</span></a></div>
+  <?php if ($productsError): ?>
+    <div class="rounded-xl border border-mist bg-forest-tint p-6" role="status"><h3 class="font-semibold text-ink">This week's picks are temporarily unavailable</h3><p class="mt-2 text-sm text-ink-60">The full shop remains available while we reconnect this selection.</p><a class="okv-btn-outline mt-4" href="/shop.php">Browse all produce</a></div>
+  <?php elseif (!$featured): ?>
+    <div class="rounded-xl border border-mist bg-forest-tint p-6"><h3 class="font-semibold text-ink">No produce has been marked as a weekly pick</h3><p class="mt-2 text-sm text-ink-60">Browse the whole shop or send the list your kitchen needs.</p><div class="mt-4 flex flex-wrap gap-3"><a class="okv-btn-outline" href="/shop.php">Browse all produce</a><a class="okv-btn-text" href="/kitchen-runs.php">Send a Kitchen Run</a></div></div>
+  <?php else: ?>
+    <div class="grid grid-cols-2 gap-4 md:grid-cols-4"><?php foreach ($featured as $product): ?><?php okv_product_card($product, $sourceRegions, $returnTo, $sourceDay); ?><?php endforeach; ?></div>
+  <?php endif; ?>
+</section>
 </main>
 
 <?php okv_shop_footer(); ?>
-
 <script>window.OKV = window.OKV || {}; window.OKV.csrf = <?= json_encode(Csrf::token()) ?>;</script>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>"></script>
 <script src="<?= okv_e(okv_asset('/assets/js/catalogue.min.js')) ?>"></script>

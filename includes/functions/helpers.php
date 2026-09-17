@@ -406,3 +406,22 @@ if (!function_exists('okv_support_whatsapp_url')) {
         return 'https://wa.me/' . rawurlencode($number) . '?text=' . rawurlencode($message);
     }
 }
+
+if (!function_exists('okv_make_it_right_policy_url')) {
+    /**
+     * Prefer the published Delivery Policy section without ever exposing a
+     * draft. How It Works is the safe public transition while that legal page
+     * is awaiting approval or the content store cannot be read.
+     */
+    function okv_make_it_right_policy_url(): string
+    {
+        try {
+            if (ContentPages::findPublished('delivery-policy') !== null) {
+                return '/delivery-policy#make-it-right';
+            }
+        } catch (Throwable $e) {
+            error_log('content.make_it_right_link failed: ' . $e->getMessage());
+        }
+        return '/how-it-works#make-it-right';
+    }
+}

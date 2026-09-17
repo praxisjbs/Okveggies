@@ -45,7 +45,7 @@ $OKV_ADMIN_NAV = [
             ['label' => 'Make It Right', 'href' => '/admin/make_it_right.php','icon' => 'heart',       'permission' => 'issues.view', 'keywords' => ['issues', 'reports', 'replacement', 'complaints']],
             // `count` names a counter the sidebar resolves once per render, so
             // staff carry the number of unanswered messages on every screen.
-            ['label' => 'Messages',      'href' => '/admin/content.php',      'icon' => 'chat',        'permission' => 'messages.view', 'count' => 'messages.new', 'keywords' => ['messages', 'contact', 'enquiries', 'inbox']],
+            ['label' => 'Content and Messages', 'href' => '/admin/content.php', 'icon' => 'chat', 'permissions_any' => ['content.view', 'messages.view'], 'count' => 'messages.new', 'keywords' => ['content', 'pages', 'messages', 'contact', 'enquiries', 'inbox']],
         ],
     ],
     [
@@ -57,6 +57,23 @@ $OKV_ADMIN_NAV = [
     ],
 ];
 
+if (!function_exists('okv_admin_nav_item_allowed')) {
+    /** Support destinations shared by independently permissioned modules. */
+    function okv_admin_nav_item_allowed(array $item, callable $can): bool
+    {
+        $any = array_values(array_filter(array_map('strval', (array) ($item['permissions_any'] ?? []))));
+        if ($any) {
+            foreach ($any as $permission) {
+                if ($can($permission)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return $can((string) ($item['permission'] ?? ''));
+    }
+}
+
 if (!function_exists('okv_admin_nav_commands')) {
     /** Flatten only server-permitted admin destinations for shared navigation tools. */
     function okv_admin_nav_commands(array $groups, callable $can): array
@@ -64,7 +81,7 @@ if (!function_exists('okv_admin_nav_commands')) {
         $commands = [];
         foreach ($groups as $group) {
             foreach (($group['items'] ?? []) as $item) {
-                if (!$can((string) ($item['permission'] ?? ''))) {
+                if (!okv_admin_nav_item_allowed($item, $can)) {
                     continue;
                 }
                 $item['heading'] = (string) ($group['heading'] ?? 'Admin');
@@ -101,12 +118,11 @@ $OKV_SHOP_NAV = [
 ];
 
 // Footer links (reached from the footer, not the top nav) ---------------------
+// Managed-page labels, paths and legal grouping belong to ContentPages. This
+// list only selects their footer order and keeps independent public routes.
 $OKV_FOOTER_NAV = [
-    ['label' => 'Our Story',       'href' => '/page.php?slug=about'],
-    ['label' => 'How It Works',    'href' => '/page.php?slug=how-it-works'],
-    ['label' => 'Questions',       'href' => '/page.php?slug=faq'],
-    ['label' => 'Terms',           'href' => '/page.php?slug=terms'],
-    ['label' => 'Privacy',         'href' => '/page.php?slug=privacy'],
-    ['label' => 'Delivery Policy', 'href' => '/page.php?slug=delivery-policy'],
-    ['label' => 'Contact',         'href' => '/contact.php'],
+    'content_slugs' => ['about', 'how-it-works', 'faq', 'terms', 'privacy', 'delivery-policy'],
+    'static' => [
+        ['label' => 'Contact', 'href' => '/contact.php', 'group' => 'Company'],
+    ],
 ];

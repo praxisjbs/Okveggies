@@ -3,6 +3,7 @@
 $root = dirname(__DIR__, 2);
 $checkout = (string) file_get_contents($root . '/checkout.php');
 $page = (string) file_get_contents($root . '/page.php');
+$guidance = (string) file_get_contents($root . '/includes/components/shop/make_it_right_guidance.php');
 $product = (string) file_get_contents($root . '/product.php');
 $combo = (string) file_get_contents($root . '/combo.php');
 $productCard = (string) file_get_contents($root . '/includes/components/shop/product_card.php');
@@ -16,9 +17,9 @@ okv_test_ok(str_contains($checkout, '/assets/img/payments/paystack.svg'), 'F: ch
 foreach (['Card', 'Bank transfer', 'USSD', 'Secure Paystack payment', 'Follow every order', 'We make it right'] as $copy) {
     okv_test_ok(str_contains($checkout, $copy), 'F: checkout carries trust copy: ' . $copy);
 }
-okv_test_ok(str_contains($checkout, '/page.php?slug=delivery-policy#make-it-right'), 'F: checkout links to the Make It Right policy section');
-okv_test_ok(str_contains($page, 'id="make-it-right"'), 'F: the Delivery Policy exposes the linked section');
-okv_test_ok(str_contains($page, 'IssueReports::reportingWindowDays()'), 'F: policy uses the managed reporting window');
+okv_test_ok(str_contains($checkout, 'okv_make_it_right_policy_url()'), 'F: checkout resolves the Make It Right link from published content state');
+okv_test_ok(str_contains($page, "make_it_right_guidance.php"), 'F: How It Works and Delivery Policy can expose operational guidance');
+okv_test_ok(str_contains($guidance, 'IssueReports::reportingWindowDays()'), 'F: policy uses the managed reporting window');
 foreach ([$product, $combo, $productCard] as $source) {
     okv_test_ok(str_contains($source, 'okv_sourced_note('), 'F: every product and combo buying page renders the shared sourcing line');
 }

@@ -14,30 +14,50 @@
  */
 require_once __DIR__ . '/brand.php';
 require_once __DIR__ . '/support_widget.php';
+require_once __DIR__ . '/../../config/nav.php';
 
 if (!function_exists('okv_shop_footer')) {
-    function okv_shop_footer(): void
+    function okv_shop_footer(?array $contentNavigation = null): void
     {
         $name = Settings::str('business_name', 'OK Veggies');
         $tagline = Settings::str('business_tagline', 'Sourced right. Priced right. Delivered right.');
         $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
         $sourceDay = Settings::str('source_day', '');
+        global $OKV_FOOTER_NAV;
+        if ($contentNavigation === null) {
+            try {
+                $contentNavigation = ContentPages::publishedNavigation($OKV_FOOTER_NAV['content_slugs'] ?? []);
+            } catch (Throwable $e) {
+                error_log('content.footer_navigation failed: ' . $e->getMessage());
+                $contentNavigation = [];
+            }
+        }
+        $company = [];
+        $legal = [];
+        foreach ($contentNavigation as $item) {
+            $link = [(string) $item['path'], (string) $item['label']];
+            if (!empty($item['legal'])) {
+                $legal[] = $link;
+            } else {
+                $company[] = $link;
+            }
+        }
+        foreach (($OKV_FOOTER_NAV['static'] ?? []) as $item) {
+            $link = [(string) $item['href'], (string) $item['label']];
+            if (($item['group'] ?? '') === 'Legal') {
+                $legal[] = $link;
+            } else {
+                $company[] = $link;
+            }
+        }
         $columns = [
-            'Company' => [
-                ['/page.php?slug=about', 'Our Story'],
-                ['/page.php?slug=how-it-works', 'How It Works'],
-                ['/page.php?slug=faq', 'Questions'],
-            ],
+            'Company' => $company,
             'Shop' => [
                 ['/shop.php', 'All produce'],
                 ['/combos.php', 'Combos'],
                 ['/kitchen-runs.php', 'Kitchen Runs'],
             ],
-            'Legal' => [
-                ['/page.php?slug=terms', 'Terms'],
-                ['/page.php?slug=privacy', 'Privacy'],
-                ['/page.php?slug=delivery-policy', 'Delivery Policy'],
-            ],
+            'Legal' => $legal,
         ];
         ?>
         <footer class="mb-14 bg-forest text-white md:mb-0">
@@ -49,7 +69,7 @@ if (!function_exists('okv_shop_footer')) {
               <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-4 text-white/75'); ?>
             </div>
 
-            <?php foreach ($columns as $heading => $items): ?>
+            <?php foreach ($columns as $heading => $items): if (!$items) { continue; } ?>
               <nav class="md:col-span-2" aria-label="<?= okv_e($heading) ?>">
                 <p class="okv-eyebrow-invert"><?= okv_e($heading) ?></p>
                 <ul class="mt-2">

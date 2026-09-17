@@ -47,6 +47,33 @@ final class Catalogue
         );
     }
 
+    /** Active catalogue records used by the public sitemap. */
+    public static function productsForSitemap(): array
+    {
+        return Database::all(
+            'SELECT p.slug, p.updated_at '
+            . 'FROM products p '
+            . 'JOIN product_categories c ON c.id = p.category_id AND c.is_active = :category_active '
+            . 'JOIN units_of_measurement u ON u.id = p.unit_id AND u.is_active = :unit_active '
+            . 'WHERE p.is_active = :product_active ORDER BY p.slug',
+            [':category_active' => 1, ':unit_active' => 1, ':product_active' => 1]
+        );
+    }
+
+    /** Active combos inside their public availability window. */
+    public static function combosForSitemap(?string $today = null): array
+    {
+        $today = $today ?? date('Y-m-d');
+        return Database::all(
+            'SELECT slug, updated_at FROM combo_packages '
+            . 'WHERE is_active = :active '
+            . 'AND (available_from IS NULL OR available_from <= :today_from) '
+            . 'AND (available_until IS NULL OR available_until >= :today_until) '
+            . 'ORDER BY slug',
+            [':active' => 1, ':today_from' => $today, ':today_until' => $today]
+        );
+    }
+
     /**
      * The products a customer can see, featured first within a category.
      *
@@ -300,13 +327,21 @@ final class Catalogue
 
     /**
      * Featured combos, for the home page. A small list, buyable now, featured
-     * first, ordered by name after that. Falls back to unfeatured combos when
-     * there are not enough featured ones to fill $limit.
+     * first, ordered by name after that. The featured flag is intentional:
+     * an empty selection is returned honestly instead of silently promoting a
+     * combo the team did not choose for the home page.
      */
     public static function featuredCombos(int $limit = 3): array
     {
         $limit = max(1, min(24, $limit));
-        return array_slice(self::combos(), 0, $limit);
+        return array_slice(
+            array_values(array_filter(
+                self::combos(),
+                static fn (array $combo): bool => (bool) ($combo['is_featured'] ?? false)
+            )),
+            0,
+            $limit
+        );
     }
 
     /**

@@ -240,7 +240,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                 <li>
                   <strong class="block text-ink">We make it right</strong>
                   <span class="mt-1 block">If delivered produce is not as described, report it from your order and see the outcome there.</span>
-                  <a class="mt-2 inline-flex min-h-[44px] items-center font-semibold text-forest underline underline-offset-2" href="/page.php?slug=delivery-policy#make-it-right">Read the Delivery Policy</a>
+                  <a class="mt-2 inline-flex min-h-[44px] items-center font-semibold text-forest underline underline-offset-2" href="<?= okv_e(okv_make_it_right_policy_url()) ?>">Read how Make It Right works</a>
                 </li>
               </ul>
               <p class="mt-3 text-xs font-semibold uppercase tracking-wider text-ink-60">Card · Bank transfer · USSD</p>
