@@ -82,6 +82,7 @@ if curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
     admin_dashboard_http_test admin_notifications_http_test customer_notifications_http_test cancellation_http_test contact_http_test contact_admin_http_test content_admin_http_test public_content_http_test m12_storefront_access_http_test sitemap_http_test homepage_http_test \
     credit_checkout_http_test customer_http_test delivery_http_test \
     issue_reports_http_test issue_photos_http_test issue_workflow_http_test issue_resolutions_http_test \
+    product_uploads_http_test smtp_delivery_http_test \
     kitchen_runs_http_test manual_operations_http_test order_lifecycle_http_test order_trail_http_test \
     role_leak_matrix_http_test settings_http_test
   do
