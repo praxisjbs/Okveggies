@@ -715,6 +715,14 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 
 ## Session log (newest first)
 
+### 17 Sep 2026, M12 senior review and integration on pull request 51
+
+- Reviewed the milestone against the PRD, `CLAUDE.md` and `docs/M12_CONTENT_CONTRACT.md`. The content service, restricted Markdown renderer, WebP image pipeline, admin editor, clean-URL routing and sitemap are strong and genuinely fail-closed. Security holds: every write is POST plus CSRF plus server-side `content.edit`, every read is bound and escaped, the renderer refuses raw HTML and every non `http(s)` link scheme. The senior review is `docs/M12_REVIEW.md`; the milestone engineer's delivery write-up is kept as `docs/M12_HANDOVER.md` (renamed from the earlier `M12_REVIEW.md`, matching the M11 convention).
+- The branch arrived un-mergeable. Merged current `main` (customer/Pro notification bell, plus the PR 50 hero copy) into it and resolved four conflicts. The one that mattered was `index.php`: the branch made the hero content-driven while `main` had hard-coded PR 50's client-approved hero line and a seal trust-stamp block. Kept the content-driven structure, folded in the seal block and the `id="home-heading"` accessibility anchor, and seeded PR 50's approved line into migration `049` and the fallback so the merge does not revert it. The test-list, JS-bundle and progress-log conflicts were additive unions.
+- Two review changes on top of the merge: `robots.txt` now disallows `/admin/`, `/pro/` and `/api/` while leaving `/uploads/` crawlable for hero and social-card images; the rest of M12 was left as delivered. Rebuilt `assets/css/tailwind.css` and the JS bundles from the merged sources.
+- Verification: unit suite **3,374 / 3,374** assertions, all **8** brand checks green, `php -l` clean on every touched file, `git diff --check` clean, no conflict markers remain. The database, HTTP and browser suites need a database and a running site and run in CI and before deploy; `homepage_visual_test.mjs` should be re-run after this merge because the hero markup changed during conflict resolution.
+- The two M12 headline dependencies (an approved documentary photograph and approved Terms/Privacy/Delivery Policy copy) remain open and client-owned. They are not engineering gaps and both were handled honestly in the delivery.
+
 ### 17 Sep 2026, M12 Task H final verification
 
 - Audited the 16 M12 outcomes against the PRD and `docs/M12_CONTENT_CONTRACT.md`. The content service, admin editor, FAQ, public renderer, canonical routes, published-only footer and sitemap, metadata, empty/error states and accessibility behaviour are implemented. `docs/M12_REVIEW.md` is the final requirement-to-evidence handover.
