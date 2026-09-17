@@ -70,6 +70,7 @@ run() { # label  command...
   else
     printf '  FAIL %-38s %s\n' "$label" "${summary:-exit $code}"
     grep -E 'FAIL|Fatal|Uncaught|Error:|REFUSING' "$out" | head -8 | sed 's/^/         /'
+    printf '         log: %s\n' "$out"
     failed=$((failed + 1))
     failures+=("$label")
   fi
@@ -98,8 +99,9 @@ for tool in php node curl; do
   command -v "$tool" >/dev/null 2>&1 || problems+=("$tool is not installed.")
 done
 
-if [ ! -d node_modules/playwright ]; then
-  problems+=("playwright is not installed. Run: npm install && npx playwright install --with-deps chromium")
+if [ ! -d node_modules/playwright ] && [ -z "${OKV_PLAYWRIGHT_PATH:-}" ]; then
+  problems+=("playwright is not installed. Run: npm install && npx playwright install chromium")
+  problems+=("(or point OKV_PLAYWRIGHT_PATH at a playwright module already on this machine)")
 fi
 
 php_ext_missing=()
