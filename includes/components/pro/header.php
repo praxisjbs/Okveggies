@@ -43,6 +43,7 @@ $okv_pro_home   = $okv_pro_active === '/pro/';
         <span class="okv-eyebrow text-forest">Pro</span>
       </a>
       <div class="flex items-center gap-2">
+        <?php require __DIR__ . '/../shop/notification_bell.php'; ?>
         <a href="/shop.php" class="okv-btn-text text-sm">Shop</a>
         <a href="/account.php" class="okv-btn-outline-sm">
           <?= $okv_pro_name !== '' ? okv_e($okv_pro_name) : 'Sign in' ?>

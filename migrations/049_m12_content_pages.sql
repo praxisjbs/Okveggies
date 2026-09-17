@@ -226,7 +226,7 @@ VALUES
    JSON_OBJECT(
      'hero_eyebrow', 'Est. 2026. Lagos',
      'hero_heading', 'We are bringing the other half home.',
-     'hero_intro', 'Fresh produce from farms we have checked ourselves in Ogun State and Jos. Weighed right, and brought on the day you pick.',
+     'hero_intro', 'Freshness You Can Trust. From Farm to Your Kitchen.',
      'primary_cta_label', 'Start shopping',
      'primary_cta_path', '/shop.php',
      'secondary_cta_label', 'See the combos',
@@ -243,7 +243,7 @@ VALUES
    JSON_OBJECT(
      'hero_eyebrow', 'Est. 2026. Lagos',
      'hero_heading', 'We are bringing the other half home.',
-     'hero_intro', 'Fresh produce from farms we have checked ourselves in Ogun State and Jos. Weighed right, and brought on the day you pick.',
+     'hero_intro', 'Freshness You Can Trust. From Farm to Your Kitchen.',
      'primary_cta_label', 'Start shopping',
      'primary_cta_path', '/shop.php',
      'secondary_cta_label', 'See the combos',

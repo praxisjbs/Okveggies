@@ -16,7 +16,7 @@ if (Rbac::isLoggedIn() && Rbac::isStaff()) {
 $fallback = [
     'hero_eyebrow' => 'Est. 2026. Lagos',
     'hero_heading' => 'We are bringing the other half home.',
-    'hero_intro' => 'Fresh produce from farms we have checked ourselves in Ogun State and Jos. Weighed right, and brought on the day you pick.',
+    'hero_intro' => 'Freshness You Can Trust. From Farm to Your Kitchen.',
     'primary_cta_label' => 'Start shopping',
     'primary_cta_path' => '/shop.php',
     'secondary_cta_label' => 'See the combos',
@@ -122,8 +122,14 @@ $noticeMessages = [
 <section class="bg-forest text-white" aria-labelledby="home-heading">
   <div class="okv-container grid items-center gap-10 py-12 md:grid-cols-2 md:py-20">
     <div class="animate-okv-rise">
-      <p class="okv-eyebrow-invert"><?= okv_e($copy['hero_eyebrow']) ?></p>
-      <h1 id="home-heading" class="mt-4 font-editorial text-okv-h4 md:text-okv-h2"><?= okv_e($copy['hero_heading']) ?></h1>
+      <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+        <?php okv_seal(120, 'flex-none', 'The OK Veggies seal'); ?>
+        <div>
+          <p class="okv-eyebrow-invert"><?= okv_e($copy['hero_eyebrow']) ?></p>
+          <p class="mt-2 max-w-xs text-sm text-white/75">A trust stamp, not a logo. Every basket is weighed and checked before it leaves us.</p>
+        </div>
+      </div>
+      <h1 id="home-heading" class="mt-8 font-editorial text-okv-h4 md:text-okv-h2"><?= okv_e($copy['hero_heading']) ?></h1>
       <p class="mt-5 max-w-xl text-okv-lead text-white/85"><?= okv_e($copy['hero_intro']) ?></p>
       <div class="mt-8 flex flex-wrap gap-3">
         <a href="<?= okv_e($copy['primary_cta_path']) ?>" class="okv-btn border border-white bg-white text-forest hover:bg-forest-tint"><?= okv_e($copy['primary_cta_label']) ?></a>
