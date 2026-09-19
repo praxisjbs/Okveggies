@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
+Disallow: /admin/
+Disallow: /pro/
+Disallow: /api/
 
 Sitemap: https://okveggies.com.ng/sitemap.xml
