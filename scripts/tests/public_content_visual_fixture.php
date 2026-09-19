@@ -2,6 +2,8 @@
 /** Publish a temporary valid FAQ around the responsive browser pass. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 $row = Database::one(
     'SELECT id, title, body, meta_title, meta_description, is_published FROM content_pages WHERE slug = :slug',
     [':slug' => 'faq']

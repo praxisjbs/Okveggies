@@ -2,6 +2,8 @@
 /** M12 sitemap and discovery behavior against a migrated scratch database. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 $tests = 0; $passed = 0;
 function smh_ok($condition, string $label): void { global $tests, $passed; $tests++; if ($condition) { $passed++; } else { fwrite(STDERR, "  FAIL: $label\n"); } }
 function smh_eq($expected, $actual, string $label): void { smh_ok($expected === $actual, $label . ($expected === $actual ? '' : ' (expected ' . var_export($expected, true) . ', got ' . var_export($actual, true) . ')')); }

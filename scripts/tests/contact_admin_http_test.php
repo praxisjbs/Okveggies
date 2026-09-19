@@ -2,6 +2,8 @@
 /** M9 contact-message RBAC and write checks through the real admin controller. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 if (!function_exists('curl_init')) { fwrite(STDERR, "This test needs the PHP curl extension.\n"); exit(2); }
 
 $root = dirname(__DIR__, 2);
