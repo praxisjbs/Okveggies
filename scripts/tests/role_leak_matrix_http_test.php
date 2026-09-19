@@ -119,13 +119,24 @@ if (!is_resource($server)) {
     fwrite(STDERR, "Could not start the role leak matrix server.\n");
     exit(2);
 }
+$listening = false;
 for ($attempt = 0; $attempt < 50; $attempt++) {
     $socket = @fsockopen('127.0.0.1', 8232, $errno, $error, 0.2);
     if ($socket) {
         fclose($socket);
+        $listening = true;
         break;
     }
     usleep(100000);
+}
+// Say why, rather than letting every assertion fail against a dead port. A port
+// already in use reads exactly like a broken suite otherwise.
+if (!$listening) {
+    fwrite(STDERR, "Could not reach the role leak matrix server on 127.0.0.1:8232 after 5 seconds.\n");
+    fwrite(STDERR, "Is something else holding that port? Server log: $serverLog\n");
+    proc_terminate($server);
+    proc_close($server);
+    exit(2);
 }
 
 $suffix   = bin2hex(random_bytes(5));
@@ -367,6 +378,13 @@ try {
         }
     }
 } finally {
+    // The server goes first: a DELETE below that throws would otherwise leave
+    // php -S holding port 8232 and the next run would not be able to start.
+    if (is_resource($server)) {
+        proc_terminate($server);
+        proc_close($server);
+        $server = null;
+    }
     if ($messageId > 0) {
         Database::run('DELETE FROM contact_messages WHERE id = :id', [':id' => $messageId]);
     }
@@ -403,10 +421,6 @@ try {
         if (is_file($jar)) {
             unlink($jar);
         }
-    }
-    if (is_resource($server)) {
-        proc_terminate($server);
-        proc_close($server);
     }
 }
 

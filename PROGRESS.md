@@ -681,7 +681,12 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 - [x] **Routing, navigation and discoverability.** `ContentPages` is the sole managed-page label and path authority; the footer configuration now carries only slug order and independent Contact. Apache permanently normalises trailing slashes and approved legacy query URLs to the fixed clean paths, discarding all legacy query data. Published pages alone enter the footer and sitemap. `/sitemap.xml` also includes the fixed public storefront routes, active products and currently buyable combos, with truthful `lastmod` values where available; `robots.txt` advertises it. Preview, missing, unpublished and error responses carry noindex protection, and sitemap failure is a complete retryable 503 rather than partial XML. MySQL 8 and real-Apache checks passed 52/52 public-page, 18/18 sitemap, 51/51 ContentPages, 38/38 Content admin, 42/42 Messages and 20/20 homepage assertions. The deployment verifier passed every route, redirect and protected-directory denial check.
 
 ### M13. Hardening, QA and go-live
-- [ ] Full role smoke suite green
+
+The suites exist and are reviewed. None of the boxes below is ticked, because
+the release gate that runs them has never been executed. See `docs/M13_REVIEW.md`
+section 4 and `docs/M13_SUITE_MATRIX.md` for what is built against what is proven.
+
+- [ ] Full role smoke suite green (suites built and gated: `role_journeys.mjs`, `role_leak_matrix_http_test.php`, 61 database and HTTP suites; never executed)
 - [ ] Accessibility pass (WCAG 2.1 AA checklist)
 - [ ] Performance pass (mobile first paint, image optimisation)
 - [~] Deploy pipeline built and verified: SFTP upload workflow + token-guarded web migration runner (`public/migrate.php`). First production go-live in progress (see Deployment and the session log)
@@ -714,6 +719,17 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 19 Sep 2026, M13 senior review and integration on pull request 53
+
+- Reviewed the milestone against `docs/M13_RELEASE_CONTRACT.md`, `docs/M13_SUITE_MATRIX.md` and `CLAUDE.md`. The release gate, the fresh-migration proof, the restricted-role leak matrix, the mail sink and the upload suite are well built, and the suite matrix is honest about what has never been executed. The senior review is `docs/M13_REVIEW.md`.
+- Six fixes on top, five of them in the guards rather than the suites. The scratch guard failed open: `APP_ENV=production # live`, a missing `APP_ENV` line, a missing `.env` and `APP_ENV=staging` on the live database name all ran. It now fails closed, strips comments and quotes, and applies the `DB_NAME` must end in `_test` rule the gate already applied. The gate had the same comment blindness, so both now read `.env` through one shared parser, `scripts/tests/lib/env_value.php`.
+- The gate now asserts the server is MySQL 8 before it migrates, because `CLAUDE.md` records that MariaDB accepts DDL that MySQL 8 rejects and the deploy is what pays for the difference. It also lints PHP, which it never did while linting every JavaScript file.
+- `fixture_orphans.php` used inner joins to `users`, but `orders`, `payments`, `kitchen_run_requests` and `issue_reports` all carry `ON DELETE SET NULL` on `user_id`, so a deleted fixture user left an invisible order behind and the check reported clean. Now left joins plus the `ZZ` fixture number prefix, with `payment_transactions` added.
+- `role_leak_matrix_http_test.php` and `product_uploads_http_test.php` carried on against a dead port instead of saying the server never started; both now fail fast, and the leak matrix releases its server before its row teardown so a throwing `DELETE` cannot wedge port 8232.
+- Verification: unit suite **3,374 / 3,374**, brand gate **8 / 8**, `php -l` **311 / 311** shipped files, `node --check` on all 5 `.mjs` files, `bash -n` on the gate, the runner, `verify.sh` and the brand check, `git diff --check` clean. The gate preflight and the hardened guard were each driven against 6 unsafe `.env` shapes and refused all 6, while `ci.env.example` and the deliberate override still run.
+- **The release gate itself has still never been executed.** The milestone engineer raised this as a blocker with three options; the Owner's decision was to skip it, with no Docker and no CI setup for this project. Rows 2 to 20 of the suite matrix are therefore built and reviewed but unproven by execution, and the M13 checkboxes stay unticked. The database, HTTP and browser suites need MySQL 8, Chromium and a running site, none of which exist in this environment.
+
 
 ### 17 Sep 2026, M12 senior review and integration on pull request 51
 

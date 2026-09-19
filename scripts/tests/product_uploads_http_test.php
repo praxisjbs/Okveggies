@@ -113,13 +113,23 @@ if (!is_resource($server)) {
     fwrite(STDERR, "Could not start the uploads test server.\n");
     exit(2);
 }
+$listening = false;
 for ($attempt = 0; $attempt < 60; $attempt++) {
     $socket = @fsockopen('127.0.0.1', 8235, $errno, $error, 0.2);
     if ($socket) {
         fclose($socket);
+        $listening = true;
         break;
     }
     usleep(100000);
+}
+// Say why, rather than letting every assertion fail against a dead port.
+if (!$listening) {
+    fwrite(STDERR, "Could not reach the uploads test server on 127.0.0.1:8235 after 6 seconds.\n");
+    fwrite(STDERR, "Is something else holding that port? Server log: $serverLog\n");
+    proc_terminate($server);
+    proc_close($server);
+    exit(2);
 }
 
 $suffix = bin2hex(random_bytes(5));
