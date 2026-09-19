@@ -27,6 +27,7 @@ if (env('APP_ENV', 'production') === 'production') {
 $pw = 'm8-visual-pass-123';
 $emails = ['biz' => 'm8biz@example.test', 'house' => 'm8house@example.test'];
 $ownerEmail = 'owner-probe@example.test';
+$managerEmail = 'manager-probe@example.test';
 
 // Clean any earlier run.
 foreach ($emails as $email) {
@@ -51,6 +52,18 @@ foreach ($emails as $email) {
 $oldOwner = Database::one('SELECT id FROM users WHERE email = :email', [':email' => $ownerEmail]);
 if ($oldOwner) {
     Database::run('DELETE FROM users WHERE id = :id', [':id' => (int) $oldOwner['id']]);
+}
+$oldManager = Database::one('SELECT id FROM users WHERE email = :email', [':email' => $managerEmail]);
+if ($oldManager) {
+    Database::run('DELETE FROM users WHERE id = :id', [':id' => (int) $oldManager['id']]);
+}
+
+// Teardown mode: the removal above is the whole job, so stop here. The release
+// gate calls this after the browser pass so the fixture rows do not outlive the
+// run, and proves it with fixture_orphans.php.
+if (getenv('OKV_FIXTURE_TEARDOWN') === '1') {
+    fwrite(STDOUT, "FIXTURE TEARDOWN OK: visual fixtures removed.\n");
+    exit(0);
 }
 
 /** A customer of the given type. */
@@ -78,6 +91,22 @@ $ownerId = (int) Database::getInstance()->getConnection()->lastInsertId();
 Database::run(
     'INSERT INTO user_roles (user_id, role_id) SELECT :user, id FROM roles WHERE name = :role',
     [':user' => $ownerId, ':role' => 'owner']
+);
+
+// A manager, so the browser journeys can prove the middle rank of staff really
+// is the middle rank: allowed the operational screens, refused the user and role
+// controls that belong to the Owner alone.
+Database::run(
+    'INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status, email_verified_at) '
+    . 'VALUES (:first, :last, :email, :phone, :hash, :type, :status, NOW())',
+    [':first' => 'Manager', ':last' => 'Probe', ':email' => $managerEmail,
+     ':phone' => '+23483' . random_int(10000000, 99999999),
+     ':hash' => password_hash('probe-manager-123', PASSWORD_BCRYPT), ':type' => 'staff', ':status' => 'active']
+);
+$managerId = (int) Database::getInstance()->getConnection()->lastInsertId();
+Database::run(
+    'INSERT INTO user_roles (user_id, role_id) SELECT :user, id FROM roles WHERE name = :role',
+    [':user' => $managerId, ':role' => 'manager']
 );
 
 Database::run(
@@ -203,4 +232,4 @@ if (!$otherId) {
     ]);
 }
 
-fwrite(STDOUT, "business: {$emails['biz']}\nhousehold: {$emails['house']}\npassword: $pw\nowner: $ownerEmail\n");
+fwrite(STDOUT, "business: {$emails['biz']}\nhousehold: {$emails['house']}\npassword: $pw\nowner: $ownerEmail\nmanager: $managerEmail\n");

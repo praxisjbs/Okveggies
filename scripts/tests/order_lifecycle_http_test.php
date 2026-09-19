@@ -1,6 +1,8 @@
 <?php
 /** Lifecycle POST, CSRF, RBAC, stale and repeat behavior over local HTTP. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
+
+require_once __DIR__ . '/lib/scratch_guard.php';
 $base = rtrim(getenv('OKV_TEST_BASE') ?: 'http://127.0.0.1:8123', '/');
 $tests = 0; $passed = 0;
 function lh_ok($condition, string $label): void { global $tests, $passed; $tests++; if ($condition) { $passed++; } else { fwrite(STDERR, "  FAIL: $label\n"); } }
