@@ -29,13 +29,13 @@ if (!function_exists('okv_head_meta')) {
             ?? 'Fresh produce from verified farms in Ogun State and Jos, delivered on the day you pick. Sourced right. Priced right. Delivered right.');
         $ogType  = (string) ($o['og_type'] ?? 'website');
         ?>
-  <meta name="theme-color" content="#0F5132">
+  <meta name="theme-color" content="<?= okv_e(Brand::FOREST) ?>">
   <meta name="color-scheme" content="light">
   <meta name="application-name" content="OK Veggies">
   <meta name="apple-mobile-web-app-title" content="OK Veggies">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="msapplication-TileColor" content="#0F5132">
+  <meta name="msapplication-TileColor" content="<?= okv_e(Brand::FOREST) ?>">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" type="image/svg+xml" href="<?= okv_e(okv_asset('/assets/img/brand/icons/favicon.svg')) ?>">
   <link rel="icon" type="image/png" sizes="32x32" href="<?= okv_e(okv_asset('/assets/img/brand/icons/favicon-32.png')) ?>">

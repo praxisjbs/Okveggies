@@ -5,15 +5,21 @@
 **Engineering:** Tom-Blake Asaah and JBS Praxis
 **First written:** 17 September 2026
 **Verified and corrected:** 19 September 2026, against the meeting transcripts and the codebase at `b2f1f43`
+**Pre-handover audit:** 19 September 2026, at `a47a319`. See Section 6
 
 ---
 
 ## 0. What this document is, and how far you can trust it
 
-This is the consolidated record of what the client asked for across three
-meetings, what was built in response, what broke and was fixed, and what is
-still outstanding. It exists so that nobody has to re-listen to a recording to
-find out whether something was agreed or delivered.
+This is the single source of truth for the final run to handover. It records
+what the client asked for across three meetings, what was built in response,
+what broke and was fixed, what a full technical audit found, and what is still
+outstanding. It exists so that nobody has to re-listen to a recording or
+re-read the codebase to find out whether something was agreed, delivered or
+still owed.
+
+**Everything left to do before handover is in Section 3, in priority order.**
+Section 6 is the evidence behind the items the 19 September audit added.
 
 ### 0.1 How each claim here was checked
 
@@ -54,6 +60,21 @@ fixed, because the point of the document is that it can be trusted:
 5. The production protected-directory check was listed as an unverified launch blocker. It is **verified automatically on every deploy** and passed on 19 September 2026. See Section 3, item 2.
 6. Delivery day coverage (Section 1A, D3) was stated as settled. The 3 September meeting changed it and the change was never seeded. See Section 3, item 3.
 7. House style: em dashes and two banned jargon words were removed, and spelling was made consistently British-leaning, as `CLAUDE.md` requires.
+
+### 0.4 Added on 19 September 2026: the pre-handover audit
+
+A full technical audit was then run at `a47a319` across security, data,
+performance, accessibility, interface, code quality, test coverage and
+operational readiness. It added twelve items to Section 3 and closed two of
+them in the same pass. Section 6 holds the evidence, including what came back
+clean. Two findings are worth reading before anything else:
+
+- **The client-side escape helper did not escape quotes**, which both broke the
+  saved-address Edit button for every customer and opened an attribute-injection
+  path. Proven in Chromium, fixed, and awaiting deploy (item 3).
+- **There is no runbook, rollback procedure or backup and restore document.**
+  That work existed on a branch that was never pushed and is gone (item 4). It
+  is the one thing that should block handover rather than go-live.
 
 ---
 
@@ -233,7 +254,11 @@ operations five. Thirty-two defects, all resolved.
 
 ## 3. Action backlog, in priority order
 
-### Priority 0, before go-live
+Items marked **[A]** were added by the 19 September pre-handover audit; the
+evidence for each is in Section 6. Items marked **[fixed]** were closed during
+that audit.
+
+### Priority 0, before go-live or handover
 
 **1. Client approval and publication of the legal copy.**
 Terms of Service, Privacy Policy, Delivery Policy. Drafts exist with visible
@@ -245,15 +270,51 @@ staff publish it through `/admin/content.php`.
 *Owner: client. Source: 3 September meeting, M12 review.*
 
 **2. Production protected-directory denial.**
-~~Unverified blocker.~~ **Closed on 19 September 2026.** `scripts/verify.sh`
-runs against the live host as the last step of every deploy. On the deploy of
-`b2f1f43` it returned 403 for `.env`, `includes/`, `migrations/` and `docs/`,
-and passed all 29 checks. No manual `curl` is needed; the deploy fails if this
-regresses.
+**Closed on 19 September 2026.** `scripts/verify.sh` runs against the live host
+as the last step of every deploy. On the deploy of `b2f1f43` it returned 403 for
+`.env`, `includes/`, `migrations/` and `docs/`, and passed all 29 checks. No
+manual `curl` is needed; the deploy fails if this regresses.
+
+**3. [A] [fixed] The client-side escape helper did not escape quotes.**
+`OKV.escape()` built its output by setting `textContent` and reading `innerHTML`
+back, which escapes `&`, `<` and `>` but not `"` or `'`. Two consequences, both
+proven in Chromium (Section 6.2): the saved-address **Edit button was broken for
+every customer**, because the JSON payload it carries is full of quotes and
+terminated its own attribute; and a value containing a quote could open an
+attribute of its own, which is attribute-injection. Fixed to escape all five
+characters, matching `htmlspecialchars(ENT_QUOTES)` server side. **Deploy this
+before handover.**
+
+**4. [A] No go-live runbook, rollback procedure or backup and restore document.**
+Nothing in `docs/` tells a new owner how to take a backup, restore one, roll
+back a bad release, or what to do when the site is down. `docs/DEPLOYMENT.md`
+covers deploying, not operating. This tranche was written on a branch that was
+never pushed and no longer exists anywhere in the repository (Section 6.7), so
+it has to be written again. A handover without it leaves the client unable to
+recover from an incident.
+*Owner: engineering. Blocks handover, not go-live.*
 
 ### Priority 1, operational readiness
 
-**3. Seed Monday as a business delivery day, or confirm it is set in production.**
+**5. [A] The payment reminder and payment sweep almost certainly do not run.**
+Two independent problems meet here. The cPanel cron jobs have never been
+configured, so nothing invokes `scripts/cron.php` on a schedule; and `Cron` is
+the only class in the codebase referenced by **zero** test suites, so nothing
+would have caught it. The abandoned-basket reminder agreed after live testing
+(L5) is therefore built, untested and not firing. Configure the jobs, then add
+a suite that proves a reminder is queued and released.
+
+```crontab
+*/10 * * * * php /home/ibbbnlso/public_html/scripts/cron.php --job=payment_sweep
+0 8 * * *    php /home/ibbbnlso/public_html/scripts/cron.php --job=daily
+```
+
+Confirm the home directory path against the live cPanel account and the job
+names against `scripts/cron.php` before pasting these, because a cron running
+with the wrong argument fails silently.
+*Owner: client cPanel access, engineering to verify and to add the suite.*
+
+**6. Seed Monday as a business delivery day, or confirm it is set in production.**
 The 3 September meeting recorded, as an aligned decision, that Monday is open to
 businesses as well as households. `003_reference_seed.sql` still seeds businesses
 on Tuesday and Friday only, and no later migration changes it. Delivery days are
@@ -263,55 +324,70 @@ Delivery screen, and if Monday is off for businesses, switch it on. Then decide
 whether the seed should carry it, so a fresh environment matches production.
 *Owner: engineering, with a check on production. Source: 3 September meeting.*
 
-**4. Change the admin password and the account email.**
+**7. Change the admin password and the account email.**
 Recorded as a client action on 3 September and not tracked since. The platform
 is live and trading, so the handover credentials used during the build should
 not still be the credentials in production.
 *Owner: client. Source: 3 September meeting.*
 
-**5. Put the item list in the new Kitchen Run admin alert.**
+**8. [A] The fixed mobile navigation covers the bottom of every page.**
+The bottom tab bar is 65px tall and fixed, and nothing reserves space for it:
+no page, no `<main>`, no stylesheet rule. Measured in Chromium at 390px, the
+last line of page content sits 25px behind the bar (Section 6.3). Add bottom
+padding of the bar's height plus `env(safe-area-inset-bottom)` to the storefront
+shell. The same change fixes the missing safe-area inset, which currently lets
+the bar sit under the iPhone home indicator.
+*Owner: engineering.*
+
+**9. [A] The mandated gold focus ring is below the accessibility minimum.**
+`CLAUDE.md` makes a visible gold focus ring a non-negotiable, and the
+implementation is a 2.5px `#C9922B` outline. Against white that is **2.75:1**,
+below the 3:1 that WCAG 2.1 SC 1.4.11 requires for a focus indicator. It passes
+on the forest footer (3.40:1) and fails on white and on gold tint, which is most
+of the site. No single gold value clears 3:1 on all three grounds
+(Section 6.4), so the fix is a two-tone ring rather than a new hex.
+*Owner: engineering.*
+
+**10. [A] The deploy ships the whole repository to a public web host.**
+The staging step excludes only `.git`, `.github`, `node_modules`, `_dist`,
+`_to_delete`, `*.tar.gz` and `.env`. Everything else is uploaded, including
+`docs/`, `scripts/tests/`, `README.md`, `composer.json` and the two root `.sql`
+files. They are unreachable only because `.htaccess` denies them, and that is
+the exact control that failed before, when production served `README.md`,
+`composer.json` and `docs/PRD.md`. It is fixed and now verified on every deploy,
+but one file is still all that stands between the source tree and the public.
+Exclude what the server does not need. `migrations/` must stay, because
+`public/migrate.php` reads it.
+*Owner: engineering.*
+
+**11. Put the item list in the new Kitchen Run admin alert.**
 The client asked for the alert to carry the item details. The
 `admin_new_kitchen_run` template sends the line count, the input mode, the
 pricing mode and the budget line, but not the items. Staff currently have to
 open the panel to see what was asked for.
 *Owner: engineering. Source: 9 September meeting, A3.*
 
-**6. Let staff start a conversation with a customer.**
+**12. Let staff start a conversation with a customer.**
 Asked for on 9 September and not built. `ContactMessages` answers inbound
 messages only. Staff can note, handle, reopen and change the status of a message
 a customer sent, but cannot open a new thread. Anything proactive currently
 leaves the platform and goes to WhatsApp.
 *Owner: engineering. Source: 9 September meeting, A8.*
 
-**7. Client supply of documentary photography.**
+**13. Client supply of documentary photography.**
 Real photographs of Ogun State and Jos sourcing and Mile 12 packing. The
 homepage currently shows an honest branded fallback. No stock or synthetic
 image has been substituted. Upload through `/admin/content.php?page=home`,
 which generates the responsive WebP variants.
 *Owner: client. Source: Brand Architecture bible, M12 review.*
 
-**8. Configure the cPanel cron jobs.**
-The logic is in `includes/classes/Cron.php` and `scripts/cron.php`; the schedule
-is not yet set on the server. Without it the payment sweep and the payment
-reminder from L5 never fire.
-
-```crontab
-*/10 * * * * php /home/ibbbnlso/public_html/scripts/cron.php --job=payment_sweep
-0 8 * * *    php /home/ibbbnlso/public_html/scripts/cron.php --job=daily
-```
-
-Confirm the home directory path against the live cPanel account before pasting
-these, and confirm the job names against `scripts/cron.php`, because a cron that
-runs with the wrong argument fails silently.
-*Owner: client cPanel access, engineering to verify.*
-
-**9. Move the checkout trust panel below the payment options.**
+**14. Move the checkout trust panel below the payment options.**
 The Make It Right and Paystack trust card sits between the 30% deposit option
 and the pay-on-delivery option, inside the radio group, where it can read as an
 option itself. Move it below the complete group in `checkout.php`.
 *Source: M10 review.*
 
-**10. Settle the cancellation asymmetry with the client.**
+**15. Settle the cancellation asymmetry with the client.**
 A customer who paid 100% up front is refunded in full when cancelling after the
 cut-off, because `deposit_required_subunit` is 0, while a deposit customer
 forfeits 30%. That may be intended generosity or an oversight. Confirm with the
@@ -319,25 +395,76 @@ client, then adjust `Cancellation::moneyOutcome()` if the answer is that both
 should forfeit the same.
 *Owner: client decision. Source: live operations review.*
 
-### Priority 2, after launch
+### Priority 2, interface and experience
 
-**11. Per-product sourcing region.** Today it is one site-wide setting. Add a `source_region` to products and show it on the product page and the Order Trail. *Source: discovery, and an open item in `PROGRESS.md`.*
+**16. [A] The mobile tab bar carries six items and one of them wraps.**
+Six cells across 390px gives each 80px. Five labels fit on one line;
+"Kitchen Runs" wraps to two, so that cell is twice the text height of its
+neighbours and the row reads as uneven (Section 6.3). The PRD specifies all six
+destinations, so the fix is presentation, not scope: shorten the label to
+"Runs", or add the icon set the PRD's native-app intent implies and let the icon
+carry recognition while the label stays short.
+*Owner: engineering.*
 
-**12. Consolidate the staff recipient helpers.** `Notifications::staffRecipients()` (wildcard roles) and `::staffRecipientsForPermission()` (exact match) overlap. Merge into one. *Source: M11 review.*
+**17. [A] The active tab is signalled by colour alone.**
+The current tab differs from the others only by `text-forest` against
+`text-ink-60`. `aria-current="page"` is correctly set, so screen readers are
+served, but `CLAUDE.md` requires that colour is never the only signal for a
+sighted user. Add a second signal: a weight change, a short indicator bar above
+the active cell, or a filled icon.
+*Owner: engineering.*
 
-**13. Batch the staff issue queue.** `IssueReports::findForStaff()` then calls per-report queries for photos, items and history. Batch them across the page. *Source: M10 review.*
+**18. [A] Promote the 44px touch target to a named token.**
+`min-h-[44px]` appears 169 times. It is the accessibility minimum, so it is a
+rule wearing the costume of an arbitrary value: nothing stops one instance
+drifting to 40px, and the brand guard cannot tell the difference. Add a
+`touch` entry to the spacing scale in `tailwind.config.js` and use
+`min-h-touch`, so the intent is legible and a drift is a build error.
+*Owner: engineering.*
 
-**14. Lock the row before calling the gateway.** `IssueResolutions::refund()` calls Paystack before locking the report row. Take `SELECT ... FOR UPDATE` first. *Source: M10 review.*
+**19. [A] [fixed] The theme colour was hardcoded past its token.**
+`head_meta.php` wrote `#0F5132` directly for `theme-color` and
+`msapplication-TileColor`, while `Brand::FOREST` held the same value for exactly
+this purpose. A brand colour change would have updated the stylesheet and left
+the browser chrome behind. Both now read `Brand::FOREST`.
+
+**20. Design tokens for the two remaining ad-hoc sizes.**
+`text-[10px]` on the notification badge and `text-[11px]` on the command palette
+shortcuts. Add named scale entries to `tailwind.config.js`.
+*Source: M11 review.*
+
+### Priority 2, engineering
+
+**21. Per-product sourcing region.** Today it is one site-wide setting. Add a `source_region` to products and show it on the product page and the Order Trail. *Source: discovery, and an open item in `PROGRESS.md`.*
+
+**22. Consolidate the staff recipient helpers.** `Notifications::staffRecipients()` (wildcard roles) and `::staffRecipientsForPermission()` (exact match) overlap. Merge into one. *Source: M11 review.*
+
+**23. Batch the staff issue queue.** `IssueReports::findForStaff()` then calls per-report queries for photos, items and history. Batch them across the page. *Source: M10 review.*
+
+**24. Lock the row before calling the gateway.** `IssueResolutions::refund()` calls Paystack before locking the report row. Take `SELECT ... FOR UPDATE` first. *Source: M10 review.*
+
+**25. [A] Split the files that outgrew the 800-line rule.**
+`CLAUDE.md` says to split a file over 800 lines. Seven are over, led by
+`Notifications.php` at **1,787**, more than twice the limit, followed by
+`Credit.php` (1,054) and `KitchenRunWorkflow.php` (989). For a codebase about to
+change hands, the largest file being the one that touches every transactional
+email is the wrong shape. Split by concern, starting with `Notifications.php`.
+*Owner: engineering.*
+
+**26. [A] Close the test coverage gap on the classes that carry risk.**
+22 of 59 classes have no dedicated unit test. Most are covered indirectly by the
+database and HTTP suites, and some heavily: `Rbac` appears in 16 suites and
+`Csrf` in 12. Three deserve attention: `Cron` appears in **none** (see item 5),
+`Auth` in one, and `PriceSheet` in one, and all three carry real risk.
+*Owner: engineering.*
 
 ### Priority 3, housekeeping
 
-**15. Design tokens for the two ad-hoc sizes.** `text-[10px]` on the notification badge and `text-[11px]` on the command palette shortcuts. Add named scale entries to `tailwind.config.js`. *Source: M11 review.*
+**27. Snapshot the category on order lines.** Analytics joins current product category, so moving a product rewrites history. Snapshot `category_id` on `order_items` at conversion. *Source: M11 review.*
 
-**16. Snapshot the category on order lines.** Analytics joins current product category, so moving a product rewrites history. Snapshot `category_id` on `order_items` at conversion. *Source: M11 review.*
+**28. [A] Two reads inside loops that grow with input.** `Checkout` looks up each combination bundle's name and SKU one row at a time while converting a basket, and `PriceSheet` looks up each product one row at a time while importing a spreadsheet. Neither is a launch risk at current volumes; both are worth batching when they are next touched. Everything else the scan flagged is either a bounded write inside a transaction or a slug-uniqueness retry, which are correct (Section 6.5).
 
-**17. Set the repository private at handover.** Public while GitHub Actions and review need it. *Source: discovery.*
-
----
+**29. Set the repository private at handover.** Public while GitHub Actions and review need it. *Source: discovery.*
 
 ## 4. Requirement to evidence
 
@@ -396,5 +523,184 @@ Wrong in the first draft, corrected above:
 
 ---
 
+## 7. How to use this document
+
+1. **Section 3 is the work list.** It is ordered. Priority 0 blocks go-live or handover; Priority 1 is what a careful team does before handing over; Priority 2 and 3 are honest debt with an owner named.
+2. **Section 6 is the evidence** for anything Section 3 asserts about the code, including the measurements and the contrast arithmetic, so a disagreement can be settled by re-running the check rather than by opinion.
+3. **Section 5 is the boundary.** It says what was not verified and why. Nothing outside it should be treated as proven.
+4. When an item is done, mark it in place with the date and how it was proven. A backlog that does not record its own closure stops being a source of truth within a week.
+
+---
+
 *Filed for Kumbish Emmanuel Putleh and JBS Praxis. Verified against the meeting
-transcripts and the codebase at `b2f1f43` on 19 September 2026.*
+transcripts and the codebase at `b2f1f43`, and audited at `a47a319`, on
+19 September 2026.*
+
+---
+
+## 6. Pre-handover audit, 19 September 2026
+
+Run against `a47a319` across security, data, performance, accessibility,
+interface, code quality, test coverage and operational readiness. This section
+is the evidence; the actions are in Section 3.
+
+### 6.1 What came back clean
+
+Recorded because a handover should say what was checked and passed, not only
+what failed. Each of these was checked mechanically, not by reading around:
+
+| Area | Result |
+| --- | --- |
+| SQL injection | **Zero surface.** Seven places concatenate a fragment into a query. Every one is a server-chosen literal (`'email'` or `'phone'`), a ternary between two column names, an allow-listed filter, or generated `?` placeholders. Values are bound everywhere |
+| Output escaping, server side | **Clean.** No unescaped variable reaches a template. The only raw `<?= ?>` emissions are ternaries between hardcoded strings |
+| RBAC | **Complete.** All 22 admin pages carry a permission check; all 6 Pro pages carry `require_business_customer()` |
+| CSRF | **Correct.** 23 of 26 API controllers check it. The three that do not are two read-only endpoints and the Paystack webhook, which verifies an HMAC signature instead, which is right |
+| Uploads | **Layered.** Extension allow-list, `finfo` MIME sniff, `getimagesize`, size cap, randomised name, plus `php_flag engine off` and a `FilesMatch` denial in `uploads/.htaccess`. Private evidence is denied outright and served only through `public/issue_photo.php` |
+| Money | **Integer throughout.** No float reaches a stored amount. Floats appear only as percentage multipliers, and the result is cast back to integer subunits |
+| Secrets | **None committed.** Every `sk_live`/`sk_test` string in the tree is a test fixture or placeholder-detection logic. `.env`, `*.log` and `error_log` are ignored |
+| Indexes | **260 declared.** Only `allowed_delivery_days` and `counters` have no secondary index, and both are lookup tables of a few rows |
+| Images | **29 of 29** `<img>` tags carry non-empty alt text |
+| Form labelling | **327 of 327** controls are labelled, by `for`, by wrapping, or by `aria-label` |
+| Heading order | No skipped levels on any page |
+| Focus suppression | No `focus:outline-none` anywhere, and the M10 regression has not returned |
+| Code markers | No `TODO`, `FIXME`, `HACK` or `XXX` in shipped code |
+
+### 6.2 The escape helper, proven in a browser
+
+`OKV.escape()` set `textContent` and read `innerHTML` back. That escapes `&`,
+`<` and `>`, because those are what a text node needs. It does not escape `"`,
+because a quote needs no escaping inside a text node. The helper's output was
+then interpolated into a double-quoted attribute.
+
+Run in Chromium against the shipped code, before the fix:
+
+```
+escape('a"b')        = a"b            <- the quote survives
+payload              = {"recipient_name":"Tunde","city":"Lekki"}
+attr actually stored = "{"            <- the attribute ended at the first quote
+stray attributes     = ["data-okv-edit-address", "recipient_name\":\"tunde\"...]
+injected handler?    = true           <- escape('x" onmouseover="ALERT') created a handler
+```
+
+So the saved-address **Edit button could never read its payload**, for any
+customer, and a quote in a stored value could open an attribute of its own.
+After the fix, in the same harness: one attribute, the payload round-trips,
+`JSON.parse` recovers `Tunde "T" Bello` intact, and the handler injection
+returns `false`.
+
+Blast radius is narrow. `OKV.escape` is used in one attribute context,
+`assets/js/account.js`, and `account.js` is the only file outside `okv.js` that
+uses it at all. The other two attribute interpolations on that screen are
+numeric row ids. Server-side escaping was never affected.
+
+### 6.3 The mobile shell, measured at 390px
+
+Rendered in Chromium at 390x844 against the compiled stylesheet:
+
+```
+nav height              = 65px
+footer last line bottom = 717px   nav top = 692px
+OBSCURED                = true
+cell widths             = 80px each
+label text height       = 15px, except "Kitchen Runs" at 30px (wraps)
+```
+
+The bar is `fixed inset-x-0 bottom-0`, and a grep across the header, the footer,
+every `<main>` and the compiled stylesheet finds nothing reserving space for it.
+`<main>` carries `py-10` (40px), less than the bar's 65px. The bar's only bottom
+padding is `pb-2` (8px), with no `env(safe-area-inset-bottom)`.
+
+What the bar gets right, and should be kept in any rework: `min-h-[56px]` cells,
+`aria-label="Mobile navigation"`, `aria-current="page"` on the active link,
+`aria-label="Basket, N items"`, and `aria-live="polite"` on the count.
+
+### 6.4 Contrast, computed from the brand tokens
+
+Every token measured against white, by the WCAG relative-luminance formula:
+
+| Token | Hex | On white | Verdict |
+| --- | --- | --- | --- |
+| Ink | `#03100A` | 19.40:1 | passes |
+| Forest | `#0F5132` | 9.36:1 | passes |
+| Gold ink | `#7A5A18` | 6.36:1 | passes |
+| Ink muted | `#636B67` | 5.48:1 | passes |
+| Tomato | `#C8321E` | 5.34:1 | passes |
+| Foliage | `#3E8B4A` | 4.20:1 | large text and UI only |
+| Gold | `#C9922B` | **2.75:1** | decorative only |
+
+Two things follow, and the first is good news. **Gold at 2.75:1 cannot carry
+text, and the brand rules already forbid exactly that** ("gold is never a button
+fill and never carries its own text"), with `GOLD_INK` at 6.36:1 provided for
+when gold-family text is needed. The rule and the palette agree. Foliage is
+never used as text either, which was checked.
+
+The second is the focus ring. It is drawn in gold, and a focus indicator is a
+non-text UI component, so WCAG 2.1 SC 1.4.11 asks for 3:1 against the adjacent
+background. Gold gives 2.75:1 on white and 2.52:1 on gold tint, and 3.40:1 on
+the forest footer. Darkening the gold trades one ground for another rather than
+fixing it:
+
+| Lightness | Hex | On white | On forest | On gold tint |
+| --- | --- | --- | --- | --- |
+| as shipped | `#C9922B` | 2.75 | 3.40 | 2.52 |
+| -5% | `#BF8B29` | 3.03 | 3.09 | 2.77 |
+| -8% | `#B98628` | 3.23 | 2.90 | 2.95 |
+| -10% | `#B58327` | 3.37 | 2.78 | 3.08 |
+
+No row passes all three. The fix is therefore a **two-tone ring**: keep the gold
+outline for the brand, and pair it with a contrasting companion ring in ink and
+in white, so whichever ground the control sits on, one edge of the indicator
+clears 3:1. Ink gives 19.40:1 on white; white gives 9.36:1 on forest. A single
+ink halo is not enough on its own, because ink against forest is only 2.07:1.
+
+### 6.5 Performance
+
+A brace-depth scan found 23 database calls inside loops. Classified by hand:
+
+- **Correct, leave alone.** Per-line inserts inside a checkout or conversion transaction, and `while (true)` slug-uniqueness retries in `Products`, `Combos` and `Delivery`, which are bounded by collisions and not by data volume. `Settings` and `SettingsEditor` iterate the result of one query, which the scan flagged and a human unflags.
+- **Worth batching later.** `Checkout` reads each combination bundle's name and SKU one row at a time; `PriceSheet` reads each product one row at a time during a spreadsheet import. Bounded by basket size and sheet length, so neither is a launch risk. Item 28.
+- **Already known.** `IssueReports::findForStaff()` issues per-report queries for photos, items and history. Item 23, carried from the M10 review.
+
+Index coverage is not a concern: 260 indexes across 43 migrations, and the two
+tables without a secondary index hold a handful of rows each.
+
+### 6.6 Code quality
+
+Seven files exceed the 800-line rule in `CLAUDE.md`:
+
+| File | Lines |
+| --- | --- |
+| `includes/classes/Notifications.php` | 1,787 |
+| `includes/classes/Credit.php` | 1,054 |
+| `includes/classes/KitchenRunWorkflow.php` | 989 |
+| `includes/classes/ContentPages.php` | 910 |
+| `includes/classes/Basket.php` | 892 |
+| `admin/payments.php` | 827 |
+| `includes/classes/IssueReports.php` | 811 |
+
+Test coverage: 22 of 59 classes have no dedicated `*Test.php`. Most are well
+covered indirectly, which was checked rather than assumed: `Rbac` appears in 16
+suites, `Csrf` in 12, `OrderTrail` in 8, `Paystack` in 7. The exceptions that
+matter are `Cron` at **zero**, `Auth` at one, and `PriceSheet` at one.
+
+### 6.7 Operational readiness for handover
+
+This is the weakest area, and it is weak because of an accident rather than a
+decision. The M13 work covering the security audit, the accessibility pass, the
+performance profile with migration `051`, the backup and restore tooling, the
+production preflight and the go-live runbook was prepared on a branch that was
+never pushed. It is on no remote reference: no branch carries migration `051`,
+and a search of every reference in the repository for a runbook, a rollback
+procedure or backup tooling returns only the long-standing `scripts/backup.sh`
+and the three milestone handover notes. That work has to be written again.
+
+What exists: `docs/DEPLOYMENT.md` (167 lines), `docs/PRD.md`, `README.md`, the
+M13 release contract and suite matrix, and the M10 to M12 handover notes. What
+does not: anything telling a new owner how to restore a backup, roll back a
+release, or respond to an incident. That is item 4.
+
+One further gap belongs here. The release gate exists, is reviewed, and has
+still never been executed, by owner decision. Rows 2 to 20 of
+`docs/M13_SUITE_MATRIX.md` are therefore built and unproven. That is a stated
+position rather than an oversight, and it is recorded so that whoever takes the
+project over knows the test evidence is structural, not empirical.

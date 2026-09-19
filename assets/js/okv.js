@@ -12,10 +12,23 @@
     else { document.addEventListener('DOMContentLoaded', fn); }
   };
 
+  // Escape for HTML, including attribute context.
+  //
+  // The old version set textContent and read innerHTML back. That escapes &, <
+  // and > but NOT quotes, because a quote needs no escaping inside a text node.
+  // Every value here is interpolated into a double quoted attribute somewhere
+  // (account.js builds data-okv-edit-address="..."), so an unescaped quote ends
+  // the attribute early: the saved-address Edit button lost its payload, and a
+  // value containing a quote could open an attribute of its own. Escape the
+  // five characters that matter, the way htmlspecialchars(ENT_QUOTES) does
+  // server side, so the two halves of the app agree.
   OKV.escape = function (value) {
-    var div = document.createElement('div');
-    div.textContent = value == null ? '' : String(value);
-    return div.innerHTML;
+    return (value == null ? '' : String(value))
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   };
 
   // Format integer subunits (kobo) as naira for display. Mirrors Money::format.
