@@ -5,11 +5,12 @@
 -- The 3 September meeting recorded, as an aligned decision, that Monday is
 -- available to businesses as well as households
 -- (docs/CLIENT_MEETING_AUDIT_AND_IMPROVEMENTS.md, decision D3 and Section 3
--- item 3). Migration 003 seeded businesses on Tuesday and Friday only, and no
--- later migration carried the change, so fresh environments and the live
--- Delivery screen disagreed with the decision. 003 now seeds the row directly;
--- this migration brings databases seeded before that correction up to the same
--- state.
+-- item 3). Migration 003 seeded businesses on Tuesday and Friday only, so the
+-- live Delivery screen disagreed with the decision. 003 already ran on the
+-- production database, and an applied migration is never edited (the runner
+-- records its checksum and refuses to deploy when it drifts, which is exactly
+-- what blocked every deploy from 20 September 2026 until this fix), so this
+-- migration carries the Monday row to every database, fresh installs included.
 --
 -- The row is inserted when absent and activated when present, but a cutoff time
 -- or lead time an admin has already set on that row is never overwritten. This

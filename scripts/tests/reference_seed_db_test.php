@@ -115,7 +115,7 @@ $activeDays = function (string $type): array {
     return $days;
 };
 rs_eq([1, 3, 4, 6], $activeDays('household'), 'households deliver on Monday, Wednesday, Thursday and Saturday');
-rs_eq([1, 2, 5], $activeDays('business'), 'businesses deliver on Monday, Tuesday and Friday, the 3 September decision seeded and migrated');
+rs_eq([1, 2, 5], $activeDays('business'), 'businesses deliver on Monday, Tuesday and Friday, the 3 September decision carried by migration 051');
 
 // --- An empty category is labelled, not hidden (M2 decision, 20 Sep 2026) ---
 $suffix = bin2hex(random_bytes(4));

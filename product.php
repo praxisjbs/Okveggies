@@ -12,7 +12,30 @@ require_once __DIR__ . '/includes/components/shop/icons.php';
 require_once __DIR__ . '/includes/components/shop/empty_state.php';
 require_once __DIR__ . '/includes/components/shop/help_sheet.php';
 
-$product = Catalogue::productBySlug((string) okv_input('slug', ''));
+try {
+    $product = Catalogue::productBySlug((string) okv_input('slug', ''));
+} catch (Throwable $e) {
+    // The catalogue failed, which is not a missing product. Answer 503 with
+    // the same friendly shape as the 404 below, so crawlers retry and a
+    // customer sees somewhere to go instead of a blank server error.
+    error_log('product.catalogue failed: ' . $e->getMessage());
+    http_response_code(503);
+    header('Retry-After: 300');
+    ?><!doctype html>
+    <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Temporarily unavailable. OK Veggies</title><meta name="robots" content="noindex"><?php okv_head_meta(); ?><link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
+    <body class="min-h-screen bg-forest-tint">
+    <?php okv_activation_banner(); okv_shop_header('shop'); ?>
+    <main id="okv-main" class="okv-container py-16 md:py-24">
+      <?php okv_empty_state('cloud', 'This item is temporarily unavailable', 'We could not load it just now. Please try again in a moment.', [
+          ['href' => '/shop.php', 'label' => 'Back to the shop', 'icon' => 'leaf'],
+          ['href' => '/combos.php', 'label' => 'See the combos', 'style' => 'outline', 'icon' => 'basket'],
+      ], ['heading_tag' => 'h1']); ?>
+    </main>
+    <?php okv_shop_footer(); ?>
+    </body></html><?php
+    exit;
+}
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
 $sourceDay = Settings::str('source_day', '');
 
@@ -35,8 +58,18 @@ if (!$product) {
 }
 
 $productSourceRegion = trim((string) ($product['source_region'] ?? '')) ?: trim($sourceRegions);
-$images = Catalogue::images((int) $product['id']);
-$suggestions = Catalogue::suggestions((int) $product['id'], (int) $product['category_id']);
+$images = [];
+try {
+    $images = Catalogue::images((int) $product['id']);
+} catch (Throwable $e) {
+    error_log('product.images failed: ' . $e->getMessage());
+}
+$suggestions = [];
+try {
+    $suggestions = Catalogue::suggestions((int) $product['id'], (int) $product['category_id']);
+} catch (Throwable $e) {
+    error_log('product.suggestions failed: ' . $e->getMessage());
+}
 $availability = okv_availability((string) $product['availability_status'], $product['restock_date'] ?? null);
 $returnTo = '/product.php?slug=' . rawurlencode($product['slug']);
 $pageTitle = $product['name'] . ', per ' . $product['unit'] . '. OK Veggies';

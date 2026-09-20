@@ -80,6 +80,10 @@ migrations. You can also trigger it by hand from the Actions tab
 
 - Open `https://okveggies.com.ng/`. You should see the storefront home with the
   Stew Combo and the featured products.
+- Open `https://okveggies.com.ng/shop.php` and one product page. Both must
+  answer 200 with produce on them. The post-deploy smoke gate
+  (`scripts/verify.sh`) checks these, and it fails the deploy when the
+  catalogue cannot be read.
 - Check migration state:
   `https://okveggies.com.ng/public/migrate.php?action=status&token=YOUR_TOKEN`
   Every migration should read `OK`.

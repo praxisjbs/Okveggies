@@ -118,11 +118,13 @@ final class CustomerNotifications
         [$in, $params] = self::eventParams($events);
         $params[':user'] = $userId;
         $params[':channel'] = Notifications::CHANNEL_IN_APP;
+        $params[':sent'] = Notifications::STATUS_SENT;
         return Database::run(
             'UPDATE notification_deliveries d
                JOIN notifications n ON n.id = d.notification_id
                 SET d.read_at = NOW()
-              WHERE d.user_id = :user AND d.channel = :channel AND d.read_at IS NULL
+              WHERE d.user_id = :user AND d.channel = :channel AND d.status = :sent
+                AND d.read_at IS NULL
                 AND n.event_type IN (' . $in . ')',
             $params
         );
