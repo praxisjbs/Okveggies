@@ -438,7 +438,7 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 | PR | Title | Fixes | Status | Coverage | Confidence | Beauty | Merged SHA | Date |
 |----|-------|-------|--------|----------|------------|--------|------------|------|
 | PR0 | Foundation and plan | - | [x] Done `a936d8e` PR #54 open, now 31 fixes | 100% docs | 98% | - | `a936d8e` | 20 Sep 2026 |
-| PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [x] Done, PR_OPEN_PLACEHOLDER Owner decisions recorded, unit + brand green locally, DB/HTTP suites registered for CI and the release gate | 100% | 95% | 95% readiness panel | PR1_SHA_PLACEHOLDER | 20 Sep 2026 |
+| PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [x] Done `dac1202` PR #57 open. Owner decisions recorded, unit + brand green locally, DB/HTTP suites registered for CI and the release gate | 100% | 95% | 95% readiness panel | `dac1202` | 20 Sep 2026 |
 | PR2 | Operational Messaging + Kitchen Runs Native | 15,16,21,22,23,28 | [ ] Not started | - | - | 95% | - | - |
 | PR3 | Checkout Beauty and Trust | 13 | [ ] Not started | - | - | 95% | - | - |
 | PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Not started | - | - | 95% | - | - |
