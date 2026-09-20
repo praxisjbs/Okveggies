@@ -1,11 +1,13 @@
-# OK Veggies: Remaining 29 Fixes, 8 PR Plan - Direct Live, No Staging
+# OK Veggies: Remaining 31 Fixes, 10 PR Plan - Direct Live, Luxurious Motion
 
 **Plan type:** PR0 Foundation
 **Branch:** `arena/01a0bd1c-okveggies`
 **Base:** `origin/main` at `a47a319`
 **Date:** 20 September 2026
 **Owner:** Engineering + Kumbish Emmanuel Putleh
-**Status:** PR0 open, seven PRs awaiting
+**Status:** PR0 open, nine PRs awaiting (PR1 to PR9)
+**Motion:** Full motion, no `prefers-reduced-motion` collapse. Client wants interesting, not static. Explore full palette daring hero and luxurious feel, 17 GSAP presets from ui-ux-pro-max skill
+**Design system:** 21st.dev + ui-ux-pro-max skill as reference, no MCP required for PHP/Tailwind. See Section 12
 **Confidence required:** 95% minimum on every PR
 **Coverage required:** 100% on every PR before it can be marked done
 **UI beauty required:** 95% on every UI touching PR, lesser text, more illustration, large clear buttons, creativity, mobile first, React Native app feel
@@ -21,13 +23,13 @@
 3. Paste it as your first message in the new chat
 4. The agent reads this plan, checks `PROGRESS.md`, works only on that PR scope, updates Section 7 when green, and pushes to the same branch
 
-PR0 is this foundation. PR1 to PR7 are in Section 3. Prompts are progressive, each assumes the previous PRs have been merged into your working branch.
+PR0 is this foundation. PR1 to PR9 are in Section 3. Prompts are progressive, each assumes the previous PRs have been merged into your working branch. PR8 and PR9 are the new motion and luxury PRs added 20 Sep after client asked for daring hero and out of ordinary motion.
 
 ---
 
-## 1. The 29 fixes, verified from the codebase - direct live, every fix ships to production
+## 1. The 31 fixes, verified from the codebase - direct live, every fix ships to production, luxurious motion
 
-Sources: `PROGRESS.md` open boxes, `docs/CLIENT_MEETING_AUDIT_AND_IMPROVEMENTS.md` Section 3 items 1 to 17, `docs/M13_RELEASE_CONTRACT.md`, `docs/M12_CONTENT_CONTRACT.md`, `docs/M13_REVIEW.md`, `migrations/003_reference_seed.sql`, `includes/classes/Cancellation.php`, `includes/classes/Notifications.php`, `includes/classes/IssueResolutions.php`, `includes/classes/IssueReports.php`, `tailwind.config.js`, kitchen-runs.php live UI audit 20 Sep 2026, attention span complaint.
+Sources: `PROGRESS.md` open boxes, `docs/CLIENT_MEETING_AUDIT_AND_IMPROVEMENTS.md` Section 3 items 1 to 17, `docs/M13_RELEASE_CONTRACT.md`, `docs/M12_CONTENT_CONTRACT.md`, `docs/M13_REVIEW.md`, `migrations/003_reference_seed.sql`, `includes/classes/Cancellation.php`, `includes/classes/Notifications.php`, `includes/classes/IssueResolutions.php`, `includes/classes/IssueReports.php`, `tailwind.config.js`, kitchen-runs.php live UI audit 20 Sep 2026, attention span complaint, client motion and luxury request 20 Sep, `nextlevelbuilder/ui-ux-pro-max-skill` 79 styles 192 palettes 17 GSAP presets, `21st.dev` CLI/MCP screenshot.
 
 Delivery mode: **No staging.** We deliver once, live. Every PR merges to `main` and deploys directly via `deploy.yml` to `https://okveggies.com.ng`. No separate staging host. Local fresh MySQL 8 rehearsal + production backup rehearsal replaces staging gate, and maintenance + rollback artifact are mandatory before each live push.
 
@@ -62,8 +64,10 @@ Delivery mode: **No staging.** We deliver once, live. Every PR merges to `main` 
 | 27 | Remove `run_all.sh` skip tolerance. Release gate must fail on a skipped suite, not report 0 failed 0 skipped | `scripts/tests/run_all.sh` vs `release_gate.sh` shared `lib/env_value.php` |
 | 28 | Redesign Kitchen Runs for attention span. Customer `kitchen-runs.php` and staff `admin/kitchen_runs.php` plus `pro/kitchen_lists.php` are text heavy, long forms, small targets, no illustration, not React Native | Live audit 20 Sep: `kitchen-runs.php` 21578 bytes, 4 modes explained in paragraphs, no stepper, no sheet. Client complaint |
 | 29 | Global attention span pass. `index.php` hero promises, `shop.php`, `product.php`, `combo.php`, `page.php` How It Works/FAQ/Delivery Policy, `contact.php`, empty states are paragraph walls. People skim, need scannable cards, icons, disclosure | 2026 generation: attention is short, lesser text + perfect illustrative design is the fix |
+| 30 | Static and boring, needs motion. No page has scroll entrances, micro interactions, page transitions, or GSAP presets. Client wants interesting out of ordinary, high design | Client 20 Sep: motions animations please, borrow from `ui-ux-pro-max-skill` 17 GSAP presets. `assets/css/tailwind.css` has only Botanical 240ms + Bounce 320ms |
+| 31 | Daring luxurious hero and full palette. Hero is safe, palette use is timid: forest header only, gold only as ring, clay/foliage/tomato underused. Client wants daring hero and luxurious feel exploring full bible palette | Brand bible v1.0 palette forest/gold/tomato/foliage/clay/ink/mist, `tailwind.config.js` already has them but site does not dare |
 
-100% coverage means every row above is assigned to exactly one PR below and closed there. **Total is now 29 fixes, all going live directly.** Nothing is staging only.
+100% coverage means every row above is assigned to exactly one PR below and closed there. **Total is now 31 fixes, all going live directly.** Nothing is staging only. Fixes 30 and 31 are the 2 new motion and luxury PRs added after the 20 Sep client motion request.
 
 ---
 
@@ -82,29 +86,31 @@ Each PR must meet all of these before its progress box can be ticked. The agent 
 - HTTP suites `*_http_test.php` relevant to PR pass on live port
 - Browser pass at 390px and 1440px where UI touched, no overflow, 44px targets, visible gold focus ring, no console errors
 
-**Beauty gate: 95% on any UI PR, creativity + mobile first + React Native feel**
+**Beauty gate: 95% on any UI PR, creativity + mobile first + React Native feel + luxurious motion**
 - **Mobile first, always:** Design at 390px first, then 768px, then 1440px. Thumb-reach primary actions within 72px of bottom, bottom tab bar persistent, safe-area-inset padding, slide-up sheets with 24px top radius and backdrop blur, not full page reloads. Every UI PR must be evidenced at 390px with no horizontal scroll, 44px targets, and one-handed usability.
 - **React Native app feel:** Bottom tab bar, slide-up sheets, spring motion, optimistic UI, instant feedback, swipe to dismiss sheets, pull to refresh where lists, haptic-like Bounce 320ms only on success, empty states never dead ends, navigation stays in app chrome.
-- **Creativity:** Inventive use of forest, gold as ring, foliage and tomato accents, bespoke line illustrations (leaf, basket, shield) not stock, editorial hero with seal, combo spreads that feel magazine, category pills with icons, checkout cards with payment icons. Surprise and delight in micro copy and motion, not generic template.
+- **Creativity and luxury:** Inventive use of full palette - forest, gold ink, foliage, tomato, clay, ink tints - not timid. Editorial hero with seal + daring overlapping, combo spreads that feel magazine, category pills with icons and source line, checkout cards with payment icons. Luxurious feel via DM Serif Display at 60px, generous whitespace, gold hairlines, subtle grain or soft gradients on tints, not flat. Surprise and delight in micro copy and motion, not generic template.
 - **Lesser text, more illustration:** Headings 3 to 5 words, body one short line, help in `?` sheet not paragraph. Prices, weights, dates always numerals with units. Icons beside headings, not walls of copy. Empty, error, maintenance and success states use soft line illustration + heading + one line + two clear buttons.
 - **Large clear buttons:** 44px min, `rounded-xl`, forest fill `okv-btn` with white label + 16px icon, outline `okv-btn-outline`, never gold fill, one primary per view. On mobile primary is full width, floating above keyboard where form.
-- **Tokens only:** Forest/gold/tomato/foliage + ink/cream from `tailwind.config.js`, no arbitrary hex, no `bg-gold` fill
+- **Tokens only:** Forest/gold/tomato/foliage/clay/ink/mist from `tailwind.config.js`, no arbitrary hex, no `bg-gold` fill. Explore full palette daring, gold can be ink text on tint, foliage and clay for accents, tomato for live only.
 - **Cards and tables:** `okv-panel` flat bordered `border-ink-10` on white, `okv-panel-head` with eyebrow + title. Tables `okv-table` hairline, mono figures for money. Badges colour never the only signal.
-- **Feedback and motion:** Skeleton `okv-skeleton` while loading, success Bounce 320ms only on add-to-basket and pay. `prefers-reduced-motion` respected, Botanical 240ms for 90% of motion, spring 300ms for sheets.
+- **Feedback and motion, now full motion:** Client wants interesting, not static. We no longer collapse to `prefers-reduced-motion`. Every UI PR ships with motion: scroll entrances, staggered card entrances, micro interactions, page transitions, hero parallax. Use 17 GSAP presets from ui-ux-pro-max skill via vanilla JS + CSS, not heavy lib. Keep Botanical 240ms for 90% and spring 300ms for sheets, add GSAP `power2.out` `expo.out` `elastic.out` where expressive. GSAP via CDN `gsap` + `ScrollTrigger` self-hosted, 12kb gz, no build step needed. Motion conveys meaning and spatial continuity, never animates `width`/`height` directly, uses `transform` and `opacity`.
 
 If any gate fails, the PR is not done.
 
 ---
 
-## 3. The 8 PRs
+## 3. The 10 PRs
+
+> Update 20 Sep: PR8 Motion System and PR9 Luxurious Daring Palette added after client asked for interesting not static. Brand black forest ink is already coded correctly, PR9 explores the rest of palette daring.
 
 ### PR0 Foundation (this PR)
 **Branch:** `arena/01a0bd1c-okveggies`
 **Status:** In progress, this document is the deliverable
 **Goal:** Establish the plan, prompts, progress ledger, beauty and confidence rules, and cron/env setup so new chats can start without re-auditing.
 **Scope files:** `docs/REMAINING_27_FIXES_8PR_PLAN.md` only, plus this ledger row
-**Fixes covered:** None of the 27 directly, enables all
-**Acceptance:** This document exists, spells the 27 cleanly, splits them into PR1 to PR7, includes copy-paste prompts, parallel map, cron/env section, progress ledger. `brand-check.sh` 8/8 green.
+**Fixes covered:** None of the 31 directly, enables all
+**Acceptance:** This document exists, spells the 31 cleanly, splits them into PR1 to PR9 plus PR7 last, includes copy-paste prompts, parallel map, cron/env section, progress ledger, Section 12 appendix. `brand-check.sh` 8/8 green.
 **Tests:** No DB migration
 **Confidence target:** 100% on docs, brand check green
 **Beauty target:** N/A docs only
@@ -155,7 +161,7 @@ If any gate fails, the PR is not done.
 - Mobile first sheet behaviour: delivery day picker is bottom sheet with 24px radius and backdrop blur, not dropdown. Skeletons and optimistic UI kept, no reload on radio change.
 **Acceptance:**
 - Trust panel no longer inside radio group, visual test at 390px shows clear separation
-- Checkout passes axe-core, 44px every control, no horizontal overflow, reduced-motion respected
+- Checkout passes axe-core, 44px every control, no horizontal overflow, full motion shipped not reduced-motion collapsed
 - `brand-check.sh` still green, no `bg-gold` fill, no `okv-btn-outline` + `text-white`
 **Tests:** `checkout_db_test`, `customer_http_test` guest checkout, browser visual at 390/1440, manual keyboard flow.
 
@@ -212,6 +218,53 @@ If any gate fails, the PR is not done.
 
 ---
 
+### PR8 Motion System - Make It Move (fix 30)
+**Goal:** Make the whole site feel interesting out of ordinary, not static boring. Motion is now expected, not optional.
+**Fixes:** 30
+**Files:** `assets/js/okv-motion.js` (new), `assets/css/src/input.css`, `assets/css/tailwind.css` rebuild, `includes/bootstrap.php` or layout `includes/components/layout/*` for GSAP CDN, all storefront pages `index.php`, `shop.php`, `product.php`, `combo.php`, `combos.php`, `page.php`, `contact.php`, `kitchen-runs.php`, `cart.php`, `checkout.php`, `assets/js/okv.js`, `assets/js/cart.js`, `assets/js/checkout.js`
+**Design system borrowing:** `nextlevelbuilder/ui-ux-pro-max-skill` 17 GSAP presets, use vanilla GSAP `power2.out` `expo.out` `elastic.out` `back.out` + `ScrollTrigger`, `docs/BRAND_BIBLE.md` motion tokens `Botanical 240ms cubic-bezier(0.33,0.16,0.12,0.97)` and `Bounce 320ms cubic-bezier(0.34,1.56,0.64,1)`. See Section 12 for palette and presets actually used. 21st.dev components are reference only via `npx @21st-dev/cli` copy, not an MCP dependency.
+**UI notes:** This is the motion flagship, luxurious daring, full motion no collapse.
+- GSAP 3.12 via CDN `gsap.min.js` + `ScrollTrigger.min.js` self-hosted under `assets/js/vendor/` with integrity hash, 12kb gz, loaded `defer`, no npm build step needed. Fallback: if CDN blocked site still works, motion just does not init. One `OkvMotion.init()` in `okv-motion.js` owns all scroll and micro motion, not per page scriptlets
+- Page load: hero seal stamps with `back.out(1.2)` scale 0.8 to 1 + opacity, heading splits by word `y 24 -> 0` `power2.out` stagger 40ms, sub and CTA follow 120ms after. Not fade only
+- Scroll entrances: every `okv-panel`, product card, combo spread, FAQ row, how it works step uses `ScrollTrigger` `y 20 -> 0` `opacity 0 -> 1` `power2.out` 500ms stagger 60ms per group. Cards use `transform` and `opacity` only, never `width` `height`
+- Staggered grid: shop grid 2-up mobile 4-up desktop staggers `from start` 60ms, kitchen runs mode cards stagger 80ms, checkout payment cards stagger 50ms
+- Micro interactions: `okv-btn` press `scale 0.98` 100ms, icon `x 2` on hover, add-to-basket `Bounce 320ms` elastic scale 0.9 -> 1.08 -> 1, heart or basket check draws with stroke-dash, sheet `y 100% -> 0` `expo.out` 450ms with backdrop `opacity 0 -> 1` `power2.out` 240ms, dismiss by swipe down `y` drag or backdrop `opacity`
+- Page transitions: shop filter, tab switches, sheet open use `view-transition` like cross fade `opacity` 200ms + `y 8` if `document.startViewTransition` available, else GSAP fade. No full reload flashes
+- Hero parallax: documentary photo `yPercent` `-8` scrub `ScrollTrigger scrub:1`, gold hairline draws `scaleX 0 -> 1` `expo.out` 900ms on enter. Foliage or clay wash behind heading uses `opacity` not colour flash
+- Attention guidance: form errors shake `x -4 -> 4` 2 times `power2.inOut` 300ms then gold ring, success check pops `elastic.out`, skeleton shimmer stays `okv-skeleton` CSS only not GSAP
+- Luxurious still: motion is slow enough to feel premium, 60fps, `will-change: transform, opacity` only during animate, then cleared. Durations generous 400 to 650ms for entrances, not twitchy 150ms
+- Brand black is correct: deep forest `#0F5132` hover `#0a3a2d` is the brand black, not pure `#000`. Do not push toward `ink #03100A` as brand unless client requests. PR8 does not change brand black
+**Acceptance:**
+- Every storefront and Pro route shows scroll entrances and micro feedback, verified by video at 390px and 1440px. No route is static. Before PR8 vs after is night and day
+- GSAP loaded defer, no console errors if CDN fails, no layout shift from motion, `prefers-reduced-motion` is not collapsing - client wants full motion. Motion respects only `prefers-reduced-motion` for `update` not `remove`, or ignored entirely per 20 Sep decision
+- 60fps on mid Android throttled 4x, no jank, no `width`/`height` animates, Lighthouse performance not regressed beyond 100ms
+- `brand-check.sh` still green, tailwind rebuilt, `assets/js/okv-motion.js` under 400 lines
+**Tests:** `homepage_visual_test.mjs` + `visual_pass.mjs` at 390/1440 video, manual `ScrollTrigger` markers check, `verify.sh` still green, manual CDN blocked fallback.
+
+---
+
+### PR9 Luxurious Daring Hero and Full Palette (fix 31)
+**Goal:** Make the site feel luxurious and daring by exploring the full bible palette already in `tailwind.config.js`, and make the hero out of ordinary editorial not timid.
+**Fixes:** 31
+**Files:** `index.php`, `includes/components/layout/header.php`, `includes/components/layout/footer.php`, `assets/css/src/input.css`, `assets/css/tailwind.css`, `shop.php`, `product.php`, `combo.php`, `page.php`, `kitchen-runs.php`, `checkout.php`, `assets/img/patterns/*` (new subtle grain or paper PNG under 5kb), `tailwind.config.js` only if new tint token needed
+**Palette in bible already:** `forest #0F5132` `#0a3a2d` `#14462c` `EBF2EC` `#0F51321A`, `gold #C9922B` `#E9B44C` `#F3D29A` `#8A6A1B` `rgba(201,146,43,0.15)`, `tomato #C8321E` `#7A1F12` `#F3C2BA`, `foliage #3E8B4A` `#2E6A37` `#D5E9D7`, `clay #B85C3E` `#6D2B1B` `#F1D9D1`, `ink #03100A` `#2B2B2B` `rgba(5,10,15,0.08)` `0.60` `0.10`, `mist #EAE8E8` `#FDFCF9` `#FFFBEB`. PR9 uses them daring, not timid.
+**UI notes:** This is the palette flagship, daring hero, large creative UI.
+- Daring hero: not a centered card. Use editorial overlap - documentary photo as `55%` right with `object-cover` and subtle `foliage` to `mist` or `clay` tint wash behind left text, DM Serif Display `text-[44px] 390px -> 60px desktop` tight leading `0.95`, gold `w-12 h-[2px]` rule above eyebrow, seal stamp overlapping bottom right of photo with `rotate-3` and shadow, floating category pills below with leaf icons and source line. Photo has `width` `height` no CLS. On 390px stacks photo `aspect-[4/3]` above text, still overlap seal. Whitespace generous `py-10 390px -> py-16 desktop`
+- Full palette exploration: forest header stays, but product cards use `foliage/10` or `clay/10` soft tint behind image not flat white, checkout trust cards use `mist` `#EAE8E8` with `gold/15` ring on selected, combo spread uses `clay #B85C3E` price accent on one variant and `foliage` on another not forest only, How It Works steps each have a different wash `foliage/10` `clay/10` `gold/15`, footer stays forest but adds gold hairline `border-t border-gold/20`. Tomato stays for live pulses only. Ink tints `#03100A` for overlays not brand
+- Luxurious feel: generous whitespace `gap-8` not `gap-4`, `tracking-tight` on display, `border-gold/15` hairlines, DM Serif Display for hero and shop section headings only, brass gold `#C9922B` never bright yellow. Subtle paper grain PNG `opacity-[0.04]` multiply over hero wash, under 5kb, not heavy texture
+- Large creative UI: category pills `44px` with icons, hero CTA `56px` forest with arrow and `shadow-forest/20`, combo spread magazine bleed not boxed, source region leaf line `text-xs text-foliage` under title, delivery day chip shows `gold dot` live
+- Brand black stays forest `#0F5132` hover `#0a3a2d`, display `okv-display` scale from tokens, no arbitrary hex, no `bg-gold` fill ever. Gold is ink text on tint or hairline/border, tomato only for live, clay and foliage daring but readable `AA` contrast `4.5:1` on white or tint
+- After motion PR8, hero entrances already move, PR9 ensures the static design underneath is luxurious without motion, screenshots without JS still feel premium
+**Acceptance:**
+- Hero is editorial daring not generic centered, evidenced at 390px `390x` and 1440px screenshots, seal overlap, category pills with icons, DM Serif at `44px` mobile `60px` desktop, wash behind text not flat
+- Full palette used: at least foliage, clay, gold tint, mist appear purposefully across site not just forest, `rg` or `grep` shows `bg-foliage` `bg-clay` `border-gold` `bg-mist` `text-clay` etc. in templates. `tailwind.config.js` not extended with arbitrary hex, only tokens
+- Luxurious feel: whitespace, hairlines, grain, no flat white everywhere, typography correct, gold never as fill, contrast `AA` passes axe
+- `brand-check.sh` 8/8 green, no `bg-gold` fill, no new colour outside `tailwind.config.js`, `git diff --check` clean
+- 390px no overflow, 44px targets, CLS `<=0.1` still, perf not regressed
+**Tests:** `visual_pass.mjs` hero 390/1440, `axe` 0 critical, `brand-check` green, `grep -r bg-` audit shows palette spread, manual no-JS screenshot still premium.
+
+---
+
 ### PR7 Release Gate and Privacy Handover
 **Goal:** Prove everything on a frozen SHA and hand over live.
 **Fixes:** 4 (credential rotation verify) + 5 + 26 + 27 (final 0 skipped proof)
@@ -219,9 +272,9 @@ If any gate fails, the PR is not done.
 **UI notes:** No UI, but handover document is beautifully laid out, one page per milestone mapping, screenshots at 390/1440 with device labels.
 **Acceptance:**
 - Fresh MySQL 8 migration from zero twice, `schema_migrations` count matches files, second run 0 pending
-- Full gate from clean env: `php -l` 311 files, `node --check`, `brand-check.sh` 8/8, unit 3,374+, every DB/HTTP suite by glob 0 failed 0 skipped, browser, `verify.sh` against staging, `fixture_orphans.php` left joins + `ZZ` prefix
+- Full gate from clean env: `php -l` 311 files, `node --check`, `brand-check.sh` 8/8, unit 3,374+, every DB/HTTP suite by glob 0 failed 0 skipped, browser, `verify.sh` against live after deploy, `fixture_orphans.php` left joins + `ZZ` prefix
 - Backup: cPanel DB + uploads before deploy, off-host copy with checksums, runbook, timed restore drill with representative records and private photo read-back
-- Rollback: versioned artifact off-host, rehearsed on staging, maintenance triggers documented
+- Rollback: versioned artifact off-host, rehearsed on live with maintenance window, maintenance triggers documented
 - Live smoke after approved deploy, one low-value live Paystack transaction reconciled, SMTP SPF/DKIM/DMARC proven with 2 provider inboxes
 - Repository made private only after collaborator/Actions/secrets audit + Owner approval, deploy access retested
 - `PROGRESS.md` M13 boxes ticked against evidence SHA, this plan Section 7 row marked 100%
@@ -238,7 +291,7 @@ PR0 Foundation (this)
   |
   +-----------------+-----------------+-----------------+
   |                 |                 |                 |
- PR1 Legal/Delivery PR2 Messaging    PR3 Checkout Beauty  PR5 Infra (cron/maint/staging prep)
+ PR1 Legal/Delivery PR2 Messaging    PR3 Checkout Beauty  PR5 Infra (cron/maint/live harden)
   |                 |                 |                 |
   +-----------------+-----------------+                 |
   |                                                   |
@@ -246,40 +299,47 @@ PR0 Foundation (this)
   |                                                   |
   +-----------------+-----------------+                 |
   |                 |                 |                 |
- PR6 Performance/A11y (needs PR3 tokens + PR1/PR4 content)   (PR5 cron must be up for PR6 hero perf)
+ PR6 Perf/A11y + Attention (needs PR3 tokens + PR1/PR4)     (PR5 cron up for PR6)
   |                                                   |
-  +-----------------+---------------------------------+
+  +-----------------+-----------------+                 |
+  |                 |                 |                 |
+ PR8 Motion System  PR9 Daring Palette (both need PR6)  (PR8+PR9 independent, either first)
+  |                 |                 |                 |
+  +-----------------+-----------------+                 |
   |
- PR7 Release Gate and Privacy (needs all above)
+ PR7 Release Gate and Privacy (needs all above, last)
 ```
+
+Merge numbers are not execution numbers: PR7 is last despite being numbered 7, PR8 and PR9 run before PR7.
 
 **Merge order enforced:**
 
 1. PR0
 2. PR1, PR2, PR3, PR5 can all start immediately after PR0 and run in parallel. They touch different domains: PR1 migrations/settings, PR2 messaging domain, PR3 storefront checkout, PR5 infra/workflows. No file overlap that blocks. If two need a migration number, PR1 takes `051`, PR2 takes `052`, PR4 waits.
 3. PR4 after PR1 allocates its migration numbers (needs `051` decided), otherwise parallel with PR2/PR3.
-4. PR6 after PR3 delivers tokens and after PR1/PR4 delivers publishable photo fields, so perf with hero is honest. Can overlap PR4 tail.
-5. PR7 last, after all. It freezes one SHA and runs the full gate, then privacy flip.
+4. PR6 after PR3 delivers tokens and after PR1/PR4 delivers publishable photo fields, so perf with hero is honest, and it closes attention span fix 29. Can overlap PR4 tail.
+5. PR8 Motion and PR9 Palette after PR6. They touch storefront CSS/JS and templates but different concerns: PR8 is `okv-motion.js` + ScrollTrigger + page JS, PR9 is hero/palette/templates. They can run in parallel after PR6, or sequentially PR8 then PR9. Either way both must be before release gate. PR9 can start early on branch but needs PR8 motion not to have CLS regressions.
+6. PR7 last, after all. It freezes one SHA and runs the full gate, then privacy flip.
 
 **Branch strategy:**
 - All work branches off `main` after PR0 merges, or off `arena/01a0bd1c-okveggies` if doing series. To keep it simple: create `arena/pr1-legal`, `arena/pr2-messaging`, etc., each from `main`. Merge back to `main` one by one in order above, pulling `main` into pending branches before they finish to catch migration number conflicts.
-- Migration numbers: next free is `051`. Reserve in this order: PR1 `051`, PR2 `052`, PR4 `053` + `054`, PR5 `055` if needed. Never reuse `034` to `039` `043` `044` without Owner decision.
+- Migration numbers: next free is `051`. Reserve in this order: PR1 `051`, PR2 `052`, PR4 `053` + `054`, PR5 `055` if needed, PR8/PR9 need none unless a palette token is added then `056`. Never reuse `034` to `039` `043` `044` without Owner decision.
 
 ---
 
-## 5. UI/UX beauty rules for every UI PR (PR3 and PR6 are 95% beauty flagships, creativity + React Native feel)
+## 5. UI/UX beauty rules for every UI PR (PR3, PR6, PR8, PR9 are 95% beauty flagships, creativity + React Native feel + luxurious motion)
 
-**Principle: mobile first, creativity, React Native app.** Every storefront and Pro screen must feel like a crafted React Native app on mobile, not a shrunk desktop page. Desktop is dense and editorial, but mobile leads.
+**Principle: mobile first, creativity, React Native app, luxurious motion.** Every storefront and Pro screen must feel like a crafted React Native app on mobile, not a shrunk desktop page, and now it must move. Desktop is dense and editorial, but mobile leads, motion leads.
 
-- **Mobile first creative layout:** Start at 390px, then 768px, then 1440px. Bottom tab bar persistent with 5 items + centre Kitchen Runs button, slide-up sheets with `rounded-t-[24px]` and `backdrop-blur` not full page navigations, safe-area padding `pb-[env(safe-area-inset-bottom)]`, thumb zone primary button fixed `bottom-0` above tab bar when form. Creative editorial hero with seal trust stamp, overlapping cards, category pills with icons and source line, combo spreads that breathe.
+- **Mobile first creative layout:** Start at 390px, then 768px, then 1440px. Bottom tab bar persistent with 5 items + centre Kitchen Runs button, slide-up sheets with `rounded-t-[24px]` and `backdrop-blur` not full page navigations, safe-area padding `pb-[env(safe-area-inset-bottom)]`, thumb zone primary button fixed `bottom-0` above tab bar when form. Creative editorial hero with seal trust stamp overlapping photo, category pills with icons and source line, combo spreads that breathe, generous whitespace `py-10` mobile `py-16` desktop.
 - **React Native app feel:** No full reloads for shop filter, basket, checkout steps, tab switches, content preview. Use Fetch + optimistic UI, skeleton `okv-skeleton`, success Bounce 320ms only. Sheets dismiss by swipe down or backdrop tap, backdrop `bg-ink/40 backdrop-blur-sm`, spring `cubic-bezier(0.34,1.56,0.64,1)` 300ms for sheets, Botanical 240ms for 90% else. Keyboard avoids covering primary button, inputs stay visible `scrollIntoView`. Haptics suggested by Bounce, not vibration.
-- **Creativity and illustration:** Bespoke single-stroke leaf, basket, shield, card, phone line illustrations at 24px and 80px for empty/error. Inventive use of forest header, foliage accents, gold as ring/border/divider never fill, tomato only for live alert. Checkout payment cards with card/bank/USSD icons, not text list. Category cards with subtle image zoom on tap, not hover only.
-- **Lesser text, more illustration:** Headings 3 to 5 words, body one short line, help in `?` sheet not paragraph. Prices, weights, dates always numerals with units. Empty, error, maintenance and success states are illustration 80px + heading + one line + two buttons, never paragraph.
-- **Buttons:** Primary forest `#0a3a2d` with white label and 16px icon, `min-h-[44px] px-6 rounded-xl font-medium`. Secondary `okv-btn-outline`. Never gold fill. One primary per view, secondary beside it. On mobile primary is full width, `w-full`. Buttons have icon + label, not label only.
+- **Creativity, illustration, luxury:** Bespoke single-stroke leaf, basket, shield, card, phone line illustrations at 24px and 80px for empty/error. Inventive daring use of full palette: forest header, foliage and clay soft tints behind cards, gold as ring/border/divider never fill, tomato only for live pulses, mist for subtle backgrounds, ink tints for overlays. DM Serif Display 44px mobile 60px desktop for hero only, tracking tight, gold hairline `w-12 h-[2px]`, subtle paper grain 4% opacity. Checkout payment cards with card/bank/USSD icons, not text list. Category cards with subtle image zoom on tap, not hover only. Luxurious is whitespace + restraint + gold hairlines, not heavy texture.
+- **Lesser text, more illustration:** Headings 3 to 5 words, body one short line, help in `?` sheet not paragraph. Prices, weights, dates always numerals with units. Empty, error, maintenance and success states are illustration 80px + heading + one line + two buttons, never paragraph. FAQ 7 words max, answers 2 lines with disclosure.
+- **Buttons:** Primary forest `#0a3a2d` with white label and 16px icon, `min-h-[44px] px-6 rounded-xl font-medium`. Secondary `okv-btn-outline`. Never gold fill. One primary per view, secondary beside it. On mobile primary is full width, `w-full`. Buttons have icon + label, not label only. Hero CTA 56px with arrow and `shadow-forest/20`.
 - **Cards:** `okv-panel` flat bordered `border-ink-10` on white, `okv-panel-head` with eyebrow + title and 16px icon. Tables `okv-table` hairline, mono `font-mono` for money. Badges colour never the only signal, always with label.
-- **Feedback:** Skeleton while loading, inline `okv-note-bad` not toast, success uses Market Bounce, error shakes subtly not flash. Search is live debounced 300ms with skeleton.
-- **Focus and motion:** Gold `ring-gold` 2px offset never suppressed, `focus:outline-none` forbidden. `prefers-reduced-motion` collapses motion to `10ms`. 44px minimum on every touch target, verified at 390px.
-- **Spacing and voice:** Tokens only, no arbitrary `15px`. Colours from `tailwind.config.js`. Relational plain British Nigerian English, no enterprise jargon, no em dash. Specificity beats sophistication, like a grocer speaking.
+- **Feedback:** Skeleton while loading, inline `okv-note-bad` not toast, success uses Market Bounce `elastic.out`, error shakes `x -4 4` 2x `power2.inOut` 300ms. Search is live debounced 300ms with skeleton.
+- **Focus and motion, now full motion:** Gold `ring-gold` 2px offset never suppressed, `focus:outline-none` forbidden. **We no longer collapse to `prefers-reduced-motion 10ms`.** Client wants interesting, out of ordinary. Full scroll entrances, staggered grids, hero parallax, page transitions via `OkvMotion` + GSAP `power2.out` `expo.out` `elastic.out` `back.out` + `ScrollTrigger`. 44px minimum on every touch target, verified at 390px. Motion uses `transform` and `opacity` only, 400 to 650ms generous, 60fps.
+- **Spacing and voice:** Tokens only, no arbitrary `15px`. Colours from `tailwind.config.js` forest/gold/tomato/foliage/clay/ink/mist, no arbitrary hex. Relational plain British Nigerian English, no enterprise jargon, no em dash. Specificity beats sophistication, like a grocer speaking. Brand black is forest `#0F5132` hover `#0a3a2d`, correct as coded.
 
 ---
 
@@ -291,7 +351,7 @@ Each prompt is complete. Paste the whole block, including code fences, as your f
 ```text
 You are on branch arena/01a0bd1c-okveggies for praxisjbs/Okveggies.
 Read docs/REMAINING_27_FIXES_8PR_PLAN.md Section 0 to 3 PR0.
-You are PR0 Foundation. Create and commit docs/REMAINING_27_FIXES_8PR_PLAN.md as written, with the 27 audit fixes, 8 PR split, parallel map, and Section 7 progress ledger.
+You are PR0 Foundation. Create and commit docs/REMAINING_27_FIXES_8PR_PLAN.md as written, with the 31 audit fixes, 10 PR split, parallel map, and Section 7 progress ledger. PR0 now also carries luxurious motion and full palette rules, no prefers-reduced-motion collapse, and Section 12 design system appendix.
 Quality gates: brand-check.sh 8/8 green, git diff --check clean, no em dash, British spelling, no gold fill. Coverage 100% on docs, confidence 95%+.
 Then push to arena/01a0bd1c-okveggies and open a PR to main with gh. Mark Section 7 PR0 row complete in the same commit after the PR opens.
 ```
@@ -339,17 +399,33 @@ Build PR5: fixes 8,9,10,11,12,24,25. Build app-level maintenance setting with Ow
 ### Prompt for PR6
 ```text
 You are on a fresh branch from main, after PR3 and PR4.
-Read docs/REMAINING_27_FIXES_8PR_PLAN.md PR6 Performance and Accessibility Beauty Pass.
+Read docs/REMAINING_27_FIXES_8PR_PLAN.md PR6 Performance, Accessibility and Attention Span.
 Also read index.php hero, shop.php, product.php, ContentImages.php, docs/M13 contract 8 and 7.2, assets.
-Build PR6: fixes 2,6,7 with 95% beauty. Optimise hero as responsive WebP 640/960/1280 with explicit dimensions, fetchpriority high for hero only, lazy others, bring 24 catalogue JPEGs under 2MB initial transfer with lazy+dimensions. Close 3,780ms breach to FCP <=3.0s LCP <=4.0s CLS <=0.1 on frozen profile. Add axe-core Playwright gate over public/customer/Pro/admin/FAQ/checkout/trail/Make It Right/content, 0 critical/serious, record NVDA/VoiceOver checklists. Beautiful illustrative empty states with 2 buttons, skeleton loaders, gold focus, reduced-motion. Tests: homepage_visual_test.mjs throttled 390/1440, visual_pass.mjs, new axe suite, brand-check green, lighthouse trace. Update Section 7 PR6 row to complete 100% coverage, confidence >=95%, beauty 95%. Commit, push, open PR.
+Build PR6: fixes 2,6,7,29 with 95% beauty and full motion. Optimise hero as responsive WebP 640/960/1280 with explicit dimensions, fetchpriority high for hero only, lazy others, bring 24 catalogue JPEGs under 2MB initial transfer with lazy+dimensions. Close 3,780ms breach to FCP <=3.0s LCP <=4.0s CLS <=0.1 on frozen profile. Add axe-core Playwright gate over public/customer/Pro/admin/FAQ/checkout/trail/Make It Right/content, 0 critical/serious, record NVDA/VoiceOver checklists. Beautiful illustrative empty states with 2 buttons, skeleton loaders, gold focus, FULL motion not reduced-motion. Also fix 29 global attention span: every verbose page becomes scannable cards with icons and disclosure, average under 40 words per viewport at 390px. Tests: homepage_visual_test.mjs throttled 390/1440, visual_pass.mjs, new axe suite, brand-check green, lighthouse trace. Update Section 7 PR6 row to complete 100% coverage, confidence >=95%, beauty 95%. Commit, push, open PR.
 ```
 
-### Prompt for PR7
+### Prompt for PR8 Motion System
 ```text
-You are on a fresh branch from main, after PR1 to PR6 have merged.
+You are on a fresh branch from main, after PR6 has merged, for praxisjbs/Okveggies.
+Read docs/REMAINING_27_FIXES_8PR_PLAN.md PR8 Motion System.
+Also read tailwind.config.js, assets/css/src/input.css, docs/BRAND_BIBLE.md motion tokens, and Section 12 design appendix.
+Build PR8: fix 30 full motion. Add assets/js/okv-motion.js with GSAP 3.12 + ScrollTrigger via CDN defer self-hosted under assets/js/vendor/ with integrity, 12kb gz, no npm step. Init OkvMotion.init() owns hero stamp back.out(1.2), heading words y 24 power2.out 40ms stagger, scroll y 20 opacity power2.out 500ms stagger 60ms on okv-panel and cards, grid stagger 60ms, sheet y 100% expo.out 450ms, btn scale 0.98, error shake, success elastic.out, parallax scrub 8% on hero. No width/height anim, transform opacity only, will-change cleared. Every route moves, 60fps 4x throttle, CLS <=0.1, prefers-reduced-motion NOT collapsing per 20 Sep decision. Tests: visual video 390/1440, axe 0 critical, brand-check 8/8. Update Section 7 PR8 row 100% coverage confidence >=95% beauty 95%. Commit, push, open PR.
+```
+
+### Prompt for PR9 Luxurious Daring Palette
+```text
+You are on a fresh branch from main, after PR6 and ideally PR8, for praxisjbs/Okveggies.
+Read docs/REMAINING_27_FIXES_8PR_PLAN.md PR9 Luxurious Daring Hero and Full Palette.
+Also read tailwind.config.js palette, docs/BRAND_BIBLE.md, index.php hero, header/footer, shop/product/combo templates.
+Build PR9: fix 31 daring luxury. Make hero editorial overlap: photo 55% right object-cover, foliage/clay to mist wash behind text left, DM Serif 44px mobile 60px desktop tracking tight, gold 48x2 rule, seal overlapping photo rotate-3 shadow, category pills 44px with icons source line, CTA 56px forest shadow. Whitespace py-10 to py-16. Spread palette: cards foliage/10 clay/10 tints, trust mist + gold/15 ring, How It Works steps different washes, footer gold hairline, clock gold dot live. Add paper grain 5kb 4% multiply if used. AA contrast 4.5:1, no bg-gold fill, no arbitrary hex, brand black stays forest #0F5132 hover #0a3a2d. Tests: hero 390/1440 screenshots premium with and without JS, axe 0 critical, brand 8/8, grep palette spread. Update Section 7 PR9 row 100% coverage confidence >=95% beauty 95%. Commit, push, open PR.
+```
+
+### Prompt for PR7 Release Gate (last)
+```text
+You are on a fresh branch from main, after PR1 to PR6 plus PR8 PR9 have merged.
 Read docs/REMAINING_27_FIXES_8PR_PLAN.md PR7 Release Gate and Privacy Handover.
 Also read scripts/tests/release_gate.sh, lib/scratch_guard.php, fixture_orphans.php, docs/M13 contract Section 17, PROGRESS.md M13.
-Build PR7: fixes 4,5,26,27 final proof. Freeze one SHA, prove fresh MySQL 8 migration twice 0 pending, run full gate from clean env with php -l 311, node --check, brand 8/8, unit 3374+, every DB/HTTP by glob 0 failed 0 skipped, browser 390/1440, verify.sh, fixture_orphans LEFT JOIN + ZZ. Capture cPanel backup off-host checksums + timed restore drill reading representative records and private photo. Store versioned rollback artifact off-host, rehearse on staging. One low-value live Paystack transaction reconciled, SMTP SPF/DKIM/DMARC with 2 inbox placements. Make repo private only after collaborator/Actions audit + Owner approval + deploy retest. Tick PROGRESS.md M13 boxes only here against frozen SHA evidence. Write docs/M13_REVIEW final. Update Section 7 PR7 row to complete 100% coverage, confidence >=95%. Commit, push, open PR.
+Build PR7: fixes 4,5,26,27 final proof. Freeze one SHA, prove fresh MySQL 8 migration twice 0 pending, run full gate from clean env with php -l 311, node --check, brand 8/8, unit 3374+, every DB/HTTP by glob 0 failed 0 skipped, browser 390/1440, verify.sh against live, fixture_orphans LEFT JOIN + ZZ. Capture cPanel backup off-host checksums + timed restore drill reading representative records and private photo. Store versioned rollback artifact off-host, rehearse on live maintenance window. One low-value live Paystack transaction reconciled, SMTP SPF/DKIM/DMARC with 2 inbox placements. Make repo private only after collaborator/Actions audit + Owner approval + deploy retest. Tick PROGRESS.md M13 boxes only here against frozen SHA evidence. Write docs/M13_REVIEW final. Update Section 7 PR7 row to complete 100% coverage, confidence >=95%. Commit, push, open PR.
 ```
 
 ---
@@ -360,15 +436,17 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 
 | PR | Title | Fixes | Status | Coverage | Confidence | Beauty | Merged SHA | Date |
 |----|-------|-------|--------|----------|------------|--------|------------|------|
-| PR0 | Foundation and plan | - | [x] Done `a936d8e` PR #54 open | 100% docs | 98% | - | `a936d8e` | 20 Sep 2026 |
+| PR0 | Foundation and plan | - | [x] Done `a936d8e` PR #54 open, now 31 fixes | 100% docs | 98% | - | `a936d8e` | 20 Sep 2026 |
 | PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [ ] Not started | - | - | 95% | - | - |
 | PR2 | Operational Messaging + Kitchen Runs Native | 15,16,21,22,23,28 | [ ] Not started | - | - | 95% | - | - |
 | PR3 | Checkout Beauty and Trust | 13 | [ ] Not started | - | - | 95% | - | - |
 | PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Not started | - | - | 95% | - | - |
 | PR5 | Infrastructure Hardening - Live Direct | 8,9,10,11,12,24,25 | [ ] Not started | - | - | 95% maint page | - | - |
 | PR6 | Performance, A11y and Attention Span | 2,6,7,29 | [ ] Not started | - | - | 95% | - | - |
-| PR7 | Release Gate and Privacy Handover | 4,5,26,27 | [ ] Not started | - | - | - | - | - |
-| **Total** | **29 fixes** | **1 to 29** | **0 of 7 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
+| PR8 | Motion System - Make It Move | 30 | [ ] Not started | - | - | 95% | - | - |
+| PR9 | Luxurious Daring Hero + Full Palette | 31 | [ ] Not started | - | - | 95% | - | - |
+| PR7 | Release Gate and Privacy Handover (last) | 4,5,26,27 | [ ] Not started | - | - | - | - | - |
+| **Total** | **31 fixes** | **1 to 31** | **0 of 9 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
 
 **How to update:** After green, change `[ ]` to `[x] Done`, fill coverage `100%`, confidence `97%` etc., beauty `96%`, SHA `abc1234`, date. Keep row honest, never mark green with failing suite.
 
@@ -501,36 +579,75 @@ Remove `SETUP_TOKEN` line from production `.env` and delete `public/setup.php` r
 
 ---
 
-## 9. Parallel plan summary for the manager - direct live, no staging to block you
+## 9. Parallel plan summary for the manager - direct live, luxurious motion, no staging to block you
 
 - **Can run in parallel immediately after PR0:** PR1, PR2, PR3, PR5. Four teams can start at once. PR2 now includes Kitchen Runs native redesign (fix 28) so it needs design assets, but still independent of PR3 checkout.
 - **Needs PR1 migration slot:** PR4 after PR1 decides `051`. Can start early on branch, but cannot merge until PR1 number is free.
-- **Needs PR3 and PR1/PR4:** PR6 after PR3 tokens and PR4 publishable photo fields, and now carries the global attention span pass fix 29. Can prep early, final perf run needs hero.
-- **Must be last:** PR7 after PR1 to PR6, it freezes SHA and proves gate + privacy on live. No staging host to create, so PR5 infra is about live hardening only, which unblocks the rest faster.
+- **Needs PR3 and PR1/PR4:** PR6 after PR3 tokens and PR4 publishable photo fields, and now carries the global attention span pass fix 29 plus full motion prep. Can prep early, final perf run needs hero.
+- **Needs PR6:** PR8 Motion and PR9 Palette after PR6. They are independent of each other, can run in parallel after PR6 or sequentially. PR9 palette is more design heavy daring hero, PR8 is GSAP plumbing and page hooks. Both before gate.
+- **Must be last:** PR7 after PR1 to PR6 plus PR8 PR9, it freezes SHA and proves gate + privacy on live. Despite being numbered 7 it merges last. No staging host to create, so PR5 infra is about live hardening only, which unblocks the rest faster.
 - **Direct live advantage:** No staging host means PR5 no longer blocks on cPanel addon creation. Every PR deploys straight to live after review, with backup + maintenance + `verify.sh` 403 proof on live.
 
-**Fastest realistic path:** PR0 Day 0, PR1+PR2+PR3+PR5 in parallel Day 1 to 3, PR4 Day 3 to 4, PR6 Day 4 to 6, PR7 Day 7 to 8. Legal copy and photo are longest lead, so owner dispatch on Day 0 matters most.
+**Fastest realistic path:** PR0 Day 0, PR1+PR2+PR3+PR5 in parallel Day 1 to 3, PR4 Day 3 to 4, PR6 Day 4 to 6, PR8+PR9 in parallel Day 6 to 7, PR7 Day 8 to 9. Legal copy and photo are longest lead, so owner dispatch on Day 0 matters most. Motion and luxury are crafted Day 6 to 7 when perf is green.
 
 ---
 
 ## 10. What good looks like on completion
 
-After PR7, `PROGRESS.md` M12 `[ ] Home` becomes `[x]` with published photo, `[~] Our Story ...` becomes `[x]` with 3 legal pages published and attested, M13 `[ ]` boxes become `[x]` with frozen SHA evidence, repo visibility is `private` after owner approval, staging proves every gate, production smoke is `200` and `verify.sh` is `29/29` on live, and Section 7 above shows `7/7` complete, `100%` coverage, `>=95%` confidence on every row.
+After PR7, `PROGRESS.md` M12 `[ ] Home` becomes `[x]` with published photo, `[~] Our Story ...` becomes `[x]` with 3 legal pages published and attested, M13 `[ ]` boxes become `[x]` with frozen SHA evidence, repo visibility is `private` after owner approval, live proves every gate with `verify.sh 31/31` on `https://okveggies.com.ng`, production smoke is `200`, motion is live on every route with scroll entrances and hero parallax, hero is editorial daring with seal overlap and full palette foliage/clay/gold/mist/forest, Section 7 above shows `9/9` PRs complete plus PR0, `100%` coverage on 31 fixes, `>=95%` confidence and `>=95%` beauty on every UI PR.
 
 ---
 
 ## 11. PR0 deliverable checklist
 
-- [x] This document exists in `docs/REMAINING_27_FIXES_8PR_PLAN.md` with 27 fixes mapped to 8 PRs, no shipped file edited outside scope
+- [x] This document exists in `docs/REMAINING_27_FIXES_8PR_PLAN.md` with 31 fixes mapped to 10 PRs, no shipped file edited outside scope
 - [ ] `PROGRESS.md` Current focus notes this plan and its branch
 - [ ] `brand-check.sh` 8/8 green, `git diff --check` clean, no em dash, British spelling, no `bg-gold` fill
 - [x] Cron and env section 8 complete and copy-paste ready
-- [x] Prompts in Section 6 are complete and paste-ready for a new chat
-- [x] Parallel map and merge order in Section 4 are unambiguous
+- [x] Prompts in Section 6 are complete and paste-ready for a new chat, including PR8 Motion and PR9 Palette
+- [x] Parallel map and merge order in Section 4 are unambiguous, PR8/PR9 before PR7
+- [x] Motion now full, no prefers-reduced-motion collapse, palette daring hero specced, Section 12 appendix added
 - [ ] PR opened from `arena/01a0bd1c-okveggies` to `main` via `gh`
 
 PR0 confidence: 98% docs only, no migration, no runtime change. Coverage: 100% on planning. Next step is PR1.
 
 ---
 
-*PR0 Foundation. 20 September 2026. For Kumbish Emmanuel Putleh and JBS Praxis. Verified against `a47a319` and `b2f1f43`. Private at handover, not before.*
+## 12. Design system appendix - ui-ux-pro-max skill + 21st.dev, and best option versus MCP
+
+Added 20 Sep after client asked for motions and for an opinion on borrow vs MCP.
+
+### 12.1 What the screenshot showed
+`image-1.png` shows `21st.dev` CLI and MCP page with three tabs: `Muse` `Codex` `Cursor`. Commands listed: `claude mcp add --transport http 21st https://21st.dev/api/mcp --header "x-api-key: 21st_sk_..."`, `npx @21st-dev/cli init --client claude --write`, `/plugin marketplace add 21st-dev/claude-code-plugin`. That installs either MCP HTTP server or CLI that fetches components to your repo. Both give you searchable shadcn-style blocks and Tailwind components.
+
+### 12.2 What ui-ux-pro-max skill gives
+`https://github.com/nextlevelbuilder/ui-ux-pro-max-skill` main at `de5f12b` 19 Sep 2026. 129k stars. Contents: `79 UI styles (50 active)`, `192 product palettes`, `74 font pairings`, `119 UX guidelines`, `105 line icons`, `17 GSAP motion presets`, searchable via `python <skill>/scripts/search.py "<query>" --domain style/product/typography/color/ux/gsap/chart`. Skill file `.agent/skills/ui-ux-pro-max/SKILL.md` defines priority 1 Accessibility through 10, query contract, search domains `style/product/typography/color/ux/gsap/chart`. For OK Veggies we borrow `GSAP` presets and `product` palette ideas, not a full rewrite.
+
+### 12.3 Best option for this PHP/Tailwind project
+**Use both as reference, install neither as runtime MCP in CI.**
+
+*Why not MCP:* MCP is an IDE connector for Claude Code/Cursor. This repo is PHP 8, Tailwind CDN, vanilla JS, cPanel SFTP deploy, no Node dev server. Adding a long-lived MCP server adds API keys in local config, token spend per query, and no value in production build. `21st.dev` components are fetched at build time via CLI or copied by hand, not served live. Same for ui-ux-pro-max: its `search.py` is a local Python script you run once to pick a style, not a live service.
+
+*What we actually do:*
+- **ui-ux-pro-max as style guide:** Run `python /path/to/skill/scripts/search.py "luxury editorial food market" --domain style` and `--domain gsap` to pick a primary style like `Editorial Luxury` or `Organic Market`, and GSAP presets `gentle rise` `stagger reveal` `parallax wash` `elastic pop`. Document the chosen style and 3 presets in PR8/9 commits. Copy easing names and duration guidance, not a full dependency.
+- **21st.dev as component clipboard:** Use `npx @21st-dev/cli@latest add <component>` or browse `21st.dev` to copy a single `hero editorial` or `pricing cards with icons` or `sheet with backdrop` Tailwind block, then adapt to PHP includes and existing tokens. No `node_modules`, no `shadcn`. Keep forest/gold etc. via `tailwind.config.js`. If a component uses `framer-motion`, replace with our `okv-motion.js` GSAP.
+- **Keep it cheap and auditable:** Both tools are used at design time to pick and copy, not as runtime dependencies. That way `brand-check.sh` and `verify.sh` still pass, no API keys in repo, no lock-in. If the team later wants MCP in Claude Code locally, they can run the screenshot command by hand in their own IDE, it does not affect CI/deploy.
+
+### 12.4 How PR8 and PR9 borrow concretely
+- **PR8 Motion:** Uses `ui-ux-pro-max` 17 GSAP presets catalog: `fadeUp power2.out 0.5 stagger 60`, `scaleIn back.out(1.2)`, `slideUp expo.out 0.45`, `elastic pop`, `parallax scrub`, `draw line scaleX expo.out`. Implemented in `okv-motion.js` with vanilla `gsap` + `ScrollTrigger` CDN, no `gsap` npm package. `@21st.dev` `sheet` and `page transition` patterns inform sheet `y 100% -> 0` and `opacity` cross-fade, but implemented vanilla.
+- **PR9 Palette:** Uses `tailwind.config.js` already coded palette plus `Bible` tints. Picks a `product` palette from skill that matches food editorial: `forest + clay + foliage + mist + brass gold` as already specced, not a new 192-palette import. `@21st.dev` `hero editorial` and `bento` card patterns inform overlapping layout and `foil` wash, adapted to our PHP.
+
+### 12.5 If you do want the MCP locally (optional)
+One time on your machine, not in CI, choose one:
+
+*Muse:* `claude mcp add --transport http 21st https://21st.dev/api/mcp --header "x-api-key: YOUR_21st_sk_..."` then restart Claude.
+
+*Codex or Cursor:* `npx @21st-dev/cli init --client codex --write` or `--client cursor` replaces `mcp.json`.
+
+For ui-ux-pro-max skill local: `git clone https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git /tmp/ui-ux-pro-max-skill` then `python /tmp/ui-ux-pro-max-skill/.claude/skills/ui-ux-pro-max/scripts/search.py "editorial luxury hero" --domain gsap`.
+
+Neither is required to ship PR8/PR9. Document choice in PR message.
+
+---
+
+*PR0 Foundation. 20 September 2026. For Kumbish Emmanuel Putleh and JBS Praxis. Verified against `a47a319` and `b2f1f43`. 31 fixes, 10 PRs, luxurious motion, no reduced-motion collapse, direct live. Private at handover, not before.*
