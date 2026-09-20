@@ -60,17 +60,13 @@ echo
 echo "[tests] 2. Database suites (MySQL 8 from .env)"
 db_probe="$(php -r 'require "includes/bootstrap.php"; Database::one("SELECT 1"); fwrite(STDOUT, "OKV_DB_READY");' 2>/dev/null)"
 if [ "$db_probe" = "OKV_DB_READY" ]; then
-  for suite in \
-    admin_dashboard_db_test admin_notifications_db_test customer_notifications_db_test auth_db_test basket_db_test cancellation_db_test checkout_db_test combos_db_test \
-    contact_db_test contact_admin_db_test content_pages_db_test \
-    credit_admin_db_test credit_customer_db_test credit_orders_db_test \
-    customer_auth_db_test customers_db_test delivery_db_test kitchen_lists_db_test \
-    issue_reports_db_test issue_workflow_db_test issue_resolutions_db_test issue_customer_outcome_db_test issue_notifications_db_test \
-    kitchen_runs_db_test manifest_db_test manual_operations_db_test notifications_db_test order_lifecycle_db_test \
-    payments_db_test pricing_db_test pro_dashboard_db_test pro_orders_db_test \
-    reference_seed_db_test settings_db_test staff_password_reset_db_test
-  do
-    run "$suite" php "scripts/tests/$suite.php"
+  # Every suite on disk, by glob - the same rule the release gate runs by, so
+  # a suite added to scripts/tests cannot quietly exist in no runner.
+  for suite_file in scripts/tests/*_db_test.php; do
+    suite="$(basename "$suite_file" .php)"
+    # Needs the stand-in payment gateway; it gets its own pass below.
+    [ "$suite" = "refund_cancellation_db_test" ] && continue
+    run "$suite" php "$suite_file"
   done
 
   if curl -fsS -o /dev/null --max-time 3 "$GATEWAY/refund" -d '{}' 2>/dev/null; then
@@ -85,15 +81,8 @@ fi
 echo
 echo "[tests] 3. HTTP suites (the site answering on $BASE)"
 if curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
-  for suite in \
-    admin_dashboard_http_test admin_notifications_http_test customer_notifications_http_test cancellation_http_test contact_http_test contact_admin_http_test content_admin_http_test public_content_http_test m12_storefront_access_http_test sitemap_http_test homepage_http_test \
-    credit_checkout_http_test customer_http_test delivery_http_test \
-    issue_reports_http_test issue_photos_http_test issue_workflow_http_test issue_resolutions_http_test \
-    product_uploads_http_test smtp_delivery_http_test \
-    kitchen_runs_http_test manual_operations_http_test order_lifecycle_http_test order_trail_http_test \
-    role_leak_matrix_http_test settings_http_test
-  do
-    run "$suite" php "scripts/tests/$suite.php"
+  for suite_file in scripts/tests/*_http_test.php; do
+    run "$(basename "$suite_file" .php)" php "$suite_file"
   done
 else
   skip "all HTTP suites" "nothing answering on $BASE"

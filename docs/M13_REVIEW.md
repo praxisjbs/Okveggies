@@ -11,13 +11,16 @@ text is kept word for word below (inter-section rules dropped, two bracketed
 
 **Frozen SHA:** `720625b47f5e10ace8289cbaff674bb1168630ce` (tip of `main` when
 the PR7 branch was cut, 20 September 2026 15:17 UTC). Every number in this part
-names that SHA. `main` moved twice while this pack was being built, to `02645aa`
-(PR 63, PR1 audit follow-ups) and `d8e3c65` (PR 64, catalogue graceful
-degradation); the unit gate was re-run at `d8e3c65` in a throwaway worktree and
-fails identically (3,425/3,426, the same single assertion), and every deploy
-since `d8e3c65` still fails at the same step. Nothing this pack certifies
-changed with those two merges.
-**Date of run:** 20 September 2026.
+names that SHA. `main` moved three times while this pack was being built: to
+`02645aa` (PR 63, PR1 audit follow-ups), `d8e3c65` (PR 64, catalogue graceful
+degradation), and finally `766c0df` (PR #65, "Restore production deploys" plus
+the Owner's letterhead decision). The first two changed nothing this pack
+certifies. The third closed this part's blockers B1 and B2 as written, so a
+post-PR audit round re-ran the whole battery on `766c0df` merged into this
+branch; its raw output is evidence file `15-audit-round-766c0df.log` and every
+"now" statement below reflects it. Where a sentence describes the frozen SHA as
+red, that remains true of `720625b47f`; it is no longer true of `main`.
+**Date of run:** 20 September 2026; audit round the same day, after 16:19 UTC.
 **Machine and honesty note:** the gate ran on a Linux box with no PHP, no MySQL
 and no Chromium. PHP 8.3.33 (production's pinned minor) was installed from the
 npm registry as `@php-wasm/node` behind a `php` shim; the ten extensions the
@@ -33,10 +36,13 @@ are recorded as NOT RUN. Raw output: `docs/evidence/720625b47f/`.
 
 ## 1. Verdict
 
-**The release gate is red on every candidate, and production's deploy path is
-broken. PR7 opens the evidence; it does not certify a release.**
+**At the frozen SHA the release gate was red on every candidate and production's
+deploy path was broken. The audit round closed both code blockers upstream, but
+the gate still has not completed anywhere, so PR7 still does not certify a
+release.**
 
-Three findings, in the order that matters:
+Three findings, in the order that mattered at freeze time, with their state
+after the audit round:
 
 **B1. Live deploys have been failing since 2026-09-20 09:33 UTC, and the cause
 is a violated migration law.** The merge of PR 57 (PR1) edited
@@ -53,6 +59,13 @@ live, today. Full forensic chain, checksums and the three weighed remedies
 (recommended: a corrective PR that restores 003's shipped bytes and lets 051,
 which already carries the decision idempotently, do its job): evidence file
 `11-migration-drift-forensics.log`.
+**RESOLVED by PR #65 (`8ae07c5`, merged to `main` as `766c0df`, 16:19 UTC).**
+The remedy merged is exactly the recommended R1: 003 is byte-for-byte back at
+its applied state (re-hashed against the `f527ff4` era in the audit round,
+evidence `15`, section 0), no new migration file, 051 carries the Monday
+decision idempotently. Deploy run `35522368135` on `766c0df` is green through
+every step, including "Apply migrations on the server", so production received
+051 to 054 and the nine-run failure chain is closed at 16:19:51 UTC.
 
 **B2. The unit gate fails on `main`, both frozen and current.** `DocumentTest`
 asserts the printed documents carry the single-ink mono-green lockup (Brand
@@ -64,6 +77,16 @@ the assertion, so CI is red at `720625b47f`, at `02645aa` and at `d8e3c65`
 not features: it was NOT applied here, and until a candidate passes
 `php scripts/tests/run.php` no SHA can be frozen green. Evidence `06` and
 `06b`.
+**RESOLVED by the Owner's call, not by the one-line fix proposed here.**
+`48d669b` (inside PR #65) pins the full-colour lockup as the letterhead mark:
+`DocumentTest` now asserts `lockup.svg`, and `brand-check.sh`'s note records the
+"logo harmony" decision. That is the opposite direction from this review's
+suggestion, and it is the Owner's to take; the brand bible comment in
+`brand-check.sh` was amended in the same PR. Two stale doc-comments still named
+the mono-green mark (`includes/components/documents/document.php:22`,
+`public/documents/invoice.php:16`); the PR66 branch corrected those two comment
+blocks, text only, no behaviour. Unit at the merged tree: 3,426/3,426 green
+(evidence `15`, section 4; CI on `766c0df` green independently).
 
 **B3. The prompt's premise "PR1 to PR6 plus PR8 PR9 have merged" is not the
 repo's state.** Merged to `main`: PR0 54, PR2 55, PR3 56, PR1 57, PR4 59, PR6
@@ -79,6 +102,15 @@ evidence is possible while deploys fail (fix 12); PR7's live `verify.sh`
 re-proof is unreachable until B1 is gone (fix 25). PR7's own acceptance items
 therefore have a hard dependency the plan's merge order already states and the
 repo has not honoured: "PR7 last, after all".
+**Audit round, unchanged in substance:** PR #65 touched migrations, brand tests
+and delivery code, not the gaps above. At `766c0df` there is still no
+maintenance state in `includes/bootstrap.php`, `ci.yml` still runs the four
+static jobs only, and `total_count: 0` environments. Two of the consequences
+loosened: the deploy pipeline now reaches its own "Verify the deployed site"
+step and passes it (run `35522368135`), which is the fix 25 live evidence
+line, and fix 26's "deploy tested" precondition is met. Fix 12's cron proof and
+fix 11's rehearsal stay blocked behind PR5, and fix 24's CI-as-gate remains
+unmerged, so the MySQL 8 gate sections have no host anywhere, not even CI.
 
 ## 2. Gate results, section by section, on 720625b47f
 
@@ -113,6 +145,22 @@ fresh-migration twice, 36 DB suites, 26 HTTP suites, both fixture-orphan sweeps,
 all seven browser passes, `verify.sh` local and live. "0 failed, 0 skipped" has
 not been achieved for this SHA, so it is not claimed.
 
+### 2b. Audit round: the same battery on the merged tree
+
+The table above stays valid for `720625b47f`. PR #65 having closed B1 and B2,
+the battery was re-run with `766c0df` merged into this branch; raw output is
+evidence `15`. Result: unit suite 3,426/3,426 GREEN (the unit-floor line reads
+3,426 over the 3,374 floor); `php -l` 321/321; shell syntax `bash -n` over both
+edited runners clean; brand guard green under the Owner's full-colour call; the
+three static node guards 52 + 128 + 98 (lesser text grew by two assertions in
+PR #65); guard matrix, all 8 `.env` shapes, refuse-or-admit exactly as designed
+(5 refusals at exit 2, 3 admissions); gate preflight refuses a production `.env`
+by name ("APP_ENV=production ... DB_NAME is 'okveggies' ... Nothing was run and
+nothing was written", exit 2) and an absent `.env` likewise; the unit floor's
+empty-output case still refuses; and the fresh-MySQL probe still finds no
+`mysqld` on this box, so sections 1, 3, 4, 5, 7, 8 and 9 remain NOT RUN, here
+and everywhere else, unchanged by PR #65.
+
 ## 3. Performance and accessibility, before/after, on this SHA
 
 Performance (contract Section 8, budgets FCP 3.0s, LCP 4.0s, CLS 0.1, initial
@@ -141,6 +189,18 @@ on any input it cannot prove safe (20 rows of proof in this part and evidence
 `01`/`07`/`09`). The PASS line belongs to a MySQL 8 host: see the recipe in
 Section 8. Until B1 and B2 land, the honest expectation for that run is a red
 unit section, so fix 5 closes only after both blockers are fixed.
+**Audit round:** both blockers are fixed upstream, so the unit-section excuse is
+gone; what keeps fix 5 open is the absent host, and it moved closer anyway.
+`release_gate.sh` now also runs the three static node guards itself instead of
+trusting `run_all.sh`, wires `checkout_visual_test.mjs` and
+`motion_visual_test.mjs` into section 7, and carries a wiring check that fails
+the gate if any `*_test.mjs` on disk belongs to no section (self-tested: 0
+unaccounted on disk, fires on a deliberately orphaned file, evidence `15`
+section 6). `run_all.sh`'s hand-maintained database and HTTP lists are gone;
+both loop over the same globs the gate uses, refund's gateway-conditional
+handled inside the loop logic. That is the "hand-maintained list" class fixed in
+both runners at once. Sections 1, 3, 4, 5, 7, 8, 9 remain the open half, and
+until one full green run exists on some host, fix 5 stays OPEN.
 
 **Fix 27, skip tolerance removed.** Proven executed, two ways. Behaviourally:
 `run_all.sh` on this box says "5 skipped", the gate on the same box says "REFUSING
@@ -166,7 +226,9 @@ changes. The live half is the Owner's and is NOT attested yet: the five-step
 checklist (V1 query, V2 old-password refusal, V3 active-account census, V4
 setup endpoint 404, V5 the signed attestation wording) is in evidence `13`.
 M13_REVIEW's sign-off table below carries that open line; PROGRESS boxes do not
-move without it.
+move without it. **Audit round:** unchanged; the live half needs production
+phpMyAdmin/SSH access this sandbox has no substitute for, and an attestation
+cannot be manufactured by re-running the code-side proofs.
 
 **Fix 26, repository privacy.** Audit half of contract Section 15, executed and
 recorded (evidence `12`): repo public, 3 collaborators with permissions listed,
@@ -177,6 +239,15 @@ RC and a tested deploy first, and both are false while B1 and B2 are open.
 Owner steps after the blockers: name the reviewer(s), then flip in repo settings
 (and only there), then re-run `deploy.yml` once against the private repo and
 archive the run id alongside this file. That retest line is Section 9, row 7.
+**Audit round:** the deploy-tested half of Section 15's precondition is now
+met, and green on the exact current tip (run `35522368135` on `766c0df`);
+`deploy.yml` reads its SFTP credentials from Actions secrets, so a flip is
+behaviour-neutral for it provided secrets survive, which the retest proves.
+What is still not met: no RC is approved (this document's rows 1 and 6 to 9 are
+open), and no written Owner approval for the flip arrived with the audit
+request. Standing rule from the audit prompt: without that approval in writing,
+leave the repository PUBLIC and mark the gap. Gap marked; flip not performed;
+everything the flip needs is now one settings click plus one re-run.
 
 ## 5. Backup and restore, evidence state
 
@@ -231,6 +302,14 @@ the cron line proven by a fresh success timestamp and a `CRON OK` manual call.
 Every line is UNRUN today, and the earliest honest attempt is the first deploy
 after B1, because nine consecutive deploys have not reached the end of their
 own pipeline.
+**Audit round:** B1 is gone, and the first post-B1 deploy (run `35522368135`)
+already carried its own green "Verify the deployed site" step: `verify.sh`
+executed on the production host against `https://okveggies.com.ng`, protected
+paths included, and passed. That closes the deploy-internal half of the fix 25
+live re-proof. This sandbox still cannot route to the host directly, so the
+operator-side lines above (manual 200 spot-checks, reconciled Paystack charge,
+two-inbox mail proof, cron timestamp) remain UNRUN and are the remaining
+content of this checklist.
 
 ## 8. The recipe that turns rows 1 to 20 green (any MySQL 8 host, ~2 hours)
 
@@ -255,27 +334,33 @@ and one of exactly two endings:
 missing. Paste the whole output into the evidence pack under the NEW frozen SHA
 and re-name this document's Part II headers to it (a change after a freeze
 creates a new candidate, contract Section 3). Expected red until B2 is fixed:
-section 2a's floor line reads "unit (run.php) ... FAIL".
+section 2a's floor line reads "unit (run.php) ... FAIL". **Audit round:** B2 is
+fixed, so with this recipe's B2 clause deleted, the first run of this recipe on
+a MySQL 8 host that includes `766c0df` should print the floor line green
+(3,426 over 3,374) and everything that remains red is genuinely a service the
+host is missing, not a known regression.
 
 ## 9. Sign-off (blank on purpose; no box ticks below it)
 
 | # | Line | Owner | Status |
 |---|---|---|---|
-| 1 | Gate green, 0 failed 0 skipped, named SHA | engineering | BLOCKED: B2, then MySQL 8 host run |
-| 2 | B1 corrective PR (003 restored to shipped bytes, 051 carries the decision), deploy reaches `MIGRATE OK`, nine-run failure chain broken | release owner + operator | OPEN, P0 |
-| 3 | B2 letterhead one-liner back to `lockup-mono-green.svg` | engineering | OPEN, P0 |
+| 1 | Gate green, 0 failed 0 skipped, named SHA | engineering | BLOCKED on one thing only now: a MySQL 8 host run. B1/B2 closed upstream |
+| 2 | B1 corrective PR (003 restored to shipped bytes, 051 carries the decision), deploy reaches `MIGRATE OK`, nine-run failure chain broken | release owner + operator | CLOSED by PR #65: `766c0df`, deploy run `35522368135` green through "Apply migrations" and "Verify" (audit evidence `15`) |
+| 3 | B2 letterhead one-liner back to `lockup-mono-green.svg` | engineering | CLOSED differently: the Owner pinned the full-colour lockup (`48d669b`), tests followed; unit 3,426/3,426 green on `766c0df` |
 | 4 | PR5 landed (maintenance, production environment, CI-as-gate, cron live proof, protected-path live re-proof) | owner + engineering | OPEN (never merged) |
 | 5 | PR9 landed or consciously descoped (fix 31 is in the "everything ships" list) | owner | OPEN (never merged) |
 | 6 | Backup + timed restore drill with record read-backs, off-host checksums | client-side operator, engineering witnesses | OPEN |
 | 7 | Rollback artefact stored off-host and rehearsed with a maintenance window (needs line 4) | named operator | OPEN |
-| 8 | Live smoke: 200s, one reconciled live Paystack charge, SPF/DKIM/DMARC into 2 inboxes, cron timestamp | operator | OPEN, after line 2 |
+| 8 | Live smoke: 200s, one reconciled live Paystack charge, SPF/DKIM/DMARC into 2 inboxes, cron timestamp | operator | OPEN and now attemptable (line 2 closed; deploy-internal `verify.sh` already green) |
 | 9 | Fix 4 attestation, V1 to V5 signed | Kumbish Emmanuel Putleh | OPEN |
-| 10 | Repository flipped private, deploy retested private | Owner approval, then operator | OPEN, Section 15 order |
+| 10 | Repository flipped private, deploy retested private | Owner approval, then operator | OPEN, Section 15 order. Deploy-tested precondition met at `766c0df` (run `35522368135`); the Owner's WRITTEN approval is the only thing still missing, so the repo stays public and the gap is marked |
 | 11 | Technical release owner and production operator NAMED (contract 5.2/19) | owner | OPEN, blocks lines 2, 7, 8, 10 |
 
 No M13 `PROGRESS.md` box is ticked by this document, and none may be until
-lines 1 to 11 carry their named evidence. The plan's Section 7 ledger PR7 row
-says the same, in shorter words.
+lines 1 to 11 carry their named evidence. Lines 2 and 3 now do, closed by
+PR #65; that is not enough, because line 1 still fails and the discipline for
+this milestone is that no box moves while the gate has a red or unexecuted
+section. The plan's Section 7 ledger PR7 row says the same, in shorter words.
 
 ---
 

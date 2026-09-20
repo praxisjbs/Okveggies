@@ -688,19 +688,21 @@ The task entries below are rewritten from what was actually executed on 9 Septem
 
 The suites exist and are reviewed, twice. On 20 September 2026 the release gate
 was executed against frozen SHA `720625b47f`: every static section ran green on
-a real PHP 8.3.33, the unit section is RED on one letterhead assertion (PR 62's
-regression, B2), and the database, HTTP and browser sections still have never
-run on any machine, because no machine that has worked on this milestone could
-obtain a MySQL 8 server (the attempt and its refusal output are recorded, not
-papered over). No box below is ticked; the rule holds that a run that did not
-happen is not a pass and a run that went red is not green. See
-`docs/M13_REVIEW.md` Part II, `docs/M13_SUITE_MATRIX.md` and
-`docs/evidence/720625b47f/`.
+a real PHP 8.3.33, the unit section was RED on one letterhead assertion. The
+post-PR audit round then merged `766c0df` (PR #65), which closed both code
+blockers upstream: production deploys are green end to end (run
+`35522368135`), and the unit section is 3,426/3,426 green on the merged tree.
+What has still never run on any machine are the database, HTTP and browser
+sections, because no machine that has worked on this milestone could obtain a
+MySQL 8 server (the attempt and its refusal output are recorded, not papered
+over). No box below is ticked; the rule holds that a run that did not happen is
+not a pass. See `docs/M13_REVIEW.md` Part II, `docs/M13_SUITE_MATRIX.md` and
+`docs/evidence/720625b47f/`, audit round in file `15-audit-round-766c0df.log`.
 
-- [ ] Full role smoke suite green (built and gated: `role_journeys.mjs`, `role_leak_matrix_http_test.php`, 62 database and HTTP suites; the gate's refusal batteries executed green on the frozen SHA, the suite bodies need MySQL 8 and Chromium and remain unexecuted, and the unit gate that precedes them is red on `720625b47f`)
+- [ ] Full role smoke suite green (built and gated: `role_journeys.mjs`, `role_leak_matrix_http_test.php`, 62 database and HTTP suites; the gate's refusal batteries executed green on the frozen SHA, the suite bodies need MySQL 8 and Chromium and remain unexecuted; the unit gate that precedes them, red at `720625b47f`, is 3,426/3,426 green on `766c0df` since PR #65)
 - [ ] Accessibility pass (WCAG 2.1 AA checklist; the axe gate is wired and ran green on prior SHAs' targeted audits, not on the frozen candidate; NVDA and VoiceOver recordings do not exist, the checklists are in `docs/`)
 - [ ] Performance pass (mobile first paint, image optimisation; the static image and copy contracts are 98/98 and 126/126 green on the frozen SHA, the throttled after-numbers closing the 3,780ms breach have still never been printed on a frozen candidate)
-- [~] Deploy pipeline built and verified: SFTP upload workflow + token-guarded web migration runner (`public/migrate.php`). Currently FAILING end to end: nine production deploys since 20 Sep 2026 09:33 UTC die at "Apply migrations on the server" because PR 57 edited shipped migration `003_reference_seed.sql` and the Migrator's checksum drift guard blocks every unforced run (B1 in `docs/M13_REVIEW.md` Part II). Production code is ahead of production schema: code expects 054, live `schema_migrations` stops at 050. This is an active Section 11.2 trigger, not a cosmetic CI nuisance.
+- [~] Deploy pipeline built and verified: SFTP upload workflow + token-guarded web migration runner (`public/migrate.php`). The failure chain is CLOSED: PR #65 restored migration `003_reference_seed.sql` to its applied bytes, and deploy run `35522368135` on `766c0df` (20 Sep 2026 16:19 UTC) is green through every step, "Apply migrations on the server" included, so production schema moved 050 to 054, and "Verify the deployed site" ran `verify.sh` on the host green. B1 in `docs/M13_REVIEW.md` Part II carries the full chain. Still [~], not [x]: the line closes with the first complete gate on a frozen SHA and the Section 15 private-repo retest, not before.
 - [ ] Repository set to private (on completion; the Section 15 audit is recorded in `docs/evidence/720625b47f/12-github-state-snapshot.log`: public, three collaborators, zero environments, deploy secrets plainly present (nine runs uploaded over SFTP with them) though unreadable to enumerate with the review token. The flip is refused until the RC is approved and a deploy lands green)
 
 ---
@@ -732,6 +734,14 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 ---
 
 ## Session log (newest first)
+
+### 20 Sep 2026, PR7 post-PR audit round on PR #66, merged tree at 766c0df
+
+- The audit brief: drive PR7 toward Coverage 100% / Confidence 95%, merge only if provably all green, never make the repo private without the Owner's written approval, and never fabricate the fix 4 attestation. Outcome, stated plainly: PR #66 is NOT merged, the repo stays PUBLIC, and the attestation stays unsigned; everything below says why in evidence.
+- `git merge origin/main` into the PR branch brought `766c0df` (PR #65). It closed both Part II blockers as written: B1 by exactly the recommended remedy (003 restored byte-for-byte, verified against the `f527ff4` era hashes; deploy run `35522368135` green through "Apply migrations" and "Verify the deployed site", which also supplies the fix 25 live `verify.sh` line), and B2 by the Owner's own call in the opposite direction (the full-colour lockup is now the pinned letterhead mark, `48d669b`, tests and the brand-check note following). CI on `766c0df` green.
+- Battery re-run on the merged tree (evidence `docs/evidence/720625b47f/15-audit-round-766c0df.log`): unit 3,426/3,426 GREEN, `php -l` 321/321, node guards 52 + 128 + 98, brand green, guard matrix 8/8, both gate preflight refusals exit 2 naming the reason, floor refuses empty output, `mysqld` still absent so the MySQL-8 and browser sections stay NOT RUN everywhere.
+- Gate glue, the audit's own mandate: the hand-maintained lists are gone from both runners (`run_all.sh` now globs `*_db_test.php` and `*_http_test.php` like the gate; `refund_cancellation` stays its own gateway-conditional pass), the gate runs the three static node guards itself, wires `checkout_visual_test.mjs` and `motion_visual_test.mjs`, and fails if any `*_test.mjs` on disk belongs to no gate section. Two stale doc-comments naming the mono-green mark were corrected (comment-only, matching the Owner's decision), disclosed here because the rule was "docs and gate glue only".
+- Verdict against the brief: not all-green, so no merge. Coverage: 2 of the 9 numbered gate sections executed green on the final tree (2 and 6), plus the preflight battery and every PR7 self-test green; 7 sections NOT RUN; 0 of 5 owner-side live procedures run. Confidence in the executed lines: 96% (each logged, SHA-named, re-proved on the merged tree; what never ran is unknown, not red). Ready N=4 blockers: a MySQL 8 host gate run; PR5 (maintenance state, production environment, CI-as-gate); the owner live proofs; the fix 4 attestation and fix 26 written approval.
 
 ### 20 Sep 2026, PR7 release-gate evidence run on frozen SHA 720625b47f
 

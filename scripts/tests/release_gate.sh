@@ -293,6 +293,14 @@ else
   failures+=("shell syntax")
 fi
 
+# Node-only contract guards from PR 6 and PR 8. They are in the gate as well
+# as in the developer script on purpose: "run_all covers it" is not a proof,
+# because run_all is whatever a person happens to run, with no gate behind it.
+# These three parse files only - no server, no database.
+run "lesser_text_test.mjs" node scripts/tests/lesser_text_test.mjs
+run "image_contract_test.mjs" node scripts/tests/image_contract_test.mjs
+run "motion_coverage_test.mjs" node scripts/tests/motion_coverage_test.mjs
+
 # -----------------------------------------------------------------------------
 # Every suite on disk, by glob. A hand-maintained list is how two suites sat in
 # no runner for three milestones.
@@ -328,7 +336,24 @@ run "homepage_visual_test.mjs" node scripts/tests/homepage_visual_test.mjs
 run "axe_suite.mjs" node scripts/tests/axe_suite.mjs
 run "content_admin_visual_test.mjs" node scripts/tests/content_admin_visual_test.mjs
 run "public_content_visual_test.mjs" php scripts/tests/public_content_visual_fixture.php
+run "checkout_visual_test.mjs" node scripts/tests/checkout_visual_test.mjs
+run "motion_visual_test.mjs" node scripts/tests/motion_visual_test.mjs
 run "role_journeys.mjs" node scripts/tests/role_journeys.mjs
+
+# Completeness, not faith: every *_test.mjs on disk must be accounted for by
+# this gate - run here, run by its fixture driver, or a section 2 static guard.
+# A suite added to scripts/tests and forgotten by every runner is how a
+# milestone passes on nine tenths of its evidence.
+for mjs in scripts/tests/*_test.mjs; do
+  case " homepage_visual_test.mjs content_admin_visual_test.mjs public_content_visual_test.mjs checkout_visual_test.mjs motion_visual_test.mjs lesser_text_test.mjs image_contract_test.mjs motion_coverage_test.mjs " in
+    *" $(basename "$mjs") "*) ;;
+    *)
+      printf '  FAIL %-38s %s\n' "suite wiring" "$(basename "$mjs") is on disk and wired into no gate section"
+      failed=$((failed + 1))
+      failures+=("unwired suite $(basename "$mjs")")
+      ;;
+  esac
+done
 
 # -----------------------------------------------------------------------------
 section "8. Deployment smoke checks against the local server"
