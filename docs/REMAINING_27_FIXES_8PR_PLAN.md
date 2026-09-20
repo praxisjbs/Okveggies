@@ -8,7 +8,7 @@
 **Status:** PR0 open, seven PRs awaiting
 **Confidence required:** 95% minimum on every PR
 **Coverage required:** 100% on every PR before it can be marked done
-**UI beauty required:** 95% on every UI touching PR, lesser text, more illustration, large clear buttons
+**UI beauty required:** 95% on every UI touching PR, lesser text, more illustration, large clear buttons, creativity, mobile first, React Native app feel
 
 > This is the single control document for the remaining work. A new chat pastes the prompt for the next PR and starts. No re-audit needed. Every fix is mapped to exactly one PR. No PR changes behaviour that belongs to another.
 
@@ -78,13 +78,15 @@ Each PR must meet all of these before its progress box can be ticked. The agent 
 - HTTP suites `*_http_test.php` relevant to PR pass on live port
 - Browser pass at 390px and 1440px where UI touched, no overflow, 44px targets, visible gold focus ring, no console errors
 
-**Beauty gate: 95% on any UI PR**
-- Lesser text, more illustration. Icons beside headings, not walls of copy
-- Large clear buttons: 44px min, rounded `rounded-xl`, forest fill `okv-btn`, outline `okv-btn-outline`, with icon + label, never gold fill
-- Forest/gold/tomato/foliage tokens only, no arbitrary hex, no `bg-gold` fill
-- Cards use `okv-panel` flat bordered, not lifting shadows, tables `okv-table`, badges colour never the only signal
-- Skeletons while loading, honest empty states with illustration + 2 actions, success uses Market Bounce 320ms only
-- `prefers-reduced-motion` respected, Botanical 240ms for 90% of motion
+**Beauty gate: 95% on any UI PR, creativity + mobile first + React Native feel**
+- **Mobile first, always:** Design at 390px first, then 768px, then 1440px. Thumb-reach primary actions within 72px of bottom, bottom tab bar persistent, safe-area-inset padding, slide-up sheets with 24px top radius and backdrop blur, not full page reloads. Every UI PR must be evidenced at 390px with no horizontal scroll, 44px targets, and one-handed usability.
+- **React Native app feel:** Bottom tab bar, slide-up sheets, spring motion, optimistic UI, instant feedback, swipe to dismiss sheets, pull to refresh where lists, haptic-like Bounce 320ms only on success, empty states never dead ends, navigation stays in app chrome.
+- **Creativity:** Inventive use of forest, gold as ring, foliage and tomato accents, bespoke line illustrations (leaf, basket, shield) not stock, editorial hero with seal, combo spreads that feel magazine, category pills with icons, checkout cards with payment icons. Surprise and delight in micro copy and motion, not generic template.
+- **Lesser text, more illustration:** Headings 3 to 5 words, body one short line, help in `?` sheet not paragraph. Prices, weights, dates always numerals with units. Icons beside headings, not walls of copy. Empty, error, maintenance and success states use soft line illustration + heading + one line + two clear buttons.
+- **Large clear buttons:** 44px min, `rounded-xl`, forest fill `okv-btn` with white label + 16px icon, outline `okv-btn-outline`, never gold fill, one primary per view. On mobile primary is full width, floating above keyboard where form.
+- **Tokens only:** Forest/gold/tomato/foliage + ink/cream from `tailwind.config.js`, no arbitrary hex, no `bg-gold` fill
+- **Cards and tables:** `okv-panel` flat bordered `border-ink-10` on white, `okv-panel-head` with eyebrow + title. Tables `okv-table` hairline, mono figures for money. Badges colour never the only signal.
+- **Feedback and motion:** Skeleton `okv-skeleton` while loading, success Bounce 320ms only on add-to-basket and pay. `prefers-reduced-motion` respected, Botanical 240ms for 90% of motion, spring 300ms for sheets.
 
 If any gate fails, the PR is not done.
 
@@ -138,13 +140,13 @@ If any gate fails, the PR is not done.
 **Goal:** Make checkout the most beautiful, easiest flow on the site, less text, more illustration, clear buttons.
 **Fixes:** 13 (+ visual polish for 2 hero fallback and 6 performance pre-step)
 **Files:** `checkout.php`, `cart.php`, `includes/components/shop/*`, `assets/css/src/input.css`, `assets/js/okv.js`, `assets/img/payments/paystack.svg` use, `tailwind.config.js` if token needed
-**UI notes:** This is the beauty flagship.
-- Four step checkout with progress dots with icons, not text trail
-- Payment choices as large cards with radio, bank card+transfer/USSD icons, not list text. Trust panel AFTER the radio group, as two small cards with shield and trail icons, plus Paystack badge, not between options
-- Illustration: simple line leaf for trust, shield check for trail, no stock photos
-- Buttons: primary `Pay now` forest with arrow icon, secondary `Pay on delivery` outline, both 44px, wide on mobile
-- Less text: collapse fee explanation into `i` sheet, keep policy one line with link
-- Skeletons and optimistic UI kept, Market Bounce on pay button only
+**UI notes:** This is the beauty flagship, mobile first React Native creativity.
+- Four step checkout with progress dots with icons and line, sticky bottom primary `Pay now` that floats above tab bar on mobile, not buried
+- Payment choices as large tappable cards with radio + bank card/transfer/USSD icons and illustration, not text list. Cards have 16px rounded-xl, selected ring-gold, deselected border-ink-10. Trust panel AFTER the radio group, as two small cards with shield and trail line illustrations plus Paystack lockup, not between options
+- Creativity: hand-drawn leaf for trust, shield check for trail, no stock photos, gold divider not fill, micro copy `Sourced right` with sparkle
+- Buttons: primary `Pay now` forest with arrow icon full width on 390px, secondary `Pay on delivery` outline, both 44px, `active:scale-[0.98]` spring, Bounce on success only
+- Less text: collapse fee explanation into `i` bottom sheet with illustration, keep policy one line with link to Delivery Policy How It Works section
+- Mobile first sheet behaviour: delivery day picker is bottom sheet with 24px radius and backdrop blur, not dropdown. Skeletons and optimistic UI kept, no reload on radio change.
 **Acceptance:**
 - Trust panel no longer inside radio group, visual test at 390px shows clear separation
 - Checkout passes axe-core, 44px every control, no horizontal overflow, reduced-motion respected
@@ -187,12 +189,12 @@ If any gate fails, the PR is not done.
 **Goal:** Make the whole site fast and accessible and unmistakably beautiful, less text, more illustration.
 **Fixes:** 2 (hero publish when supplied) + 6 + 7
 **Files:** `index.php`, `page.php`, `shop.php`, `product.php`, `combo.php`, `includes/components/shop/*`, `assets/css/tailwind.css`, `assets/js/*.js`, `scripts/tests/visual_*`, `scripts/tests/axe_*` (new), product images optimised
-**UI notes:** This is the second beauty flagship.
-- Hero: documentary photo as responsive WebP 640/960/1280 via `ContentImages`, `fetchpriority=high` only for hero, explicit width/height, no CLS, lazy below hero
-- Product grid: 2-up mobile 4-up desktop, `loading=lazy`, `decoding=async`, WebP where generated, JPEG fallback kept, total initial transfer under 2MB
-- Illustrative empty states: soft leaf or basket line illustration plus heading + one line + 2 buttons, not paragraph
-- Icons: lucide or inline SVG 16px, 24px grid, never emoji
-- Buttons always icon+label, rounded-xl, forest primary
+**UI notes:** This is the second beauty flagship, mobile first React Native creativity.
+- Hero: documentary photo as responsive WebP 640/960/1280 via `ContentImages`, `fetchpriority=high` only for hero, explicit width/height no CLS, creative overlay with seal stamp and gold rule, floating category pills below. Lazy below hero
+- Product grid: 2-up mobile 4-up desktop, bottom tab bar always visible, card tap feels native with `active:scale-[0.98]` and image zoom, `loading=lazy` `decoding=async`, WebP where generated, total initial transfer under 2MB. Shop filter is bottom sheet with chips, not sidebar on mobile, sticky rail on desktop
+- Illustrative empty states: bespoke 80px line leaf or basket illustration + heading 4 words + one short line + 2 large buttons with icons, not paragraph. Search empty uses magnifier illustration, network error uses cloud illustration
+- Icons: lucide or inline SVG 16px and 80px, 24px grid, never emoji, stroke 1.5 on 24px
+- Buttons always icon+label, `rounded-xl` forest primary, full width on mobile, spring motion
 - Typography: DM Serif Display for hero headings only, Hanken Grotesk for body, JetBrains Mono for prices and order numbers, scale from `tailwind.config.js`
 **Acceptance:**
 - Frozen profile: mid-range Android, 4x CPU throttling, 1.6Mbps/150ms, cold cache, recorded. Homepage with hero meets: First Contentful Paint 3.0s or less, Largest Contentful Paint 4.0s or less, Cumulative Layout Shift 0.1 or less, initial transfer 2MB or less. Before/after logged.
@@ -257,16 +259,19 @@ PR0 Foundation (this)
 
 ---
 
-## 5. UI/UX beauty rules for every UI PR (PR3 and PR6 are 95% beauty flagships)
+## 5. UI/UX beauty rules for every UI PR (PR3 and PR6 are 95% beauty flagships, creativity + React Native feel)
 
-- **Lesser text:** Headings 3 to 5 words, body one short line, help in `?` sheet not paragraph. Prices, weights, dates always numerals with units.
-- **More illustrative:** Line icon beside every heading, soft illustration for empty/error/maintenance, not stock photos. Illustrations are single-stroke leaf, basket, shield, never emoji.
-- **Buttons:** Primary forest `#0a3a2d` with white label and 16px icon, `min-h-[44px] px-6 rounded-xl font-medium`. Secondary `okv-btn-outline`. Never gold fill. One primary per view, secondary beside it. On mobile, primary is full width.
-- **Cards:** `okv-panel` flat bordered `border-ink-10` on white, `okv-panel-head` with eyebrow + title. Tables `okv-table` hairline, mono figures.
-- **Feedback:** Skeleton `okv-skeleton` while loading, success Bounce 320ms only on add-to-basket and pays. Errors inline with `okv-note-bad`, not toast.
-- **Focus:** Gold `ring-gold` 2px offset never suppressed. `focus:outline-none` forbidden.
-- **Spacing:** Tokens only, no arbitrary `15px`. Colours from `tailwind.config.js`.
-- **Voice:** Relational plain British Nigerian English. No enterprise jargon, no em dash.
+**Principle: mobile first, creativity, React Native app.** Every storefront and Pro screen must feel like a crafted React Native app on mobile, not a shrunk desktop page. Desktop is dense and editorial, but mobile leads.
+
+- **Mobile first creative layout:** Start at 390px, then 768px, then 1440px. Bottom tab bar persistent with 5 items + centre Kitchen Runs button, slide-up sheets with `rounded-t-[24px]` and `backdrop-blur` not full page navigations, safe-area padding `pb-[env(safe-area-inset-bottom)]`, thumb zone primary button fixed `bottom-0` above tab bar when form. Creative editorial hero with seal trust stamp, overlapping cards, category pills with icons and source line, combo spreads that breathe.
+- **React Native app feel:** No full reloads for shop filter, basket, checkout steps, tab switches, content preview. Use Fetch + optimistic UI, skeleton `okv-skeleton`, success Bounce 320ms only. Sheets dismiss by swipe down or backdrop tap, backdrop `bg-ink/40 backdrop-blur-sm`, spring `cubic-bezier(0.34,1.56,0.64,1)` 300ms for sheets, Botanical 240ms for 90% else. Keyboard avoids covering primary button, inputs stay visible `scrollIntoView`. Haptics suggested by Bounce, not vibration.
+- **Creativity and illustration:** Bespoke single-stroke leaf, basket, shield, card, phone line illustrations at 24px and 80px for empty/error. Inventive use of forest header, foliage accents, gold as ring/border/divider never fill, tomato only for live alert. Checkout payment cards with card/bank/USSD icons, not text list. Category cards with subtle image zoom on tap, not hover only.
+- **Lesser text, more illustration:** Headings 3 to 5 words, body one short line, help in `?` sheet not paragraph. Prices, weights, dates always numerals with units. Empty, error, maintenance and success states are illustration 80px + heading + one line + two buttons, never paragraph.
+- **Buttons:** Primary forest `#0a3a2d` with white label and 16px icon, `min-h-[44px] px-6 rounded-xl font-medium`. Secondary `okv-btn-outline`. Never gold fill. One primary per view, secondary beside it. On mobile primary is full width, `w-full`. Buttons have icon + label, not label only.
+- **Cards:** `okv-panel` flat bordered `border-ink-10` on white, `okv-panel-head` with eyebrow + title and 16px icon. Tables `okv-table` hairline, mono `font-mono` for money. Badges colour never the only signal, always with label.
+- **Feedback:** Skeleton while loading, inline `okv-note-bad` not toast, success uses Market Bounce, error shakes subtly not flash. Search is live debounced 300ms with skeleton.
+- **Focus and motion:** Gold `ring-gold` 2px offset never suppressed, `focus:outline-none` forbidden. `prefers-reduced-motion` collapses motion to `10ms`. 44px minimum on every touch target, verified at 390px.
+- **Spacing and voice:** Tokens only, no arbitrary `15px`. Colours from `tailwind.config.js`. Relational plain British Nigerian English, no enterprise jargon, no em dash. Specificity beats sophistication, like a grocer speaking.
 
 ---
 
