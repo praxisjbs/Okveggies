@@ -10,16 +10,33 @@ require_once __DIR__ . '/includes/components/shop/product_card.php';
 require_once __DIR__ . '/includes/components/shop/shop_results.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
 require_once __DIR__ . '/includes/components/shop/icons.php';
+require_once __DIR__ . '/includes/components/shop/empty_state.php';
 
 $search = Catalogue::cleanSearch((string) okv_input('search', ''));
 $category = Catalogue::cleanCategory((string) okv_input('category', ''));
-$categories = Catalogue::categories();
 
 $perPage = Catalogue::PER_PAGE;
-$total = Catalogue::countProducts($search, $category);
-$pages = max(1, (int) ceil($total / $perPage));
-$page = min(max(1, (int) okv_input('page', 1)), $pages);
-$products = Catalogue::products($search, $category, $page, $perPage);
+$categories = [];
+$catalogueError = false;
+try {
+    $categories = Catalogue::categories();
+    $total = Catalogue::countProducts($search, $category);
+    $pages = max(1, (int) ceil($total / $perPage));
+    $page = min(max(1, (int) okv_input('page', 1)), $pages);
+    $products = Catalogue::products($search, $category, $page, $perPage);
+} catch (Throwable $e) {
+    // The shelf failed but the page still answers. A 503 with a friendly
+    // body tells crawlers and monitors the truth (try again later) while a
+    // customer sees what is still open instead of a blank server error.
+    error_log('shop.catalogue failed: ' . $e->getMessage());
+    $catalogueError = true;
+    $total = 0;
+    $pages = 1;
+    $page = 1;
+    $products = [];
+    http_response_code(503);
+    header('Retry-After: 300');
+}
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
 $sourceDay = Settings::str('source_day', '');
 
@@ -90,6 +107,7 @@ $noticeMessages = [
   <?php endif; ?>
 
   <section class="okv-container py-8 md:py-12">
+    <?php if (!$catalogueError): ?>
     <div class="mb-6 flex items-center justify-between gap-4 lg:hidden">
       <p class="text-sm font-semibold text-ink" data-shop-summary aria-live="polite"><?= okv_e(okv_page_summary($page, $total, $perPage, 'item')) ?></p>
       <button type="button" class="okv-btn-outline min-h-[44px] px-4" data-filter-open aria-controls="shop-filter-sheet" aria-expanded="false"><?php okv_icon('magnifier', 'h-4 w-4'); ?> Filter by category</button>
@@ -101,7 +119,20 @@ $noticeMessages = [
         <a href="<?= okv_e(okv_shop_url($search, $item['slug'])) ?>" data-shop-category-link="<?= okv_e($item['slug']) ?>" class="okv-filter-chip <?= $category === $item['slug'] ? 'okv-filter-chip-active' : '' ?>"><?= okv_e($item['name']) ?></a>
       <?php endforeach; ?>
     </div>
+    <?php endif; ?>
 
+    <?php if ($catalogueError): ?>
+      <?php okv_empty_state(
+          'cloud',
+          'The shop is temporarily unavailable',
+          'We could not load the shelf just now. The combos are still open while we reconnect it.',
+          [
+              ['href' => '/combos.php', 'label' => 'See the combos', 'icon' => 'basket'],
+              ['href' => '/kitchen-runs.php', 'label' => 'Send a Kitchen Run', 'style' => 'outline', 'icon' => 'list'],
+          ],
+          ['heading_tag' => 'h2']
+      ); ?>
+    <?php else: ?>
     <div class="grid gap-8 lg:grid-cols-12">
       <aside class="hidden lg:col-span-2 lg:block" aria-label="Product categories">
         <div class="sticky top-24 rounded-lg bg-white p-4 shadow-okv-1">
@@ -123,6 +154,7 @@ $noticeMessages = [
         <?php okv_shop_results($products, $categories, $sourceRegions, $search, $category, $page, $total, $perPage, $sourceDay); ?>
       </div>
     </div>
+    <?php endif; ?>
   </section>
 </main>
 

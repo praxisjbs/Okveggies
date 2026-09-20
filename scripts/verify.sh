@@ -53,6 +53,10 @@ expect_private() { # url  label   (login/refusal, with 404 allowed to avoid exis
 }
 
 expect "$BASE/"               "200" "storefront home"
+expect "$BASE/shop.php"       "200" "the shop"
+expect "$BASE/combos.php"     "200" "the combos"
+expect "$BASE/product.php?slug=fresh-tomatoes" "200" "a product page"
+expect "$BASE/api/v1/catalog.php?action=browse" "200" "the catalogue browse endpoint"
 expect "$BASE/admin/login.php" "200" "admin login page"
 
 # Brand chrome must actually serve after a deploy.
