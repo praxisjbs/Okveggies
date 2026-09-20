@@ -65,6 +65,10 @@ module.exports = {
           DEFAULT: '#03100A',
           60:      'rgba(3,16,10,0.62)',
           40:      'rgba(3,16,10,0.40)',
+          // The quietest border in the system: the resting edge of a tappable
+          // choice card. Added for the checkout payment cards, where a full
+          // mist border fought the card fill and a hairline was wanted.
+          10:      'rgba(3,16,10,0.10)',
         },
         mist: '#EAE8E8',
       },
@@ -100,6 +104,9 @@ module.exports = {
         sm: '3px',
         md: '6px',
         lg: '12px',
+        // The slide-up sheet corner. The plan asks for a 24px top radius on
+        // mobile sheets, so it is a named token rather than an arbitrary value.
+        sheet: '24px',
         full: '9999px',
       },
       boxShadow: {

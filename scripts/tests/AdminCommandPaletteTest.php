@@ -54,4 +54,9 @@ okv_test_ok(str_contains($paletteJs, "announce('You are already on '")
     && str_contains($paletteJs, 'samePage(command)'), 'a current-page shortcut announces without reloading');
 okv_test_ok(str_contains($paletteJs, 'activeOverlay()')
     && str_contains($paletteJs, 'if (overlay || isEditable(event.target)'), 'direct navigation stays inactive in overlays and editable controls');
-okv_test_ok(str_contains($paletteCss, '@media (prefers-reduced-motion: reduce)'), 'the shared reduced-motion rule covers the palette animation');
+// Motion is full by the 20 Sep decision (plan Section 5): the stylesheet no
+// longer collapses every animation to near-instant, so the palette opens with
+// its animation everywhere, exactly like every other screen.
+okv_test_ok(!str_contains($paletteCss, 'animation-duration: 0.001ms')
+    && !str_contains($paletteCss, 'transition-duration: 0.001ms'),
+    'full motion ships: the shared reduced-motion collapse is gone');

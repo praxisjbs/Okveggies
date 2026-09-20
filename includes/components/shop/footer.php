@@ -95,7 +95,7 @@ if (!function_exists('okv_shop_footer')) {
                   <p class="mt-1 text-sm text-white/70">Farms we have visited. Prices we can explain. A day you picked.</p>
                 </div>
               </div>
-              <p class="text-xs text-white/60">&copy; <?= date('Y') ?> <?= okv_e($name) ?>. Powered by JBS Praxis.</p>
+              <p class="text-xs text-white/70">&copy; <?= date('Y') ?> <?= okv_e($name) ?>. Powered by JBS Praxis.</p>
             </div>
           </div>
         </footer>
