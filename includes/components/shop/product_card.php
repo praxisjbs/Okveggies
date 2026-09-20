@@ -19,13 +19,14 @@ if (!function_exists('okv_product_card')) {
     {
         $availability = okv_availability((string) ($product['availability_status'] ?? 'available'), $product['restock_date'] ?? null);
         $unit = (string) ($product['unit'] ?? '');
+        $productSourceRegion = trim((string) ($product['source_region'] ?? '')) ?: trim($sourceRegions);
         ?>
         <article class="okv-card group flex h-full flex-col" data-product-card>
           <a href="/product.php?slug=<?= okv_e($product['slug']) ?>" class="block">
             <div class="aspect-square overflow-hidden rounded-md bg-forest-tint">
               <?php if (!empty($product['image'])): ?>
                 <img src="<?= okv_e(okv_image_url($product['image'])) ?>"
-                     alt="<?= okv_e(okv_produce_alt((string) $product['name'], $unit, $sourceRegions)) ?>"
+                     alt="<?= okv_e(okv_produce_alt((string) $product['name'], $unit, $productSourceRegion)) ?>"
                      class="h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105" loading="lazy">
               <?php else: ?>
                 <div class="flex h-full items-center justify-center p-4 text-center text-sm text-ink-40">Photo coming soon</div>
@@ -45,7 +46,7 @@ if (!function_exists('okv_product_card')) {
           <?php if (!empty($product['short_description'])): ?>
             <p class="mt-2 line-clamp-2 text-sm text-ink-60"><?= okv_e($product['short_description']) ?></p>
           <?php endif; ?>
-          <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-2 text-xs text-ink-60'); ?>
+          <?php okv_sourced_note($productSourceRegion, $sourceDay, 'mt-2 text-xs text-ink-60'); ?>
           <!--
             The row wraps on purpose. On a two-up grid at 390px the price and
             the Add button do not both fit on one line, and wrapping puts the

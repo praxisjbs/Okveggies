@@ -421,17 +421,18 @@ final class Checkout
             $isCombo = (string) $line['item_type'] === 'combo';
             $source  = $isCombo
                 ? Database::one('SELECT name, sku FROM combo_packages WHERE id = :id', [':id' => (int) $line['combo_package_id']])
-                : Database::one('SELECT p.name, p.sku, u.name AS unit_name FROM products p JOIN units_of_measurement u ON u.id = p.unit_id WHERE p.id = :id', [':id' => (int) $line['product_id']]);
+                : Database::one('SELECT p.name, p.sku, p.category_id, u.name AS unit_name FROM products p JOIN units_of_measurement u ON u.id = p.unit_id WHERE p.id = :id', [':id' => (int) $line['product_id']]);
 
             Database::run(
                 'INSERT INTO order_items
-                    (order_id, item_type, product_id, combo_package_id, item_name, sku, unit_name, quantity, unit_price_subunit, line_total_subunit)
-                 VALUES (:order, :type, :product, :combo, :name, :sku, :unit, :quantity, :price, :line_total)',
+                    (order_id, item_type, product_id, snapshot_category_id, combo_package_id, item_name, sku, unit_name, quantity, unit_price_subunit, line_total_subunit)
+                 VALUES (:order, :type, :product, :snapshot_category, :combo, :name, :sku, :unit, :quantity, :price, :line_total)',
                 [
                     ':order'      => $orderId,
-                    ':type'       => $line['item_type'],
-                    ':product'    => $line['product_id'],
-                    ':combo'      => $line['combo_package_id'],
+                    ':type'             => $line['item_type'],
+                    ':product'          => $line['product_id'],
+                    ':snapshot_category' => $isCombo ? null : ($source['category_id'] ?? null),
+                    ':combo'            => $line['combo_package_id'],
                     ':name'       => $source['name'],
                     ':sku'        => $source['sku'],
                     ':unit'       => $isCombo ? 'basket' : $source['unit_name'],

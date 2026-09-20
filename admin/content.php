@@ -287,7 +287,7 @@ okv_content_tabs($tab, ContactMessages::countNew(), $canMessages, $canContent);
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="composer-heading" class="font-display text-[22px] font-semibold leading-tight tracking-tight text-ink">Start a thread</h2>
-        <span class="inline-flex items-center gap-1 rounded-full bg-forest/10 px-2.5 py-1 text-[11px] font-medium text-forest">Staff initiated</span>
+        <span class="inline-flex items-center gap-1 rounded-full bg-forest/10 px-2.5 py-1 text-okv-micro font-medium text-forest">Staff initiated</span>
       </div>
       <p class="mt-1 text-[13px] leading-snug text-ink-60">Proactive message to a customer. One subject, one message, email sent.</p>
       <form action="/api/v1/contact.php" method="post" class="mt-4 space-y-3">
@@ -393,10 +393,10 @@ okv_content_tabs($tab, ContactMessages::countNew(), $canMessages, $canContent);
               <span class="min-w-0 flex-1">
                 <span class="flex items-start justify-between gap-2">
                   <strong class="min-w-0 truncate text-[13px] font-medium text-ink"><?= okv_e($message['name']) ?></strong>
-                  <span class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium <?= $statusChip ?>"><?= $message['status'] === 'new' ? 'New' : 'Handled' ?><?= $isStaff ? ' • Staff' : '' ?></span>
+                  <span class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-okv-micro font-medium <?= $statusChip ?>"><?= $message['status'] === 'new' ? 'New' : 'Handled' ?><?= $isStaff ? ' • Staff' : '' ?></span>
                 </span>
                 <span class="mt-1 block truncate text-[13px] text-ink-60"><?= okv_e(trim((string) ($message['subject'] ?? '')) ?: 'No subject') ?></span>
-                <span class="mt-1 flex flex-wrap justify-between gap-2 text-[11px] text-ink-60">
+                <span class="mt-1 flex flex-wrap justify-between gap-2 text-okv-micro text-ink-60">
                   <span class="truncate"><?= okv_e((string) ($message['email'] ?: Phone::display((string) $message['phone']))) ?></span>
                   <time datetime="<?= okv_e($message['created_at']) ?>"><?= okv_e(date('j M, H:i', strtotime((string) $message['created_at']))) ?></time>
                 </span>
@@ -430,21 +430,21 @@ okv_content_tabs($tab, ContactMessages::countNew(), $canMessages, $canContent);
         <div class="flex items-center gap-3 min-w-0">
           <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-forest text-sm font-bold text-white"><?= okv_e($initial) ?></span>
           <div class="min-w-0">
-            <p class="text-[11px] font-semibold uppercase tracking-wide text-ink-60">Message <?= (int) $selected['id'] ?><?= !empty($selected['is_staff_initiated']) ? ' • Staff initiated' : '' ?></p>
+            <p class="text-okv-micro font-semibold uppercase tracking-wide text-ink-60">Message <?= (int) $selected['id'] ?><?= !empty($selected['is_staff_initiated']) ? ' • Staff initiated' : '' ?></p>
             <h2 id="message-detail-heading" class="mt-0.5 truncate font-display text-[18px] font-semibold leading-tight text-ink"><?= okv_e(trim((string) ($selected['subject'] ?? '')) ?: 'No subject') ?></h2>
           </div>
         </div>
-        <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium <?= $selected['status'] === 'new' ? 'bg-amber-100 text-amber-800' : 'bg-forest/10 text-forest' ?>"><?= $selected['status'] === 'new' ? 'New' : 'Handled' ?></span>
+        <span class="inline-flex items-center rounded-full px-2.5 py-1 text-okv-micro font-medium <?= $selected['status'] === 'new' ? 'bg-amber-100 text-amber-800' : 'bg-forest/10 text-forest' ?>"><?= $selected['status'] === 'new' ? 'New' : 'Handled' ?></span>
       </div>
 
       <div class="space-y-5 p-5">
         <dl class="grid gap-3 text-sm sm:grid-cols-2">
-          <div><dt class="text-[11px] uppercase tracking-wide text-ink-60">From</dt><dd class="mt-1 font-medium text-ink"><?= okv_e($selected['name']) ?></dd></div>
-          <div><dt class="text-[11px] uppercase tracking-wide text-ink-60">Received</dt><dd class="mt-1 text-ink-60"><time datetime="<?= okv_e($selected['created_at']) ?>"><?= okv_e(date('j M Y, H:i', strtotime((string) $selected['created_at']))) ?></time></dd></div>
-          <div><dt class="text-[11px] uppercase tracking-wide text-ink-60">Email</dt><dd class="mt-1 break-words text-ink-60"><?= $email !== '' ? okv_e($email) : 'Not provided' ?></dd></div>
-          <div><dt class="text-[11px] uppercase tracking-wide text-ink-60">Phone</dt><dd class="mt-1 text-ink-60"><?= $phone !== null ? okv_e(Phone::display($phone)) : 'Not provided' ?></dd></div>
-          <div><dt class="text-[11px] uppercase tracking-wide text-ink-60">Source</dt><dd class="mt-1 text-ink-60"><?= okv_e(ucfirst(str_replace('_', ' ', (string) $selected['source']))) ?></dd></div>
-          <div><dt class="text-[11px] uppercase tracking-wide text-ink-60">Handling</dt><dd class="mt-1 text-ink-60"><?php if ($selected['status'] === 'handled'): ?>Handled by <?= okv_e(trim((string) $selected['handled_by_name']) ?: 'a former team member') ?><?= $selected['handled_at'] ? ' on ' . okv_e(date('j M Y, H:i', strtotime((string) $selected['handled_at']))) : ', time not recorded' ?><?php else: ?>Waiting for a team member<?php endif; ?></dd></div>
+          <div><dt class="text-okv-micro uppercase tracking-wide text-ink-60">From</dt><dd class="mt-1 font-medium text-ink"><?= okv_e($selected['name']) ?></dd></div>
+          <div><dt class="text-okv-micro uppercase tracking-wide text-ink-60">Received</dt><dd class="mt-1 text-ink-60"><time datetime="<?= okv_e($selected['created_at']) ?>"><?= okv_e(date('j M Y, H:i', strtotime((string) $selected['created_at']))) ?></time></dd></div>
+          <div><dt class="text-okv-micro uppercase tracking-wide text-ink-60">Email</dt><dd class="mt-1 break-words text-ink-60"><?= $email !== '' ? okv_e($email) : 'Not provided' ?></dd></div>
+          <div><dt class="text-okv-micro uppercase tracking-wide text-ink-60">Phone</dt><dd class="mt-1 text-ink-60"><?= $phone !== null ? okv_e(Phone::display($phone)) : 'Not provided' ?></dd></div>
+          <div><dt class="text-okv-micro uppercase tracking-wide text-ink-60">Source</dt><dd class="mt-1 text-ink-60"><?= okv_e(ucfirst(str_replace('_', ' ', (string) $selected['source']))) ?></dd></div>
+          <div><dt class="text-okv-micro uppercase tracking-wide text-ink-60">Handling</dt><dd class="mt-1 text-ink-60"><?php if ($selected['status'] === 'handled'): ?>Handled by <?= okv_e(trim((string) $selected['handled_by_name']) ?: 'a former team member') ?><?= $selected['handled_at'] ? ' on ' . okv_e(date('j M Y, H:i', strtotime((string) $selected['handled_at']))) : ', time not recorded' ?><?php else: ?>Waiting for a team member<?php endif; ?></dd></div>
         </dl>
 
         <div class="rounded-xl border border-mist bg-mist/30 p-4">
