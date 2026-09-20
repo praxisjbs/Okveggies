@@ -62,10 +62,6 @@ try {
     );
     Database::run(
         'UPDATE content_pages SET draft_title = :title, draft_body = :body, is_published = :published WHERE slug = :slug',
-        [':title' => 'Terms test fixture', ':body' => 'Integration test fixture. Not legal copy.', ':published' => 0, ':slug' => 'terms']
-    );
-    Database::run(
-        'UPDATE content_pages SET draft_title = :title, draft_body = :body, is_published = :published WHERE slug = :slug',
         [':title' => 'FAQ', ':body' => "## When?\nNow.", ':published' => 0, ':slug' => 'faq']
     );
 
@@ -143,17 +139,46 @@ try {
     cpdb_eq('/uploads/content/farm-visit.webp', ContentPages::findPublished('about')['image_url'], 'publish copies the documentary image atomically');
     cpdb_eq($actorId, ContentPages::findForAdmin('about')['published_by'], 'publish records the responsible staff member');
 
-    $terms = ContentPages::findForAdmin('terms');
-    $legalRefused = ContentPages::publish('terms', $terms['fingerprint'], $actorId, false);
-    cpdb_eq('legal_approval_required', $legalRefused['code'], 'legal content cannot publish without explicit client-copy attestation');
-    cpdb_eq(null, ContentPages::findPublished('terms'), 'refused legal publication stays unavailable publicly');
-    $legalPublished = ContentPages::publish('terms', $terms['fingerprint'], $actorId, true);
-    cpdb_eq('published', $legalPublished['code'], 'attested legal test fixture can exercise publication');
-    $legalAudit = Database::one(
-        'SELECT new_values FROM audit_logs WHERE entity_type = :entity AND entity_id = :id AND action = :action ORDER BY id DESC LIMIT 1',
-        [':entity' => ContentPages::AUDIT_ENTITY, ':id' => $terms['id'], ':action' => ContentPages::ACTION_PUBLISH]
-    );
-    cpdb_eq(true, json_decode($legalAudit['new_values'], true)['legal_approval_confirmed'], 'legal publish audit records the attestation');
+    // --- Legal publication: attested or not at all, for each of the 3 pages --
+    // PR1 makes the M12 legal gate provable page by page: Terms, Privacy and
+    // Delivery Policy each refuse publication without the client-copy
+    // attestation, stay out of the footer and the sitemap while unpublished,
+    // and record the attested actor in the audit trail when they do publish.
+    $legalSlugs = ['terms', 'privacy', 'delivery-policy'];
+    foreach ($legalSlugs as $index => $legalSlug) {
+        Database::run(
+            'UPDATE content_pages SET draft_title = :title, draft_body = :body, is_published = :published WHERE slug = :slug',
+            [':title' => 'Legal fixture ' . $index, ':body' => 'Integration test fixture. Not legal copy.', ':published' => 0, ':slug' => $legalSlug]
+        );
+        $legalPage = ContentPages::findForAdmin($legalSlug);
+        $legalRefused = ContentPages::publish($legalSlug, $legalPage['fingerprint'], $actorId, false);
+        cpdb_eq('legal_approval_required', $legalRefused['code'], "$legalSlug cannot publish without explicit client-copy attestation");
+        cpdb_eq(null, ContentPages::findPublished($legalSlug), "refused $legalSlug publication stays unavailable publicly");
+        cpdb_ok(
+            !in_array($legalSlug, array_column(ContentPages::publishedNavigation(['about', 'terms', 'privacy', 'delivery-policy']), 'slug'), true),
+            "unpublished $legalSlug is excluded from footer navigation"
+        );
+        cpdb_ok(
+            !in_array($legalSlug, array_column(ContentPages::publishedForSitemap(), 'slug'), true),
+            "unpublished $legalSlug is excluded from the sitemap"
+        );
+        $legalPublished = ContentPages::publish($legalSlug, $legalPage['fingerprint'], $actorId, true);
+        cpdb_eq('published', $legalPublished['code'], "attested $legalSlug can exercise publication");
+        $legalAudit = Database::one(
+            'SELECT new_values, actor_user_id FROM audit_logs WHERE entity_type = :entity AND entity_id = :id AND action = :action ORDER BY id DESC LIMIT 1',
+            [':entity' => ContentPages::AUDIT_ENTITY, ':id' => $legalPage['id'], ':action' => ContentPages::ACTION_PUBLISH]
+        );
+        cpdb_eq(true, json_decode($legalAudit['new_values'], true)['legal_approval_confirmed'], "the $legalSlug publish audit records the attestation");
+        cpdb_eq($actorId, (int) $legalAudit['actor_user_id'], "the $legalSlug publish audit names the staff member who attested");
+    }
+    $legalNavigation = array_column(ContentPages::publishedNavigation(['about', 'terms', 'privacy', 'delivery-policy']), 'slug');
+    foreach ($legalSlugs as $legalSlug) {
+        cpdb_ok(in_array($legalSlug, $legalNavigation, true), "once attested and published, $legalSlug joins footer navigation");
+    }
+    $legalSitemap = array_column(ContentPages::publishedForSitemap(), 'slug');
+    foreach ($legalSlugs as $legalSlug) {
+        cpdb_ok(in_array($legalSlug, $legalSitemap, true), "once attested and published, $legalSlug joins the sitemap");
+    }
 
     $faq = ContentPages::findForAdmin('faq');
     $faqBadSave = ContentPages::updateDraft('faq', ['title' => 'FAQ', 'body' => "## Empty answer?"], $faq['fingerprint'], $actorId);
@@ -169,7 +194,13 @@ try {
     $history = ContentPages::history('about', 100);
     cpdb_ok(count($history) >= 3, 'page-scoped history returns the draft, image and publish events');
     cpdb_ok(is_array($history[0]['old_values']) && is_array($history[0]['new_values']), 'history returns decoded presentation-neutral snapshots');
-    cpdb_ok(!in_array(ContentPages::ACTION_PUBLISH, array_column(ContentPages::history('privacy'), 'action'), true), 'one page history does not leak another page events');
+    $privacyRow = Database::one('SELECT id FROM content_pages WHERE slug = :slug', [':slug' => 'privacy']);
+    $privacyAuditIds = array_map('intval', array_column(Database::all(
+        'SELECT id FROM audit_logs WHERE entity_type = :entity AND entity_id = :id ORDER BY id DESC LIMIT 100',
+        [':entity' => ContentPages::AUDIT_ENTITY, ':id' => $privacyRow['id']]
+    ), 'id'));
+    cpdb_ok(array_map('intval', array_column(ContentPages::history('privacy', 100), 'id')) === $privacyAuditIds, 'one page history does not leak another page events');
+    cpdb_ok(in_array(ContentPages::ACTION_PUBLISH, array_column(ContentPages::history('privacy'), 'action'), true), 'privacy history carries its own attested publish event');
 
     $currentAbout = ContentPages::findForAdmin('about');
     $staleUnpublish = ContentPages::unpublish('about', $actorId, $about['fingerprint']);

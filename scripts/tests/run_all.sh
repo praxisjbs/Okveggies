@@ -61,7 +61,7 @@ if [ "$db_probe" = "OKV_DB_READY" ]; then
     issue_reports_db_test issue_workflow_db_test issue_resolutions_db_test issue_customer_outcome_db_test issue_notifications_db_test \
     kitchen_runs_db_test manifest_db_test manual_operations_db_test notifications_db_test order_lifecycle_db_test \
     payments_db_test pricing_db_test pro_dashboard_db_test pro_orders_db_test \
-    settings_db_test staff_password_reset_db_test
+    reference_seed_db_test settings_db_test staff_password_reset_db_test
   do
     run "$suite" php "scripts/tests/$suite.php"
   done

@@ -59,20 +59,9 @@ okv_test_eq('/shop.php', okv_safe_path("/shop.php\nSet-Cookie: x=1", '/shop.php'
 okv_test_eq('/shop.php', okv_safe_path('shop.php', '/shop.php'), 'a relative target is refused');
 okv_test_eq('/shop.php', okv_safe_path('', '/shop.php'), 'an empty target falls back');
 
-$referenceSeed = file_get_contents($appRoot . '/migrations/003_reference_seed.sql');
-$productSeed = file_get_contents($appRoot . '/migrations/004_product_seed.sql');
-okv_test_ok($referenceSeed !== false, 'reference seed can be read');
-okv_test_ok($productSeed !== false, 'product seed can be read');
-
-preg_match('/INSERT INTO product_categories.*?VALUES(.*?)ON DUPLICATE KEY UPDATE/s', (string) $referenceSeed, $categoryBlock);
-preg_match_all('/\(\d+,\s*\'[^\']+\',\s*\'[^\']+\'/', $categoryBlock[1] ?? '', $categoryRows);
-okv_test_eq(5, count($categoryRows[0] ?? []), '5 product categories are seeded');
-
-preg_match('/INSERT INTO units_of_measurement.*?VALUES(.*?)ON DUPLICATE KEY UPDATE/s', (string) $referenceSeed, $unitBlock);
-preg_match_all('/\(\d+,\s*\'[^\']+\',\s*\'[^\']+\'/', $unitBlock[1] ?? '', $unitRows);
-okv_test_eq(4, count($unitRows[0] ?? []), '4 units are seeded');
-
-preg_match('/INSERT INTO products.*?VALUES(.*?)ON DUPLICATE KEY UPDATE/s', (string) $productSeed, $productBlock);
-preg_match_all('/^\s*\(\d+,\s*\d+,\s*\d+,\s*\'/m', $productBlock[1] ?? '', $productRows);
-okv_test_eq(24, count($productRows[0] ?? []), '24 products are seeded');
-okv_test_ok((bool) preg_match('/\(5,\s*3,\s*1,\s*\'Garlic\'/', $productBlock[1] ?? ''), 'Garlic uses unit 1, kg');
+// The reference-seed assertions used to live here as regular expressions run
+// over the SQL files, which proved the text of the seed rather than the data a
+// customer actually shops against. They moved to a real migrated database in
+// scripts/tests/reference_seed_db_test.php on 20 September 2026, closing the M2
+// audit carry-forward: the categories, units, the 24 products and the Garlic
+// kilogramme correction are now asserted as rows.

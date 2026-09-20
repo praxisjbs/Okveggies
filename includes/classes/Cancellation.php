@@ -15,6 +15,11 @@
  * scheduling a van, this one is about the point at which the produce has been
  * bought from a farmer and a cancellation costs real stock. They will drift.
  *
+ * What a late cancellation costs is the deposit share, decided with the Owner
+ * on 20 September 2026 and recorded in docs/CANCELLATION_ASYMMETRY_DECISION.md:
+ * the deposit taken at checkout, or the same share of an order that was paid in
+ * full, never more than was actually paid.
+ *
  * Everything here is pure: no database, no session, no clock of its own unless
  * one is passed. Unit tested in scripts/tests/CancellationTest.php.
  * -----------------------------------------------------------------------------
@@ -127,14 +132,39 @@ final class Cancellation
     }
 
     /**
+     * The deposit share an order has at stake after the cutoff, whatever the
+     * customer chose to pay at checkout.
+     *
+     * A deposit order names its figure directly through deposit_required. An
+     * order paid in full never wrote a deposit figure down, because none was
+     * asked for, so before 20 September 2026 its late cancellation refunded
+     * everything while a deposit customer lost 30 percent of the order. The
+     * Owner settled that asymmetry on 20 September 2026
+     * (docs/CANCELLATION_ASYMMETRY_DECISION.md): the consequence of a late
+     * cancellation must not depend on which payment option was picked, so the
+     * same percentage of the order total stands in when no deposit was taken.
+     *
+     * Pure, so the unit tests can hold the rule to its word.
+     */
+    public static function depositShare(int $depositRequiredSubunit, int $orderTotalSubunit, float $depositPercentage): int
+    {
+        if ($depositRequiredSubunit > 0) {
+            return $depositRequiredSubunit;
+        }
+        return $orderTotalSubunit > 0 ? Money::deposit($orderTotalSubunit, $depositPercentage) : 0;
+    }
+
+    /**
      * What happens to money already paid when an order is cancelled.
      *
-     * Before the cutoff everything goes back. After it, a deposit may be kept
-     * if the business has said so at checkout, because a deposit whose only
-     * outcome is a full refund is not a deposit and will not protect anyone the
-     * week four crates are cancelled on the morning of delivery. Anything paid
-     * beyond the deposit always goes back: the business is protecting its
-     * committed cost, not keeping the whole order.
+     * Before the cutoff everything goes back. After it, the deposit share of
+     * what was paid may be kept if the business has said so at checkout,
+     * because a deposit whose only outcome is a full refund is not a deposit
+     * and will not protect anyone the week four crates are cancelled on the
+     * morning of delivery. Callers pass the deposit share from depositShare(),
+     * so an order paid in full and an order that paid the deposit forfeit the
+     * same amount. Anything paid beyond that share always goes back: the
+     * business is protecting its committed cost, not keeping the whole order.
      */
     public static function moneyOutcome(
         int $paidSubunit,
@@ -193,7 +223,7 @@ final class Cancellation
         $when = 'Cancel free until ' . $cutoffTime . self::deadlineDay($deliveryDate) . ', the day before your delivery.';
 
         $after = $forfeitAfterCutoff
-            ? ' After that we have already bought your produce, so a deposit is not returned. Anything you paid above it comes back to you.'
+            ? ' After that we have already bought your produce, so we keep the deposit part of what you paid and return the rest.'
             : ' After that, ask us and we return everything you have paid.';
 
         // The one people find out about at the door, so it is said here first.
@@ -242,14 +272,14 @@ final class Cancellation
                 return 'This order is on the way. Tell the driver when they arrive and we will sort it out with you there.';
             }
             return $dispatchedForfeit
-                ? 'This order is on the way. We can still cancel it, but the produce has been bought and the van has run, so a deposit is kept.'
+                ? 'This order is on the way. We can still cancel it, but the produce has been bought and the van has run, so the deposit part of what you paid is kept.'
                 : 'This order is on the way. We can still cancel it and return anything you have paid.';
         }
         if (in_array($orderStatus, self::COMMITTED_STATUSES, true)) {
             return 'This order is packed and waiting for the van, so our team cancels it rather than the screen. Ask us and we will tell you exactly what comes back.';
         }
         return 'Cancel this order free until ' . $cutoffTime . self::deadlineDay($deliveryDate) . ', the day before your delivery.'
-             . ($forfeitAfterCutoff ? ' After that a deposit is kept, because your produce will already have been bought.' : '');
+             . ($forfeitAfterCutoff ? ' After that the deposit part of what you paid is kept, because your produce will already have been bought.' : '');
     }
 
     /** Why a deposit was kept, in the customer's words, for the email and the screen. */

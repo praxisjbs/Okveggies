@@ -269,6 +269,7 @@ Paystack is the gateway. Money is stored in **subunits (kobo)** everywhere, as i
 - **Deposit balance and pay-on-delivery** amounts are recorded by the admin (cash or transfer) with an optional proof, reviewed in the admin panel (`manual_payment_proofs`).
 - **Refunds, settlements and disputes** are modelled and tracked (append-only status history on payments and refunds).
 - **Deposit percentage** is a setting, not a constant.
+- **Late cancellation costs the deposit share, whichever way it was paid** (Owner decision, 20 September 2026, `docs/CANCELLATION_ASYMMETRY_DECISION.md`): the deposit taken at checkout, or the same percentage of an order paid in full. Never more than was actually paid, and everything above the share always comes back.
 
 ---
 
@@ -287,7 +288,7 @@ Credit is extended to trusted restaurants, hotels and marts, 7 to 10 day terms.
 
 Delivery fees stay off the platform, arranged and settled on delivery. The software plans and schedules; it does not price delivery.
 
-- **Allowed days by customer type:** households get Monday, Wednesday, Thursday, Saturday. Tuesday and Friday are reserved for restaurant and mart supply, so the two queues do not slow each other down. Driven by `allowed_delivery_days`, editable by the admin.
+- **Allowed days by customer type:** households get Monday, Wednesday, Thursday, Saturday. Businesses get Monday, Tuesday and Friday; the 3 September decision opened Monday to business customers as well, and migration `051` carries that to databases seeded before it. Tuesday and Friday remain the core restaurant and mart supply days. Driven by `allowed_delivery_days`, editable by the admin.
 - **Cutoff and lead time:** an order-by cutoff (default 18:00 the day before) and a minimum lead in days, both configurable. Full or excepted dates come from `delivery_date_exceptions`.
 - **Zones:** delivery zones are admin-managed data (`delivery_zones`), seeded with editable Lagos placeholders. The customer's zone is captured at checkout and shown on the manifest, and it is what the team uses to confirm the off-platform fee (Section 9.3).
 - **Delivery-day manifest / packing list (admin):** for any chosen day, a printable list of every order to pack and deliver, grouped by zone, with items, quantities and customer contact. This is a day-one operational need.
@@ -434,7 +435,7 @@ users, roles, user_roles, business_customers, customer_addresses, product_catego
 
 ### 20.3 Seeds and settings
 
-Reference seed: 5 product categories (Vegetables, Herbs & Spices, Tubers & Roots, Fruits, Grains & Cereals), units (kg, bunch, head, tuber), allowed delivery days (households Mon/Wed/Thu/Sat), placeholder delivery zones, a default RBAC set (Owner, Manager) with the permission catalogue. Product seed: the 24 produce items already drafted, with the Garlic unit corrected to kg. Combo seed: The Stew Combo. Settings seed in `site_settings`: `deposit_percentage_default = 30`, `delivery_cutoff_time = 18:00`, `delivery_min_lead_days = 1`, `currency = NGN`, business identity, WhatsApp support number.
+Reference seed: 5 product categories (Vegetables, Herbs & Spices, Tubers & Roots, Fruits, Grains & Cereals), units (kg, bunch, head, tuber), allowed delivery days (households Mon/Wed/Thu/Sat; businesses Mon/Tue/Fri per the 3 September decision and migration `051`), placeholder delivery zones, a default RBAC set (Owner, Manager) with the permission catalogue. Product seed: the 24 produce items already drafted, with the Garlic unit corrected to kg. Combo seed: The Stew Combo. Settings seed in `site_settings`: `deposit_percentage_default = 30`, `delivery_cutoff_time = 18:00`, `delivery_min_lead_days = 1`, `currency = NGN`, business identity, WhatsApp support number. The seed truth is asserted against a migrated database by `scripts/tests/reference_seed_db_test.php`.
 
 ### 20.4 Order numbers
 

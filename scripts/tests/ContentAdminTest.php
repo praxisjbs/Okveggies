@@ -15,6 +15,7 @@ okv_test_ok(str_contains($page, 'ContentPages::history'), 'the editor shows appe
 okv_test_ok(str_contains($page, 'data-content-preview'), 'the editor offers a saved-draft preview');
 okv_test_ok(str_contains($page, 'name="fingerprint"'), 'draft and publication forms carry an optimistic-lock token');
 okv_test_ok(str_contains($page, 'name="legal_approved"'), 'legal publication requires an explicit client-approval confirmation');
+okv_test_ok(str_contains($page, 'Legal readiness') && str_contains($page, 'Waiting for client copy'), 'the legal readiness panel names the client-owned dependency while legal pages are unpublished');
 okv_test_ok(str_contains($page, 'enctype="multipart/form-data"') && str_contains($page, 'name="image_alt"'), 'the editor accepts an approved photograph with required alt text');
 okv_test_ok(str_contains($page, 'Stock and synthetic documentary images are not accepted'), 'the editor states the documentary-image provenance rule');
 okv_test_ok(!preg_match('/(?:SELECT|INSERT|UPDATE|DELETE)\s+.*content_pages/i', $page), 'the admin page contains no content SQL');
