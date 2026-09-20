@@ -40,13 +40,18 @@ $listUnits = $listUnits ?? [];
         <?php endforeach; ?>
       </select>
     </div>
-    <div class="sm:col-span-5">
-      <label class="okv-label" for="kl-note-<?= (int) $row ?>">Item note, optional</label>
-      <input class="okv-input" id="kl-note-<?= (int) $row ?>" name="items[<?= (int) $row ?>][note]"
-             maxlength="255" value="<?= okv_e((string) ($line['note'] ?? '')) ?>" placeholder="Firm, not very ripe">
+    <div class="sm:col-span-12">
+      <details class="group rounded-xl border border-ink-10 bg-mist/30">
+        <summary class="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 px-3 text-sm font-medium text-ink-60">Line note <span class="text-xs">Tap to edit</span></summary>
+        <div class="border-t border-ink-10 p-3">
+          <label class="okv-label text-xs" for="kl-note-<?= (int) $row ?>">Item note, optional</label>
+          <input class="okv-input min-h-[44px] rounded-xl" id="kl-note-<?= (int) $row ?>" name="items[<?= (int) $row ?>][note]"
+                 maxlength="255" value="<?= okv_e((string) ($line['note'] ?? '')) ?>" placeholder="Firm, not very ripe">
+        </div>
+      </details>
     </div>
   </div>
   <div class="mt-2 flex justify-end">
-    <button type="button" class="okv-btn-text text-sm" data-kl-remove>Remove this item</button>
+    <button type="button" class="inline-flex min-h-[44px] items-center rounded-xl px-3 text-sm text-ink-60 hover:bg-mist" data-kl-remove>Remove this item</button>
   </div>
 </div>

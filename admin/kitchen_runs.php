@@ -109,10 +109,10 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <span class="ml-2 rounded-full bg-forest px-2 py-0.5 text-sm text-white"><?= (int) $waiting ?> waiting</span>
         <?php endif; ?>
       </h2>
-      <nav class="flex flex-wrap gap-2 text-sm" aria-label="Filter by status">
+      <nav class="flex flex-wrap gap-2 text-sm" aria-label="Filter by status" role="tablist">
         <?php foreach (KitchenRuns::FILTERS as $status): ?>
           <?php $count = (int) ($counts[$status] ?? 0); ?>
-          <a class="rounded-full border px-3 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center gap-2 <?= $filter === $status ? 'border-forest bg-foliage-tint text-forest' : 'border-mist text-ink-60 hover:border-forest' ?>"
+          <a role="tab" aria-selected="<?= $filter === $status ? 'true' : 'false' ?>" class="rounded-full border px-3 py-1 min-h-[44px] sm:min-h-0 inline-flex items-center gap-2 <?= $filter === $status ? 'border-forest bg-foliage-tint text-forest' : 'border-mist text-ink-60 hover:border-forest' ?>"
              href="<?= okv_e($queryWith(['status' => $status])) ?>"<?= $filter === $status ? ' aria-current="true"' : '' ?>>
             <?= okv_e(KitchenRuns::filterLabel($status)) ?>
             <span class="font-mono text-xs <?= $filter === $status ? 'text-forest' : 'text-ink-60' ?>"><?= $count ?></span>
