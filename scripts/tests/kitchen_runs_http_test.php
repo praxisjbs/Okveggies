@@ -241,6 +241,26 @@ try {
     krh_eq($zoneId, (int) $storedAsk['delivery_zone_id'], 'so is the area they picked');
     krh_eq('priced', (string) $storedAsk['input_mode'], 'an already-priced list is recorded as its own mode over the real route too');
 
+    // --- 3b (continued). A shop-picked list over the real route: quoted the
+    //     moment it is sent, because every line already carries a shop price.
+    $product = Database::one('SELECT id, current_price_subunit FROM products WHERE is_active = 1 AND current_price_subunit IS NOT NULL ORDER BY id LIMIT 1');
+    [$code, $body] = krh_req($jars[1], $base . '/api/v1/kitchen_runs.php', [
+        'action' => 'submit', 'okv_csrf' => $submitCsrf,
+        'input_mode' => 'catalogue', 'pricing_mode' => 'by_us',
+        'recipient_name' => 'Kitchen Owner', 'recipient_phone' => '08031234567',
+        'address_line_1' => '5 Bourdillon Road', 'city' => 'Lagos', 'state' => 'Lagos',
+        'preferred_delivery_date' => $date, 'delivery_zone_id' => $zoneId,
+        'items' => [['product_id' => $product['id'], 'quantity' => '3.000']],
+    ]);
+    krh_eq(200, $code, 'a shop-picked list is sent over the real route');
+    $shopSent = json_decode($body, true) ?: [];
+    $shopId = (int) ($shopSent['id'] ?? 0);
+    krh_ok($shopId > 0, 'the shop-picked submission answers with the request it made');
+    krh_ok(str_ends_with((string) ($shopSent['redirect'] ?? ''), '&quoted=1'), 'the fetch caller is told the run is quoted, not merely submitted');
+    krh_eq(3 * (int) $product['current_price_subunit'], (int) ($shopSent['total_subunit'] ?? 0), 'the answer carries the automatic quote, exact in kobo');
+    krh_eq('quoted', (string) Database::one('SELECT status FROM kitchen_run_requests WHERE id = :id', [':id' => $shopId])['status'], 'the run is quoted in storage the moment it is sent');
+    $requestIds[] = $shopId;
+
     [$code] = krh_req($jars[1], $base . '/api/v1/kitchen_runs.php', [
         'action' => 'submit', 'okv_csrf' => $submitCsrf,
         'input_mode' => 'custom', 'pricing_mode' => 'by_us',

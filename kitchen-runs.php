@@ -41,6 +41,13 @@ $products = Database::all(
       WHERE p.is_active = 1 AND p.current_price_subunit IS NOT NULL
       ORDER BY p.name'
 );
+// The same products keyed by id, so a saved shop line can find its product,
+// its price and its unit for the prefill without a query per row.
+$productById = [];
+foreach ($products as $product) {
+    $productById[(int) $product['id']] = $product;
+}
+
 $units = Database::all('SELECT id, name FROM units_of_measurement ORDER BY id');
 $zones = Delivery::zonesActive();
 
@@ -53,6 +60,19 @@ $lastDay = Database::one(
 );
 if ($lastDay && !empty(Delivery::isEligible((string) $lastDay['preferred_delivery_date'], $customerType)['eligible'])) {
     $prefillDate = (string) $lastDay['preferred_delivery_date'];
+}
+
+// A saved list may mix shop lines and typed lines. The shop lines go to the
+// picker rows, the typed ones to the "not in the shop" rows, so the list the
+// customer re-sends reads like the one they saved.
+$shopPrefill = [];
+$freePrefill = [];
+foreach ($prefillLines as $prefillLine) {
+    if ((int) ($prefillLine['product_id'] ?? 0) > 0) {
+        $shopPrefill[] = $prefillLine;
+    } else {
+        $freePrefill[] = $prefillLine;
+    }
 }
 
 $saved = Database::one(
@@ -77,6 +97,8 @@ if ($errorCode !== '') {
     $notice = ['tone' => 'bad', 'text' => 'Saved list unavailable. Pick from My Lists.'];
 } elseif ($savedList !== null) {
     $notice = ['tone' => 'good', 'text' => 'Saved list loaded. Check then send.'];
+} elseif (okv_input('quoted', '') !== '') {
+    $notice = ['tone' => 'good', 'text' => 'Shop prices attached. Check the total and approve.'];
 } elseif (okv_input('submitted', '') !== '') {
     $notice = ['tone' => 'good', 'text' => 'List received. We will price it.'];
 } elseif (okv_input('approved', '') !== '') {
@@ -207,42 +229,75 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
       <!-- STEP 2 sheet -->
       <div data-kr-step="2" hidden class="min-h-[100dvh] md:min-h-0">
         <h2 class="font-display text-[22px] font-semibold tracking-tight">Your items</h2>
-        <p class="mt-1 text-[13px] text-ink-60">Add lines. 44px fields.</p>
+        <?php
+          $step2Subs = [
+            'catalogue' => 'Pick from the shop. Prices as marked, total as you go.',
+            'custom'    => 'Type each item. We price them and send the quote back.',
+            'upload'    => 'Add lines if you like, or just upload your list below.',
+            'priced'    => 'Type each item with its price. We confirm and proceed.',
+          ];
+        ?>
+        <p class="mt-1 text-[13px] text-ink-60" data-kr-step2-sub><?= okv_e($step2Subs[$chosen] ?? $step2Subs['custom']) ?></p>
 
-        <div class="mt-4 space-y-3" data-kr-rows>
-          <?php $rowCount = max(1, count($prefillLines)); for ($row=0;$row<$rowCount;$row++): $prefillLine=$prefillLines[$row]??[]; ?>
-            <div data-kr-row class="rounded-[14px] border border-ink-10 bg-white p-3">
-              <div class="flex items-center justify-between gap-2">
-                <label class="text-xs font-medium text-ink-60" for="kr-name-<?= $row ?>">Item <?= $row+1 ?></label>
-                <button type="button" data-kr-remove class="inline-flex min-h-[32px] items-center rounded-full px-2 text-xs text-ink-60 hover:bg-mist" aria-label="Remove item">Remove</button>
-              </div>
-              <input class="okv-input mt-2 min-h-[44px] rounded-xl" id="kr-name-<?= $row ?>" name="items[<?= $row ?>][item_name]" data-kr-name placeholder="Tomatoes" value="<?= okv_e((string)($prefillLine['item_name']??'')) ?>">
-              <div class="mt-2 grid grid-cols-3 gap-2">
-                <div>
-                  <label class="sr-only" for="kr-qty-<?= $row ?>">Quantity</label>
-                  <input class="okv-input min-h-[44px] rounded-xl" id="kr-qty-<?= $row ?>" name="items[<?= $row ?>][quantity]" data-kr-qty inputmode="decimal" placeholder="2" value="<?= okv_e((string)($prefillLine['quantity']??'')) ?>">
-                </div>
-                <div>
-                  <label class="sr-only" for="kr-unit-<?= $row ?>">Unit</label>
-                  <select class="okv-input min-h-[44px] rounded-xl" id="kr-unit-<?= $row ?>" name="items[<?= $row ?>][unit_id]">
-                    <option value="">Unit</option>
-                    <?php foreach ($units as $u): ?><option value="<?= (int)$u['id'] ?>"><?= okv_e($u['name']) ?></option><?php endforeach; ?>
-                  </select>
-                  <input type="hidden" name="items[<?= $row ?>][unit_label]" value="kg" data-kr-unit-label>
-                </div>
-                <div data-kr-price-field>
-                  <label class="sr-only" for="kr-price-<?= $row ?>">Price</label>
-                  <input class="okv-input min-h-[44px] rounded-xl" id="kr-price-<?= $row ?>" name="items[<?= $row ?>][price]" data-kr-price inputmode="decimal" placeholder="₦">
-                </div>
-              </div>
-              <input type="hidden" name="items[<?= $row ?>][note]" value="">
+        <!-- Pick from shop: a picker line per item, an Add a line under them, -->
+        <!-- the live total, and the off-shop block for everything else. -->
+        <div data-kr-section-shop <?php if ($chosen !== 'catalogue') { echo 'hidden'; } ?>>
+          <?php if (!$products): ?>
+            <p class="mt-4 rounded-xl border border-dashed border-ink-20 bg-white p-4 text-sm text-ink-60">
+              The shop is being restocked right now, so there is nothing to pick. Type your list below instead.
+            </p>
+          <?php else: ?>
+            <div class="mt-4 space-y-3" data-kr-shop-rows>
+              <?php $shopRowCount = max(1, count($shopPrefill)); for ($row = 0; $row < $shopRowCount; $row++): $prefillLine = $shopPrefill[$row] ?? []; ?>
+                <?php require __DIR__ . '/includes/components/shop/kitchen_run_shop_row.php'; ?>
+              <?php endfor; ?>
             </div>
-          <?php endfor; ?>
+
+            <button type="button" data-kr-shop-add class="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink-20 bg-white text-sm text-ink-60 hover:bg-mist">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg> Add a line
+            </button>
+          <?php endif; ?>
+
+          <div class="mt-4 rounded-xl bg-mist/60 p-3">
+            <div class="flex items-baseline justify-between gap-3">
+              <span class="text-sm font-medium">List total</span>
+              <span class="font-mono text-base font-semibold text-ink" data-kr-total aria-live="polite">&#8358;0</span>
+            </div>
+            <p class="mt-1 text-xs text-ink-60" data-kr-total-offshop hidden>+ the items you typed below, which we price.</p>
+            <p class="mt-1 text-xs text-ink-60">Today's shop prices. You approve the total before anything is charged.</p>
+          </div>
+
+          <details class="mt-4 rounded-xl border border-ink-10 bg-white" data-kr-offshop <?php if (count($freePrefill) > 0) { echo 'open'; } ?>>
+            <summary class="flex min-h-[44px] cursor-pointer list-none items-center justify-between px-4 text-sm font-medium">
+              Anything not in the shop?
+              <span class="text-xs font-normal text-ink-60">Type it, we price it</span>
+            </summary>
+            <div class="border-t border-ink-10 p-4">
+              <p class="text-xs text-ink-60">Pomo, meat, oil, anything else. These lines go to the team to price.</p>
+              <div class="mt-3 space-y-3" data-kr-rows>
+                <?php $freeRowCount = max(1, count($freePrefill)); for ($row = 0; $row < $freeRowCount; $row++): ?>
+                  <?php $prefillLine = $freePrefill[$row] ?? []; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
+                <?php endfor; ?>
+              </div>
+              <button type="button" data-kr-add class="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink-20 bg-white text-sm text-ink-60 hover:bg-mist">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg> Add item
+              </button>
+            </div>
+          </details>
         </div>
 
-        <button type="button" data-kr-add class="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink-20 bg-white text-sm text-ink-60 hover:bg-mist">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg> Add item
-        </button>
+        <!-- Every other mode: typed lines. -->
+        <div data-kr-section-text <?php if ($chosen === 'catalogue') { echo 'hidden'; } ?>>
+          <div class="mt-4 space-y-3" data-kr-rows>
+            <?php $textRowCount = max(1, count($freePrefill)); for ($row = 0; $row < $textRowCount; $row++): ?>
+              <?php $prefillLine = $freePrefill[$row] ?? []; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
+            <?php endfor; ?>
+          </div>
+
+          <button type="button" data-kr-add class="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink-20 bg-white text-sm text-ink-60 hover:bg-mist">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg> Add item
+          </button>
+        </div>
 
         <div class="mt-4 rounded-xl bg-mist/60 p-3">
           <label class="flex items-start gap-3">
@@ -260,6 +315,8 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
           <input class="okv-input min-h-[44px] rounded-xl" type="file" id="kr-attachment" name="attachment" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
           <p class="mt-1 text-xs text-ink-60">JPEG, PNG, PDF up to 5MB.</p>
         </div>
+
+        <p class="mt-3 hidden text-sm text-tomato" data-kr-error-2 role="alert" aria-live="polite"></p>
 
         <div class="mt-4 flex gap-2">
           <button type="button" data-kr-back="1" class="inline-flex min-h-[44px] items-center rounded-xl border border-ink-10 px-4 text-sm">Back</button>
@@ -322,6 +379,14 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 
         <p class="mt-3 hidden text-sm text-tomato" data-kr-error role="alert" aria-live="polite"></p>
 
+        <div class="mt-3 rounded-xl bg-mist/60 p-3" data-kr-review hidden>
+          <div class="flex items-baseline justify-between gap-3">
+            <span class="text-sm font-medium">List total at shop prices</span>
+            <span class="font-mono text-base font-semibold text-ink" data-kr-review-total></span>
+          </div>
+          <p class="mt-1 text-xs text-ink-60" data-kr-review-note hidden>+ the items you typed, priced by us.</p>
+        </div>
+
         <div class="kr-sticky-cta">
           <button type="submit" class="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-forest px-6 text-sm font-medium text-white shadow-sm hover:bg-forest/90 focus-visible:ring-2 focus-visible:ring-gold active:scale-[0.98]">Send list</button>
           <p class="mt-2 text-center text-xs text-ink-60">Nothing charged until approval.</p>
@@ -334,7 +399,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
     <h2 id="runs-heading" class="font-display text-[18px] font-semibold tracking-tight">Your runs</h2>
     <?php if (!$runs): ?>
       <div class="mt-3">
-        <?php okv_empty_state('list', 'No runs yet here', 'Start above. We will price your list.', [
+        <?php okv_empty_state('list', 'No runs yet here', 'Start above. You approve the price before anything is charged.', [
             ['href' => '/shop.php', 'label' => 'Shop produce', 'icon' => 'leaf'],
             ['href' => '/combos.php', 'label' => 'See combos', 'style' => 'outline', 'icon' => 'basket'],
         ], ['class' => 'border border-dashed border-ink-20 shadow-none']); ?>
@@ -358,16 +423,6 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 <!-- Backdrop + sheets -->
 <div id="kr-backdrop" class="kr-backdrop fixed inset-0 z-40 hidden" data-kr-close aria-hidden="true"></div>
 
-<div id="kr-items-sheet" class="kr-sheet fixed inset-x-0 bottom-0 z-50 hidden max-h-[85dvh] overflow-auto bg-white" role="dialog" aria-modal="true" aria-label="Items help">
-  <div class="p-5">
-    <div class="mx-auto h-1 w-10 rounded-full bg-mist"></div>
-    <h3 class="mt-4 font-display text-[18px] font-semibold">Add items fast</h3>
-    <p class="mt-1 text-sm text-ink-60">Tap Add item. Quantity + unit.</p>
-  </div>
-</div>
-
-<div id="kr-delivery-sheet" class="kr-sheet fixed inset-x-0 bottom-0 z-50 hidden max-h-[85dvh] overflow-auto bg-white" role="dialog" aria-modal="true" aria-label="Delivery help"></div>
-
 <div id="kr-help-sheet" class="kr-sheet fixed inset-x-0 bottom-0 z-50 hidden bg-white" role="dialog" aria-modal="true" aria-labelledby="kr-help-title">
   <div class="p-6 text-center">
     <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-forest-tint" aria-hidden="true">
@@ -380,6 +435,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 </div>
 
 <?php okv_shop_footer(); ?>
-<script src="<?= okv_e(okv_asset('/assets/js/kitchen-runs.js')) ?>" defer></script>
+<script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
+<script src="<?= okv_e(okv_asset('/assets/js/kitchen-runs.min.js')) ?>" defer></script>
 </body>
 </html>
