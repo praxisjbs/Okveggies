@@ -153,7 +153,10 @@
       backdrop.querySelectorAll('[data-sheet-close]').forEach(function (button) {
         button.addEventListener('click', function () { OKV.closeSheet(backdrop); });
       });
-      wireSwipe(backdrop);
+      // okv-motion.js owns the open and close motion and the swipe-down
+      // dismiss when it is loaded, so its GSAP tweens stay the only writer of
+      // the panel transform. Without it this plain touch swipe still ships.
+      if (!(window.OkvMotion && window.OkvMotion.ownsSheets)) { wireSwipe(backdrop); }
     });
   };
 

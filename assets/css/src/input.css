@@ -246,6 +246,41 @@
 .okv-enter-5 { animation-delay: 280ms; }
 .okv-enter-6 { animation-delay: 350ms; }
 
+/*
+ * PR8 motion system, the two handshake classes okv-motion.js sets on <html>.
+ *
+ * okv-motion-pending is printed by okv_motion_pending() before any content
+ * parses on pages that load the motion system. It holds exactly the elements
+ * the motion timeline will own, invisible from the first paint, so nothing
+ * flashes visible and then hides when the deferred scripts run. It is opacity
+ * only, so it can never shift layout, and two safety nets uncover the page:
+ * the 2.5 second dead man switch in the inline glue and okv-motion.js itself.
+ *
+ * okv-motion-on means GSAP owns the element now, so the plain CSS entrances
+ * stand down rather than run twice. The hero container's animate-okv-rise is
+ * deliberately left alone: its children are hidden while it plays, and the
+ * homepage browser test asserts the CSS animation is still full under the
+ * reduced-motion preference.
+ */
+.okv-motion-pending [data-okv-hero-seal],
+.okv-motion-pending [data-okv-hero] h1,
+.okv-motion-pending [data-okv-hero] [data-okv-hero-sub],
+.okv-motion-pending [data-okv-hero] [data-okv-hero-cta],
+.okv-motion-pending [data-okv-hero] [data-okv-hero-hairline],
+.okv-motion-pending main :is(.okv-panel, .okv-card, .okv-step-card, .okv-empty,
+  .okv-enter, [data-product-card], [data-combo-card], [data-faq-item],
+  [data-kr-mode], [data-payment-options] > .okv-choice, [data-okv-rise]) {
+  opacity: 0;
+}
+
+.okv-motion-on .okv-sheet { animation: none; }
+.okv-motion-on .okv-enter,
+.okv-motion-on .okv-enter-2,
+.okv-motion-on .okv-enter-3,
+.okv-motion-on .okv-enter-4,
+.okv-motion-on .okv-enter-5,
+.okv-motion-on .okv-enter-6 { animation: none; }
+
 /* ---------------------------------------------------------------------------
  * Checkout. The beauty flagship (plan PR3): big tappable choices, a progress
  * line with icons, and a sticky pay bar that floats above the mobile tab bar.

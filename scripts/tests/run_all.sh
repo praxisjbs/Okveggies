@@ -97,8 +97,11 @@ echo "[tests] 4. Browser pass at 390px and 1440px"
 if [ ! -d node_modules/playwright ]; then
   skip "visual_pass.mjs" "playwright not installed (npm install)"
   skip "axe_suite.mjs" "playwright not installed (npm install)"
+  skip "motion_visual_test.mjs" "playwright not installed (npm install)"
 elif ! curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
   skip "visual_pass.mjs" "nothing answering on $BASE"
+  skip "axe_suite.mjs" "nothing answering on $BASE"
+  run "motion_visual_test.mjs" node scripts/tests/motion_visual_test.mjs
 else
   run "visual_pass.mjs" node scripts/tests/visual_pass.mjs
   run "homepage_visual_test.mjs" node scripts/tests/homepage_visual_test.mjs
@@ -106,6 +109,7 @@ else
   run "content_admin_visual_test.mjs" node scripts/tests/content_admin_visual_test.mjs
   run "public_content_visual_test.mjs" php scripts/tests/public_content_visual_fixture.php
   run "role_journeys.mjs" node scripts/tests/role_journeys.mjs
+  run "motion_visual_test.mjs" node scripts/tests/motion_visual_test.mjs
 fi
 
 echo
