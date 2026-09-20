@@ -62,7 +62,10 @@ try {
         hph_ok(str_contains($body, '/shop.php?category=' . $category['slug']), 'category link reaches the ' . $category['slug'] . ' shop filter');
     }
     hph_ok(str_contains($body, 'href="/shop.php"') && str_contains($body, 'href="/combos.php"') && str_contains($body, 'href="/kitchen-runs.php"'), 'homepage provides all 3 core routes');
-    hph_ok(str_contains($body, 'Documentary photograph pending') && !str_contains($body, 'assets/img/product_images'), 'missing documentary photography never falls back to a product image');
+    hph_ok(str_contains($body, '/assets/img/hero/fresh-produce-1280.webp')
+        && str_contains($body, 'Crates of fresh tomatoes, red and yellow peppers, and onions.')
+        && !str_contains($body, 'assets/img/product_images'),
+        'missing published CMS photography uses the committed hero photo, never a product image');
 
     [, $notice] = hph_get('/?basket=added');
     hph_ok(str_contains($notice, 'Added to your basket.'), 'existing basket notices remain intact');

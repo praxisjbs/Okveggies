@@ -91,9 +91,46 @@ if ($description === '') {
 }
 $documentTitle = $seoTitle . '. OK Veggies';
 $canonical = rtrim((string) APP_URL, '/') . '/';
-$heroPath = trim((string) ($home['image_url'] ?? ''));
-$heroAlt = trim((string) ($home['image_alt'] ?? ''));
-$heroImage = $heroPath !== '' && $heroAlt !== '' ? ContentImages::presentation($heroPath) : null;
+$heroSizes = '(min-width: 768px) 50vw, 100vw';
+$defaultHeroPath = '/assets/img/hero/fresh-produce-1280.webp';
+$defaultHeroAlt = 'Crates of fresh tomatoes, red and yellow peppers, and onions.';
+$defaultHeroSrcset = implode(', ', [
+    okv_image_url('/assets/img/hero/fresh-produce-640.webp') . ' 640w',
+    okv_image_url('/assets/img/hero/fresh-produce-960.webp') . ' 960w',
+    okv_image_url($defaultHeroPath) . ' 1280w',
+]);
+$defaultHeroImage = [
+    'src' => $defaultHeroPath,
+    'srcset' => $defaultHeroSrcset,
+    'width' => 1280,
+    'height' => 721,
+];
+$defaultHeroReady = true;
+foreach (['fresh-produce-640.webp', 'fresh-produce-960.webp', 'fresh-produce-1280.webp'] as $heroFile) {
+    if (!is_file(__DIR__ . '/assets/img/hero/' . $heroFile)) {
+        $defaultHeroReady = false;
+        break;
+    }
+}
+
+$heroPath = '';
+$heroAlt = '';
+$heroImage = null;
+$publishedHeroPath = trim((string) ($home['image_url'] ?? ''));
+$publishedHeroAlt = trim((string) ($home['image_alt'] ?? ''));
+if ($publishedHeroPath !== '' && $publishedHeroAlt !== '') {
+    $publishedHero = ContentImages::presentation($publishedHeroPath);
+    if ($publishedHero['srcset'] !== '' && $publishedHero['width'] > 0 && $publishedHero['height'] > 0) {
+        $heroPath = $publishedHeroPath;
+        $heroAlt = $publishedHeroAlt;
+        $heroImage = $publishedHero;
+    }
+}
+if ($heroImage === null && $defaultHeroReady) {
+    $heroPath = $defaultHeroImage['src'];
+    $heroAlt = $defaultHeroAlt;
+    $heroImage = $defaultHeroImage;
+}
 $ogImage = $heroImage !== null ? rtrim((string) APP_URL, '/') . okv_image_url($heroPath) : '';
 
 $basketNotice = (string) okv_input('basket', '');
@@ -113,7 +150,7 @@ $noticeMessages = [
   <meta name="description" content="<?= okv_e($description) ?>">
   <link rel="canonical" href="<?= okv_e($canonical) ?>">
   <meta property="og:url" content="<?= okv_e($canonical) ?>">
-  <?php if ($heroImage !== null): ?><link rel="preload" as="image" href="<?= okv_e(okv_image_url($heroPath)) ?>"<?= $heroImage['srcset'] !== '' ? ' imagesrcset="' . okv_e($heroImage['srcset']) . '" imagesizes="(min-width: 768px) 50vw, 100vw"' : '' ?>><?php endif; ?>
+  <?php if ($heroImage !== null): ?><link rel="preload" as="image" href="<?= okv_e(okv_image_url($heroPath)) ?>" imagesrcset="<?= okv_e($heroImage['srcset']) ?>" imagesizes="<?= okv_e($heroSizes) ?>"><?php endif; ?>
   <?php okv_head_meta(['og_title' => $documentTitle, 'og_description' => $description, 'og_image' => $ogImage]); ?>
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
@@ -154,8 +191,8 @@ $noticeMessages = [
 
     <?php if ($heroImage !== null): ?>
       <figure class="overflow-hidden rounded-xl bg-white/10 shadow-okv-2">
-        <img src="<?= okv_e(okv_image_url($heroPath)) ?>"<?= $heroImage['srcset'] !== '' ? ' srcset="' . okv_e($heroImage['srcset']) . '" sizes="(min-width: 768px) 50vw, 100vw"' : '' ?>
-             alt="<?= okv_e($heroAlt) ?>" width="<?= $heroImage['width'] > 0 ? (int) $heroImage['width'] : 1280 ?>" height="<?= $heroImage['height'] > 0 ? (int) $heroImage['height'] : 960 ?>"
+        <img src="<?= okv_e(okv_image_url($heroPath)) ?>" srcset="<?= okv_e($heroImage['srcset']) ?>" sizes="<?= okv_e($heroSizes) ?>"
+             alt="<?= okv_e($heroAlt) ?>" width="<?= (int) $heroImage['width'] ?>" height="<?= (int) $heroImage['height'] ?>"
              class="aspect-[4/3] h-full w-full object-cover" data-okv-parallax fetchpriority="high" decoding="async">
       </figure>
     <?php else: ?>

@@ -724,6 +724,13 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 
 ## Session log (newest first)
 
+### 20 Sep 2026, homepage hero photograph optimisation
+
+- Retrieved the chosen source from the latest `main` image commit `d262d0b6b9ccbb10e434cfaa6edbe3df4347e122`. The 1671px by 941px PNG remains outside this branch. Generated committed WebP candidates at 640px by 360px, 960px by 541px and 1280px by 721px with quality 78 and stripped profiles. The inspected 1280px candidate remains clear, and the three files are 59,632 bytes, 107,236 bytes and 155,062 bytes.
+- The homepage now uses the committed produce photo when the published CMS image is absent or invalid, while a valid published CMS image and its alt text still win. The preload and image share the 50vw desktop and 100vw mobile sizes for the current two-column hero, carry the same srcset, explicit dimensions, object-cover, high priority and asynchronous decoding. No database or generic CMS upload path was changed.
+- Updated the homepage and image contract checks for the default photo and its three candidates. Static verification passed: image contract 98/98, lesser-text 126/126, motion coverage 52/52, brand check 8/8, npm image test 98/98 and `git diff --check`.
+- PHP lint, PHP unit and HTTP suites, browser screenshots, no-JavaScript screenshots and CLS/network inspection were blocked because PHP and a local base URL are unavailable in this container. PR6 and PR9 remain open and are not marked complete by this image-only task.
+
 ### 20 Sep 2026, PR1 post-open audit and merge
 
 - Main moved under the PR (PR3 checkout beauty merged as PR #56), so `origin/main` was merged in first: the only overlap was the two ledgers, both rows stand, PR1 above PR3 by commit time.
