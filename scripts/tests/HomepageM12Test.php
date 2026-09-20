@@ -8,7 +8,7 @@ $admin = (string) file_get_contents($root . '/admin/content.php');
 $controller = (string) file_get_contents($root . '/api/v1/content.php');
 $images = (string) file_get_contents($root . '/includes/classes/ContentImages.php');
 
-okv_test_ok(str_contains($home, "ContentPages::findPublished('home')"), 'homepage copy comes from the published ContentPages snapshot');
+okv_test_ok(str_contains($home, "ContentPages::findPublished('home')"), 'editable homepage copy comes from the published ContentPages snapshot');
 okv_test_ok(str_contains($home, '$fallback') && !str_contains($home, 'findPreview'), 'homepage has reviewed continuity copy and never reads a draft');
 okv_test_ok(str_contains($home, 'ContentRenderer::render($copy[\'promise_body\'])'), 'the editable promise uses the restricted Markdown renderer');
 okv_test_ok(str_contains($home, 'The OK Veggies promise'), 'the promise has its own semantic section');
@@ -48,3 +48,18 @@ okv_test_ok(str_contains($images, 'array_merge(self::WIDTHS, [(int) $match[2]])'
 $unknown = ContentImages::presentation('/assets/img/product_images/Fresh Tomatoes.jpeg');
 okv_test_eq('', $unknown['srcset'], 'a product image is never treated as a documentary responsive set');
 okv_test_eq('/assets/img/product_images/Fresh Tomatoes.jpeg', $unknown['src'], 'an unrelated safe path is returned unchanged for neutral presentation');
+
+// The approved presentation copy is fixed without writing to the CMS snapshot.
+okv_test_ok(str_contains($home, "\$heroHeading = 'Bringing the Best of the Farm Straight to Your Kitchen.';")
+    && str_contains($home, 'okv_e($heroHeading)'), 'hero renders the approved heading, even when older CMS copy exists');
+okv_test_ok(str_contains($home, "\$heroIntro = 'Freshness You Can Trust. Sourced daily from local farms, carefully selected, and delivered perfectly to you.';")
+    && str_contains($home, 'okv_e($heroIntro)'), 'hero renders the approved supporting text exactly');
+foreach (['hero_eyebrow', 'primary_cta_path', 'primary_cta_label', 'secondary_cta_path', 'secondary_cta_label'] as $field) {
+    okv_test_ok(str_contains($home, 'okv_e($copy[\'' . $field . '\'])'), $field . ' still honours the published CMS value');
+}
+okv_test_ok(str_contains($home, "\$heroSizes = '100vw';"), 'hero responsive sizing describes the full viewport, not a column');
+$hero = substr($home, strpos($home, '<section class="okv-home-hero'), strpos($home, '</section>') - strpos($home, '<section class="okv-home-hero'));
+okv_test_ok(str_contains($hero, 'data-okv-hero>') && str_contains($hero, 'okv-home-hero-media')
+    && str_contains($hero, 'okv-home-hero-wash'), 'one hero hook contains the full-image and full-overlay layers');
+okv_test_ok(!str_contains($hero, 'backdrop-blur') && !str_contains($hero, 'okv-card')
+    && !str_contains($hero, 'bg-white/') && !str_contains($hero, 'animate-okv-rise'), 'hero has no glass panel or JavaScript-independent entrance');

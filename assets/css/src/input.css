@@ -177,6 +177,40 @@
   /* Page container width. */
   .okv-container { @apply max-w-content mx-auto px-4 md:px-8; }
 
+  /*
+   * Homepage only. The photo and forest wash fill the same unframed viewport.
+   * Vertical image overscan covers the 7% scroll drift even at scale 1.
+   * No height is animated, and the static composition needs no JavaScript.
+   */
+  .okv-home-hero {
+    @apply relative isolate grid items-center overflow-hidden;
+    min-height: 100vh;
+    min-height: 100svh;
+    overflow-wrap: anywhere;
+  }
+  .okv-home-hero-media { @apply absolute inset-0 overflow-hidden; }
+  .okv-home-hero-image {
+    @apply absolute left-0 top-0;
+    height: 116%;
+    object-position: 58% center;
+  }
+  .okv-home-hero-wash {
+    @apply pointer-events-none absolute inset-0;
+    background: linear-gradient(160deg,
+      theme('colors.forest.DEFAULT / 76%') 0%,
+      theme('colors.forest.DEFAULT / 84%') 50%,
+      theme('colors.forest.DEFAULT / 90%') 100%);
+  }
+  @screen md {
+    .okv-home-hero-image { object-position: center; }
+    .okv-home-hero-wash {
+      background: linear-gradient(90deg,
+        theme('colors.forest.DEFAULT / 80%') 0%,
+        theme('colors.forest.DEFAULT / 77%') 50%,
+        theme('colors.forest.DEFAULT / 74%') 100%);
+    }
+  }
+
   /* Slide-up sheets on mobile that become a centred dialog on wider screens.
      The 24px top radius and the blurred backdrop are the house sheet pattern. */
   .okv-sheet-backdrop { @apply fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm sm:items-center sm:p-4; }
@@ -257,10 +291,9 @@
  * the 2.5 second dead man switch in the inline glue and okv-motion.js itself.
  *
  * okv-motion-on means GSAP owns the element now, so the plain CSS entrances
- * stand down rather than run twice. The hero container's animate-okv-rise is
- * deliberately left alone: its children are hidden while it plays, and the
- * homepage browser test asserts the CSS animation is still full under the
- * reduced-motion preference.
+ * stand down rather than run twice. The homepage hero has no CSS entrance:
+ * its timeline is owned here only when motion is allowed. The scoped reduced
+ * motion rule below also keeps its copy visible before the controller loads.
  */
 .okv-motion-pending [data-okv-hero-seal],
 .okv-motion-pending [data-okv-hero] h1,
@@ -271,6 +304,19 @@
   .okv-enter, [data-product-card], [data-combo-card], [data-faq-item],
   [data-kr-mode], [data-payment-options] > .okv-choice, [data-okv-rise]) {
   opacity: 0;
+}
+
+/* This hero's approved still state takes precedence over the older site policy. */
+@media (prefers-reduced-motion: reduce) {
+  [data-okv-hero], [data-okv-hero] * {
+    animation: none !important;
+    transition: none !important;
+  }
+  [data-okv-hero] :is(h1, [data-okv-word], [data-okv-hero-seal],
+    [data-okv-hero-sub], [data-okv-hero-cta], [data-okv-hero-hairline], [data-okv-parallax]) {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 .okv-motion-on .okv-sheet { animation: none; }
