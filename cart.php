@@ -13,6 +13,7 @@ require_once __DIR__ . '/includes/components/shop/activation_banner.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
+require_once __DIR__ . '/includes/components/shop/icons.php';
 
 $basket = Basket::state();
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
@@ -50,7 +51,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
 
 <main class="okv-container py-8 md:py-12">
   <nav class="mb-6 text-sm text-ink-60" aria-label="Breadcrumb">
-    <a href="/" class="hover:text-forest">Home</a> / <span aria-current="page">Basket</span>
+    <a href="/" class="inline-flex min-h-[44px] items-center hover:text-forest">Home</a> / <span aria-current="page">Basket</span>
   </nav>
 
   <div class="flex flex-wrap items-end justify-between gap-4">
@@ -102,7 +103,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
             <div class="min-w-0 flex-1">
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-gold-ink"><?= $combo ? 'Ready basket' : 'Produce' ?></p>
               <h2 class="mt-1 font-display text-lg font-bold text-ink">
-                <a href="<?= okv_e($line['url']) ?>" class="hover:text-forest"><?= okv_e($line['name']) ?></a>
+                <a href="<?= okv_e($line['url']) ?>" class="inline-flex min-h-[44px] items-center hover:text-forest"><?= okv_e($line['name']) ?></a>
               </h2>
               <p class="mt-1 text-sm text-ink-60">
                 <?= okv_e($line['quantity_display']) ?> <?= okv_e($line['unit']) ?> at <?= okv_e($line['unit_price_display']) ?><?= $combo ? '' : ' per ' . okv_e($line['unit']) ?>

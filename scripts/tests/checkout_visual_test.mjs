@@ -104,12 +104,14 @@ try {
     const cardHeight = await page.locator('label.okv-choice').first().evaluate((el) => Math.round(el.getBoundingClientRect().height));
     ok(cardHeight >= 72, `${viewport.name}: a payment choice is a large card, not a text line`, `(${cardHeight}px)`);
     await page.locator('input[name="payment_option"][value="deposit"]').check({ force: true });
-    const selectedRing = await page.locator('input[name="payment_option"][value="deposit"]:checked + span').count()
-      && await page.evaluate(() => {
-        const card = document.querySelector('input[value="deposit"]').closest('label');
-        return getComputedStyle(card).getPropertyValue('--tw-ring-color') !== '';
-      });
-    ok(selectedRing, `${viewport.name}: the chosen card carries the selection ring`);
+    // The border and ring travel on the 240ms Botanical curve; let it land.
+    await page.waitForTimeout(400);
+    const selectedRing = await page.evaluate(() => {
+      const card = document.querySelector('input[value="deposit"]').closest('label');
+      return getComputedStyle(card).borderColor === 'rgb(15, 81, 50)'
+        && getComputedStyle(card).boxShadow.includes('rgb(201, 146, 43)');
+    });
+    ok(selectedRing, `${viewport.name}: the chosen card carries the forest border and gold ring`);
     if (viewport.touch) {
       const bar = await page.evaluate(() => {
         const pay = document.querySelector('[data-pay-bar]');
@@ -147,11 +149,11 @@ try {
     const overflow = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     ok(overflow[0] <= overflow[1] + 1, `${viewport.name}: checkout has no horizontal overflow`, `(${overflow[0]} > ${overflow[1]})`);
 
-    // The sheets: the fee note opens and closes, focus comes home.
-    await page.locator('[data-sheet-open="fee-sheet"]').click();
-    ok(await page.locator('#fee-sheet [role="dialog"]').isVisible(), `${viewport.name}: the fee sheet opens`);
+    // The sheets: the cancellation note opens and closes, focus comes home.
+    await page.locator('[data-sheet-open="cancel-sheet"]').click();
+    ok(await page.locator('#cancel-sheet [role="dialog"]').isVisible(), `${viewport.name}: the cancellation sheet opens`);
     await page.keyboard.press('Escape');
-    ok(!(await page.locator('#fee-sheet').evaluate((el) => !el.hidden)), `${viewport.name}: Escape closes the fee sheet`);
+    ok(!(await page.locator('#cancel-sheet').evaluate((el) => !el.hidden)), `${viewport.name}: Escape closes the cancellation sheet`);
     const focusHome = await page.evaluate(() => document.activeElement?.hasAttribute('data-sheet-open'));
     ok(focusHome, `${viewport.name}: focus returns to the sheet trigger`);
 
@@ -185,6 +187,8 @@ try {
     await page.addScriptTag({ path: axeSource });
     const axe = await page.evaluate(() => axe.run(document, {
       runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] },
+      // Freeze entrance animations for measurement only; the page keeps its motion.
+      animations: { onReady: 'disabled' },
     }));
     const bad = axe.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious');
     ok(bad.length === 0, `${viewport.name}: axe reports no critical or serious violation`,

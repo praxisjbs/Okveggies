@@ -132,8 +132,11 @@
       if (!select || !button || !sheet) { return; }
 
       // Swap the select for the day button. The select stays in the form and
-      // carries the value; it just stops being the thing you touch.
+      // carries the value; it just stops being the thing you touch. Both the
+      // attribute and the `hidden` class have to go: the class sets
+      // display:none, and the attribute alone would leave it invisible.
       button.hidden = false;
+      button.classList.remove('hidden');
       select.hidden = true;
       select.tabIndex = -1;
       select.required = false;
