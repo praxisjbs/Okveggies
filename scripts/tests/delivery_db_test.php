@@ -5,8 +5,8 @@
  * OK Veggies. Delivery reads against a real database. The eligibility rule is
  * covered by DeliveryTest.php; this checks the reads it depends on line up with
  * the reference seed: the household delivery days (Mon, Wed, Thu, Sat), the
- * business days (Mon, Tue, Fri, the 3 September decision seeded in 003 and
- * carried to existing databases by migration 051), the active Lagos zones, and
+ * business days (Mon, Tue, Fri, the 3 September decision carried by
+ * migration 051), the active Lagos zones, and
  * that the next eligible dates come back only on allowed weekdays.
  *
  *   php scripts/tests/delivery_db_test.php
