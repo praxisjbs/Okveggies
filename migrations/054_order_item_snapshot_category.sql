@@ -15,7 +15,7 @@ SET @has_snapshot_category := (
 SET @snapshot_category_ddl := IF(
   @has_snapshot_category = 0,
   'ALTER TABLE `order_items` ADD COLUMN `snapshot_category_id` BIGINT UNSIGNED NULL AFTER `product_id`',
-  'SELECT 1'
+  'DO 0'
 );
 PREPARE snapshot_category_stmt FROM @snapshot_category_ddl;
 EXECUTE snapshot_category_stmt;
@@ -30,7 +30,7 @@ SET @has_snapshot_index := (
 SET @snapshot_index_ddl := IF(
   @has_snapshot_index = 0,
   'CREATE INDEX `idx_order_items_snapshot_category_id` ON `order_items` (`snapshot_category_id`)',
-  'SELECT 1'
+  'DO 0'
 );
 PREPARE snapshot_index_stmt FROM @snapshot_index_ddl;
 EXECUTE snapshot_index_stmt;

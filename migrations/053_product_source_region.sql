@@ -15,7 +15,7 @@ SET @has_source_region := (
 SET @source_region_ddl := IF(
   @has_source_region = 0,
   'ALTER TABLE `products` ADD COLUMN `source_region` VARCHAR(255) NULL AFTER `description`',
-  'SELECT 1'
+  'DO 0'
 );
 PREPARE source_region_stmt FROM @source_region_ddl;
 EXECUTE source_region_stmt;
