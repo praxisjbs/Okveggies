@@ -10,6 +10,7 @@
     "build": "npm run build:css && npm run build:js",
     "test:visual": "node scripts/tests/visual_pass.mjs",
     "test:motion": "node scripts/tests/motion_visual_test.mjs",
+    "test:motion-coverage": "node scripts/tests/motion_coverage_test.mjs",
     "test:axe": "node scripts/tests/axe_suite.mjs",
     "test:lesser": "node scripts/tests/lesser_text_test.mjs",
     "test:images": "node scripts/tests/image_contract_test.mjs",

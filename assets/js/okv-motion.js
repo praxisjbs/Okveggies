@@ -276,12 +276,12 @@
 
   // ---- Micro feedback: press, add to basket, shake, success -----------------
 
-  /** The success pop: the Market Bounce, elastic.out, about 320ms. */
+  /** The success pop: the Market Bounce, elastic.out, 320ms in all. */
   function bounceTimeline(el) {
     remember(el);
-    return gsap.timeline({ overwrite: 'auto' }).to(el, { scale: 0.9, duration: 0.1, ease: 'power2.in' })
-      .to(el, { scale: 1.08, duration: 0.15, ease: 'power2.out' })
-      .to(el, { scale: 1, duration: 0.25, ease: 'elastic.out(1, 0.5)', clearProps: 'transform,will-change' });
+    return gsap.timeline({ overwrite: 'auto' }).to(el, { scale: 0.9, duration: 0.07, ease: 'power2.in' })
+      .to(el, { scale: 1.08, duration: 0.1, ease: 'power2.out' })
+      .to(el, { scale: 1, duration: 0.15, ease: 'elastic.out(1, 0.5)', clearProps: 'transform,will-change' });
   }
 
   /** The error shake: x -4 to 4, twice, power2.inOut, 300ms in all. */

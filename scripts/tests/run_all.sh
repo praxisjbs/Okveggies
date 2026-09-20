@@ -115,6 +115,7 @@ fi
 echo
 echo "[tests] 5. Static guards"
 run "brand-check.sh" bash scripts/brand-check.sh
+run "motion_coverage_test.mjs" node scripts/tests/motion_coverage_test.mjs
 run "lesser_text_test.mjs" node scripts/tests/lesser_text_test.mjs
 run "image_contract_test.mjs" node scripts/tests/image_contract_test.mjs
 

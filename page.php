@@ -153,7 +153,7 @@ $actions = match ($slug) {
     </nav>
 
     <?php if ($isStory): ?>
-      <article>
+      <article class="okv-enter">
         <header class="grid overflow-hidden rounded-xl bg-white shadow-okv-2 lg:grid-cols-12">
           <div class="p-6 md:p-10 lg:col-span-6 lg:flex lg:flex-col lg:justify-center">
             <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
@@ -180,7 +180,7 @@ $actions = match ($slug) {
         <div class="mx-auto max-w-3xl py-10 md:py-16" data-content-body><?= $rendered['html'] ?></div>
       </article>
     <?php elseif ($isHow): ?>
-      <article class="rounded-xl bg-white p-6 shadow-okv-1 md:p-10">
+      <article class="okv-enter rounded-xl bg-white p-6 shadow-okv-1 md:p-10">
         <header class="max-w-3xl border-b border-mist pb-8">
           <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($visibleTitle) ?></h1>
@@ -189,7 +189,7 @@ $actions = match ($slug) {
         <?php require __DIR__ . '/includes/components/shop/make_it_right_guidance.php'; ?>
       </article>
     <?php elseif ($isFaq): ?>
-      <article class="mx-auto max-w-4xl rounded-xl bg-white p-6 shadow-okv-1 md:p-10">
+      <article class="okv-enter mx-auto max-w-4xl rounded-xl bg-white p-6 shadow-okv-1 md:p-10">
         <header class="border-b border-mist pb-8">
           <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($visibleTitle) ?></h1>
@@ -210,7 +210,7 @@ $actions = match ($slug) {
         </aside><?php endif; ?>
       </article>
     <?php elseif ($isLegal): ?>
-      <article class="mx-auto max-w-4xl rounded-xl bg-white p-6 shadow-okv-1 md:p-10">
+      <article class="okv-enter mx-auto max-w-4xl rounded-xl bg-white p-6 shadow-okv-1 md:p-10">
         <header class="border-b border-mist pb-8">
           <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($visibleTitle) ?></h1>

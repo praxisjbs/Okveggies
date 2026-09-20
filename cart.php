@@ -87,7 +87,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
     <div class="mt-8 grid gap-8 lg:grid-cols-12">
       <section class="space-y-4 lg:col-span-8" aria-label="Basket items">
         <?php foreach ($basket['lines'] as $line): $combo = $line['item_type'] === 'combo'; ?>
-          <article class="rounded-lg bg-white p-4 shadow-okv-1 sm:flex sm:items-start sm:gap-5">
+          <article class="okv-enter rounded-lg bg-white p-4 shadow-okv-1 sm:flex sm:items-start sm:gap-5">
             <div class="hidden h-20 w-20 flex-none overflow-hidden rounded-md bg-forest-tint sm:block">
               <?php if ($line['image_url'] !== ''): ?>
                 <img src="<?= okv_e($line['image_url']) ?>"
@@ -137,7 +137,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
       </section>
 
       <aside class="lg:col-span-4">
-        <div class="sticky top-24 rounded-xl bg-white p-6 shadow-okv-2">
+        <div class="okv-enter okv-enter-2 sticky top-24 rounded-xl bg-white p-6 shadow-okv-2">
           <h2 class="font-display text-xl font-bold text-ink">Basket total</h2>
           <span class="mt-2 block w-12 border-t-2 border-gold" aria-hidden="true"></span>
           <div class="mt-5 flex justify-between font-mono text-lg font-semibold text-forest">

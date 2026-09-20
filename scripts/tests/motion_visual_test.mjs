@@ -319,6 +319,47 @@ try {
     }
   }
 
+  // 60fps under the frozen profile: 4x CPU throttle, frame deltas sampled
+  // through a scroll entrance, a sheet open and close. Median at 60fps, p95
+  // and the worst frame bounded, so no sustained jank and no long stall.
+  console.log('\n[60fps under 4x CPU throttle]');
+  for (const fpsWidth of WIDTHS) {
+    const fpsContext = await browser.newContext({
+      viewport: { width: fpsWidth.width, height: fpsWidth.height },
+      hasTouch: fpsWidth.touch,
+      isMobile: fpsWidth.touch,
+    });
+    const fpsPage = await newPage(fpsContext);
+    const cdp = await fpsContext.newCDPSession(fpsPage);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    await fpsPage.goto(BASE + FIXTURE, { waitUntil: 'networkidle' });
+    const frames = await fpsPage.evaluate(() => new Promise((done) => {
+      const deltas = [];
+      let last = performance.now();
+      const tick = () => {
+        const now = performance.now();
+        deltas.push(now - last);
+        last = now;
+        if (deltas.length < 200) { requestAnimationFrame(tick); } else { done(deltas); }
+      };
+      requestAnimationFrame(tick);
+      document.querySelector('[data-fixture-grid]').scrollIntoView({ block: 'center' });
+      setTimeout(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+        document.querySelector('[data-fixture-open-sheet]').click();
+        setTimeout(() => { document.querySelector('#fixture-sheet [data-sheet-close]').click(); }, 500);
+      }, 600);
+    }));
+    const sorted = [...frames].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    const worst = sorted[sorted.length - 1];
+    ok(median <= 20, `${fpsWidth.name}: median frame holds 60fps at 4x throttle`, `(median ${median.toFixed(1)}ms)`);
+    ok(p95 <= 50, `${fpsWidth.name}: p95 frame shows no sustained jank`, `(p95 ${p95.toFixed(1)}ms)`);
+    ok(worst <= 100, `${fpsWidth.name}: worst frame shows no long stall`, `(worst ${worst.toFixed(1)}ms)`);
+    await fpsContext.close();
+  }
+
   // Reduced motion is not collapsed, per the client decision of 20 Sep 2026.
   console.log('\n[reduced motion, full motion still runs]');
   const reduceContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
