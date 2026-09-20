@@ -57,6 +57,12 @@ const contentImages = fs.readFileSync(path.join(root, 'includes/classes/ContentI
 ok(contentImages.includes('private const WIDTHS = [640, 960, 1280]'),
   'content WebP widths are 640, 960 and 1280');
 
+for (const width of [640, 960, 1280]) {
+  const hero = path.join(root, 'assets/img/hero', `fresh-produce-${width}.webp`);
+  ok(fs.existsSync(hero) && fs.statSync(hero).size > 0,
+    `homepage hero has a non-empty ${width}px WebP variant`);
+}
+
 const optimiser = fs.readFileSync(path.join(root, 'scripts/brand/optimise_catalogue_images.sh'), 'utf8');
 ok(optimiser.includes('400 800 1200') && optimiser.includes('.webp'),
   'the optimiser writes the three WebP widths');

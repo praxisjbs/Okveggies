@@ -28,7 +28,17 @@ okv_test_ok(str_contains($home, 'rel="canonical"') && str_contains($home, 'prope
 okv_test_ok(str_contains($home, "'og_title' => \$documentTitle") && str_contains($home, "'og_description' => \$description"), 'published SEO values reach shared metadata');
 okv_test_ok(str_contains($home, 'Documentary photograph pending') && str_contains($home, 'We will not replace it with stock photography'), 'missing approved photography is stated honestly');
 okv_test_ok(str_contains($home, 'fetchpriority="high"') && !str_contains($home, 'fetchpriority="high" loading="lazy"'), 'the approved hero is high priority and never lazy-loaded');
-okv_test_ok(str_contains($home, 'imagesrcset=') && str_contains($home, 'sizes="(min-width: 768px) 50vw, 100vw"'), 'the hero uses responsive image candidates');
+okv_test_ok(str_contains($home, 'imagesrcset=') && str_contains($home, 'sizes="<?= okv_e($heroSizes) ?>"'), 'the hero preload and image share responsive sizing');
+okv_test_ok(str_contains($home, 'fresh-produce-640.webp')
+    && str_contains($home, 'fresh-produce-960.webp')
+    && str_contains($home, 'fresh-produce-1280.webp'),
+    'the committed hero exposes all three WebP candidates');
+okv_test_ok(str_contains($home, 'Crates of fresh tomatoes, red and yellow peppers, and onions.')
+    && str_contains($home, '$defaultHeroReady'),
+    'the committed hero has descriptive fallback text and a missing-asset guard');
+okv_test_ok(str_contains($home, '$publishedHero = ContentImages::presentation($publishedHeroPath)')
+    && str_contains($home, '$heroImage = $publishedHero'),
+    'a valid published CMS hero still takes precedence over the committed fallback');
 okv_test_ok(str_contains($admin, 'image/jpeg,image/png,image/webp') && str_contains($admin, 'required'), 'admin image input restricts formats and requires supporting fields');
 okv_test_ok(str_contains($controller, 'Rbac::requirePermission(\'content.edit\')') && str_contains($controller, 'Csrf::validate()'), 'documentary image writes inherit server RBAC and CSRF gates');
 okv_test_ok(str_contains($images, "private const WIDTHS = [640, 960, 1280]") && str_contains($images, 'imagewebp'), 'content photography is resized into responsive WebP variants');
