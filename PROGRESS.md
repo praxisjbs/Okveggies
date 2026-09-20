@@ -724,6 +724,14 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 
 ## Session log (newest first)
 
+### 20 Sep 2026, PR1 post-open audit and merge
+
+- Main moved under the PR (PR3 checkout beauty merged as PR #56), so `origin/main` was merged in first: the only overlap was the two ledgers, both rows stand, PR1 above PR3 by commit time.
+- Verification on the merged tree, run directly against MySQL 8 and a real Chromium: unit suite **3,395 / 3,395**, brand gate **8 / 8**, `php scripts/migrate.php` idempotent, `git diff --check` clean, no em dash in the diff. Database suites all green: reference seed 28/28, delivery 15/15, cancellation 32/32, content pages 75/75 (with the privacy publish assertion strengthened to compare the exact audit ids), settings 46/46, and PR3's checkout 31/31 across the merge, which proves the Monday business day and the new cancellation wording hold inside the checkout journey.
+- Browser pass at 390 and 1440 on the only UI PR1 touches: no horizontal overflow, no console errors, the attest checkbox and readiness rows hit at 44px and up through their `min-h-[44px]` labels (60px measured at 390), the gold keyboard ring reads `rgb(201, 146, 43)`, and anonymous `admin/content.php` still redirects to the login while the owner session renders the panel. The flags the scan raised outside PR1's files are recorded below as follow-ups, not fixed here.
+- The HTTP suites stay unexecuted in this container: the PHP-in-WebAssembly suite process crawls at zero output nondeterministically, an environment fault this build cannot clear. The Owner waived them for this merge on 20 Sep; they remain registered in `run_all.sh`, CI and the release gate, where a real PHP runs them.
+- Follow-ups found, none introduced by PR1: `CustomerNotifications::markAllRead()` (includes/classes/CustomerNotifications.php, near line 112) marks held notifications read because it lacks the `d.status = :sent` filter that `unreadCount()` has, so `customer_notifications_db_test` sits at 14/15 on `main` too; and the delivery day toggles on `admin/delivery.php` label their checkboxes "On" only with about a 20px hit target, a pre-existing pattern on every day row.
+
 ### 20 Sep 2026, PR1 Legal Truth and Delivery Truth (fixes 1, 3, 14, 18)
 
 Branch `arena/01a0bd40-okveggies`, from `main` at `95f101e`. Five questions were put to the Owner before any code, each with three options and a recommendation: Monday lands as seed plus migration (A), the cancellation rule becomes a symmetric deposit share (A), the legal workflow is proved by tests plus an admin readiness panel (B), the M2 seed assertions move to a new migrated-database suite with the Being sourced label kept (A), and the checkout line stays amount-free, saying "the deposit part of what you paid" (B).
