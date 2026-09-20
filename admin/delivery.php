@@ -65,8 +65,9 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <span class="text-sm font-semibold text-ink">
             <?= okv_e(ucfirst((string) $day['customer_type'])) ?>, <?= okv_e($isoDays[(int) $day['day_of_week']] ?? (string) $day['day_of_week']) ?>
           </span>
-          <label class="flex items-center gap-2 text-sm text-ink-60">On
-            <input type="checkbox" name="is_active" value="1" <?= $day['is_active'] ? 'checked' : '' ?>>
+          <label class="flex min-h-[44px] items-center gap-2 text-sm text-ink-60">On
+            <input type="checkbox" name="is_active" value="1" <?= $day['is_active'] ? 'checked' : '' ?>
+                   aria-label="<?= okv_e(ucfirst((string) $day['customer_type'])) ?>, <?= okv_e($isoDays[(int) $day['day_of_week']] ?? (string) $day['day_of_week']) ?> active">
           </label>
           <label class="text-sm text-ink-60">Cutoff
             <input class="okv-input mt-1" type="time" name="cutoff_time" value="<?= okv_e(substr((string) $day['cutoff_time'], 0, 5)) ?>" required>
