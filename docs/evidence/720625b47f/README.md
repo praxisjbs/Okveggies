@@ -3,8 +3,9 @@
 Every file here names one SHA: `720625b47f5e10ace8289cbaff674bb1168630ce`, the
 tip of `main` when this branch was cut, 20 September 2026. One file is the
 exception by design: `15-audit-round-766c0df-72f59b8.log` re-runs the whole battery on
-origin/main `766c0df` after PR #65 landed, because that merge closed the two
-red blockers (B1, B2) that the earlier files record as open. Where the two
+origin/main after PR #65 landed (`766c0df`) and again after PR #67 (`72f59b8`),
+because PR #65 closed the two red blockers (B1, B2) that the earlier files
+record as open. Where the two
 trees disagree, the audit-round file wins. Nothing in this pack
 is a substitute for a gate run that did not happen: sections that need MySQL 8,
 Chromium or the live host are recorded as REFUSED or NOT RUN, with the refusal
@@ -37,7 +38,7 @@ parser, `run.php` and the suites are the real scripts, the gate is the real
 | `11-migration-drift-forensics.log` | Why every production deploy since 09:33 UTC fails | PR #57 edited shipped migration `003`; the Migrator drift guard blocks `migrate.php`; nine failed deploy runs listed; three remedies weighed, R1 recommended |
 | `12-github-state-snapshot.log` | Fix 26 audit, environment check, live-host probe | repo public; 3 collaborators; 0 environments (PR5 not landed); secrets and branch protection UNVERIFIED with this token; live host unroutable from this box |
 | `13-fix4-credential-hygiene.log` | Fix 4 code-side proofs + the Owner's live checklist and attestation wording | 0 seeded user rows, 0 password literals in shipped SQL, no demo emails; all four rotation endpoints stamp `password_changed_at`; live proof is the Owner's to produce and tick |
-| `15-audit-round-766c0df-72f59b8.log` | The post-PR audit round, battery re-run on the merged tree | origin/main `766c0df` (PR #65) merged in: migration 003 restored byte-for-byte and the Owner pinned the full-colour lockup, so the unit suite is 3,426/3,426 green and the production deploy is green end to end; the guard matrix, the preflight refusals, the new suite-wiring guard and the still-absent MySQL 8 are all re-proved here |
+| `15-audit-round-766c0df-72f59b8.log` | The post-PR audit round, battery re-run on two merged trees | `766c0df` (PR #65: migration 003 restored byte-for-byte, Owner letterhead decision) then `72f59b8` (PR #67, homepage hero): unit 3,426/3,426 then 3,456/3,456, CI and the production deploy green end to end on both, and the guard matrix, preflight refusals, unit floor, the new suite-wiring check (which caught PR #67's hero suite unwired) and the still-absent MySQL 8 are all re-proved here |
 
 Reproduce any line: the harness lives outside the repo (PATH shim plus
 `/home/user/.gate-tools/phpshim.mjs`); inside the repo the commands are exactly
