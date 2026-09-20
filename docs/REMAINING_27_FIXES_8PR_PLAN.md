@@ -1,4 +1,4 @@
-# OK Veggies: Remaining 27 Fixes, 8 PR Plan
+# OK Veggies: Remaining 29 Fixes, 8 PR Plan - Direct Live, No Staging
 
 **Plan type:** PR0 Foundation
 **Branch:** `arena/01a0bd1c-okveggies`
@@ -25,9 +25,11 @@ PR0 is this foundation. PR1 to PR7 are in Section 3. Prompts are progressive, ea
 
 ---
 
-## 1. The 27 fixes, verified from the codebase
+## 1. The 29 fixes, verified from the codebase - direct live, every fix ships to production
 
-Sources: `PROGRESS.md` open boxes, `docs/CLIENT_MEETING_AUDIT_AND_IMPROVEMENTS.md` Section 3 items 1 to 17, `docs/M13_RELEASE_CONTRACT.md`, `docs/M12_CONTENT_CONTRACT.md`, `docs/M13_REVIEW.md`, `migrations/003_reference_seed.sql`, `includes/classes/Cancellation.php`, `includes/classes/Notifications.php`, `includes/classes/IssueResolutions.php`, `includes/classes/IssueReports.php`, `tailwind.config.js`.
+Sources: `PROGRESS.md` open boxes, `docs/CLIENT_MEETING_AUDIT_AND_IMPROVEMENTS.md` Section 3 items 1 to 17, `docs/M13_RELEASE_CONTRACT.md`, `docs/M12_CONTENT_CONTRACT.md`, `docs/M13_REVIEW.md`, `migrations/003_reference_seed.sql`, `includes/classes/Cancellation.php`, `includes/classes/Notifications.php`, `includes/classes/IssueResolutions.php`, `includes/classes/IssueReports.php`, `tailwind.config.js`, kitchen-runs.php live UI audit 20 Sep 2026, attention span complaint.
+
+Delivery mode: **No staging.** We deliver once, live. Every PR merges to `main` and deploys directly via `deploy.yml` to `https://okveggies.com.ng`. No separate staging host. Local fresh MySQL 8 rehearsal + production backup rehearsal replaces staging gate, and maintenance + rollback artifact are mandatory before each live push.
 
 | # | Fix | Where verified |
 |---|-----|----------------|
@@ -38,7 +40,7 @@ Sources: `PROGRESS.md` open boxes, `docs/CLIENT_MEETING_AUDIT_AND_IMPROVEMENTS.m
 | 5 | Execute full release gate with 0 failed 0 skipped. 61 DB/HTTP suites + browser pass never executed | `scripts/tests/release_gate.sh` + `docs/M13_SUITE_MATRIX.md` rows 2 to 20 + `PROGRESS.md` M13 `[ ]` |
 | 6 | Close performance breach. Cold throttled homepage 3,780ms exceeds 3.0s First Contentful Paint budget | `PROGRESS.md` M12 Task H + `M13 contract 8` table, without hero photo |
 | 7 | Complete accessibility pass WCAG 2.1 AA. No axe-core gate, no NVDA/VoiceOver recordings | `PROGRESS.md` M13 `[ ] Accessibility` + `M13 7.2` |
-| 8 | Create staging environment on same cPanel. Own DB, own `.env` with test keys, same Apache denies, noindex | `M13 5.1` |
+| 8 | Harden direct live deploy path, no staging. Live is the only target, so every deploy needs backup + maintenance rehearsal + local fresh MySQL 8 proof. Staging host not created per 20 Sep decision | `M13 5.1` superseded, 20 Sep live direct decision |
 | 9 | Create protected GitHub `production` environment with required reviewers. Push to `main` currently suffices | `M13 5.2` + `.github/workflows/deploy.yml` no environment |
 | 10 | Name release owners. Technical release owner, production operator, backup owner not named | `M13 0.3 / 5.2 / 9 / 10` open table |
 | 11 | Build app-level maintenance state. No file exists, server-file rejected as deploy overwrites dotfiles | `M13 11.1` + current `includes/bootstrap.php` |
@@ -58,8 +60,10 @@ Sources: `PROGRESS.md` open boxes, `docs/CLIENT_MEETING_AUDIT_AND_IMPROVEMENTS.m
 | 25 | Prove protected-directory deny on live after redeploy. `deploy.yml` now uploads `.htaccess`+`.user.ini` explicitly but `PROGRESS.md` M12 Task B `[~]` still awaits live `verify.sh` 403 on `/.env` `/includes` `/migrations` `/docs` | `.htaccess` + `deploy.yml` + `scripts/verify.sh` |
 | 26 | Set repository private after handover checks. Still public `total_count: 0` envs | `M13 15` + `PROGRESS.md` M13 `[ ]` + audit P3#17 |
 | 27 | Remove `run_all.sh` skip tolerance. Release gate must fail on a skipped suite, not report 0 failed 0 skipped | `scripts/tests/run_all.sh` vs `release_gate.sh` shared `lib/env_value.php` |
+| 28 | Redesign Kitchen Runs for attention span. Customer `kitchen-runs.php` and staff `admin/kitchen_runs.php` plus `pro/kitchen_lists.php` are text heavy, long forms, small targets, no illustration, not React Native | Live audit 20 Sep: `kitchen-runs.php` 21578 bytes, 4 modes explained in paragraphs, no stepper, no sheet. Client complaint |
+| 29 | Global attention span pass. `index.php` hero promises, `shop.php`, `product.php`, `combo.php`, `page.php` How It Works/FAQ/Delivery Policy, `contact.php`, empty states are paragraph walls. People skim, need scannable cards, icons, disclosure | 2026 generation: attention is short, lesser text + perfect illustrative design is the fix |
 
-100% coverage means every row above is assigned to exactly one PR below and closed there.
+100% coverage means every row above is assigned to exactly one PR below and closed there. **Total is now 29 fixes, all going live directly.** Nothing is staging only.
 
 ---
 
@@ -121,18 +125,20 @@ If any gate fails, the PR is not done.
 
 ---
 
-### PR2 Operational Messaging
-**Goal:** Make back-office communication complete and correct, fix N+1 and lock ordering.
-**Fixes:** 15, 16, 21, 22, 23
-**Files:** `includes/classes/Notifications.php`, `includes/classes/IssueReports.php`, `includes/classes/IssueResolutions.php`, `includes/classes/ContactMessages.php`, `api/v1/contact.php`, `api/v1/make_it_right.php`, `admin/kitchen_runs.php`, `admin/make_it_right.php`, `admin/content.php`
+### PR2 Operational Messaging + Kitchen Runs React Native
+**Goal:** Make back-office communication complete and correct, fix N+1 and lock ordering, and make Kitchen Runs feel like a native app with almost no reading.
+**Fixes:** 15, 16, 21, 22, 23, 28
+**Files:** `includes/classes/Notifications.php`, `includes/classes/IssueReports.php`, `includes/classes/IssueResolutions.php`, `includes/classes/ContactMessages.php`, `api/v1/contact.php`, `api/v1/make_it_right.php`, `admin/kitchen_runs.php`, `admin/kitchen_run_new.php`, `kitchen-runs.php`, `pro/kitchen_lists.php`, `assets/js/kitchen-runs.js`, `assets/js/admin-kitchen-runs.js`, `admin/content.php`
 **UI notes:** Beautiful message composer for staff-initiated thread: single subject+message, large send button with plane icon, contact history with avatars and status chips. Kitchen run alert email shows item table with quantity, unit, note, not just count.
+**Kitchen Runs creativity, mobile first, lesser text:** Rebuild customer form as 3-tap native flow, not a long page. Step 1: mode picker as 4 large cards with icons `List + Price` `I will price` `Upload` `Already priced`, one line each, illustration. Step 2: dynamic sheet for items, 44px quantity/unit/price fields, add line with `+ Add item` large dashed card. Step 3: delivery day as bottom sheet with 24px radius, not dropdown. No paragraphs, every help is `?` sheet with 80px line illustration + heading 4 words + one line. Progress dots with icons, sticky bottom `Send list` forest button full width on 390px. Staff queue: filter chips, not text, line notes as disclosure.
 **Acceptance:**
 - `admin_new_kitchen_run` carries line table. Staff see items without opening panel.
 - Staff can start a thread: POST + CSRF + `messages.handle`, creates `contact_messages` inbound style with `staff_initiated` flag, notifies customer email, appears in admin list.
 - `IssueResolutions::refund()` locks `issue_reports` row `FOR UPDATE` before calling `Paystack`.
 - `IssueReports::findForStaff()` batches photos/items/history in 2 queries, not N+1.
 - `Notifications` keeps one recipient helper, wildcard and exact merged, with tests.
-**Tests:** `issue_reports_db_test`, `issue_resolutions_db_test`, `contact_admin_db_test`, `admin_notifications_db_test`, `NotificationsTest` staff recipients.
+- **Fix 28:** `kitchen-runs.php` customer flow is 3-step cards with icons, average words per screen under 25, no paragraph over 2 lines, every field 44px, illustration 80px for empty/empty list, sheets with backdrop blur, 390px no scroll beyond 1 viewport per step, axe 0 critical, recorded video at 390px showing native feel.
+**Tests:** `issue_reports_db_test`, `issue_resolutions_db_test`, `contact_admin_db_test`, `admin_notifications_db_test`, `NotificationsTest` staff recipients, `kitchen_runs_db_test` + `kitchen_runs_http_test` + visual 390/1440 for fix 28.
 
 ---
 
@@ -168,31 +174,32 @@ If any gate fails, the PR is not done.
 
 ---
 
-### PR5 Infrastructure Hardening
-**Goal:** Cron, maintenance, staging, deploy approval work without inventing shell.
+### PR5 Infrastructure Hardening - Direct Live, No Staging Host
+**Goal:** Cron, maintenance, deploy approval work without inventing shell and without a staging host. Live is the only host.
 **Fixes:** 8, 9, 10, 11, 12, 24, 25
 **Files:** `public/cron.php`, `scripts/cron.php`, `includes/classes/Cron.php`, `includes/classes/Maintenance.php` (new), `includes/bootstrap.php`, `includes/config/settings_fields.php`, `admin/settings.php`, `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `docs/DEPLOYMENT.md`, `scripts/verify.sh`
-**UI notes:** Maintenance page is beautiful and minimal: forest header, seal 80px, heading `We will be right back`, one line `We are restocking the store`, retry button, WhatsApp link. Admin setting is a switch with confirmation, not a text field.
+**UI notes:** Maintenance page is beautiful and minimal: forest header, seal 80px, heading `We will be right back`, one line `We are restocking the store`, retry button, WhatsApp link. Admin setting is a switch with confirmation, not a text field. Mobile first: centered card, illustration 80px, 44px button.
 **Acceptance:**
-- Staging addon/subdomain created on same cPanel, own DB + `.env` (`sk_test_`), same Apache rewrites, noindex, documented steps without secrets
-- `production` GitHub environment with required reviewers, `deploy.yml` uses `environment: production`
+- **No staging host created.** Direct live mode documented. Local fresh MySQL 8 rehearsal replaces staging DB proof, and cPanel manual backup + local restore replaces staging backup rehearsal. `docs/DEPLOYMENT.md` Section 5.1 marked as not applicable for this delivery.
+- `production` GitHub environment with required reviewers, `deploy.yml` uses `environment: production` so a push to `main` is no longer sufficient authority
 - Named owners recorded in `docs/REMAINING_27_FIXES_8PR_PLAN.md` Section 7 and `M13 contract 5.2`
-- Maintenance setting: `site_settings.maintenance_enabled` bool, `bootstrap.php` returns 503 `Retry-After` for anonymous storefront, staff/admin/healthcheck pass, verified on staging
-- Cron: single `*/5 * * * * curl -fsS -H X-Migrate-Token YOUR_TOKEN https://okveggies.com.ng/public/cron.php` proves sweep + reminder. `scripts/cron.php` args documented as numeric limit only, not `--job`
-- CI: `ci.yml` gains MySQL 8 service, SMTP sink, Paystack stand-in `scripts/tests/fake/paystack.php`, runs DB/HTTP/browser suites with 0 skipped
-- Protected paths: `deploy.yml` explicit dotfile upload + `verify.sh` 403 on `/.env` `/includes` `/migrations` `/docs` `/vendor` proved on staging
-**Tests:** `release_gate.sh` preflight + `verify.sh` against staging port, manual cron timestamp check.
+- Maintenance setting: `site_settings.maintenance_enabled` bool, `bootstrap.php` returns 503 `Retry-After` for anonymous storefront, staff/admin/healthcheck pass, verified locally against `public/maintenance.php` style and on live via `curl -i` after deploy
+- Cron: single `*/5 * * * * curl -fsS -H X-Migrate-Token YOUR_TOKEN https://okveggies.com.ng/public/cron.php` proves sweep + reminder on live host. `scripts/cron.php` args documented as numeric limit only, not `--job`
+- CI: `ci.yml` gains MySQL 8 service, SMTP sink, Paystack stand-in `scripts/tests/fake/paystack.php`, runs DB/HTTP/browser suites with 0 skipped, proves every gate that staging would have proved but on CI + local
+- Protected paths: `deploy.yml` explicit dotfile upload + `verify.sh` 403 on `/.env` `/includes` `/migrations` `/docs` `/vendor` proved on live immediately after each deploy
+**Tests:** `release_gate.sh` preflight + `verify.sh` against live URL after deploy, manual cron timestamp check on live `public/cron.php?token=`.
 
 ---
 
-### PR6 Performance and Accessibility Beauty Pass
-**Goal:** Make the whole site fast and accessible and unmistakably beautiful, less text, more illustration.
-**Fixes:** 2 (hero publish when supplied) + 6 + 7
-**Files:** `index.php`, `page.php`, `shop.php`, `product.php`, `combo.php`, `includes/components/shop/*`, `assets/css/tailwind.css`, `assets/js/*.js`, `scripts/tests/visual_*`, `scripts/tests/axe_*` (new), product images optimised
-**UI notes:** This is the second beauty flagship, mobile first React Native creativity.
+### PR6 Performance, Accessibility and Attention Span Beauty Pass
+**Goal:** Make the whole site fast, accessible, unmistakably beautiful, and skimmable in 5 seconds. Every verbose page becomes scannable.
+**Fixes:** 2 (hero publish when supplied) + 6 + 7 + 29
+**Files:** `index.php`, `page.php`, `shop.php`, `product.php`, `combo.php`, `combos.php`, `contact.php`, `kitchen-runs.php` polish, `includes/components/shop/*`, `includes/components/content/*`, `assets/css/tailwind.css`, `assets/js/*.js`, `scripts/tests/visual_*`, `scripts/tests/axe_*` (new), product images optimised
+**UI notes:** This is the second beauty flagship, mobile first React Native creativity, **lesser text is law**.
 - Hero: documentary photo as responsive WebP 640/960/1280 via `ContentImages`, `fetchpriority=high` only for hero, explicit width/height no CLS, creative overlay with seal stamp and gold rule, floating category pills below. Lazy below hero
 - Product grid: 2-up mobile 4-up desktop, bottom tab bar always visible, card tap feels native with `active:scale-[0.98]` and image zoom, `loading=lazy` `decoding=async`, WebP where generated, total initial transfer under 2MB. Shop filter is bottom sheet with chips, not sidebar on mobile, sticky rail on desktop
 - Illustrative empty states: bespoke 80px line leaf or basket illustration + heading 4 words + one short line + 2 large buttons with icons, not paragraph. Search empty uses magnifier illustration, network error uses cloud illustration
+- **Attention span fix 29:** No page ships a paragraph wall again. How It Works becomes 3 visual steps with 80px icons + 5-word headings + one line + `Learn` sheet. FAQ questions are 7-word max, answers are 2 lines max with `Expand` disclosure and 16px icon state. Delivery Policy is table + icons not prose. Shop and product descriptions are 2 lines with `Read` sheet. Every long help is a bottom sheet with illustration, not inline text. Measure: average words per viewport under 40 on 390px, Flesch reading ease up, screenshots evidence.
 - Icons: lucide or inline SVG 16px and 80px, 24px grid, never emoji, stroke 1.5 on 24px
 - Buttons always icon+label, `rounded-xl` forest primary, full width on mobile, spring motion
 - Typography: DM Serif Display for hero headings only, Hanken Grotesk for body, JetBrains Mono for prices and order numbers, scale from `tailwind.config.js`
@@ -200,7 +207,8 @@ If any gate fails, the PR is not done.
 - Frozen profile: mid-range Android, 4x CPU throttling, 1.6Mbps/150ms, cold cache, recorded. Homepage with hero meets: First Contentful Paint 3.0s or less, Largest Contentful Paint 4.0s or less, Cumulative Layout Shift 0.1 or less, initial transfer 2MB or less. Before/after logged.
 - Axe-core gate via Playwright over storefront, account, Pro, admin, content, FAQ, checkout, trail, Make It Right. 0 critical/serious. Keyboard, focus gold ring, zoom/reflow, labels, heading order, landmarks all named. NVDA + VoiceOver sessions recorded checklist in `docs/`.
 - No stock or synthetic photo ever substituted. Until client supplies Track 2, branded placeholder stays honest.
-**Tests:** `homepage_visual_test.mjs` + `visual_pass.mjs` + new `axe` suite at 390/1440, Lighthouse or Playwright trace recorded.
+- **Fix 29:** No verbose page remains. Before/after word counts per page logged, average under 40 words per viewport on 390px, each page passes `LESSER TEXT` check: no paragraph over 2 lines without disclosure. 390px screenshots evidence at 390px prove scannable cards with icons.
+**Tests:** `homepage_visual_test.mjs` + `visual_pass.mjs` + new `axe` suite at 390/1440, Lighthouse or Playwright trace recorded, plus `npm run build` and `public_content_visual` for text reduction.
 
 ---
 
@@ -354,13 +362,13 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 |----|-------|-------|--------|----------|------------|--------|------------|------|
 | PR0 | Foundation and plan | - | [x] Done `a936d8e` PR #54 open | 100% docs | 98% | - | `a936d8e` | 20 Sep 2026 |
 | PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [ ] Not started | - | - | 95% | - | - |
-| PR2 | Operational Messaging | 15,16,21,22,23 | [ ] Not started | - | - | 95% | - | - |
+| PR2 | Operational Messaging + Kitchen Runs Native | 15,16,21,22,23,28 | [ ] Not started | - | - | 95% | - | - |
 | PR3 | Checkout Beauty and Trust | 13 | [ ] Not started | - | - | 95% | - | - |
 | PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Not started | - | - | 95% | - | - |
-| PR5 | Infrastructure Hardening | 8,9,10,11,12,24,25 | [ ] Not started | - | - | 95% maint page | - | - |
-| PR6 | Performance and Accessibility Beauty | 2,6,7 | [ ] Not started | - | - | 95% | - | - |
+| PR5 | Infrastructure Hardening - Live Direct | 8,9,10,11,12,24,25 | [ ] Not started | - | - | 95% maint page | - | - |
+| PR6 | Performance, A11y and Attention Span | 2,6,7,29 | [ ] Not started | - | - | 95% | - | - |
 | PR7 | Release Gate and Privacy Handover | 4,5,26,27 | [ ] Not started | - | - | - | - | - |
-| **Total** | **27 fixes** | **1 to 27** | **0 of 7 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
+| **Total** | **29 fixes** | **1 to 29** | **0 of 7 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
 
 **How to update:** After green, change `[ ]` to `[x] Done`, fill coverage `100%`, confidence `97%` etc., beauty `96%`, SHA `abc1234`, date. Keep row honest, never mark green with failing suite.
 
@@ -430,21 +438,22 @@ ERROR_LOG_PATH=/home/ibbbnlso/logs/okveggies_error.log
 
 `PAYSTACK_BASE_URL` must be blank in production. It is only for the stand-in gateway in staging or local test, and is ignored unless the secret is `sk_test_`.
 
-### 8.2 Staging `.env` - must differ
+### 8.2 Staging `.env` - not used, direct live only
 
-On the addon/subdomain staging host:
+**We are not creating staging.** Per 20 Sep decision we ship every PR directly to `https://okveggies.com.ng` via `deploy.yml`. The section below is kept for reference if you later add staging, but for this delivery ignore it. Local CI and a local `_test` database replace the staging gate.
+
+For local rehearsal only:
 
 ```ini
-APP_URL=https://staging.okveggies.com.ng
-APP_ENV=staging
-DB_NAME=ibbbnlso_okveggies_staging_test
-MIGRATE_TOKEN=*** different strong value, not production ***
+APP_ENV=testing
+DB_NAME=okveggies_test
+MIGRATE_TOKEN=*** local value ***
 PAYSTACK_SECRET_KEY=sk_test_***
 PAYSTACK_PUBLIC_KEY=pk_test_***
-SMTP_HOST=127.0.0.1  # or staging sink, never production SMTP
+SMTP_HOST=127.0.0.1
 ```
 
-`DB_NAME` must end in `_test` so the destructive `release_gate.sh` and `scratch_guard.php` allow runs. `APP_ENV` must never be `production` on staging.
+`DB_NAME` must end in `_test` so the destructive `release_gate.sh` and `scratch_guard.php` allow runs. `APP_ENV` must never be `production` on a test DB.
 
 ### 8.3 cPanel cron - the only job the host needs
 
@@ -456,7 +465,7 @@ The shop logic is shared by `includes/classes/Cron.php` for both cron paths. Do 
 */5 * * * * curl -fsS -H "X-Migrate-Token: YOUR_TOKEN" https://okveggies.com.ng/public/cron.php > /dev/null
 ```
 
-For staging:
+For reference if you later add staging, not for this delivery:
 
 ```cron
 */5 * * * * curl -fsS -H "X-Migrate-Token: YOUR_STAGING_TOKEN" https://staging.okveggies.com.ng/public/cron.php > /dev/null
@@ -492,12 +501,13 @@ Remove `SETUP_TOKEN` line from production `.env` and delete `public/setup.php` r
 
 ---
 
-## 9. Parallel plan summary for the manager
+## 9. Parallel plan summary for the manager - direct live, no staging to block you
 
-- **Can run in parallel immediately after PR0:** PR1, PR2, PR3, PR5. Four teams can start at once.
+- **Can run in parallel immediately after PR0:** PR1, PR2, PR3, PR5. Four teams can start at once. PR2 now includes Kitchen Runs native redesign (fix 28) so it needs design assets, but still independent of PR3 checkout.
 - **Needs PR1 migration slot:** PR4 after PR1 decides `051`. Can start early on branch, but cannot merge until PR1 number is free.
-- **Needs PR3 and PR1/PR4:** PR6 after PR3 tokens and PR4 publishable photo fields. Can prep early, final perf run needs hero.
-- **Must be last:** PR7 after PR1 to PR6, it freezes SHA and proves gate + privacy.
+- **Needs PR3 and PR1/PR4:** PR6 after PR3 tokens and PR4 publishable photo fields, and now carries the global attention span pass fix 29. Can prep early, final perf run needs hero.
+- **Must be last:** PR7 after PR1 to PR6, it freezes SHA and proves gate + privacy on live. No staging host to create, so PR5 infra is about live hardening only, which unblocks the rest faster.
+- **Direct live advantage:** No staging host means PR5 no longer blocks on cPanel addon creation. Every PR deploys straight to live after review, with backup + maintenance + `verify.sh` 403 proof on live.
 
 **Fastest realistic path:** PR0 Day 0, PR1+PR2+PR3+PR5 in parallel Day 1 to 3, PR4 Day 3 to 4, PR6 Day 4 to 6, PR7 Day 7 to 8. Legal copy and photo are longest lead, so owner dispatch on Day 0 matters most.
 
