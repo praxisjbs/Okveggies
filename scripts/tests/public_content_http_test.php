@@ -109,13 +109,18 @@ try {
     [$status, $hiddenFaq] = pch_get('/faq');
     pch_eq(404, $status, 'an unpublished FAQ remains indistinguishable from a missing page');
 
-    Database::run('UPDATE content_pages SET is_published = :published WHERE slug = :slug', [':published' => 0, ':slug' => 'terms']);
-    [$status, $missing] = pch_get('/terms');
-    pch_eq(404, $status, 'an unpublished page returns 404');
-    pch_ok(str_contains($missing, 'Page not found') && !str_contains($missing, (string) ($before['terms']['title'] ?? 'Terms')), 'the unpublished response does not disclose stored copy');
-    pch_ok(str_contains($missing, 'noindex, nofollow'), 'an unpublished response is noindex');
-    [, , $missingHeaders] = pch_get('/terms');
-    pch_ok((bool) array_filter($missingHeaders, static fn(string $line): bool => strcasecmp($line, 'X-Robots-Tag: noindex, nofollow') === 0), 'an unpublished response sends the HTTP noindex directive');
+    // The honest legal fallback, per page: while Terms, Privacy and Delivery
+    // Policy are unpublished, each public path is the branded 404 with noindex,
+    // discloses none of the stored copy, and never looks like a live promise.
+    foreach (['terms' => '/terms', 'privacy' => '/privacy', 'delivery-policy' => '/delivery-policy'] as $legalSlug => $legalPath) {
+        Database::run('UPDATE content_pages SET is_published = :published WHERE slug = :slug', [':published' => 0, ':slug' => $legalSlug]);
+        [$status, $missing] = pch_get($legalPath);
+        pch_eq(404, $status, "an unpublished $legalSlug page returns 404");
+        pch_ok(str_contains($missing, 'Page not found') && !str_contains($missing, (string) ($before[$legalSlug]['title'] ?? $legalSlug)), "the unpublished $legalSlug response does not disclose stored copy");
+        pch_ok(str_contains($missing, 'noindex, nofollow'), "an unpublished $legalSlug response is noindex");
+        [, , $missingHeaders] = pch_get($legalPath);
+        pch_ok((bool) array_filter($missingHeaders, static fn(string $line): bool => strcasecmp($line, 'X-Robots-Tag: noindex, nofollow') === 0), "an unpublished $legalSlug response sends the HTTP noindex directive");
+    }
 
     [$status, $unknown] = pch_get('/page.php?slug=unknown-page');
     pch_eq(404, $status, 'an unknown slug returns 404');

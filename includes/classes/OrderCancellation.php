@@ -218,7 +218,7 @@ final class OrderCancellation
 
             $outcome = Cancellation::moneyOutcome(
                 $paid,
-                (int) ($order['deposit_required_subunit'] ?? 0),
+                self::forfeitCap($order, $paid),
                 $withinCutoff,
                 Settings::bool('cancellation_deposit_forfeit_after_cutoff', true),
                 $stage,
@@ -447,6 +447,26 @@ final class OrderCancellation
         );
     }
 
+    /**
+     * The most a late cancellation of this order may keep, capped at what the
+     * customer actually paid. An order that took a deposit names its figure; an
+     * order paid in full never wrote one down, so the same percentage of its
+     * total stands in. That is the Owner's 20 September 2026 decision on the
+     * cancellation asymmetry, recorded in docs/CANCELLATION_ASYMMETRY_DECISION.md.
+     */
+    private static function forfeitCap(array $order, int $paidSubunit): int
+    {
+        $recorded = $order['deposit_percentage'] ?? null;
+        return min(
+            max(0, $paidSubunit),
+            Cancellation::depositShare(
+                (int) ($order['deposit_required_subunit'] ?? 0),
+                (int) ($order['order_total_subunit'] ?? 0),
+                $recorded !== null && $recorded !== '' ? (float) $recorded : Settings::depositPercentage()
+            )
+        );
+    }
+
     private static function decorate(array $order, bool $staff): array
     {
         $cutoff = Settings::str('cancellation_cutoff_time', '18:00');
@@ -466,7 +486,7 @@ final class OrderCancellation
             );
         $outcome = Cancellation::moneyOutcome(
             (int) $order['amount_paid_subunit'],
-            (int) ($order['deposit_required_subunit'] ?? 0),
+            self::forfeitCap($order, max(0, (int) $order['amount_paid_subunit'])),
             $within,
             $forfeitAfterCutoff,
             $stage,

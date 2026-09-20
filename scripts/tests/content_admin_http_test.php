@@ -39,6 +39,14 @@ if (!is_resource($server)) { fwrite(STDERR, "Could not start the content admin t
 for ($attempt = 0; $attempt < 50; $attempt++) { $socket = @fsockopen('127.0.0.1', 8212, $errno, $error, 0.2); if ($socket) { fclose($socket); break; } usleep(100000); }
 
 $before = Database::one('SELECT * FROM content_pages WHERE slug = :slug', [':slug' => 'about']);
+// PR1 pins the legal readiness panel against real HTML: while the three legal
+// pages are unpublished, every content viewer sees exactly what is still owed
+// and nobody else sees it at all.
+$legalSlugs = ['terms', 'privacy', 'delivery-policy'];
+$legalBefore = [];
+foreach ($legalSlugs as $legalSlug) {
+    $legalBefore[$legalSlug] = Database::one('SELECT id, is_published FROM content_pages WHERE slug = :slug', [':slug' => $legalSlug]);
+}
 $suffix = bin2hex(random_bytes(5));
 $password = 'content-http-88';
 $users = []; $roles = []; $jars = []; $contactMessageId = 0;
@@ -50,6 +58,9 @@ $profiles = [
 ];
 
 try {
+    foreach ($legalSlugs as $legalSlug) {
+        Database::run('UPDATE content_pages SET is_published = :published WHERE slug = :slug', [':published' => 0, ':slug' => $legalSlug]);
+    }
     Database::run(
         'UPDATE content_pages SET title = :public_title, body = :public_body, draft_title = :draft_title, draft_body = :draft_body, '
         . 'draft_meta_title = :meta_title, draft_meta_description = :meta_description, draft_content_data = NULL, '
@@ -102,6 +113,12 @@ try {
     cph_ok(!str_contains($viewerPage, '>Messages<'), 'content-only viewer receives no Messages tab');
     cph_ok(!str_contains($viewerPage, 'MESSAGE SECRET ' . $suffix), 'content-only HTML contains no customer-message data');
     cph_ok(str_contains($viewerPage, 'Content and Messages'), 'content-only viewer receives the shared navigation item');
+    cph_ok(str_contains($viewerPage, 'Legal readiness'), 'the legal readiness panel is visible while legal pages are unpublished');
+    cph_ok(str_contains($viewerPage, 'Waiting for client copy'), 'the panel says plainly what each legal page is waiting for');
+    foreach (['Terms', 'Privacy', 'Delivery Policy'] as $legalLabel) {
+        cph_ok(str_contains($viewerPage, '>' . $legalLabel . '</strong>'), "the panel lists $legalLabel");
+    }
+    cph_ok(str_contains($viewerPage, 'href="/admin/content.php?tab=page-copy&amp;page=terms"'), 'the panel links straight to the Terms editor');
     [$status, $preview, , $previewHeaders] = cph_req($base, $jars['viewer'], 'GET', '/admin/content-preview.php?page=about');
     cph_eq(200, $status, 'content viewer can open the staff-only saved-draft preview');
     cph_ok(str_contains($preview, 'Secret draft ' . $suffix), 'preview contains the latest saved draft');
@@ -117,6 +134,7 @@ try {
     [$status, $forbiddenCopy] = cph_req($base, $jars['messages'], 'GET', '/admin/content.php?tab=page-copy&page=about');
     cph_eq(403, $status, 'a guessed Page Copy URL is forbidden to messages-only staff');
     cph_ok(!str_contains($forbiddenCopy, 'Secret draft ' . $suffix), 'the forbidden response embeds no draft copy');
+    cph_ok(!str_contains($forbiddenCopy, 'Legal readiness'), 'the forbidden response embeds no content-readiness data');
     [$status, $forbiddenJson] = cph_req($base, $jars['messages'], 'POST', '/api/v1/content.php', ['action' => 'save_draft', 'slug' => 'about', 'okv_csrf' => $messagesCsrf], true);
     cph_eq(403, $status, 'messages-only staff cannot write or retrieve content through the content API');
     cph_ok(!str_contains(json_encode($forbiddenJson), 'Secret draft ' . $suffix), 'the forbidden JSON response embeds no draft copy');
@@ -134,6 +152,18 @@ try {
         cph_ok(str_contains($rolePage, '>Save draft</button>'), "the seeded $roleLabel receives content.edit controls");
         cph_ok(str_contains($rolePage, 'href="/admin/content.php"') && str_contains($rolePage, 'href="/admin/content.php?tab=page-copy"'), "the seeded $roleLabel receives both permitted tabs");
         cph_ok(str_contains($rolePage, 'Secret draft ' . $suffix), "the seeded $roleLabel receives authorised draft copy");
+    }
+
+    // The panel is the honest state, not a permanent fixture: once all three
+    // legal pages are published it disappears, so its presence always means
+    // client copy is still owed.
+    foreach ($legalSlugs as $legalSlug) {
+        Database::run('UPDATE content_pages SET is_published = :published WHERE slug = :slug', [':published' => 1, ':slug' => $legalSlug]);
+    }
+    [, $allPublishedPage] = cph_req($base, $jars['viewer'], 'GET', '/admin/content.php?page=about');
+    cph_ok(!str_contains($allPublishedPage, 'Legal readiness'), 'with every legal page published the readiness panel is gone');
+    foreach ($legalSlugs as $legalSlug) {
+        Database::run('UPDATE content_pages SET is_published = :published WHERE slug = :slug', [':published' => 0, ':slug' => $legalSlug]);
     }
 
     cph_login($base, $jars['editor'], $users['editor']['email'], $password);
@@ -183,6 +213,11 @@ try {
         $sets = []; $params = [':id' => $before['id']];
         foreach ($columns as $column) { $sets[] = $column . ' = :' . $column; $params[':' . $column] = $before[$column]; }
         Database::run('UPDATE content_pages SET ' . implode(', ', $sets) . ' WHERE id = :id', $params);
+    }
+    foreach ($legalBefore as $legalSlug => $legalRow) {
+        if ($legalRow) {
+            Database::run('UPDATE content_pages SET is_published = :published WHERE id = :id', [':published' => (int) $legalRow['is_published'], ':id' => (int) $legalRow['id']]);
+        }
     }
     if ($contactMessageId > 0) { Database::run('DELETE FROM contact_messages WHERE id = :id', [':id' => $contactMessageId]); }
     foreach ($users as $user) { Database::run('DELETE FROM users WHERE id = :id', [':id' => $user['id']]); }

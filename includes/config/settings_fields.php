@@ -110,7 +110,7 @@ $OKV_SETTINGS_GROUPS = [
 
             'cancellation_deposit_forfeit_after_cutoff' => [
                 'label'      => 'Keep the deposit on a late cancellation',
-                'help'       => 'On, a deposit is kept when a customer cancels after the cutoff, and the checkout copy says so before they pay. Off, a deposit is always returned in full.',
+                'help'       => 'On, a late cancellation keeps the deposit share: the deposit taken at checkout, or the same share of an order that was paid in full. The checkout copy says so before they pay. Off, everything paid is always returned in full.',
                 'type'       => 'bool',
                 'value_type' => 'bool',
                 'confirm'    => true,
@@ -126,7 +126,7 @@ $OKV_SETTINGS_GROUPS = [
 
             'cancellation_dispatched_forfeit_deposit' => [
                 'label'      => 'Keep the deposit when the order was already dispatched',
-                'help'       => 'On, a deposit is kept when an order is cancelled after it has left on the van, whatever the clock says, because the produce is bought and the run has been made. Separate from the cutoff rule above on purpose. Off, only the cutoff rule applies.',
+                'help'       => 'On, the deposit share is kept when an order is cancelled after it has left on the van, whatever the clock says, because the produce is bought and the run has been made. The share is the deposit taken, or the same share of an order paid in full. Separate from the cutoff rule above on purpose. Off, only the cutoff rule applies.',
                 'type'       => 'bool',
                 'value_type' => 'bool',
                 'confirm'    => true,

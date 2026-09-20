@@ -118,6 +118,7 @@ If any gate fails, the PR is not done.
 ---
 
 ### PR1 Legal Truth and Delivery Truth
+**Status:** Complete 20 Sep 2026 on branch `arena/01a0bd40-okveggies`. Owner answers: Monday via seed + migration 051; symmetric deposit share (`docs/CANCELLATION_ASYMMETRY_DECISION.md`); tests + admin readiness panel; new `reference_seed_db_test` with the Being sourced label kept; amount-free checkout wording.
 **Goal:** Close client-decision track so legal risk is gone before QA burns.
 **Fixes:** 1, 3, 14, 18
 **Files:** `admin/content.php`, `page.php`, `includes/classes/ContentPages.php`, `includes/classes/Cancellation.php`, `includes/classes/SettingsEditor.php`, `migrations/051_*_monday_business_day.sql` (if seed corrected), `docs/PRD.md` note, `PROGRESS.md` M2 carry-forward closure note
@@ -437,7 +438,7 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 | PR | Title | Fixes | Status | Coverage | Confidence | Beauty | Merged SHA | Date |
 |----|-------|-------|--------|----------|------------|--------|------------|------|
 | PR0 | Foundation and plan | - | [x] Done `a936d8e` PR #54 open, now 31 fixes | 100% docs | 98% | - | `a936d8e` | 20 Sep 2026 |
-| PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [ ] Not started | - | - | 95% | - | - |
+| PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [x] Done, PR_OPEN_PLACEHOLDER Owner decisions recorded, unit + brand green locally, DB/HTTP suites registered for CI and the release gate | 100% | 95% | 95% readiness panel | PR1_SHA_PLACEHOLDER | 20 Sep 2026 |
 | PR2 | Operational Messaging + Kitchen Runs Native | 15,16,21,22,23,28 | [ ] Not started | - | - | 95% | - | - |
 | PR3 | Checkout Beauty and Trust | 13 | [ ] Not started | - | - | 95% | - | - |
 | PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Not started | - | - | 95% | - | - |
@@ -446,7 +447,7 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 | PR8 | Motion System - Make It Move | 30 | [ ] Not started | - | - | 95% | - | - |
 | PR9 | Luxurious Daring Hero + Full Palette | 31 | [ ] Not started | - | - | 95% | - | - |
 | PR7 | Release Gate and Privacy Handover (last) | 4,5,26,27 | [ ] Not started | - | - | - | - | - |
-| **Total** | **31 fixes** | **1 to 31** | **0 of 9 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
+| **Total** | **31 fixes** | **1 to 31** | **1 of 9 PRs done (PR1), 8 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
 
 **How to update:** After green, change `[ ]` to `[x] Done`, fill coverage `100%`, confidence `97%` etc., beauty `96%`, SHA `abc1234`, date. Keep row honest, never mark green with failing suite.
 

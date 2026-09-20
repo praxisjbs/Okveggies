@@ -101,6 +101,15 @@ if ($tab === 'page-copy') {
         'products_eyebrow' => 'Products eyebrow', 'products_heading' => 'Products heading',
     ];
     $faq = $selected && $selected['slug'] === 'faq' ? ContentPages::validateFaq((string) $selected['body']) : null;
+    // The legal readiness panel. Terms, Privacy and Delivery Policy are P0
+    // client-owned dependencies, not engineering gaps: until the client
+    // supplies approved wording they stay unpublished, out of the footer and
+    // out of the sitemap, and publishing needs the client-approval box ticked.
+    // The panel disappears once all three are published, so its presence is
+    // itself the honest state. See docs/M12_CONTENT_CONTRACT.md Section 5 and
+    // docs/REMAINING_27_FIXES_8PR_PLAN.md PR1.
+    $legalPages = array_values(array_filter($pages, static fn(array $page): bool => (bool) $page['legal']));
+    $legalWaiting = array_values(array_filter($legalPages, static fn(array $page): bool => !(bool) $page['is_published']));
     $okv_admin_title = 'Content and Messages';
     $okv_admin_note  = 'The messages customers send you, and the page copy they read.';
     $okv_admin_script = '/assets/js/admin-content.js';
@@ -114,6 +123,30 @@ if ($tab === 'page-copy') {
 <?php elseif (!$pages): ?>
   <section class="okv-panel okv-panel-body"><h2 class="okv-panel-title">No managed pages are available</h2><p class="mt-2 text-sm text-ink-60">The fixed M12 pages have not been seeded. Run the approved migrations before editing content.</p></section>
 <?php else: ?>
+  <?php if ($legalWaiting): ?>
+    <section class="okv-panel mb-5" aria-labelledby="legal-readiness-heading">
+      <div class="okv-panel-head">
+        <div>
+          <p class="okv-eyebrow">Legal readiness</p>
+          <h2 id="legal-readiness-heading" class="okv-panel-title">Legal pages waiting on the client</h2>
+        </div>
+        <span class="text-xs text-ink-60"><?= count($legalWaiting) ?> of <?= count($legalPages) ?> unpublished</span>
+      </div>
+      <div class="p-4 md:p-5">
+        <p class="text-sm text-ink-60">These pages are needed before the shop opens. Until the client-approved wording is entered, they stay out of the footer and the sitemap, and publishing one needs the client-approval box ticked. Placeholder copy is never published as final.</p>
+        <ul class="mt-4 divide-y divide-mist">
+          <?php foreach ($legalWaiting as $page): ?>
+            <li>
+              <a class="flex min-h-[44px] items-center justify-between gap-3 py-3 hover:bg-forest-tint" href="/admin/content.php?tab=page-copy&amp;page=<?= okv_e(rawurlencode((string) $page['slug'])) ?>">
+                <span><strong class="text-sm"><?= okv_e($page['label']) ?></strong><span class="mt-0.5 block font-mono text-xs text-ink-60"><?= okv_e($page['canonical_path']) ?></span></span>
+                <span class="okv-badge okv-badge-warn">Waiting for client copy</span>
+              </a>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      </div>
+    </section>
+  <?php endif; ?>
   <div class="grid gap-5 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.5fr)]">
     <section class="okv-panel" aria-labelledby="page-list-heading">
       <div class="okv-panel-head"><h2 id="page-list-heading" class="okv-panel-title">Managed pages</h2><span class="text-xs text-ink-60"><?= count($pages) ?> pages</span></div>
