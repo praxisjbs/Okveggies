@@ -11,7 +11,8 @@
 #   4. No arbitrary colour: no Tailwind [#hex] and no inline style hex.
 #   5. An outline button never carries white text on its own white fill.
 #   6. The brand assets exist (logo, favicon set, manifest, fonts, the
-#      single-ink set for documents and the raster mark for email).
+#      single-ink set and the raster mark for email). Documents carry the
+#      full-colour lockup since the Owner's "logo harmony" decision.
 #   7. Every page that loads the stylesheet also emits the brand head partial,
 #      so a new page can never ship without a favicon and the fonts.
 #   8. The compiled stylesheet is current with the brand.
