@@ -34,3 +34,10 @@ okv_test_ok(
 foreach (['/.env', '/includes/config/db.php', '/migrations/001_core_schema.sql', '/docs/PRD.md'] as $path) {
     okv_test_ok(str_contains($verify, '$BASE' . $path), "deployment smoke checks $path");
 }
+
+// The catalogue pages read the product tables on every load, so they are the
+// smoke gate's proof that the deployed code and the migrated schema agree. A
+// deploy that leaves the shop blank must fail here, never reach customers.
+foreach (['/shop.php', '/combos.php', '/product.php?slug=', '/api/v1/catalog.php?action=browse'] as $path) {
+    okv_test_ok(str_contains($verify, '$BASE' . $path), "deployment smoke covers the catalogue at $path");
+}
