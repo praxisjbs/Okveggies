@@ -484,7 +484,7 @@ okv_content_tabs($tab, ContactMessages::countNew(), $canMessages, $canContent);
                   ][$event['action']] ?? 'Message updated';
                 ?>
                 <li class="flex gap-3">
-                  <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-gold"></span>
+                  <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-forest"></span>
                   <span class="min-w-0 flex-1">
                     <p class="text-sm font-medium text-ink"><?= okv_e($label) ?></p>
                     <p class="text-xs text-ink-60"><?= okv_e(trim((string) $event['actor_name']) ?: 'Storefront visitor') ?>, <?= okv_e(date('j M Y, H:i', strtotime((string) $event['created_at']))) ?></p>
