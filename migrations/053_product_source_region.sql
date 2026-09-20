@@ -21,6 +21,15 @@ PREPARE source_region_stmt FROM @source_region_ddl;
 EXECUTE source_region_stmt;
 DEALLOCATE PREPARE source_region_stmt;
 
+-- The launch seed explicitly identifies Fresh Tomatoes as coming from Ogun
+-- State. Keep that known fact as a product override; all other products retain
+-- NULL and therefore use the site-wide setting until staff records a region.
+UPDATE products
+   SET source_region = 'Ogun State'
+ WHERE slug = 'fresh-tomatoes'
+   AND (source_region IS NULL OR TRIM(source_region) = '')
+   AND description LIKE '%Sourced from Ogun State%';
+
 COMMIT;
 
 -- Verification:
