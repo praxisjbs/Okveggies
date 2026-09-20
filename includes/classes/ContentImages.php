@@ -92,29 +92,41 @@ final class ContentImages
 
     public static function presentation(string $path): array
     {
+        $unavailable = ['src' => $path, 'srcset' => '', 'width' => 0, 'height' => 0];
         if (preg_match('#^/uploads/content/([a-f0-9]{32})-([0-9]{3,4})\.webp$#', $path, $match) !== 1) {
-            return ['src' => $path, 'srcset' => '', 'width' => 0, 'height' => 0];
+            return $unavailable;
+        }
+        $mainWidth = (int) $match[2];
+        $size = self::readSize($path, $mainWidth);
+        if ($size === null) {
+            return $unavailable;
         }
         $created = [];
-        foreach (self::WIDTHS as $width) {
+        foreach (array_unique(array_merge(self::WIDTHS, [$mainWidth])) as $width) {
             $candidate = '/uploads/content/' . $match[1] . '-' . $width . '.webp';
-            if (is_file(dirname(__DIR__, 2) . $candidate)) {
+            if ($width === $mainWidth || self::readSize($candidate, $width) !== null) {
                 $created[$width] = $candidate;
             }
         }
-        $mainWidth = (int) $match[2];
-        if (is_file(dirname(__DIR__, 2) . $path)) {
-            $created[$mainWidth] = $path;
-        }
         ksort($created);
-        $absolute = dirname(__DIR__, 2) . $path;
-        $size = is_file($absolute) ? @getimagesize($absolute) : false;
         return [
             'src' => $path,
             'srcset' => self::srcset($created),
-            'width' => (int) ($size[0] ?? 0),
-            'height' => (int) ($size[1] ?? 0),
+            'width' => (int) $size[0],
+            'height' => (int) $size[1],
         ];
+    }
+
+    /** A missing, corrupt or mislabelled candidate must not enter a srcset. */
+    private static function readSize(string $path, int $width): ?array
+    {
+        $absolute = dirname(__DIR__, 2) . $path;
+        $size = is_file($absolute) ? @getimagesize($absolute) : false;
+        if ($size === false || ($size['mime'] ?? '') !== 'image/webp'
+            || (int) $size[0] !== $width || (int) $size[1] <= 0) {
+            return null;
+        }
+        return $size;
     }
 
     public static function removeSet(string $path): void

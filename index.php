@@ -16,10 +16,15 @@ if (Rbac::isLoggedIn() && Rbac::isStaff()) {
     Rbac::redirectToLanding();
 }
 
+// The approved hero wording is fixed for this composition. Published CMS copy
+// remains stored unchanged; the eyebrow, CTAs and other sections still use it.
+$heroHeading = 'Bringing the Best of the Farm Straight to Your Kitchen.';
+$heroIntro = 'Freshness You Can Trust. Sourced daily from local farms, carefully selected, and delivered perfectly to you.';
+
 $fallback = [
     'hero_eyebrow' => 'Est. 2026. Lagos',
-    'hero_heading' => 'We are bringing the other half home.',
-    'hero_intro' => 'Freshness You Can Trust. From Farm to Your Kitchen.',
+    'hero_heading' => $heroHeading,
+    'hero_intro' => $heroIntro,
     'primary_cta_label' => 'Start shopping',
     'primary_cta_path' => '/shop.php',
     'secondary_cta_label' => 'See the combos',
@@ -91,7 +96,7 @@ if ($description === '') {
 }
 $documentTitle = $seoTitle . '. OK Veggies';
 $canonical = rtrim((string) APP_URL, '/') . '/';
-$heroSizes = '(min-width: 768px) 50vw, 100vw';
+$heroSizes = '100vw';
 $defaultHeroPath = '/assets/img/hero/fresh-produce-1280.webp';
 $defaultHeroAlt = 'Crates of fresh tomatoes, red and yellow peppers, and onions.';
 $defaultHeroSrcset = implode(', ', [
@@ -159,49 +164,37 @@ $noticeMessages = [
 <?php okv_shop_header('home'); ?>
 
 <main id="okv-main">
-<section class="bg-forest text-white" aria-labelledby="home-heading">
-  <div class="okv-container grid items-center gap-10 py-10 md:grid-cols-2 md:py-16">
-    <!--
-      PR8 motion hooks: the seal stamps in, the heading splits by word, the
-      sub and CTA follow, the gold hairline draws, the photograph parallaxes.
-      okv-motion.js reads these attributes; with JavaScript off every element
-      here is a plain static hero and nothing is hidden.
-    -->
-    <div class="animate-okv-rise" data-okv-hero>
-      <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-        <span class="inline-flex flex-none" data-okv-hero-seal><?php okv_seal(120, 'flex-none', 'The OK Veggies seal'); ?></span>
-        <div>
-          <p class="okv-eyebrow-invert"><?= okv_e($copy['hero_eyebrow']) ?></p>
-        </div>
-      </div>
-      <h1 id="home-heading" class="mt-8 font-editorial text-okv-h4 md:text-okv-h2"><?= okv_e($copy['hero_heading']) ?></h1>
-      <p class="mt-5 max-w-xl text-okv-lead text-white/85" data-okv-hero-sub><?= okv_e($copy['hero_intro']) ?></p>
-      <div class="mt-8 flex flex-wrap gap-3" data-okv-hero-cta>
-        <a href="<?= okv_e($copy['primary_cta_path']) ?>" class="okv-btn h-14 rounded-xl border border-white bg-white px-6 text-forest shadow-lg shadow-forest/20 hover:bg-forest-tint"><?php okv_icon('arrow-right', 'h-4 w-4'); ?> <?= okv_e($copy['primary_cta_label']) ?></a>
-        <a href="<?= okv_e($copy['secondary_cta_path']) ?>" class="okv-btn-outline-invert rounded-xl"><?php okv_icon('basket', 'h-4 w-4'); ?> <?= okv_e($copy['secondary_cta_label']) ?></a>
-      </div>
-      <!--
-        The gold rule above the tagline is its own element so PR8 can draw it
-        in with a scaleX, which is a transform and never shifts layout. A
-        border on the paragraph cannot animate without dragging the words.
-      -->
-      <div class="mt-8 w-full border-t-2 border-gold" data-okv-hero-hairline aria-hidden="true"></div>
-      <p class="mt-4 text-sm font-semibold uppercase tracking-wider text-white"><?= okv_e($tagline) ?></p>
-    </div>
+<section class="okv-home-hero bg-forest text-white" aria-labelledby="home-heading" data-okv-hero>
+  <?php if ($heroImage !== null): ?>
+    <figure class="okv-home-hero-media">
+      <img src="<?= okv_e(okv_image_url($heroPath)) ?>" srcset="<?= okv_e($heroImage['srcset']) ?>" sizes="<?= okv_e($heroSizes) ?>"
+           alt="<?= okv_e($heroAlt) ?>" width="<?= (int) $heroImage['width'] ?>" height="<?= (int) $heroImage['height'] ?>"
+           class="okv-home-hero-image w-full object-cover" data-okv-parallax fetchpriority="high" decoding="async">
+    </figure>
+  <?php endif; ?>
+  <div class="okv-home-hero-wash" aria-hidden="true"></div>
 
-    <?php if ($heroImage !== null): ?>
-      <figure class="overflow-hidden rounded-xl bg-white/10 shadow-okv-2">
-        <img src="<?= okv_e(okv_image_url($heroPath)) ?>" srcset="<?= okv_e($heroImage['srcset']) ?>" sizes="<?= okv_e($heroSizes) ?>"
-             alt="<?= okv_e($heroAlt) ?>" width="<?= (int) $heroImage['width'] ?>" height="<?= (int) $heroImage['height'] ?>"
-             class="aspect-[4/3] h-full w-full object-cover" data-okv-parallax fetchpriority="high" decoding="async">
-      </figure>
-    <?php else: ?>
-      <aside class="flex aspect-[4/3] flex-col items-center justify-center rounded-xl border border-white/25 bg-white/10 p-6 text-center md:p-10" aria-label="Documentary photograph pending">
-        <?php okv_seal(120, 'mx-auto', ''); ?>
+  <!-- The copy and seal sit on the full-hero wash, never inside a panel. -->
+  <div class="okv-container relative z-10 w-full py-10 pb-24 md:py-16">
+    <div class="max-w-2xl">
+      <div class="flex items-center gap-6">
+        <span class="inline-flex flex-none" data-okv-hero-seal><?php okv_seal(120, 'flex-none', 'The OK Veggies seal'); ?></span>
+        <p class="okv-eyebrow-invert min-w-0 text-white"><?= okv_e($copy['hero_eyebrow']) ?></p>
+      </div>
+      <h1 id="home-heading" class="mt-6 font-editorial text-okv-h4 tracking-tight md:mt-8 md:text-okv-h2"><?= okv_e($heroHeading) ?></h1>
+      <p class="mt-4 max-w-xl text-okv-lead text-white md:mt-5" data-okv-hero-sub><?= okv_e($heroIntro) ?></p>
+      <div class="mt-6 flex flex-wrap gap-3 md:mt-8" data-okv-hero-cta>
+        <a href="<?= okv_e($copy['primary_cta_path']) ?>" class="okv-btn min-h-14 max-w-full rounded-xl border border-tomato bg-tomato px-6 py-3 text-white shadow-lg shadow-forest/20 hover:bg-tomato-hover active:bg-tomato-active"><?php okv_icon('arrow-right', 'h-4 w-4'); ?> <?= okv_e($copy['primary_cta_label']) ?></a>
+        <a href="<?= okv_e($copy['secondary_cta_path']) ?>" class="okv-btn-outline-invert min-h-14 max-w-full rounded-xl py-3"><?php okv_icon('basket', 'h-4 w-4'); ?> <?= okv_e($copy['secondary_cta_label']) ?></a>
+      </div>
+      <!-- A separate rule draws with scaleX without moving the tagline. -->
+      <div class="mt-6 w-full border-t-2 border-gold md:mt-8" data-okv-hero-hairline aria-hidden="true"></div>
+      <p class="mt-4 text-sm font-semibold uppercase tracking-wider text-white"><?= okv_e($tagline) ?></p>
+      <?php if ($heroImage === null): ?>
         <p class="mt-6 text-sm font-semibold uppercase tracking-wider text-white">Documentary photograph pending</p>
-        <p class="mt-3 text-sm leading-6 text-white/75">We will not replace it with stock photography.</p>
-      </aside>
-    <?php endif; ?>
+        <p class="mt-3 text-sm leading-6 text-white">We will not replace it with stock photography.</p>
+      <?php endif; ?>
+    </div>
   </div>
 </section>
 

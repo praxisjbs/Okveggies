@@ -14,6 +14,7 @@
     "test:axe": "node scripts/tests/axe_suite.mjs",
     "test:lesser": "node scripts/tests/lesser_text_test.mjs",
     "test:images": "node scripts/tests/image_contract_test.mjs",
+    "test:hero": "node scripts/tests/homepage_hero_visual_test.mjs",
     "test:pr6": "node scripts/tests/lesser_text_test.mjs && node scripts/tests/image_contract_test.mjs"
   },
   "devDependencies": {
