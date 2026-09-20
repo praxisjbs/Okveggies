@@ -439,7 +439,7 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 | PR0 | Foundation and plan | - | [x] Done `a936d8e` PR #54 open, now 31 fixes | 100% docs | 98% | - | `a936d8e` | 20 Sep 2026 |
 | PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [ ] Not started | - | - | 95% | - | - |
 | PR2 | Operational Messaging + Kitchen Runs Native | 15,16,21,22,23,28 | [ ] Not started | - | - | 95% | - | - |
-| PR3 | Checkout Beauty and Trust | 13 | [x] Done | 100% | 96% | 96% | `PR3 branch, pull request open` | 20 Sep 2026 |
+| PR3 | Checkout Beauty and Trust | 13 | [x] Done | 100% | 96% | 96% | `ef5f37d` | 20 Sep 2026 |
 | PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Not started | - | - | 95% | - | - |
 | PR5 | Infrastructure Hardening - Live Direct | 8,9,10,11,12,24,25 | [ ] Not started | - | - | 95% maint page | - | - |
 | PR6 | Performance, A11y and Attention Span | 2,6,7,29 | [ ] Not started | - | - | 95% | - | - |
