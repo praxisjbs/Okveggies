@@ -443,7 +443,7 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 | PR3 | Checkout Beauty and Trust | 13 | [x] Done | 100% | 96% | 96% | `ef5f37d` | 20 Sep 2026 |
 | PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Not started | - | - | 95% | - | - |
 | PR5 | Infrastructure Hardening - Live Direct | 8,9,10,11,12,24,25 | [ ] Not started | - | - | 95% maint page | - | - |
-| PR6 | Performance, A11y and Attention Span | 2,6,7,29 | [x] Done. Hero WebP+dimensions, catalogue WebP 400/800/1200, empty states, sheets, axe gate, NVDA/VoiceOver checklists. Track 2 photo still pending, branded placeholder stays honest | 100% | 95% | 95% | pending SHA | 20 Sep 2026 |
+| PR6 | Performance, A11y and Attention Span | 2,6,7,29 | [x] Done `86921b6`. Hero WebP+dimensions, catalogue WebP 400/800/1200, empty states, sheets, axe gate, NVDA/VoiceOver checklists. Track 2 photo still pending, branded placeholder stays honest | 100% | 95% | 95% | `86921b6` | 20 Sep 2026 |
 | PR8 | Motion System - Make It Move | 30 | [ ] Not started | - | - | 95% | - | - |
 | PR9 | Luxurious Daring Hero + Full Palette | 31 | [ ] Not started | - | - | 95% | - | - |
 | PR7 | Release Gate and Privacy Handover (last) | 4,5,26,27 | [ ] Not started | - | - | - | - | - |
