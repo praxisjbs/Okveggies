@@ -72,7 +72,7 @@ require_once __DIR__ . '/../../config/nav.php';
                   class="ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-md border border-mist bg-white px-3 text-sm font-medium text-ink-60 hover:border-forest hover:text-forest md:px-4">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
             <span class="hidden md:inline">Find a page</span>
-            <kbd class="hidden rounded border border-mist px-1.5 py-0.5 font-mono text-[11px] text-ink-40 lg:inline">Ctrl/⌘ K</kbd>
+            <kbd class="hidden rounded border border-mist px-1.5 py-0.5 font-mono text-okv-micro text-ink-40 lg:inline">Ctrl/⌘ K</kbd>
             <span class="sr-only md:hidden">Find a page</span>
           </button>
 

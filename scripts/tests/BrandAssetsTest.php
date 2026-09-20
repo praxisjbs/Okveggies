@@ -126,6 +126,10 @@ $tokens = [
 foreach ($tokens as $name => $hex) {
     okv_test_ok(str_contains($config, $hex), "Brand::$name ($hex) is a token in tailwind.config.js");
 }
+okv_test_ok(str_contains($config, "'okv-caption'"), 'the 10px caption token is named in tailwind.config.js');
+okv_test_ok(str_contains($config, "'okv-micro'"), 'the 11px metadata token is named in tailwind.config.js');
+okv_test_ok(str_contains($css, '.text-okv-caption'), 'tailwind.css builds the 10px caption token');
+okv_test_ok(str_contains($css, '.text-okv-micro'), 'tailwind.css builds the 11px metadata token');
 okv_test_ok(str_contains($config, 'rgba(3,16,10,0.62)'), 'ink at 62% is still the token Brand::INK_MUTED was flattened from');
 okv_test_eq(Brand::INK_MUTED, Brand::flatten(3, 16, 10, 0.62), 'Brand::INK_MUTED is the computed flatten of ink 62% over white, not a colour someone picked');
 okv_test_eq('#FFFFFF', Brand::flatten(255, 255, 255, 1.0), 'flatten returns the colour itself at full opacity');

@@ -83,7 +83,7 @@ if (Rbac::can('messages.view')) {
         $visible = array_filter($group['items'], static fn($it) => okv_admin_nav_item_allowed($it, static fn(string $permission): bool => Rbac::can($permission)));
         if (!$visible) { continue; }
     ?>
-      <p class="px-5 mt-4 mb-1 text-[11px] uppercase tracking-[0.14em] text-white/50"><?= okv_e($group['heading']) ?></p>
+      <p class="px-5 mt-4 mb-1 text-okv-micro uppercase tracking-[0.14em] text-white/50"><?= okv_e($group['heading']) ?></p>
       <?php foreach ($visible as $item):
           $active = okv_admin_nav_is_active($item['href']);
       ?>
@@ -94,7 +94,7 @@ if (Rbac::can('messages.view')) {
           <span><?= okv_e($item['label']) ?></span>
           <?php $count = (int) ($okv_sb_counts[$item['count'] ?? ''] ?? 0); ?>
           <?php if ($count > 0): ?>
-            <span class="ml-auto inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-white px-2 py-0.5 font-mono text-[11px] font-semibold leading-none text-forest">
+            <span class="ml-auto inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-white px-2 py-0.5 font-mono text-okv-micro font-semibold leading-none text-forest">
               <?= $count > 99 ? '99+' : $count ?><span class="sr-only"> new, unanswered</span>
             </span>
           <?php endif; ?>
@@ -105,7 +105,7 @@ if (Rbac::can('messages.view')) {
 
   <div class="border-t border-white/10 px-5 py-4">
     <p class="text-sm font-medium leading-tight"><?= okv_e($okv_sb_name) ?></p>
-    <p class="mt-1 inline-flex items-center rounded-full border border-white/25 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/75"><?= okv_e($okv_sb_role) ?></p>
+    <p class="mt-1 inline-flex items-center rounded-full border border-white/25 px-2 py-0.5 text-okv-micro font-semibold uppercase tracking-[0.12em] text-white/75"><?= okv_e($okv_sb_role) ?></p>
     <div class="mt-2 flex items-center gap-4">
       <a href="/admin/account.php" class="inline-flex min-h-[44px] items-center text-xs text-white/80 hover:text-white underline underline-offset-2">Your account</a>
       <form method="POST" action="/api/v1/auth.php" class="inline">

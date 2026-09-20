@@ -92,13 +92,13 @@ try {
 
     Database::run(
         'INSERT INTO order_items
-            (order_id, item_type, product_id, item_name, sku, unit_name, quantity,
+            (order_id, item_type, product_id, snapshot_category_id, item_name, sku, unit_name, quantity,
              unit_price_subunit, line_total_subunit, created_at)
-         VALUES (:order_id, :item_type, :product_id, :item_name, :sku, :unit_name, :quantity,
+         VALUES (:order_id, :item_type, :product_id, :snapshot_category, :item_name, :sku, :unit_name, :quantity,
                  :unit_price, :line_total, :created_at)',
         [
             ':order_id' => $todayOrder, ':item_type' => 'product', ':product_id' => $productId,
-            ':item_name' => 'M11 Tomatoes ' . $suffix, ':sku' => 'M11-P-' . $suffix,
+            ':snapshot_category' => (int) $category['id'], ':item_name' => 'M11 Tomatoes ' . $suffix, ':sku' => 'M11-P-' . $suffix,
             ':unit_name' => 'kg', ':quantity' => '2.000', ':unit_price' => 5000,
             ':line_total' => 10000, ':created_at' => '2099-12-31 00:00:00',
         ]
@@ -120,13 +120,13 @@ try {
     }
     Database::run(
         'INSERT INTO order_items
-            (order_id, item_type, product_id, item_name, sku, unit_name, quantity,
+            (order_id, item_type, product_id, snapshot_category_id, item_name, sku, unit_name, quantity,
              unit_price_subunit, line_total_subunit, created_at)
-         VALUES (:order_id, :item_type, :product_id, :item_name, :sku, :unit_name, :quantity,
+         VALUES (:order_id, :item_type, :product_id, :snapshot_category, :item_name, :sku, :unit_name, :quantity,
                  :unit_price, :line_total, :created_at)',
         [
             ':order_id' => $singleOrder, ':item_type' => 'product', ':product_id' => $productId,
-            ':item_name' => 'Single Snapshot ' . $suffix, ':sku' => 'SINGLE-' . $suffix,
+            ':snapshot_category' => (int) $category['id'], ':item_name' => 'Single Snapshot ' . $suffix, ':sku' => 'SINGLE-' . $suffix,
             ':unit_name' => 'kg', ':quantity' => '1.000', ':unit_price' => 2500,
             ':line_total' => 2500, ':created_at' => '2099-12-20 12:00:00',
         ]
@@ -415,7 +415,7 @@ try {
     $share = AdminDashboard::categoryShare(7, $now);
     $shareBySlug = array_column($share['rows'], null, 'category_slug');
     adb_eq(10000, array_sum(array_column($share['rows'], 'share_basis_points')), 'database category share totals 10000 basis points');
-    adb_eq(7000, $shareBySlug['fruits']['amount_subunit'], 'a product moved after sale uses its current category while keeping its historical name');
+    adb_eq(7000, $shareBySlug['vegetables']['amount_subunit'], 'a product renamed and moved after sale keeps its snapshotted category');
     adb_eq(8000, $shareBySlug['combos']['amount_subunit'], 'Combo sales use the Combos group');
     adb_eq(6000, $shareBySlug['kitchen-runs']['amount_subunit'], 'Kitchen Run sales use the Kitchen Runs group');
     adb_eq(4000, $share['uncategorised_subunit'], 'an unrelated typed line remains explicitly uncategorised');

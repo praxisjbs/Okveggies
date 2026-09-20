@@ -50,7 +50,7 @@ $okv_command_items = okv_admin_nav_commands(
             <?php if (count($okv_command['shortcut']) === 2): ?>
               <span class="ml-auto flex shrink-0 gap-1" aria-label="Shortcut <?= okv_e(strtoupper(implode(' then ', $okv_command['shortcut']))) ?>">
                 <?php foreach ($okv_command['shortcut'] as $okv_shortcut_key): ?>
-                  <kbd class="rounded border border-mist px-1.5 py-0.5 font-mono text-[11px] uppercase text-ink-40" aria-hidden="true"><?= okv_e($okv_shortcut_key) ?></kbd>
+                  <kbd class="rounded border border-mist px-1.5 py-0.5 font-mono text-okv-micro uppercase text-ink-40" aria-hidden="true"><?= okv_e($okv_shortcut_key) ?></kbd>
                 <?php endforeach; ?>
               </span>
             <?php endif; ?>

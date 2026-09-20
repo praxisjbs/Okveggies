@@ -31,6 +31,7 @@ if (!$product) {
     exit;
 }
 
+$productSourceRegion = trim((string) ($product['source_region'] ?? '')) ?: trim($sourceRegions);
 $images = Catalogue::images((int) $product['id']);
 $suggestions = Catalogue::suggestions((int) $product['id'], (int) $product['category_id']);
 $availability = okv_availability((string) $product['availability_status'], $product['restock_date'] ?? null);
@@ -76,7 +77,7 @@ $basketNotice = (string) okv_input('basket', '');
           <div class="grid gap-4 <?= count($images) > 1 ? 'sm:grid-cols-2' : '' ?>">
             <?php foreach ($images as $index => $image): ?>
               <div class="overflow-hidden rounded-lg bg-white p-4 shadow-okv-1 <?= $index === 0 && count($images) > 2 ? 'sm:col-span-2' : '' ?>">
-                <img src="<?= okv_e(okv_image_url($image['image_url'])) ?>" alt="<?= okv_e(okv_produce_alt((string) $product['name'], (string) $product['unit'], $sourceRegions)) ?>" class="aspect-square w-full rounded-md object-cover">
+                <img src="<?= okv_e(okv_image_url($image['image_url'])) ?>" alt="<?= okv_e(okv_produce_alt((string) $product['name'], (string) $product['unit'], $productSourceRegion)) ?>" class="aspect-square w-full rounded-md object-cover">
               </div>
             <?php endforeach; ?>
           </div>
@@ -98,7 +99,7 @@ $basketNotice = (string) okv_input('basket', '');
           <p class="mt-6 text-okv-lead text-ink-60"><?= nl2br(okv_e($product['description'])) ?></p>
 
           <div class="mt-6 rounded-lg border border-mist bg-white p-4">
-            <?php okv_sourced_note($sourceRegions, $sourceDay, 'font-semibold text-ink'); ?>
+            <?php okv_sourced_note($productSourceRegion, $sourceDay, 'font-semibold text-ink'); ?>
             <p class="mt-2 text-sm text-ink-60">Sold per <?= okv_e($product['unit']) ?>. Minimum <?= okv_e(okv_quantity($product['minimum_quantity'])) ?><?= okv_e($product['unit']) ?>, added in steps of <?= okv_e(okv_quantity($product['quantity_increment'])) ?><?= okv_e($product['unit']) ?>.</p>
           </div>
 
