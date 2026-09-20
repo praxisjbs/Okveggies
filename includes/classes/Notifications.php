@@ -120,7 +120,7 @@ final class Notifications
         'kitchen_run_received' => ['customer_name', 'request_number', 'line_count', 'delivery_day', 'request_url'],
         'kitchen_run_quoted'   => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'quote_expiry', 'request_url'],
         'kitchen_run_declined' => ['customer_name', 'request_number', 'decline_reason', 'request_url'],
-        'admin_new_kitchen_run'      => ['customer_name', 'request_number', 'line_count', 'input_mode_label', 'pricing_mode_label', 'budget_line', 'admin_url'],
+        'admin_new_kitchen_run'      => ['customer_name', 'request_number', 'line_count', 'input_mode_label', 'pricing_mode_label', 'budget_line', 'item_table', 'admin_url'],
         'admin_kitchen_run_approved' => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'admin_url'],
         'admin_kitchen_run_cancelled' => ['customer_name', 'request_number', 'quote_total', 'admin_url'],
 
@@ -590,45 +590,66 @@ final class Notifications
         return $templateKey;
     }
 
-    /** Staff who may open the work named by an alert. */
-    public static function staffRecipients(?string $permission = null): array
+    /**
+     * One helper, one code path for every staff alert.
+     * Wildcard module.* and exact permission are merged, owner always qualifies,
+     * and the support inbox is the fallback when nobody matches.
+     */
+    private static function fetchStaffRecipientRows(?string $permission): array
     {
-        if ($permission === null || trim($permission) === '') {
-            $rows = Database::all(
+        $permission = $permission === null ? null : trim($permission);
+        if ($permission === '') {
+            $permission = null;
+        }
+
+        if ($permission === null) {
+            return Database::all(
                 'SELECT DISTINCT u.id, u.email, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
                    FROM users u
                    JOIN user_roles ur ON ur.user_id = u.id
                    JOIN roles r ON r.id = ur.role_id
-                  WHERE u.status = :status AND u.user_type = :type AND r.name IN (:owner, :manager)',
+                  WHERE u.status = :status AND u.user_type = :type AND u.email IS NOT NULL AND r.name IN (:owner, :manager)
+               ORDER BY u.id',
                 [':status' => 'active', ':type' => 'staff', ':owner' => 'owner', ':manager' => 'manager']
             );
-        } else {
-            $module = strstr($permission, '.', true);
-            $modulePermission = ($module === false ? $permission : $module) . '.*';
-            $rows = Database::all(
-                'SELECT DISTINCT u.id, u.email, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
-                   FROM users u
-                  WHERE u.status = :status AND u.user_type = :type
-                    AND EXISTS (
-                        SELECT 1
-                          FROM user_roles ur
-                          JOIN roles r ON r.id = ur.role_id
-                          LEFT JOIN role_permissions rp ON rp.role_id = r.id
-                          LEFT JOIN permissions p ON p.id = rp.permission_id
-                         WHERE ur.user_id = u.id
-                           AND (r.name = :owner OR p.`key` = :permission OR p.`key` = :module_permission)
-                    )',
-                [
-                    ':status' => 'active', ':type' => 'staff', ':owner' => 'owner',
-                    ':permission' => $permission, ':module_permission' => $modulePermission,
-                ]
-            );
         }
+
+        $module = strstr($permission, '.', true);
+        $modulePermission = ($module === false ? $permission : $module) . '.*';
+
+        return Database::all(
+            'SELECT DISTINCT u.id, u.email, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
+               FROM users u
+              WHERE u.status = :status AND u.user_type = :type AND u.email IS NOT NULL
+                AND EXISTS (
+                    SELECT 1
+                      FROM user_roles ur
+                      JOIN roles r ON r.id = ur.role_id
+                      LEFT JOIN role_permissions rp ON rp.role_id = r.id
+                      LEFT JOIN permissions p ON p.id = rp.permission_id
+                     WHERE ur.user_id = u.id
+                       AND (r.name = :owner OR p.`key` = :permission OR p.`key` = :module_permission)
+                )
+           ORDER BY u.id',
+            [
+                ':status' => 'active',
+                ':type' => 'staff',
+                ':owner' => 'owner',
+                ':permission' => $permission,
+                ':module_permission' => $modulePermission,
+            ]
+        );
+    }
+
+    /** Staff who may open the work named by an alert. */
+    public static function staffRecipients(?string $permission = null): array
+    {
+        $rows = self::fetchStaffRecipientRows($permission);
         $recipients = [];
         foreach ($rows as $row) {
             $recipients[] = ['email' => (string) $row['email'], 'user_id' => (int) $row['id'], 'name' => (string) $row['name']];
         }
-        if (!$recipients && ($permission === null || trim($permission) === '')) {
+        if (!$recipients) {
             $fallback = Settings::str('support_email', '');
             if ($fallback !== '') {
                 $recipients[] = ['email' => $fallback, 'user_id' => null, 'name' => 'OK Veggies'];
@@ -644,32 +665,7 @@ final class Notifications
         if ($permission === '') {
             return [];
         }
-        $rows = Database::all(
-            'SELECT DISTINCT u.id, u.email,
-                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
-               FROM users u
-               JOIN user_roles ur ON ur.user_id = u.id
-               JOIN role_permissions rp ON rp.role_id = ur.role_id
-               JOIN permissions p ON p.id = rp.permission_id
-              WHERE u.status = :status AND u.email IS NOT NULL AND p.`key` = :permission
-           ORDER BY u.id',
-            [':status' => 'active', ':permission' => $permission]
-        );
-        $recipients = [];
-        foreach ($rows as $row) {
-            $recipients[] = [
-                'email' => (string) $row['email'],
-                'user_id' => (int) $row['id'],
-                'name' => (string) $row['name'],
-            ];
-        }
-        if ($recipients === []) {
-            $fallback = Settings::str('support_email', '');
-            if ($fallback !== '') {
-                $recipients[] = ['email' => $fallback, 'user_id' => null, 'name' => 'OK Veggies'];
-            }
-        }
-        return $recipients;
+        return self::staffRecipients($permission);
     }
 
     /**
@@ -1052,6 +1048,16 @@ final class Notifications
         $deposit = $request['deposit_subunit'] === null ? null : (int) $request['deposit_subunit'];
         $count   = (int) $request['line_count'];
 
+        $items = Database::all(
+            'SELECT item_name, quantity, unit_label, note,
+                    COALESCE(unit_label, \'\') AS unit_name
+               FROM kitchen_run_items
+              WHERE request_id = :id
+              ORDER BY sort_order, id',
+            [':id' => $requestId]
+        );
+        $itemTable = self::kitchenRunItemTable($items);
+
         return [
             'request_id' => $requestId,
             'recipients' => self::customerRecipients([
@@ -1069,11 +1075,36 @@ final class Notifications
                 'input_mode_label'   => KitchenRuns::modeLabel((string) $request['input_mode']),
                 'pricing_mode_label' => KitchenRuns::pricingLabel((string) $request['pricing_mode']),
                 'budget_line'        => self::kitchenRunBudgetLine($request),
+                'item_table'         => $itemTable,
                 'delivery_day'       => self::kitchenRunDeliveryDay($request['preferred_delivery_date'] ?? null),
                 'request_url'        => $base . '/kitchen-runs.php?request=' . $requestId,
                 'admin_url'          => $base . '/admin/kitchen_runs.php?request=' . $requestId,
             ],
         ];
+    }
+
+    private static function kitchenRunItemTable(array $items): string
+    {
+        if (!$items) {
+            return 'No lines recorded.';
+        }
+        $lines = [];
+        foreach ($items as $index => $item) {
+            $name = trim((string) ($item['item_name'] ?? ''));
+            if ($name === '') {
+                $name = 'Item ' . ($index + 1);
+            }
+            $qty = trim((string) ($item['quantity'] ?? ''));
+            $unit = trim((string) ($item['unit_label'] ?? $item['unit_name'] ?? ''));
+            $note = trim((string) ($item['note'] ?? ''));
+            $qtyPart = $qty !== '' ? $qty . ($unit !== '' ? ' ' . $unit : '') : ($unit !== '' ? $unit : 'quantity not set');
+            $line = ($index + 1) . '. ' . $name . ' - ' . $qtyPart;
+            if ($note !== '') {
+                $line .= ' (' . mb_substr($note, 0, 120) . ')';
+            }
+            $lines[] = $line;
+        }
+        return implode("\n", $lines);
     }
 
     /** The day the customer asked for, in words. Empty when there is not one. */

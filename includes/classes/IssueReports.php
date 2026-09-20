@@ -442,14 +442,165 @@ final class IssueReports
         if ($report === null) {
             return null;
         }
-        $report['photos'] = self::photosForReport($issueId);
-        $report['items'] = Database::all(
-            'SELECT id, item_name, quantity, unit_name, line_total_subunit
-               FROM order_items WHERE order_id = :order_id ORDER BY id',
-            [':order_id' => (int) $report['order_id']]
+
+        $combined = Database::all(
+            'SELECT \'photo\' AS kind, id, photo_url AS c1, NULL AS c2, NULL AS c3, NULL AS c4, created_at AS c5
+               FROM issue_report_photos WHERE issue_id = :issue_id
+              UNION ALL
+             SELECT \'item\' AS kind, id, item_name AS c1, quantity AS c2, unit_name AS c3, line_total_subunit AS c4, NULL AS c5
+               FROM order_items WHERE order_id = :order_id
+              ORDER BY kind, id',
+            [':issue_id' => $issueId, ':order_id' => (int) $report['order_id']]
         );
+        $photos = [];
+        $items = [];
+        foreach ($combined as $row) {
+            if ((string) $row['kind'] === 'photo') {
+                $photos[] = ['id' => (int) $row['id'], 'photo_url' => (string) $row['c1'], 'created_at' => (string) $row['c5']];
+            } else {
+                $items[] = [
+                    'id' => (int) $row['id'],
+                    'item_name' => (string) $row['c1'],
+                    'quantity' => $row['c2'],
+                    'unit_name' => (string) $row['c3'],
+                    'line_total_subunit' => $row['c4'] === null ? null : (int) $row['c4'],
+                ];
+            }
+        }
+
+        $report['photos'] = $photos;
+        $report['items'] = $items;
         $report['history'] = self::historyForStaff($issueId);
         return $report;
+    }
+
+    /**
+     * Batch detailed context for many reports in 2 queries after the main report fetch.
+     * Photos and items are fetched together via UNION ALL, history is the second query.
+     * This removes the N+1 that forStaff plus per-report findForStaff would cause.
+     *
+     * @param array<int> $issueIds
+     * @return array<int, array{photos: array, items: array, history: array}>
+     */
+    public static function findDetailedBatchForStaff(array $issueIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $issueIds), static fn(int $id): bool => $id > 0)));
+        if (!$ids) {
+            return [];
+        }
+
+        $placeholders = [];
+        $params = [];
+        foreach ($ids as $index => $id) {
+            $key = ':id_' . $index;
+            $placeholders[] = $key;
+            $params[$key] = $id;
+        }
+        $in = implode(', ', $placeholders);
+
+        $reports = Database::all(
+            'SELECT id, order_id FROM issue_reports WHERE id IN (' . $in . ')',
+            $params
+        );
+        $orderMap = [];
+        foreach ($reports as $r) {
+            $orderMap[(int) $r['id']] = (int) $r['order_id'];
+        }
+        $orderIds = array_values(array_unique(array_filter($orderMap)));
+        if (!$orderIds) {
+            $orderIds = [0];
+        }
+
+        $orderPlaceholders = [];
+        $orderParams = [];
+        foreach ($orderIds as $index => $oid) {
+            $key = ':oid_' . $index;
+            $orderPlaceholders[] = $key;
+            $orderParams[$key] = $oid;
+        }
+
+        $allParams = $params + $orderParams;
+        $orderIn = implode(', ', $orderPlaceholders);
+
+        $combined = Database::all(
+            'SELECT issue_id AS owner_id, \'photo\' AS kind, id, photo_url AS c1, NULL AS c2, NULL AS c3, NULL AS c4, created_at AS c5
+               FROM issue_report_photos WHERE issue_id IN (' . $in . ')
+              UNION ALL
+             SELECT order_id AS owner_id, \'item\' AS kind, id, item_name AS c1, quantity AS c2, unit_name AS c3, line_total_subunit AS c4, NULL AS c5
+               FROM order_items WHERE order_id IN (' . $orderIn . ')
+              ORDER BY owner_id, kind, id',
+            $allParams
+        );
+
+        $history = Database::all(
+            'SELECT h.issue_id AS owner_id, h.id, h.old_status, h.new_status, h.action, h.note, h.created_at,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS actor_name
+               FROM issue_report_history h
+          LEFT JOIN users u ON u.id = h.acted_by
+              WHERE h.issue_id IN (' . $in . ')
+           ORDER BY h.issue_id, h.created_at, h.id',
+            $params
+        );
+
+        $grouped = [];
+        foreach ($ids as $id) {
+            $grouped[$id] = ['photos' => [], 'items' => [], 'history' => []];
+        }
+
+        foreach ($combined as $row) {
+            $owner = (int) $row['owner_id'];
+            $issueOwner = $owner;
+            if ((string) $row['kind'] === 'item') {
+                $issueOwner = array_search($owner, $orderMap, true);
+                if ($issueOwner === false) {
+                    continue;
+                }
+                $issueOwner = (int) $issueOwner;
+                if (!isset($grouped[$issueOwner])) {
+                    continue;
+                }
+                $grouped[$issueOwner]['items'][] = [
+                    'id' => (int) $row['id'],
+                    'item_name' => (string) $row['c1'],
+                    'quantity' => $row['c2'],
+                    'unit_name' => (string) $row['c3'],
+                    'line_total_subunit' => $row['c4'] === null ? null : (int) $row['c4'],
+                ];
+            } else {
+                if (!isset($grouped[$owner])) {
+                    continue;
+                }
+                $grouped[$owner]['photos'][] = [
+                    'id' => (int) $row['id'],
+                    'photo_url' => (string) $row['c1'],
+                    'created_at' => (string) $row['c5'],
+                ];
+            }
+        }
+
+        foreach ($history as $row) {
+            $owner = (int) $row['owner_id'];
+            if (!isset($grouped[$owner])) {
+                continue;
+            }
+            $grouped[$owner]['history'][] = [
+                'id' => (int) $row['id'],
+                'old_status' => $row['old_status'],
+                'new_status' => $row['new_status'],
+                'action' => $row['action'],
+                'note' => $row['note'],
+                'created_at' => $row['created_at'],
+                'actor_name' => $row['actor_name'],
+            ];
+        }
+
+        return $grouped;
+    }
+
+    /** Alias for batch method expected by tests: many reports detailed in 2 queries. */
+    public static function findManyForStaffDetailed(array $issueIds): array
+    {
+        return self::findDetailedBatchForStaff($issueIds);
     }
 
     public static function forOrderStaff(int $orderId): array

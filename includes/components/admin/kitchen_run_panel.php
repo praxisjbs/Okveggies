@@ -180,14 +180,17 @@ $creditRefusal  = (string) $request['customer_type'] === 'business'
                       aria-label="Move this line down" title="Move down">&darr;</button>
             </div>
 
-            <!-- The note the customer reads beside this line on their quote,
-                 for example which market it came from or why the size changed.
-                 It is the only per-line words either side ever sees. -->
+            <!-- Line note as disclosure, customer sees it on quote -->
             <div class="sm:col-span-11">
-              <label class="okv-label" for="kr-a-note-<?= (int) $index ?>">Note on this line, the customer sees it</label>
-              <input class="okv-input" id="kr-a-note-<?= (int) $index ?>" name="items[<?= (int) $index ?>][note]"
-                     maxlength="255" placeholder="Soft pomo, cut in the market."
-                     value="<?= okv_e((string) ($line['note'] ?? '')) ?>">
+              <details class="group rounded-xl border border-ink-10 bg-mist/20">
+                <summary class="flex min-h-[44px] cursor-pointer list-none items-center justify-between px-3 text-sm font-medium text-ink-60">Line note, customer sees it</summary>
+                <div class="border-t border-ink-10 p-3">
+                  <label class="okv-label text-xs" for="kr-a-note-<?= (int) $index ?>">Note on this line</label>
+                  <input class="okv-input min-h-[44px] rounded-xl" id="kr-a-note-<?= (int) $index ?>" name="items[<?= (int) $index ?>][note]"
+                         maxlength="255" placeholder="Soft pomo, cut in the market."
+                         value="<?= okv_e((string) ($line['note'] ?? '')) ?>">
+                </div>
+              </details>
             </div>
             <div class="flex items-end justify-end sm:col-span-1">
               <button type="button" class="okv-btn-text text-sm min-h-[44px]" data-kr-admin-remove hidden>Remove</button>

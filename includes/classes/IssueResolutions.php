@@ -180,19 +180,62 @@ final class IssueResolutions
         int $transactionId,
         int $actorId
     ): array {
-        $existing = Database::one(
-            'SELECT id, order_id, amount_subunit, status FROM refunds WHERE issue_report_id = :issue_id',
-            [':issue_id' => (int) $report['id']]
-        );
-        if ($existing !== null) {
-            return self::finishRefund($report, $note, $items, $existing, $actorId);
-        }
-        $quote = Refunds::quote($transactionId);
-        if (empty($quote['ok']) || (int) ($quote['order_id'] ?? 0) !== (int) $report['order_id']) {
-            return self::failure('invalid_transaction', 'Choose a refundable Paystack payment from this order.', 'transaction_id');
-        }
-        if (!self::amountIsValid($amount, array_column($items, 'line_total_subunit'), (int) $quote['refundable_subunit'])) {
-            return self::failure('bad_amount', 'The amount is above what can be refunded for the selected items or payment.', 'amount');
+        $pdo = Database::getInstance()->getConnection();
+        $pdo->beginTransaction();
+        try {
+            $locked = self::lockedReport((int) $report['id']);
+            if ($locked === null) {
+                $pdo->rollBack();
+                return self::failure('not_found', 'That report could not be found.');
+            }
+            if (self::terminal($locked)) {
+                $pdo->rollBack();
+                return self::failure('terminal', 'This report has already been finished.');
+            }
+            if ((string) $locked['status'] !== 'in_progress') {
+                $pdo->rollBack();
+                return self::failure('stale', 'This report changed after the page loaded. Reload it before acting.');
+            }
+            if ((int) ($locked['handled_by'] ?? 0) !== $actorId) {
+                $pdo->rollBack();
+                return self::failure('not_handler', 'Only the colleague handling this report can finish it.');
+            }
+
+            $existing = Database::one(
+                'SELECT id, order_id, amount_subunit, status FROM refunds WHERE issue_report_id = :issue_id FOR UPDATE',
+                [':issue_id' => (int) $report['id']]
+            );
+            if ($existing !== null) {
+                self::storeItems((int) $report['id'], $items);
+                self::writeTerminal($report, 'refund', $note, (int) $existing['amount_subunit'], null, null, $actorId);
+                $pdo->commit();
+                return [
+                    'ok' => true,
+                    'code' => 'resolved',
+                    'status' => 'resolved',
+                    'type' => 'refund',
+                    'amount_subunit' => (int) $existing['amount_subunit'],
+                    'refund_id' => (int) $existing['id'],
+                    'refund_status' => (string) $existing['status'],
+                ];
+            }
+
+            $quote = Refunds::quote($transactionId);
+            if (empty($quote['ok']) || (int) ($quote['order_id'] ?? 0) !== (int) $report['order_id']) {
+                $pdo->rollBack();
+                return self::failure('invalid_transaction', 'Choose a refundable Paystack payment from this order.', 'transaction_id');
+            }
+            if (!self::amountIsValid($amount, array_column($items, 'line_total_subunit'), (int) $quote['refundable_subunit'])) {
+                $pdo->rollBack();
+                return self::failure('bad_amount', 'The amount is above what can be refunded for the selected items or payment.', 'amount');
+            }
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
         }
 
         $result = Refunds::request(
@@ -206,6 +249,7 @@ final class IssueResolutions
         if (empty($result['refund_id'])) {
             return $result;
         }
+
         return self::finishRefund($report, $note, $items, [
             'id' => (int) $result['refund_id'],
             'order_id' => (int) $result['order_id'],
