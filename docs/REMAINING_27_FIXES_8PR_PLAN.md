@@ -177,7 +177,7 @@ If any gate fails, the PR is not done.
 - `products.source_region` added guarded via `information_schema`, seeded where known, editable in `admin/products.php`
 - `order_items.snapshot_category_id` added guarded, written at order placement and kitchen run conversion, `AdminDashboard::categoryShare` reads snapshot not current category
 - `tailwind.config.js` adds named tokens for `10px` `11px` replacing `text-[10px]` `text-[11px]`, stylesheet rebuilt
-**Tests:** `catalogue` + `products` + `admin_dashboard_db_test` with rename/move scenario, `BrandAssetsTest` token check.
+**Tests:** `CatalogueTest` and `run.php` unit coverage, `reference_seed_db_test` for the known source seed, `pricing_db_test` for Products create/edit persistence, `checkout_db_test` and `kitchen_runs_db_test` for category writes, `admin_dashboard_db_test` with the rename/move scenario, and `BrandAssetsTest` token checks.
 
 ---
 
