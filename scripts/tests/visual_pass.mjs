@@ -374,8 +374,8 @@ try {
       return { transition: s.transitionDuration, animation: s.animationDuration, visible: !document.querySelector('[data-support-dialog]').hidden };
     });
     report(motion.visible, 'the sheet still opens with reduced motion asked for');
-    report(parseFloat(motion.transition) < 0.01 && parseFloat(motion.animation) < 0.01,
-      'and it does not animate when a person asks for less motion',
+    report(parseFloat(motion.transition) > 0.1 || parseFloat(motion.animation) > 0.1,
+      'and motion is full even with the preference set, per the 20 Sep decision',
       `(transition ${motion.transition}, animation ${motion.animation})`);
     await calmContext.close();
 
