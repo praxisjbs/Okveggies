@@ -51,7 +51,7 @@ function contact_admin_fail(array $result, int $status, string $returnTo): void
 }
 
 $action = okv_action();
-$adminActions = ['save_note', 'handle', 'reopen'];
+$adminActions = ['save_note', 'handle', 'reopen', 'staff_initiate', 'compose'];
 if (in_array($action, $adminActions, true)) {
     if (!okv_is_post()) {
         okv_error('Use POST for this action.', 405, 'method_not_allowed');
@@ -62,6 +62,9 @@ if (in_array($action, $adminActions, true)) {
     }
     $messageId = (int) okv_input('message_id', 0);
     $returnTo = okv_safe_path((string) okv_input('return_to', ''), '/admin/content.php?message=' . $messageId);
+    if ($action === 'staff_initiate' || $action === 'compose') {
+        Rbac::requirePermission('messages.view');
+    }
     try {
         $result = match ($action) {
             'save_note' => ContactMessages::saveNote(
@@ -80,10 +83,34 @@ if (in_array($action, $adminActions, true)) {
                 (string) okv_input('expected_status', ''),
                 (int) Rbac::userId()
             ),
+            'staff_initiate', 'compose' => ContactMessages::staffInitiate($_POST, (int) Rbac::userId()),
         };
     } catch (Throwable $e) {
         error_log('contact admin ' . $action . ' failed: ' . $e->getMessage());
         contact_admin_fail(['code' => 'failed', 'message' => 'We could not update that message. Please try again.'], 500, $returnTo);
+    }
+    if (($action === 'staff_initiate' || $action === 'compose') && !empty($result['ok'])) {
+        try {
+            $email = trim((string) ($_POST['email'] ?? ''));
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $firstName = trim((string) ($_POST['name'] ?? ''));
+                $firstName = $firstName !== '' ? (explode(' ', $firstName)[0] ?: 'there') : 'there';
+                Notifications::send(
+                    'contact_acknowledgement',
+                    [
+                        'customer_name' => $firstName,
+                        'received_at' => date('l jS F'),
+                        'whatsapp_url' => okv_support_whatsapp_url(),
+                    ],
+                    [['email' => $email, 'name' => (string) ($_POST['name'] ?? '')]],
+                    'contact_message',
+                    (int) $result['message_id'],
+                    (int) Rbac::userId()
+                );
+            }
+        } catch (Throwable $e) {
+            error_log('contact staff_initiate notify failed: ' . $e->getMessage());
+        }
     }
     if (empty($result['ok'])) {
         $status = ($result['code'] ?? '') === 'not_found' ? 404
