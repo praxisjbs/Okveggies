@@ -87,7 +87,7 @@ final class Catalogue
         [$where, $params] = self::productsWhere($search, $category);
 
         return Database::all(
-            'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.current_price_subunit,
+            'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.source_region, p.current_price_subunit,
                     p.minimum_quantity, p.quantity_increment, p.is_featured,
                     c.name AS category_name, c.slug AS category_slug,
                     u.name AS unit_name, u.symbol AS unit,
@@ -119,7 +119,7 @@ final class Catalogue
     {
         $limit = max(1, min(24, $limit));
         return Database::all(
-            'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.current_price_subunit,
+            'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.source_region, p.current_price_subunit,
                     p.minimum_quantity, p.quantity_increment, p.is_featured,
                     c.name AS category_name, c.slug AS category_slug,
                     u.name AS unit_name, u.symbol AS unit,
@@ -196,7 +196,7 @@ final class Catalogue
         }
 
         return Database::one(
-            'SELECT p.id, p.category_id, p.name, p.slug, p.sku, p.short_description, p.description,
+            'SELECT p.id, p.category_id, p.name, p.slug, p.sku, p.short_description, p.description, p.source_region,
                     p.current_price_subunit, p.minimum_quantity, p.quantity_increment,
                     c.name AS category_name, c.slug AS category_slug,
                     u.name AS unit_name, u.symbol AS unit,
@@ -226,7 +226,7 @@ final class Catalogue
     public static function suggestions(int $productId, int $categoryId): array
     {
         $curated = Database::all(
-            'SELECT p.id, p.name, p.slug, p.short_description, p.current_price_subunit,
+            'SELECT p.id, p.name, p.slug, p.short_description, p.source_region, p.current_price_subunit,
                     u.symbol AS unit,
                     COALESCE(pa.availability_status, \'available\') AS availability_status,
                     pa.restock_date,
@@ -248,7 +248,7 @@ final class Catalogue
         }
 
         $fallback = Database::all(
-            'SELECT p.id, p.name, p.slug, p.short_description, p.current_price_subunit,
+            'SELECT p.id, p.name, p.slug, p.short_description, p.source_region, p.current_price_subunit,
                     u.symbol AS unit,
                     COALESCE(pa.availability_status, \'available\') AS availability_status,
                     pa.restock_date,

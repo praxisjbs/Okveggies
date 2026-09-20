@@ -127,6 +127,10 @@ require __DIR__ . '/../includes/components/admin/header.php';
           </select>
         </div>
         <div>
+          <label for="new-source-region" class="okv-label">Source region <span class="font-normal text-ink-40">optional</span></label>
+          <input id="new-source-region" name="source_region" type="text" class="okv-input" maxlength="255" placeholder="Use site default when blank">
+        </div>
+        <div>
           <label for="new-price" class="okv-label">Opening price, in naira</label>
           <input id="new-price" name="price" type="text" inputmode="decimal" class="okv-input font-mono" placeholder="2700">
         </div>

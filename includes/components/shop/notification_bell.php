@@ -32,7 +32,7 @@ $okv_customer_badge = $okv_customer_unread > 99 ? '99+' : (string) $okv_customer
           class="relative inline-flex h-11 w-11 items-center justify-center rounded-md text-ink-60 hover:bg-forest-tint hover:text-forest">
     <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
     <span data-notification-badge
-          class="absolute right-0 top-0 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-tomato px-1 font-mono text-[10px] font-semibold leading-none text-white <?= $okv_customer_unread < 1 ? 'hidden' : '' ?>"><?= okv_e($okv_customer_badge) ?></span>
+          class="absolute right-0 top-0 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-tomato px-1 font-mono text-okv-caption font-semibold leading-none text-white <?= $okv_customer_unread < 1 ? 'hidden' : '' ?>"><?= okv_e($okv_customer_badge) ?></span>
   </button>
 
   <div id="okv-customer-notification-panel" class="okv-notification-backdrop" data-notification-backdrop hidden>

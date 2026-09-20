@@ -871,7 +871,8 @@ final class KitchenRunWorkflow
     private static function linesForConversion(int $requestId): array
     {
         return Database::all(
-            'SELECT i.*, COALESCE(u.name, i.unit_label, \'unit\') AS resolved_unit, p.sku
+            'SELECT i.*, COALESCE(u.name, i.unit_label, \'unit\') AS resolved_unit,
+                    p.sku, p.category_id AS snapshot_category_id
                FROM kitchen_run_items i
                LEFT JOIN units_of_measurement u ON u.id = i.unit_id
                LEFT JOIN products p ON p.id = i.product_id
@@ -916,15 +917,16 @@ final class KitchenRunWorkflow
     {
         $stmt = $pdo->prepare(
             'INSERT INTO order_items
-                (order_id, item_type, product_id, item_name, sku, unit_name,
+                (order_id, item_type, product_id, snapshot_category_id, item_name, sku, unit_name,
                  quantity, unit_price_subunit, line_total_subunit)
-             VALUES (:order, \'product\', :product, :name, :sku, :unit, :quantity, :price, :total)'
+             VALUES (:order, \'product\', :product, :snapshot_category, :name, :sku, :unit, :quantity, :price, :total)'
         );
         foreach ($lines as $line) {
             $stmt->execute([
-                ':order'    => $orderId,
-                ':product'  => $line['product_id'] ?? null,
-                ':name'     => $line['item_name'],
+                ':order'             => $orderId,
+                ':product'           => $line['product_id'] ?? null,
+                ':snapshot_category' => $line['snapshot_category_id'] ?? null,
+                ':name'              => $line['item_name'],
                 ':sku'      => trim((string) ($line['sku'] ?? '')) !== '' ? $line['sku'] : 'KITCHEN-RUN',
                 ':unit'     => $line['resolved_unit'] ?? $line['unit_label'] ?? 'unit',
                 ':quantity' => $line['quantity'],

@@ -160,6 +160,10 @@ if (!function_exists('okv_admin_product_cards')) {
                 </div>
               </div>
               <div>
+                <label for="source-region-<?= $id ?>" class="okv-label">Source region <span class="font-normal text-ink-40">optional</span></label>
+                <input id="source-region-<?= $id ?>" name="source_region" type="text" maxlength="255" class="okv-input" value="<?= okv_e($product['source_region'] ?? '') ?>" placeholder="Use site default when blank">
+              </div>
+              <div>
                 <label for="short-<?= $id ?>" class="okv-label">Short description</label>
                 <input id="short-<?= $id ?>" name="short_description" type="text" class="okv-input" value="<?= okv_e($product['short_description']) ?>">
               </div>

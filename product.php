@@ -34,6 +34,7 @@ if (!$product) {
     exit;
 }
 
+$productSourceRegion = trim((string) ($product['source_region'] ?? '')) ?: trim($sourceRegions);
 $images = Catalogue::images((int) $product['id']);
 $suggestions = Catalogue::suggestions((int) $product['id'], (int) $product['category_id']);
 $availability = okv_availability((string) $product['availability_status'], $product['restock_date'] ?? null);
@@ -79,7 +80,7 @@ $basketNotice = (string) okv_input('basket', '');
           <div class="grid gap-4 <?= count($images) > 1 ? 'sm:grid-cols-2' : '' ?>">
             <?php foreach ($images as $index => $image): ?>
               <div class="overflow-hidden rounded-lg bg-white p-4 shadow-okv-1 <?= $index === 0 && count($images) > 2 ? 'sm:col-span-2' : '' ?>">
-                <?php okv_picture((string) $image['image_url'], okv_produce_alt((string) $product['name'], (string) $product['unit'], $sourceRegions), [
+                <?php okv_picture((string) $image['image_url'], okv_produce_alt((string) $product['name'], (string) $product['unit'], $productSourceRegion), [
                     'class' => 'aspect-square w-full rounded-md object-cover',
                     'sizes' => '(min-width: 1024px) 50vw, 100vw',
                     'lazy' => $index !== 0,
@@ -109,7 +110,7 @@ $basketNotice = (string) okv_input('basket', '');
           <?php endif; ?>
 
           <div class="mt-6 rounded-lg border border-mist bg-white p-4">
-            <?php okv_sourced_note($sourceRegions, $sourceDay, 'font-semibold text-ink'); ?>
+            <?php okv_sourced_note($productSourceRegion, $sourceDay, 'font-semibold text-ink'); ?>
             <p class="mt-2 text-sm text-ink-60">Sold per <?= okv_e($product['unit']) ?>. Minimum <?= okv_e(okv_quantity($product['minimum_quantity'])) ?><?= okv_e($product['unit']) ?>, added in steps of <?= okv_e(okv_quantity($product['quantity_increment'])) ?><?= okv_e($product['unit']) ?>.</p>
           </div>
 

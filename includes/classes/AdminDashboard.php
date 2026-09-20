@@ -561,8 +561,7 @@ final class AdminDashboard
                     ) AS is_kitchen_run
                FROM order_items oi
                JOIN orders o ON o.id = oi.order_id
-               LEFT JOIN products p ON p.id = oi.product_id
-               LEFT JOIN product_categories pc ON pc.id = p.category_id
+               LEFT JOIN product_categories pc ON pc.id = oi.snapshot_category_id
               WHERE o.created_at >= :start_at
                 AND o.created_at < :end_at
                 AND o.order_status <> :cancelled

@@ -345,7 +345,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
           <li class="rounded-xl border border-ink-10 bg-white p-4">
             <div class="flex items-baseline justify-between gap-3">
               <a class="font-mono text-sm font-semibold text-forest hover:underline" href="/kitchen-runs.php?request=<?= (int)$run['id'] ?>"><?= okv_e($run['request_number']) ?></a>
-              <span class="rounded-full bg-mist px-2 py-0.5 text-[11px] text-ink-60"><?= okv_e($run['status_label']) ?></span>
+              <span class="rounded-full bg-mist px-2 py-0.5 text-okv-micro text-ink-60"><?= okv_e($run['status_label']) ?></span>
             </div>
             <p class="mt-1 text-xs text-ink-60"><?= okv_e(date('j M Y', strtotime((string)$run['created_at']))) ?> • <?= (int)$run['line_count'] ?> items<?php if ($run['quoted_total_subunit']!==null): ?> • <?= okv_e(Money::format((int)$run['quoted_total_subunit'])) ?><?php endif; ?></p>
           </li>

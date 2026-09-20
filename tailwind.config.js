@@ -98,7 +98,8 @@ module.exports = {
         'okv-lead':    ['1.25rem',   { lineHeight: '1.5' }],  // 20px
         'okv-body':    ['1rem',      { lineHeight: '1.7' }],  // 16px
         'okv-label':   ['0.8125rem', { lineHeight: '1.5' }],  // 13px
-        'okv-caption': ['0.625rem',  { lineHeight: '1.4' }],  // 10px
+        'okv-micro':   ['0.6875rem',  { lineHeight: '1.4' }],  // 11px operational metadata
+        'okv-caption': ['0.625rem',  { lineHeight: '1.4' }],  // 10px badges
       },
       borderRadius: {
         sm: '3px',

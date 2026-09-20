@@ -87,6 +87,11 @@ $garlic = Database::one(
 );
 rs_eq('Garlic', (string) ($garlic['name'] ?? ''), 'Garlic is in the seeded catalogue');
 rs_eq('kg', (string) ($garlic['symbol'] ?? ''), 'Garlic is sold by the kilogramme, the corrected unit');
+$tomatoes = Database::one(
+    'SELECT source_region FROM products WHERE slug = :slug',
+    [':slug' => 'fresh-tomatoes']
+);
+rs_eq('Ogun State', (string) ($tomatoes['source_region'] ?? ''), 'Fresh Tomatoes keeps its known Ogun State source region');
 $seedImages = Database::one('SELECT COUNT(*) AS n FROM product_images WHERE product_id BETWEEN 1 AND 24');
 rs_eq(24, (int) $seedImages['n'], 'every seeded product carries its image row');
 $seedAvailability = Database::one('SELECT COUNT(*) AS n FROM product_availability WHERE product_id BETWEEN 1 AND 24');

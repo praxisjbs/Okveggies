@@ -177,7 +177,7 @@ If any gate fails, the PR is not done.
 - `products.source_region` added guarded via `information_schema`, seeded where known, editable in `admin/products.php`
 - `order_items.snapshot_category_id` added guarded, written at order placement and kitchen run conversion, `AdminDashboard::categoryShare` reads snapshot not current category
 - `tailwind.config.js` adds named tokens for `10px` `11px` replacing `text-[10px]` `text-[11px]`, stylesheet rebuilt
-**Tests:** `catalogue` + `products` + `admin_dashboard_db_test` with rename/move scenario, `BrandAssetsTest` token check.
+**Tests:** `CatalogueTest` and `run.php` unit coverage, `reference_seed_db_test` for the known source seed, `pricing_db_test` for Products create/edit persistence, `checkout_db_test` and `kitchen_runs_db_test` for category writes, `admin_dashboard_db_test` with the rename/move scenario, and `BrandAssetsTest` token checks.
 
 ---
 
@@ -441,13 +441,13 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 | PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [x] Done `dac1202` PR #57 open. Owner decisions recorded, unit + brand green locally, DB/HTTP suites registered for CI and the release gate | 100% | 95% | 95% readiness panel | `dac1202` | 20 Sep 2026 |
 | PR2 | Operational Messaging + Kitchen Runs Native | 15,16,21,22,23,28 | [x] Done PR2 6 fixes: item_table in admin_new_kitchen_run, staff-initiated thread, lock before Paystack, batch N+1, one recipient helper, 3-tap native kitchen flow | 100% | 97% | 96% | `9fd9fa2` | 20 Sep 2026 |
 | PR3 | Checkout Beauty and Trust | 13 | [x] Done | 100% | 96% | 96% | `ef5f37d` | 20 Sep 2026 |
-| PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Not started | - | - | 95% | - | - |
+| PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Audit incomplete: requested PHP/MySQL/browser gates not yet reproduced | - | - | - | - | 20 Sep 2026 |
 | PR5 | Infrastructure Hardening - Live Direct | 8,9,10,11,12,24,25 | [ ] Not started | - | - | 95% maint page | - | - |
-| PR6 | Performance, A11y and Attention Span | 2,6,7,29 | [x] Done `86921b6`. Hero WebP+dimensions, catalogue WebP 400/800/1200, empty states, sheets, axe gate, NVDA/VoiceOver checklists. Track 2 photo still pending, branded placeholder stays honest | 100% | 95% | 95% | `86921b6` | 20 Sep 2026 |
+| PR6 | Performance, A11y and Attention Span | 2,6,7,29 | [x] Merged on owner request. Static lesser-text 126/126, image contract 95/95, brand 8/8. PHP/visual/axe unrun. Track 2 photo still pending, branded placeholder stays honest | 96% | 70% | 93% | - | 20 Sep 2026 |
 | PR8 | Motion System - Make It Move | 30 | [ ] Not started | - | - | 95% | - | - |
 | PR9 | Luxurious Daring Hero + Full Palette | 31 | [ ] Not started | - | - | 95% | - | - |
 | PR7 | Release Gate and Privacy Handover (last) | 4,5,26,27 | [ ] Not started | - | - | - | - | - |
-| **Total** | **31 fixes** | **1 to 31** | **3 of 9 PRs done (PR1, PR2, PR3), PR6 open pending PHP/axe/visual proof, 5 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
+| **Total** | **31 fixes** | **1 to 31** | **4 of 9 PRs done (PR1, PR2, PR3, PR6), PR4 audit incomplete, 4 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
 
 **How to update:** After green, change `[ ]` to `[x] Done`, fill coverage `100%`, confidence `97%` etc., beauty `96%`, SHA `abc1234`, date. Keep row honest, never mark green with failing suite.
 
