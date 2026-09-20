@@ -347,7 +347,7 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 
 | PR | Title | Fixes | Status | Coverage | Confidence | Beauty | Merged SHA | Date |
 |----|-------|-------|--------|----------|------------|--------|------------|------|
-| PR0 | Foundation and plan | - | [x] In progress, this PR | 100% docs | 98% | - | `arena/01a0bd1c-okveggies` | 20 Sep 2026 |
+| PR0 | Foundation and plan | - | [x] Done `a936d8e` PR #54 open | 100% docs | 98% | - | `a936d8e` | 20 Sep 2026 |
 | PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [ ] Not started | - | - | 95% | - | - |
 | PR2 | Operational Messaging | 15,16,21,22,23 | [ ] Not started | - | - | 95% | - | - |
 | PR3 | Checkout Beauty and Trust | 13 | [ ] Not started | - | - | 95% | - | - |
