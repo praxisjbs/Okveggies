@@ -124,27 +124,39 @@ $noticeMessages = [
 <main id="okv-main">
 <section class="bg-forest text-white" aria-labelledby="home-heading">
   <div class="okv-container grid items-center gap-10 py-10 md:grid-cols-2 md:py-16">
-    <div class="animate-okv-rise">
+    <!--
+      PR8 motion hooks: the seal stamps in, the heading splits by word, the
+      sub and CTA follow, the gold hairline draws, the photograph parallaxes.
+      okv-motion.js reads these attributes; with JavaScript off every element
+      here is a plain static hero and nothing is hidden.
+    -->
+    <div class="animate-okv-rise" data-okv-hero>
       <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-        <?php okv_seal(120, 'flex-none', 'The OK Veggies seal'); ?>
+        <span class="inline-flex flex-none" data-okv-hero-seal><?php okv_seal(120, 'flex-none', 'The OK Veggies seal'); ?></span>
         <div>
           <p class="okv-eyebrow-invert"><?= okv_e($copy['hero_eyebrow']) ?></p>
         </div>
       </div>
       <h1 id="home-heading" class="mt-8 font-editorial text-okv-h4 md:text-okv-h2"><?= okv_e($copy['hero_heading']) ?></h1>
-      <p class="mt-5 max-w-xl text-okv-lead text-white/85"><?= okv_e($copy['hero_intro']) ?></p>
-      <div class="mt-8 flex flex-wrap gap-3">
+      <p class="mt-5 max-w-xl text-okv-lead text-white/85" data-okv-hero-sub><?= okv_e($copy['hero_intro']) ?></p>
+      <div class="mt-8 flex flex-wrap gap-3" data-okv-hero-cta>
         <a href="<?= okv_e($copy['primary_cta_path']) ?>" class="okv-btn h-14 rounded-xl border border-white bg-white px-6 text-forest shadow-lg shadow-forest/20 hover:bg-forest-tint"><?php okv_icon('arrow-right', 'h-4 w-4'); ?> <?= okv_e($copy['primary_cta_label']) ?></a>
         <a href="<?= okv_e($copy['secondary_cta_path']) ?>" class="okv-btn-outline-invert rounded-xl"><?php okv_icon('basket', 'h-4 w-4'); ?> <?= okv_e($copy['secondary_cta_label']) ?></a>
       </div>
-      <p class="mt-8 border-t-2 border-gold pt-4 text-sm font-semibold uppercase tracking-wider text-white"><?= okv_e($tagline) ?></p>
+      <!--
+        The gold rule above the tagline is its own element so PR8 can draw it
+        in with a scaleX, which is a transform and never shifts layout. A
+        border on the paragraph cannot animate without dragging the words.
+      -->
+      <div class="mt-8 w-full border-t-2 border-gold" data-okv-hero-hairline aria-hidden="true"></div>
+      <p class="mt-4 text-sm font-semibold uppercase tracking-wider text-white"><?= okv_e($tagline) ?></p>
     </div>
 
     <?php if ($heroImage !== null): ?>
       <figure class="overflow-hidden rounded-xl bg-white/10 shadow-okv-2">
         <img src="<?= okv_e(okv_image_url($heroPath)) ?>"<?= $heroImage['srcset'] !== '' ? ' srcset="' . okv_e($heroImage['srcset']) . '" sizes="(min-width: 768px) 50vw, 100vw"' : '' ?>
              alt="<?= okv_e($heroAlt) ?>" width="<?= $heroImage['width'] > 0 ? (int) $heroImage['width'] : 1280 ?>" height="<?= $heroImage['height'] > 0 ? (int) $heroImage['height'] : 960 ?>"
-             class="aspect-[4/3] h-full w-full object-cover" fetchpriority="high" decoding="async">
+             class="aspect-[4/3] h-full w-full object-cover" data-okv-parallax fetchpriority="high" decoding="async">
       </figure>
     <?php else: ?>
       <aside class="flex aspect-[4/3] flex-col items-center justify-center rounded-xl border border-white/25 bg-white/10 p-6 text-center md:p-10" aria-label="Documentary photograph pending">

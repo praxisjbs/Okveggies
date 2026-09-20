@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 
 const sources = [
   'assets/js/okv.js',
+  'assets/js/okv-motion.js',
   'assets/js/okv-rbac.js',
   'assets/js/auth.js',
   'assets/js/admin-users.js',

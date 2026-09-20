@@ -104,7 +104,16 @@ if (!function_exists('okv_shop_footer')) {
         // storefront page, so its behaviour loads here, once, alongside it.
         // Without JavaScript the header basket control stays a real link to
         // /cart.php, so nothing here is required for the basket to work.
+        //
+        // PR8 motion: GSAP 3.12 and ScrollTrigger, self-hosted under
+        // assets/js/vendor/ with SRI pins, no npm step. okv-motion.js owns
+        // every scroll entrance, hero moment, sheet and micro feedback. If the
+        // vendored files cannot load it retries the pinned backup CDN copies
+        // of the same bytes, and failing that the page simply stays still.
         ?>
+        <script src="<?= okv_e(okv_asset('/assets/js/vendor/gsap.min.js')) ?>" integrity="sha384-g4NTh/Iv5PPU4xPyhEWqPcwtNXOvdaDI8LLnyYfyNZOjKJeYQyjzQ9X5275eBjpt" crossorigin="anonymous" defer></script>
+        <script src="<?= okv_e(okv_asset('/assets/js/vendor/ScrollTrigger.min.js')) ?>" integrity="sha384-Z3REaz79l2IaAZqJsSABtTbhjgOUYyV3p90XNnAPCSHg3EMTz1fouunq9WZRtj3d" crossorigin="anonymous" defer></script>
+        <script src="<?= okv_e(okv_asset('/assets/js/okv-motion.min.js')) ?>" defer></script>
         <script src="<?= okv_e(okv_asset('/assets/js/basket.min.js')) ?>" defer></script>
         <?php okv_support_widget(); ?>
         <?php

@@ -15,6 +15,9 @@ if (!function_exists('okv_shop_header')) {
             'basket' => ['/cart.php', 'Basket'],
             'account' => ['/account.php', $accountLabel],
         ];
+        // The motion dead man switch prints before any content parses, so the
+        // blocks okv-motion.js will animate never flash. See head_meta.php.
+        okv_motion_pending();
         ?>
         <a href="#okv-main" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-white focus:px-4 focus:py-3 focus:text-forest">Skip to content</a>
         <header class="sticky top-0 z-30 border-b border-mist bg-white/95 backdrop-blur">

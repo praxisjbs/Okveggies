@@ -49,7 +49,7 @@ if (!function_exists('okv_combo_spread')) {
         $preview = array_slice($components, 0, 6);
         $remaining = max(0, count($components) - count($preview));
         ?>
-        <article class="overflow-hidden rounded-lg bg-white shadow-okv-1" data-combo-spread>
+        <article class="okv-enter overflow-hidden rounded-lg bg-white shadow-okv-1" data-combo-spread>
           <div class="grid gap-0 lg:grid-cols-2">
             <!--
               The photo links to the same place the name does. It is taken out

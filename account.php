@@ -51,6 +51,7 @@ $csrf = Csrf::token();
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="bg-forest-tint min-h-screen text-ink">
+<?php okv_motion_pending(); ?>
 <?php if ($signedIn):
     require_once __DIR__ . '/includes/components/shop/activation_banner.php';
     okv_activation_banner();
@@ -435,6 +436,9 @@ $csrf = Csrf::token();
 
   <?php okv_support_widget(); ?>
   <script>window.OKV = window.OKV || {}; window.OKV.csrf = <?= json_encode($csrf, JSON_UNESCAPED_SLASHES) ?>;</script>
+  <script src="<?= okv_e(okv_asset('/assets/js/vendor/gsap.min.js')) ?>" integrity="sha384-g4NTh/Iv5PPU4xPyhEWqPcwtNXOvdaDI8LLnyYfyNZOjKJeYQyjzQ9X5275eBjpt" crossorigin="anonymous" defer></script>
+  <script src="<?= okv_e(okv_asset('/assets/js/vendor/ScrollTrigger.min.js')) ?>" integrity="sha384-Z3REaz79l2IaAZqJsSABtTbhjgOUYyV3p90XNnAPCSHg3EMTz1fouunq9WZRtj3d" crossorigin="anonymous" defer></script>
+  <script src="<?= okv_e(okv_asset('/assets/js/okv-motion.min.js')) ?>" defer></script>
   <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
   <script src="<?= okv_e(okv_asset('/assets/js/account.min.js')) ?>" defer></script>
 </body>
