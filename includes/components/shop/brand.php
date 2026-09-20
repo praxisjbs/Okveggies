@@ -31,14 +31,20 @@ if (!function_exists('okv_seal')) {
         $size = max(120, $size);
         // Serve roughly twice the rendered size so the stamp stays crisp on a
         // phone's 2x screen without pulling the 640px file for a small mark.
-        $source = $size <= 160 ? 'seal-320.png' : 'seal-640.png';
+        $stem = $size <= 160 ? 'seal-320' : 'seal-640';
+        $png = $stem . '.png';
+        $webp = $stem . '.webp';
         $decorative = trim($alt) === '';
         ?>
-        <img src="<?= okv_e(okv_asset('/assets/img/brand/' . $source)) ?>"
-             alt="<?= okv_e($alt) ?>"
-             width="<?= $size ?>" height="<?= $size ?>"
-             class="<?= okv_e($class) ?>"
-             <?= $decorative ? 'aria-hidden="true"' : '' ?>>
+        <picture>
+          <source type="image/webp" srcset="<?= okv_e(okv_asset('/assets/img/brand/' . $webp)) ?>">
+          <img src="<?= okv_e(okv_asset('/assets/img/brand/' . $png)) ?>"
+               alt="<?= okv_e($alt) ?>"
+               width="<?= $size ?>" height="<?= $size ?>"
+               class="<?= okv_e($class) ?>"
+               decoding="async"
+               <?= $decorative ? 'aria-hidden="true"' : '' ?>>
+        </picture>
         <?php
     }
 }

@@ -443,11 +443,11 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 | PR3 | Checkout Beauty and Trust | 13 | [x] Done | 100% | 96% | 96% | `ef5f37d` | 20 Sep 2026 |
 | PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Audit incomplete: requested PHP/MySQL/browser gates not yet reproduced | - | - | - | - | 20 Sep 2026 |
 | PR5 | Infrastructure Hardening - Live Direct | 8,9,10,11,12,24,25 | [ ] Not started | - | - | 95% maint page | - | - |
-| PR6 | Performance, A11y and Attention Span | 2,6,7,29 | [ ] Not started | - | - | 95% | - | - |
+| PR6 | Performance, A11y and Attention Span | 2,6,7,29 | [x] Merged on owner request. Static lesser-text 126/126, image contract 95/95, brand 8/8. PHP/visual/axe unrun. Track 2 photo still pending, branded placeholder stays honest | 96% | 70% | 93% | - | 20 Sep 2026 |
 | PR8 | Motion System - Make It Move | 30 | [ ] Not started | - | - | 95% | - | - |
 | PR9 | Luxurious Daring Hero + Full Palette | 31 | [ ] Not started | - | - | 95% | - | - |
 | PR7 | Release Gate and Privacy Handover (last) | 4,5,26,27 | [ ] Not started | - | - | - | - | - |
-| **Total** | **31 fixes** | **1 to 31** | **4 of 9 PRs done (PR1, PR2, PR3, PR4), 5 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
+| **Total** | **31 fixes** | **1 to 31** | **4 of 9 PRs done (PR1, PR2, PR3, PR6), PR4 audit incomplete, 4 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
 
 **How to update:** After green, change `[ ]` to `[x] Done`, fill coverage `100%`, confidence `97%` etc., beauty `96%`, SHA `abc1234`, date. Keep row honest, never mark green with failing suite.
 

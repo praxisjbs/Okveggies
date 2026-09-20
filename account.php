@@ -108,7 +108,7 @@ $csrf = Csrf::token();
     </div>
   </header>
 
-  <main class="okv-container py-8 md:py-12">
+  <main id="okv-main" class="okv-container py-8 md:py-12">
     <?php if (okv_input('notice', '') === 'pro_business'): ?>
       <div class="mb-6 rounded-md border border-mist bg-white px-4 py-3 text-sm text-ink" role="status">
         Pro screens are for business accounts. You can manage this household account here or

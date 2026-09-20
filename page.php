@@ -6,6 +6,10 @@ require_once __DIR__ . '/includes/components/shop/brand.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/faq_disclosures.php';
+require_once __DIR__ . '/includes/components/shop/icons.php';
+require_once __DIR__ . '/includes/components/shop/empty_state.php';
+require_once __DIR__ . '/includes/components/shop/how_it_works_steps.php';
+require_once __DIR__ . '/includes/components/shop/delivery_policy_table.php';
 
 $slug = trim((string) okv_input('slug', ''));
 $publicSlugs = ['about', 'how-it-works', 'faq', 'terms', 'privacy', 'delivery-policy'];
@@ -55,10 +59,10 @@ if ($databaseFailed || $page === null) {
     }
     header('X-Robots-Tag: noindex, nofollow');
     $errorTitle = $databaseFailed ? 'Page temporarily unavailable' : 'Page not found';
-    $errorHeading = $databaseFailed ? 'We cannot open that page just now' : 'That page is not on the stall';
+    $errorHeading = $databaseFailed ? 'Page is resting' : 'Page not found';
     $errorCopy = $databaseFailed
-        ? 'The content store is not responding. Nothing has been replaced with old or placeholder copy. Please try again shortly.'
-        : 'The page may be unpublished, may have moved, or the address may be wrong. You can keep browsing from here.';
+        ? 'Try again shortly. Nothing was replaced with old copy.'
+        : 'The address may be wrong. Keep browsing from here.';
     ?><!doctype html>
 <html lang="en">
 <head>
@@ -73,22 +77,15 @@ if ($databaseFailed || $page === null) {
 <body class="min-h-screen bg-forest-tint text-ink">
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header(); ?>
-<main class="okv-container py-10 md:py-16">
+<main id="okv-main" class="okv-container py-10 md:py-16">
   <nav class="mb-6 flex min-h-[44px] items-center gap-2 text-sm text-ink-60" aria-label="Breadcrumb">
     <a href="/" class="inline-flex min-h-[44px] items-center font-medium hover:text-forest">Home</a>
     <span aria-hidden="true">/</span><span aria-current="page"><?= okv_e($errorTitle) ?></span>
   </nav>
-  <section class="rounded-xl bg-white p-6 text-center shadow-okv-1 md:p-10">
-    <?php okv_seal(120, 'mx-auto', ''); ?>
-    <p class="okv-eyebrow mt-6"><?= $databaseFailed ? 'Please try again' : 'Page not found' ?></p>
-    <h1 class="mx-auto mt-3 max-w-2xl font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($errorHeading) ?></h1>
-    <p class="mx-auto mt-4 max-w-xl leading-7 text-ink-60"><?= okv_e($errorCopy) ?></p>
-    <div class="mt-8 flex flex-wrap justify-center gap-3">
-      <a href="/shop.php" class="okv-btn">Browse the shop</a>
-      <a href="/combos.php" class="okv-btn-outline">See the combos</a>
-      <a href="/contact.php" class="okv-btn-text min-h-[44px]">Contact us</a>
-    </div>
-  </section>
+  <?php okv_empty_state($databaseFailed ? 'cloud' : 'leaf', $errorHeading, $errorCopy, [
+      ['href' => '/shop.php', 'label' => 'Browse the shop', 'icon' => 'leaf'],
+      ['href' => '/combos.php', 'label' => 'See the combos', 'style' => 'outline', 'icon' => 'basket'],
+  ], ['heading_tag' => 'h1']); ?>
 </main>
 <?php okv_shop_footer([]); ?>
 </body>
@@ -148,7 +145,7 @@ $actions = match ($slug) {
 <body class="min-h-screen bg-forest-tint text-ink">
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header(); ?>
-<main>
+<main id="okv-main">
   <div class="okv-container py-6 md:py-10">
     <nav class="mb-6 flex min-h-[44px] items-center gap-2 text-sm text-ink-60" aria-label="Breadcrumb">
       <a href="/" class="inline-flex min-h-[44px] items-center font-medium hover:text-forest">Home</a>
@@ -165,7 +162,12 @@ $actions = match ($slug) {
           </div>
           <figure class="bg-forest-tint lg:col-span-6">
             <?php if ((string) $page['image_url'] !== ''): ?>
-              <img src="<?= okv_e(okv_image_url((string) $page['image_url'])) ?>" alt="<?= okv_e((string) $page['image_alt']) ?>" class="h-full min-h-80 w-full object-cover" fetchpriority="high">
+              <?php $storyImage = ContentImages::presentation((string) $page['image_url']); ?>
+              <img src="<?= okv_e(okv_image_url((string) $page['image_url'])) ?>"<?= $storyImage['srcset'] !== '' ? ' srcset="' . okv_e($storyImage['srcset']) . '" sizes="(min-width: 1024px) 50vw, 100vw"' : '' ?>
+                   alt="<?= okv_e((string) $page['image_alt']) ?>"
+                   width="<?= $storyImage['width'] > 0 ? (int) $storyImage['width'] : 1280 ?>"
+                   height="<?= $storyImage['height'] > 0 ? (int) $storyImage['height'] : 960 ?>"
+                   class="h-full min-h-80 w-full object-cover" fetchpriority="high" decoding="async">
             <?php else: ?>
               <div class="flex min-h-80 flex-col items-center justify-center p-8 text-center">
                 <?php okv_seal(160, '', ''); ?>
@@ -183,7 +185,7 @@ $actions = match ($slug) {
           <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($visibleTitle) ?></h1>
         </header>
-        <div class="max-w-3xl pt-3" data-content-body><?= $rendered['html'] ?></div>
+        <?php okv_how_it_works_steps($rendered['html']); ?>
         <?php require __DIR__ . '/includes/components/shop/make_it_right_guidance.php'; ?>
       </article>
     <?php elseif ($isFaq): ?>
@@ -191,24 +193,20 @@ $actions = match ($slug) {
         <header class="border-b border-mist pb-8">
           <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($visibleTitle) ?></h1>
-          <p class="mt-4 max-w-2xl leading-7 text-ink-60">Open a question for the answer. If yours is not here, send us a message or chat with us on WhatsApp.</p>
+          <p class="mt-4 max-w-2xl text-ink-60">Open a question. Chat if yours is not here.</p>
         </header>
         <?php if ($faqItems): ?>
           <div class="mt-6"><?php okv_faq_disclosures($faqItems); ?></div>
         <?php else: ?>
-          <section class="mt-8 rounded-lg bg-forest-tint p-6 text-center" aria-labelledby="faq-empty-heading">
-            <h2 id="faq-empty-heading" class="font-editorial text-okv-h6 text-ink">We are preparing these answers</h2>
-            <p class="mx-auto mt-3 max-w-xl leading-7 text-ink-60">There are no published questions just now. Tell us what you need and we will help directly.</p>
-            <div class="mt-6 flex flex-wrap justify-center gap-3">
-              <a class="okv-btn" href="/contact.php">Contact us</a>
-              <a class="okv-btn-outline" href="<?= okv_e(okv_support_whatsapp_url()) ?>" target="_blank" rel="noopener noreferrer">Chat on WhatsApp</a>
-            </div>
-          </section>
+          <div class="mt-8"><?php okv_empty_state('info', 'We are preparing these answers', 'There are no published questions just now.', [
+              ['href' => '/contact.php', 'label' => 'Contact us', 'icon' => 'user'],
+              ['href' => okv_support_whatsapp_url(), 'label' => 'Chat on WhatsApp', 'style' => 'outline', 'icon' => 'phone'],
+          ]); ?></div>
         <?php endif; ?>
         <?php if ($faqItems): ?><aside class="mt-8 border-t border-mist pt-6">
           <h2 class="font-editorial text-okv-h6 text-ink">Still need a hand?</h2>
-          <p class="mt-2 text-ink-60">Send the details through our contact form or start a WhatsApp chat.</p>
-          <div class="mt-5 flex flex-wrap gap-3"><a class="okv-btn" href="/contact.php">Contact us</a><a class="okv-btn-outline" href="<?= okv_e(okv_support_whatsapp_url()) ?>" target="_blank" rel="noopener noreferrer">Chat on WhatsApp</a></div>
+          <p class="mt-2 text-ink-60">Send a form or start a chat.</p>
+          <div class="mt-5 flex flex-wrap gap-3"><a class="okv-btn" href="/contact.php"><?php okv_icon('user', 'h-4 w-4'); ?> Contact us</a><a class="okv-btn-outline" href="<?= okv_e(okv_support_whatsapp_url()) ?>" target="_blank" rel="noopener noreferrer"><?php okv_icon('phone', 'h-4 w-4'); ?> Chat on WhatsApp</a></div>
         </aside><?php endif; ?>
       </article>
     <?php elseif ($isLegal): ?>
@@ -216,19 +214,22 @@ $actions = match ($slug) {
         <header class="border-b border-mist pb-8">
           <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($visibleTitle) ?></h1>
-          <p class="mt-4 max-w-2xl text-sm leading-6 text-ink-60">Read this page carefully. If anything is unclear, contact us before placing an order.</p>
         </header>
-        <?php $levelTwo = array_values(array_filter($rendered['headings'], static fn(array $heading): bool => $heading['level'] === 2)); ?>
-        <?php if (count($levelTwo) >= 2): ?>
-          <nav class="mt-8 rounded-lg bg-forest-tint p-5" aria-label="On this page">
-            <h2 class="font-semibold text-ink">On this page</h2>
-            <ul class="mt-2 grid gap-1 sm:grid-cols-2">
-              <?php foreach ($levelTwo as $heading): ?><li><a class="inline-flex min-h-[44px] items-center font-semibold text-forest underline underline-offset-2" href="#<?= okv_e($heading['id']) ?>"><?= okv_e($heading['text']) ?></a></li><?php endforeach; ?>
-            </ul>
-          </nav>
+        <?php if ($slug === 'delivery-policy'): ?>
+          <?php okv_delivery_policy_table($rendered['html']); ?>
+          <?php require __DIR__ . '/includes/components/shop/make_it_right_guidance.php'; ?>
+        <?php else: ?>
+          <?php $levelTwo = array_values(array_filter($rendered['headings'], static fn(array $heading): bool => $heading['level'] === 2)); ?>
+          <?php if (count($levelTwo) >= 2): ?>
+            <nav class="mt-8 rounded-lg bg-forest-tint p-5" aria-label="On this page">
+              <h2 class="font-semibold text-ink">On this page</h2>
+              <ul class="mt-2 grid gap-1 sm:grid-cols-2">
+                <?php foreach ($levelTwo as $heading): ?><li><a class="inline-flex min-h-[44px] items-center font-semibold text-forest underline underline-offset-2" href="#<?= okv_e($heading['id']) ?>"><?= okv_e($heading['text']) ?></a></li><?php endforeach; ?>
+              </ul>
+            </nav>
+          <?php endif; ?>
+          <div class="max-w-3xl pt-3" data-content-body><?= $rendered['html'] ?></div>
         <?php endif; ?>
-        <div class="max-w-3xl pt-3" data-content-body><?= $rendered['html'] ?></div>
-        <?php if ($slug === 'delivery-policy'): require __DIR__ . '/includes/components/shop/make_it_right_guidance.php'; endif; ?>
       </article>
     <?php endif; ?>
 
@@ -244,6 +245,7 @@ $actions = match ($slug) {
   </div>
 </main>
 <?php okv_shop_footer(); ?>
+<script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
 <?php if ($isFaq): ?><script src="<?= okv_e(okv_asset('/assets/js/faq.min.js')) ?>" defer></script><?php endif; ?>
 </body>
 </html>

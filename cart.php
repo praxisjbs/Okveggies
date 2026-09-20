@@ -14,6 +14,8 @@ require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
 require_once __DIR__ . '/includes/components/shop/icons.php';
+require_once __DIR__ . '/includes/components/shop/empty_state.php';
+require_once __DIR__ . '/includes/components/shop/picture.php';
 
 $basket = Basket::state();
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
@@ -49,7 +51,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header('basket'); ?>
 
-<main class="okv-container py-8 md:py-12">
+<main id="okv-main" class="okv-container py-8 md:py-12">
   <nav class="mb-6 text-sm text-ink-60" aria-label="Breadcrumb">
     <a href="/" class="inline-flex min-h-[44px] items-center hover:text-forest">Home</a> / <span aria-current="page">Basket</span>
   </nav>
@@ -59,7 +61,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
       <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Your order</p>
       <h1 class="mt-2 font-display text-4xl font-extrabold text-ink">Your basket</h1>
     </div>
-    <a href="/shop.php" class="okv-btn-outline px-4">Keep shopping</a>
+    <a href="/shop.php" class="okv-btn-outline min-h-[44px] px-4"><?php okv_icon('leaf', 'h-4 w-4'); ?> Keep shopping</a>
   </div>
 
   <?php if (isset($notices[$notice])): ?>
@@ -75,17 +77,12 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
   <?php endif; ?>
 
   <?php if (!$basket['lines']): ?>
-    <section class="mt-8 rounded-xl bg-white px-6 py-14 text-center shadow-okv-1">
-      <span class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-forest-tint text-forest">
-        <?php okv_icon('basket-empty', 'h-10 w-10'); ?>
-      </span>
-      <h2 class="mt-4 font-display text-2xl font-bold text-ink">Your basket is empty</h2>
-      <p class="mx-auto mt-2 max-w-md text-ink-60">Pick the produce or ready baskets you need for the kitchen.</p>
-      <div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-        <a href="/shop.php" class="okv-btn w-full justify-center sm:w-auto">Shop produce <?php okv_icon('arrow-right', 'h-4 w-4'); ?></a>
-        <a href="/combos.php" class="okv-btn-outline w-full justify-center sm:w-auto">See combos</a>
-      </div>
-    </section>
+    <div class="mt-8">
+      <?php okv_empty_state('basket-empty', 'Your basket is empty', 'Pick the produce or ready baskets you need.', [
+          ['href' => '/shop.php', 'label' => 'Shop produce', 'icon' => 'leaf'],
+          ['href' => '/combos.php', 'label' => 'See combos', 'style' => 'outline', 'icon' => 'basket'],
+      ]); ?>
+    </div>
   <?php else: ?>
     <div class="mt-8 grid gap-8 lg:grid-cols-12">
       <section class="space-y-4 lg:col-span-8" aria-label="Basket items">
@@ -97,7 +94,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
                      alt="<?= okv_e($combo
                        ? (string) $line['name'] . ', ready basket'
                        : okv_produce_alt((string) $line['name'], (string) $line['unit'], $sourceRegions)) ?>"
-                     width="80" height="80" class="h-full w-full object-cover" loading="lazy">
+                     width="80" height="80" class="h-full w-full object-cover" loading="lazy" decoding="async">
               <?php endif; ?>
             </div>
             <div class="min-w-0 flex-1">

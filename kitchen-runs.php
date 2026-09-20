@@ -13,6 +13,8 @@ require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
 require_once __DIR__ . '/includes/components/shop/delivery_picker.php';
+require_once __DIR__ . '/includes/components/shop/icons.php';
+require_once __DIR__ . '/includes/components/shop/empty_state.php';
 
 if (!Customer::isLoggedIn()) {
     require __DIR__ . '/includes/components/shop/kitchen_run_intro.php';
@@ -119,7 +121,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 <?php okv_shop_header('kitchen-runs'); ?>
 <?php okv_activation_banner(); ?>
 
-<main class="okv-container pb-24 md:pb-12">
+<main id="okv-main" class="okv-container pb-24 md:pb-12">
   <nav aria-label="Breadcrumb" class="pt-3 text-xs text-ink-60">
     <ol class="flex items-center gap-2">
       <li><a class="hover:text-forest underline-offset-2 hover:underline" href="/">Home</a></li>
@@ -331,11 +333,11 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
   <section class="mt-10" aria-labelledby="runs-heading">
     <h2 id="runs-heading" class="font-display text-[18px] font-semibold tracking-tight">Your runs</h2>
     <?php if (!$runs): ?>
-      <div class="mt-3 flex flex-col items-center gap-3 rounded-[16px] border border-dashed border-ink-20 bg-white p-8 text-center">
-        <div class="flex h-20 w-20 items-center justify-center rounded-full bg-mist" aria-hidden="true">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0F5132" stroke-width="1.5"><path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M15 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>
-        </div>
-        <p class="text-sm text-ink-60">No runs yet. Start above.</p>
+      <div class="mt-3">
+        <?php okv_empty_state('list', 'No runs yet here', 'Start above. We will price your list.', [
+            ['href' => '/shop.php', 'label' => 'Shop produce', 'icon' => 'leaf'],
+            ['href' => '/combos.php', 'label' => 'See combos', 'style' => 'outline', 'icon' => 'basket'],
+        ], ['class' => 'border border-dashed border-ink-20 shadow-none']); ?>
       </div>
     <?php else: ?>
       <ul class="mt-3 space-y-2">

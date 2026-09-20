@@ -190,6 +190,13 @@
   /* Skeleton shimmer for content that is loading. */
   .okv-skeleton { @apply bg-mist rounded-md animate-pulse; }
 
+  /* Empty, error and success: 80px line art, four-word heading, one line, two buttons. */
+  .okv-empty { @apply rounded-xl bg-white px-6 py-14 text-center shadow-okv-1; }
+  .okv-empty-art { @apply mx-auto flex h-20 w-20 items-center justify-center text-forest; }
+
+  /* How It Works and promise steps. */
+  .okv-step-card { @apply rounded-xl border border-ink-10 bg-white p-5 text-center; }
+
   /*
    * The eyebrow over a section title. Gold ink on white, which is 5.94:1, so
    * it never leans on Harvest Gold itself to carry small text (bible 3.10).

@@ -107,7 +107,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header('basket'); ?>
 
-<main class="okv-container pt-8 md:pb-16 md:pt-12 <?= $step === 4 && $basket['lines'] ? 'pb-44' : 'pb-24' ?>">
+<main id="okv-main" class="okv-container pt-8 md:pb-16 md:pt-12 <?= $step === 4 && $basket['lines'] ? 'pb-44' : 'pb-24' ?>">
   <div class="okv-enter">
     <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Your order</p>
     <h1 class="mt-2 font-display text-4xl font-extrabold text-ink">Checkout</h1>

@@ -13,6 +13,8 @@
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/brand.php';
+require_once __DIR__ . '/picture.php';
+require_once __DIR__ . '/icons.php';
 
 if (!function_exists('okv_product_card')) {
     function okv_product_card(array $product, string $sourceRegions, string $returnTo, string $sourceDay = ''): void
@@ -21,13 +23,15 @@ if (!function_exists('okv_product_card')) {
         $unit = (string) ($product['unit'] ?? '');
         $productSourceRegion = trim((string) ($product['source_region'] ?? '')) ?: trim($sourceRegions);
         ?>
-        <article class="okv-card group flex h-full flex-col" data-product-card>
+        <article class="okv-card group flex h-full flex-col active:scale-[0.98]" data-product-card>
           <a href="/product.php?slug=<?= okv_e($product['slug']) ?>" class="block">
             <div class="aspect-square overflow-hidden rounded-md bg-forest-tint">
               <?php if (!empty($product['image'])): ?>
-                <img src="<?= okv_e(okv_image_url($product['image'])) ?>"
-                     alt="<?= okv_e(okv_produce_alt((string) $product['name'], $unit, $productSourceRegion)) ?>"
-                     class="h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105" loading="lazy">
+                <?php okv_picture((string) $product['image'], okv_produce_alt((string) $product['name'], $unit, $productSourceRegion), [
+                    'class' => 'h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105',
+                    'sizes' => '(min-width: 1024px) 25vw, 50vw',
+                    'lazy' => true,
+                ]); ?>
               <?php else: ?>
                 <div class="flex h-full items-center justify-center p-4 text-center text-sm text-ink-40">Photo coming soon</div>
               <?php endif; ?>
@@ -59,7 +63,7 @@ if (!function_exists('okv_product_card')) {
               <input type="hidden" name="action" value="add_product">
               <input type="hidden" name="product_id" value="<?= (int) $product['id'] ?>">
               <input type="hidden" name="return_to" value="<?= okv_e($returnTo) ?>">
-              <button type="submit" class="okv-btn px-4" <?= $availability['can_add'] ? '' : 'disabled' ?> data-add-button><?= $availability['can_add'] ? 'Add' : 'Waiting' ?></button>
+              <button type="submit" class="okv-btn rounded-xl px-4" <?= $availability['can_add'] ? '' : 'disabled' ?> data-add-button><?php if ($availability['can_add']): ?><?php okv_icon('basket', 'h-4 w-4'); ?> Add<?php else: ?>Waiting<?php endif; ?></button>
             </form>
           </div>
         </article>

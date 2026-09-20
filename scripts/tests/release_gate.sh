@@ -281,6 +281,7 @@ section "7. Browser pass at 390px and 1440px"
 run "seed_visual_fixture" php scripts/tests/seed_visual_fixture.php
 run "visual_pass.mjs" node scripts/tests/visual_pass.mjs
 run "homepage_visual_test.mjs" node scripts/tests/homepage_visual_test.mjs
+run "axe_suite.mjs" node scripts/tests/axe_suite.mjs
 run "content_admin_visual_test.mjs" node scripts/tests/content_admin_visual_test.mjs
 run "public_content_visual_test.mjs" php scripts/tests/public_content_visual_fixture.php
 run "role_journeys.mjs" node scripts/tests/role_journeys.mjs
