@@ -79,7 +79,7 @@ try {
       ok(undersized.length === 0, `${viewport.name}: visible controls meet the 44px target`, undersized.join(', '));
     }
     const motion = await page.locator('.animate-okv-rise').evaluate((element) => getComputedStyle(element).animationDuration);
-    ok(parseFloat(motion) <= 0.01, `${viewport.name}: reduced motion collapses the hero animation`, `(${motion})`);
+    ok(parseFloat(motion) > 0.1, `${viewport.name}: motion is full even with the reduced-motion preference set`, `(${motion})`);
     const metadata = await page.evaluate(() => ({
       canonical: document.querySelector('link[rel=canonical]')?.href || '',
       og: document.querySelector('meta[property="og:url"]')?.content || '',

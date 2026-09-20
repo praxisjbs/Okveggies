@@ -31,6 +31,7 @@ require_once $root . '/includes/classes/Auth.php';
 require_once $root . '/includes/classes/Otp.php';
 require_once $root . '/includes/classes/Money.php';
 require_once $root . '/includes/classes/OrderTrail.php';
+require_once $root . '/includes/classes/Delivery.php';
 
 // Issue codes in the same timezone the server verifies them in, so the codes
 // this test mints line up with the app's naive DATETIME comparisons. The real
@@ -303,6 +304,97 @@ try {
         'action' => 'delete', 'list_id' => $savedListId, 'confirm_delete' => '1', 'okv_csrf' => token($jarBiz),
     ], $jarBiz);
     t_eq(200, $deleteCode, 'a business deletes its confirmed saved list');
+
+    // ---- Guest checkout, over the same endpoints the redesigned page posts -
+    //
+    // The checkout page is plain HTML forms, so the browser journey is the
+    // form journey: add to the basket, save the customer step, save the
+    // delivery step, place the order. This drives those endpoints as a guest
+    // and proves the redesign kept the server contract: a real order, a trail
+    // token, no account written, and the trust panel rendered below the whole
+    // payment radio group (fix 13).
+    $guestEmail = 'httpguest@okveggies.com.ng';
+    $jarShop = tempnam($jarDir, 'okvsh');
+
+    $shopProduct = Database::one('SELECT id, name FROM products WHERE is_active = 1 ORDER BY id LIMIT 1');
+    t_ok($shopProduct !== null, 'the scratch catalogue has a product for the guest journey');
+    [$code, $res] = http('POST', '/api/v1/cart.php', [
+        'action' => 'add_product', 'product_id' => (int) $shopProduct['id'], 'quantity' => '2', 'okv_csrf' => token($jarShop),
+    ], $jarShop);
+    t_eq(200, $code, 'a guest adds a product to the basket');
+
+    [, $guestBasket] = http('GET', '/api/v1/cart.php?action=state', null, $jarShop);
+    $guestCartId = (int) ($guestBasket['cart_id'] ?? 0);
+    t_ok($guestCartId > 0, 'the guest basket exists to convert');
+
+    [$step1Code, $checkoutStep1] = http('GET', '/checkout.php', null, $jarShop, false);
+    t_eq(200, $step1Code, 'the checkout page opens for the guest');
+    t_ok(strpos((string) $checkoutStep1, 'Check your basket') !== false, 'the checkout page opens on the basket review step');
+    t_ok(strpos((string) $checkoutStep1, (string) $shopProduct['name']) !== false, 'the basket review names the product the guest added');
+
+    [$code, $res] = http('POST', '/api/v1/checkout.php', [
+        'action' => 'save_step', 'step' => 'customer', 'okv_csrf' => token($jarShop),
+        'recipient_name' => 'Ngozi Guest', 'recipient_phone' => '08090000044', 'email' => $guestEmail,
+        'address_line_1' => '4 Trail Close', 'address_line_2' => '', 'city' => 'Lagos', 'state' => 'Lagos',
+        'landmark' => 'Opposite the blue gate', 'customer_type' => 'household',
+    ], $jarShop);
+    t_eq(200, $code, 'the guest saves the customer step');
+    t_eq(3, $res['next_step'] ?? 0, 'the customer step moves the guest to delivery');
+
+    $guestDate = Delivery::nextEligibleDates('household', 1);
+    $guestZone = Database::one('SELECT id FROM delivery_zones WHERE is_active = 1 ORDER BY sort_order LIMIT 1');
+    t_ok($guestDate !== [] && $guestZone !== null, 'the scratch database offers a delivery day and an area');
+    [$code, $res] = http('POST', '/api/v1/checkout.php', [
+        'action' => 'save_step', 'step' => 'delivery', 'okv_csrf' => token($jarShop),
+        'delivery_date' => (string) $guestDate[0]['date'], 'delivery_zone_id' => (int) $guestZone['id'],
+    ], $jarShop);
+    t_eq(200, $code, 'the guest saves the delivery step');
+    t_eq(4, $res['next_step'] ?? 0, 'the delivery step moves the guest to payment');
+
+    [, $checkoutStep4] = http('GET', '/checkout.php?step=4', null, $jarShop, false);
+    t_ok(strpos((string) $checkoutStep4, 'Choose how to pay') !== false, 'the payment step renders');
+    $pageLastRadio  = strripos((string) $checkoutStep4, 'name="payment_option"');
+    $pageTrustPanel = stripos((string) $checkoutStep4, 'data-trust-panel');
+    t_ok($pageLastRadio !== false && $pageTrustPanel !== false && $pageTrustPanel > $pageLastRadio,
+        'over HTTP too, the trust panel renders below the whole payment radio group');
+    t_ok(strpos((string) $checkoutStep4, 'Pay now') !== false, 'the payment step carries the pay button');
+
+    [$code, $placed] = http('POST', '/api/v1/checkout.php', [
+        'action' => 'place_order', 'payment_option' => 'pay_in_full', 'okv_csrf' => token($jarShop),
+    ], $jarShop);
+    t_eq(200, $code, 'the guest places the order');
+    t_eq('ok', $placed['status'] ?? '', 'placement answers ok');
+    t_ok((int) ($placed['order_id'] ?? 0) > 0, 'placement returns the order id');
+    t_ok(($placed['confirmation_url'] ?? '') !== '', 'placement returns the confirmation link');
+    t_ok(array_key_exists('pay_url', $placed), 'placement answers with the pay slot, filled or empty by configuration');
+    $guestOrderId = (int) $placed['order_id'];
+    $guestOrderNumber = (string) ($placed['order_number'] ?? '');
+
+    $guestOrder = Database::one('SELECT user_id, contact_email, payment_option, order_total_subunit FROM orders WHERE id = :id', [':id' => $guestOrderId]);
+    t_eq(null, $guestOrder['user_id'], 'the order belongs to no account');
+    t_eq($guestEmail, (string) $guestOrder['contact_email'], 'the order keeps the email the confirmation goes to');
+    t_eq('pay_in_full', (string) $guestOrder['payment_option'], 'the chosen payment card is what was recorded');
+    t_ok((bool) Database::one('SELECT id FROM payments WHERE order_id = :id AND status = \'unpaid\'', [':id' => $guestOrderId]), 'the order records what is owed');
+    t_ok((bool) Database::one('SELECT id FROM delivery_schedules WHERE order_id = :id AND delivery_date = :d', [':id' => $guestOrderId, ':d' => (string) $guestDate[0]['date']]), 'the chosen delivery day is scheduled');
+
+    $guestTrail = (string) ($placed['trail_url'] ?? '');
+    t_ok($guestTrail !== '', 'a guest order returns its trail link, the only way back to it');
+    [$trailCode, $trailBody] = http('GET', $guestTrail, null, tempnam($jarDir, 'okvtr'), false);
+    t_eq(200, $trailCode, 'the trail link opens without a session');
+    t_ok(strpos((string) $trailBody, $guestOrderNumber) !== false, 'the trail names the placed order');
+
+    // The guest leaves the same way they came: no account created, and a fresh
+    // basket next time, because the old one converted with the order.
+    [, $guestState] = http('GET', '/api/v1/cart.php?action=state', null, $jarShop);
+    t_eq(0, (int) ($guestState['count'] ?? 1), 'the placed basket is gone, so the guest starts clean');
+    t_eq(null, Database::one('SELECT id FROM users WHERE email = :e', [':e' => $guestEmail]), 'no account row was written for the guest');
+
+    // Cleanup for a guest order, which no user email covers.
+    foreach (['order_trail_share_links', 'payments', 'order_status_history', 'order_items', 'order_addresses', 'delivery_schedules'] as $guestTable) {
+        $pdo->prepare("DELETE FROM $guestTable WHERE order_id = ?")->execute([$guestOrderId]);
+    }
+    $pdo->prepare('DELETE FROM orders WHERE id = ?')->execute([$guestOrderId]);
+    $pdo->prepare('DELETE FROM shopping_carts WHERE user_id IS NULL AND status <> \'converted\'')->execute();
 
     // ---- Business credit application -------------------------------------
     $creditFields = [

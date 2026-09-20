@@ -177,12 +177,13 @@
   /* Page container width. */
   .okv-container { @apply max-w-content mx-auto px-4 md:px-8; }
 
-  /* Slide-up sheets on mobile that become a centred dialog on wider screens. */
-  .okv-sheet-backdrop { @apply fixed inset-0 z-50 bg-ink/50 flex items-end sm:items-center justify-center p-0 sm:p-4; }
+  /* Slide-up sheets on mobile that become a centred dialog on wider screens.
+     The 24px top radius and the blurred backdrop are the house sheet pattern. */
+  .okv-sheet-backdrop { @apply fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm sm:items-center sm:p-4; }
   /* The display:flex above would beat the plain hidden attribute, so make hidden win. */
   .okv-sheet-backdrop[hidden] { display: none; }
   .okv-sheet {
-    @apply bg-white w-full sm:max-w-md rounded-t-lg sm:rounded-lg shadow-okv-3 p-6
+    @apply bg-white w-full sm:max-w-md rounded-t-sheet sm:rounded-sheet shadow-okv-3 p-6
            max-h-[92vh] overflow-y-auto animate-okv-rise;
   }
 
@@ -212,8 +213,81 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+/*
+ * Motion is full, by the client's decision of 20 Sep 2026 (plan Section 5):
+ * the interface is meant to move, so the old global collapse of every
+ * animation to 0.001ms under prefers-reduced-motion is gone. What stays true
+ * is the house rule that motion moves only transform and opacity, keeps to the
+ * two brand curves plus the entrance curve below, and never blocks a control:
+ * an animation is a remark, not a gate.
+ */
+@keyframes okv-enter {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/*
+ * Scroll-free entrance for the blocks of one screen, checkout above all: the
+ * panel rises once, its cards follow in a short stagger, all on transform and
+ * opacity so it holds 60fps on a mid-range phone. `both` fill keeps each block
+ * honest before its turn, so nothing flashes and nothing jumps.
+ */
+.okv-enter   { animation: okv-enter 500ms cubic-bezier(0.33, 0.16, 0.12, 0.97) both; }
+.okv-enter-2 { animation-delay: 70ms; }
+.okv-enter-3 { animation-delay: 140ms; }
+.okv-enter-4 { animation-delay: 210ms; }
+.okv-enter-5 { animation-delay: 280ms; }
+.okv-enter-6 { animation-delay: 350ms; }
+
+/* ---------------------------------------------------------------------------
+ * Checkout. The beauty flagship (plan PR3): big tappable choices, a progress
+ * line with icons, and a sticky pay bar that floats above the mobile tab bar.
+ * The classes here exist because the same shapes repeat across the four steps
+ * and must not drift apart.
+ * ------------------------------------------------------------------------ */
+@layer components {
+  /*
+   * The choice radio. It draws itself: a quiet ring at rest, forest once
+   * chosen, and the gold focus ring from the base layer lands on it untouched.
+   * The dot is a sibling span in the markup, scaled in with Market Bounce, so
+   * the celebration of choosing is one of the bounce moments the bible allows.
+   */
+  .okv-radio {
+    @apply h-7 w-7 shrink-0 cursor-pointer appearance-none rounded-full border-2 border-ink-40 bg-white
+           transition duration-botanical ease-botanical
+           hover:border-forest checked:border-forest;
+  }
+
+  /* The circle of the checkout progress line, and its two states. */
+  .okv-step-dot {
+    @apply flex h-11 w-11 items-center justify-center rounded-full border-2 border-mist bg-white text-ink-40
+           transition duration-botanical ease-botanical;
+  }
+  .okv-step-dot-done    { @apply border-forest bg-white text-forest; }
+  .okv-step-dot-current { @apply border-forest bg-forest text-white shadow-okv-2; }
+
+  /*
+   * A large payment choice card. The radio inside it is only the marker: the
+   * whole card is one label, so the tap target is the card, which is how a
+   * phone app does it. Selection is styled by the has-[:checked] utilities in
+   * the markup, so one rule of markup carries every state.
+   */
+  .okv-choice {
+    @apply relative flex cursor-pointer items-start gap-3 rounded-xl border border-ink-10 bg-white p-4
+           transition duration-botanical ease-botanical
+           hover:border-forest/40 active:scale-[0.98]
+           has-[:checked]:border-forest has-[:checked]:bg-white has-[:checked]:shadow-okv-2
+           has-[:checked]:ring-2 has-[:checked]:ring-gold
+           has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 has-[:disabled]:active:scale-100;
+  }
+
+  /* The sticky mobile pay bar. It floats directly above the mobile tab bar
+     (64px: a 56px row plus its 8px pad) and clears the bottom safe area, so
+     the primary action is in the thumb zone and the tab bar stays tappable. */
+  .okv-pay-bar {
+    @apply fixed inset-x-0 bottom-16 z-40 border-t border-mist bg-white/95 px-4 pt-3 backdrop-blur
+           pb-[env(safe-area-inset-bottom)] md:hidden;
+  }
 }
 
 /* ---------------------------------------------------------------------------
