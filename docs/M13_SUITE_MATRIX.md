@@ -18,7 +18,7 @@ Status meanings:
 | 3 | Fresh migration from zero, then a second run applying nothing | `scripts/tests/db_reset.php`, with the gate asserting the server is MySQL 8 first | built, gated |
 | 4 | HTTP suites | every `*_http_test.php` (26 files), including `manual_operations_http_test` | built, gated |
 | 5 | PHP and JavaScript syntax of what we ship | `scripts/tests/release_gate.sh` (`php -l` over all 311 shipped PHP files, `node --check` over `assets/js` and `scripts/tests/*.mjs`) | built, gated |
-| 6 | Browser pass at 390px and 1440px | `scripts/tests/visual_pass.mjs`, `homepage_visual_test.mjs`, `content_admin_visual_test.mjs`, `public_content_visual_fixture.php` | built, gated |
+| 6 | Browser pass at 390px and 1440px | `scripts/tests/visual_pass.mjs`, `homepage_visual_test.mjs`, `axe_suite.mjs`, `content_admin_visual_test.mjs`, `public_content_visual_fixture.php` | built, gated |
 | 7 | Brand consistency | `scripts/brand-check.sh` | built, executed in CI |
 | 8 | Deployment smoke checks | `scripts/verify.sh` against the local server (which `public_content_router.php` makes possible away from Apache) | built, gated |
 | 9 | Guest journey | `scripts/tests/role_journeys.mjs` | built, gated |

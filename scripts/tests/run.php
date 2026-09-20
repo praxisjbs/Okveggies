@@ -46,6 +46,7 @@ require_once $appRoot . '/includes/classes/Settings.php';
 require_once $appRoot . '/includes/classes/SettingsEditor.php';
 require_once $appRoot . '/includes/classes/ContentPages.php';
 require_once $appRoot . '/includes/classes/ContentImages.php';
+require_once $appRoot . '/includes/classes/ProductImages.php';
 require_once $appRoot . '/includes/classes/ContentRenderer.php';
 require_once $appRoot . '/includes/classes/FaqContent.php';
 require_once $appRoot . '/includes/classes/Basket.php';

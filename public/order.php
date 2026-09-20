@@ -48,7 +48,7 @@ if (!$order) {
     </head>
     <body class="min-h-screen bg-forest-tint">
     <?php okv_shop_header(); ?>
-    <main class="okv-container py-16 text-center">
+    <main id="okv-main" class="okv-container py-16 text-center">
       <h1 class="font-display text-3xl font-extrabold text-ink">We could not find that order</h1>
       <p class="mt-3 text-ink-60">Check the link, or sign in to open your order.</p>
       <a class="okv-btn mt-6 px-4" href="/account.php?mode=signin">Sign in</a>
@@ -146,7 +146,7 @@ $publicStatus = [
 <body class="min-h-screen bg-forest-tint">
 <?php okv_shop_header(); ?>
 
-<main class="okv-container py-8 md:py-12">
+<main id="okv-main" class="okv-container py-8 md:py-12">
   <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Order <?= okv_e($order['order_number']) ?></p>
   <h1 class="mt-2 font-display text-4xl font-extrabold text-ink"><?= $publicTrail ? 'Follow this order' : 'We have your order' ?></h1>
   <p class="mt-3 text-ink-60">

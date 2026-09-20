@@ -24,11 +24,11 @@ if (!function_exists('okv_faq_disclosures')) {
               <summary class="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-4 py-3 font-semibold text-ink marker:content-none" aria-controls="<?= okv_e($answerId) ?>">
                 <span class="text-lg" role="heading" aria-level="2"><?= okv_e((string) $item['question']) ?></span>
                 <span class="flex flex-none items-center gap-2 text-sm text-forest" aria-hidden="true">
-                  <span class="group-open:hidden">Show answer</span><span class="hidden group-open:inline">Hide answer</span>
-                  <svg class="h-5 w-5 transition-transform duration-botanical ease-botanical group-open:rotate-45 motion-reduce:transition-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  <span class="group-open:hidden">Expand</span><span class="hidden group-open:inline">Close</span>
+                  <svg class="h-4 w-4 transition-transform duration-botanical ease-botanical group-open:rotate-45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 </span>
               </summary>
-              <div class="pb-6 pr-8" id="<?= okv_e($answerId) ?>" data-faq-answer><?= $item['answer_html'] ?></div>
+              <div class="max-w-xl pb-6 pr-8 text-sm leading-6 text-ink-60" id="<?= okv_e($answerId) ?>" data-faq-answer><?= $item['answer_html'] ?></div>
             </details>
           <?php endforeach; ?>
         </div>

@@ -64,6 +64,14 @@ if (!function_exists('okv_icon')) {
             'plate'        => '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="m9.5 12.5 1.8-3 1.6 2 1.6-2.6"/>',
             // The empty basket, drawn to read as a picture at 80px.
             'basket-empty' => '<path d="M4 10h16l-1.5 9a2 2 0 0 1-2 1.7h-9a2 2 0 0 1-2-1.7L4 10Z"/><path d="M8 10 12 3l4 7"/><path d="M9.5 14v3M14.5 14v3"/><path d="M2.5 6.5 5 10M21.5 6.5 19 10"/>',
+            // Magnifier, for a search that found nothing.
+            'magnifier'    => '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>',
+            // Cloud, for a dropped connection.
+            'cloud'        => '<path d="M7 17h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.5 1.5A3.5 3.5 0 0 0 7 17Z"/>',
+            // A kitchen list.
+            'list'         => '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+            // The van that brings the basket.
+            'truck'        => '<path d="M3 7h11v10H3z"/><path d="M14 11h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>',
         ];
         return $paths;
     }

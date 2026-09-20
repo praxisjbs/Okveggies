@@ -18,6 +18,8 @@
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/brand.php';
+require_once __DIR__ . '/picture.php';
+require_once __DIR__ . '/icons.php';
 
 if (!function_exists('okv_combo_card')) {
     function okv_combo_card(array $combo, string $returnTo, string $sourceRegions = '', string $sourceDay = ''): void
@@ -48,13 +50,15 @@ if (!function_exists('okv_combo_card')) {
         $saving = Combos::customerSaving($price, $componentTotal);
         $detailUrl = '/combo.php?slug=' . rawurlencode($slug);
         ?>
-        <article class="okv-card group flex h-full flex-col" data-combo-card>
+        <article class="okv-card group flex h-full flex-col active:scale-[0.98]" data-combo-card>
           <a href="<?= okv_e($detailUrl) ?>" class="block">
-            <div class="aspect-[4/3] overflow-hidden rounded-md bg-forest-tint">
+            <div class="aspect-[4/3] overflow-hidden rounded-md bg-clay-tint">
               <?php if ($image !== ''): ?>
-                <img src="<?= okv_e(okv_image_url($image)) ?>"
-                     alt="<?= okv_e($name) ?>, ready basket of <?= (int) $componentCount ?> items<?= $sourceRegions !== '' ? ', sourced from ' . okv_e($sourceRegions) : '' ?>"
-                     class="h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105" loading="lazy">
+                <?php okv_picture($image, $name . ', ready basket of ' . (int) $componentCount . ' items' . ($sourceRegions !== '' ? ', sourced from ' . $sourceRegions : ''), [
+                    'class' => 'h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105',
+                    'sizes' => '(min-width: 1024px) 33vw, 100vw',
+                    'lazy' => true,
+                ]); ?>
               <?php else: ?>
                 <div class="flex h-full items-center justify-center p-4 text-center text-sm text-ink-40">Photo coming soon</div>
               <?php endif; ?>
@@ -86,7 +90,7 @@ if (!function_exists('okv_combo_card')) {
               <input type="hidden" name="action" value="add_combo">
               <input type="hidden" name="combo_id" value="<?= (int) $comboId ?>">
               <input type="hidden" name="return_to" value="<?= okv_e($returnTo) ?>">
-              <button type="submit" class="okv-btn w-full" data-add-button>Add full basket</button>
+              <button type="submit" class="okv-btn w-full rounded-xl" data-add-button><?php okv_icon('basket', 'h-4 w-4'); ?> Add full basket</button>
             </form>
           </div>
         </article>

@@ -88,19 +88,50 @@ try {
 
     const performance = await page.evaluate(() => {
       const paint = performance.getEntriesByType('paint').find((entry) => entry.name === 'first-contentful-paint');
+      const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
+      const cls = performance.getEntriesByType('layout-shift')
+        .filter((entry) => !entry.hadRecentInput)
+        .reduce((sum, entry) => sum + entry.value, 0);
       const bytes = performance.getEntriesByType('resource').reduce((sum, entry) => sum + (entry.transferSize || entry.encodedBodySize || 0), 0);
       const navigation = performance.getEntriesByType('navigation')[0];
+      const vh = window.innerHeight;
+      let words = 0;
+      const walker = document.createTreeWalker(document.querySelector('main') || document.body, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const parent = node.parentElement;
+        if (!parent) { continue; }
+        const style = getComputedStyle(parent);
+        if (style.display === 'none' || style.visibility === 'hidden') { continue; }
+        const box = parent.getBoundingClientRect();
+        if (box.bottom <= 0 || box.top >= vh) { continue; }
+        const text = (node.textContent || '').trim();
+        if (text) { words += text.split(/\s+/).length; }
+      }
       return {
         fcp: paint?.startTime || 0,
+        lcp: lcpEntries.length ? lcpEntries[lcpEntries.length - 1].startTime : 0,
+        cls,
         bytes,
+        words,
         responseStart: navigation?.responseStart || 0,
         responseEnd: navigation?.responseEnd || 0,
         domContentLoaded: navigation?.domContentLoadedEventEnd || 0,
       };
     });
-    ok(performance.fcp > 0 && performance.fcp < 3000, `${viewport.name}: throttled first contentful paint is under 3 seconds`,
-      `(fcp ${Math.round(performance.fcp)}ms, response ${Math.round(performance.responseStart)}-${Math.round(performance.responseEnd)}ms, dom ${Math.round(performance.domContentLoaded)}ms)`);
+    // Before (M12, no hero photo, same frozen profile): FCP 3,780ms.
+    const lcp = performance.lcp > 0 ? performance.lcp : performance.fcp;
+    ok(performance.fcp > 0 && performance.fcp <= 3000, `${viewport.name}: throttled first contentful paint is 3.0s or less`,
+      `(fcp ${Math.round(performance.fcp)}ms, was 3780ms, response ${Math.round(performance.responseStart)}-${Math.round(performance.responseEnd)}ms, dom ${Math.round(performance.domContentLoaded)}ms)`);
+    ok(lcp > 0 && lcp <= 4000, `${viewport.name}: throttled largest contentful paint is 4.0s or less`,
+      `(lcp ${Math.round(lcp)}ms)`);
+    ok(performance.cls <= 0.1, `${viewport.name}: cumulative layout shift is 0.1 or less`,
+      `(cls ${performance.cls.toFixed(3)})`);
     ok(performance.bytes < 2_000_000, `${viewport.name}: initial transferred resources stay under 2MB`, `(${performance.bytes} bytes)`);
+    if (viewport.width === 390) {
+      ok(performance.words <= 80, `${viewport.name}: first viewport of main stays scannable`,
+        `(${performance.words} words in view)`);
+    }
     await context.close();
   }
 } finally {

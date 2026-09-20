@@ -16,6 +16,7 @@ if (!function_exists('okv_shop_header')) {
             'account' => ['/account.php', $accountLabel],
         ];
         ?>
+        <a href="#okv-main" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-white focus:px-4 focus:py-3 focus:text-forest">Skip to content</a>
         <header class="sticky top-0 z-30 border-b border-mist bg-white/95 backdrop-blur">
           <div class="okv-container flex h-16 items-center justify-between gap-4">
             <a href="/" class="inline-flex min-h-[44px] items-center rounded-md" aria-label="OK Veggies, home">

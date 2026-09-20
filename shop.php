@@ -9,6 +9,7 @@ require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/product_card.php';
 require_once __DIR__ . '/includes/components/shop/shop_results.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
+require_once __DIR__ . '/includes/components/shop/icons.php';
 
 $search = Catalogue::cleanSearch((string) okv_input('search', ''));
 $category = Catalogue::cleanCategory((string) okv_input('category', ''));
@@ -59,7 +60,7 @@ $noticeMessages = [
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header('shop'); ?>
 
-<main>
+<main id="okv-main">
   <section class="border-b border-mist bg-white">
     <div class="okv-container py-8 md:py-12">
       <nav class="mb-4 text-sm text-ink-60" aria-label="Breadcrumb"><a href="/" class="hover:text-forest">Home</a> <span aria-hidden="true">/</span> <span aria-current="page">Shop</span></nav>
@@ -67,7 +68,7 @@ $noticeMessages = [
         <div>
           <p class="okv-eyebrow">Fresh this week</p>
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3">What is going into your pot?</h1>
-          <p class="mt-4 max-w-2xl text-okv-lead text-ink-60">Search the week's produce, check the unit and price, then add what you need.</p>
+          <p class="mt-4 max-w-2xl text-okv-lead text-ink-60">Search, check the unit, add what you need.</p>
           <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-4'); ?>
         </div>
         <form action="/shop.php" method="get" role="search" class="w-full max-w-xl">
@@ -75,7 +76,7 @@ $noticeMessages = [
           <div class="flex gap-2">
             <input id="shop-search" name="search" type="search" value="<?= okv_e($search) ?>" class="okv-input" placeholder="Try tomatoes, garlic or herbs">
             <?php if ($category !== ''): ?><input type="hidden" name="category" value="<?= okv_e($category) ?>"><?php endif; ?>
-            <button type="submit" class="okv-btn px-4">Search</button>
+            <button type="submit" class="okv-btn rounded-xl px-4"><?php okv_icon('magnifier', 'h-4 w-4'); ?> Search</button>
           </div>
         </form>
       </div>

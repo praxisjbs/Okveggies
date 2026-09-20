@@ -11,7 +11,7 @@ okv_test_ok(str_contains($page, 'FaqContent::present'), 'the public FAQ uses the
 okv_test_ok(str_contains($page, 'okv_faq_disclosures'), 'the public FAQ uses the shared disclosure component');
 okv_test_ok(str_contains($component, '<details') && str_contains($component, '<summary'), 'FAQ uses native no-JavaScript disclosures');
 okv_test_ok(str_contains($component, 'aria-level="2"') && str_contains($component, 'aria-controls='), 'questions retain heading and answer association semantics');
-okv_test_ok(str_contains($component, 'Show answer') && str_contains($component, 'Hide answer'), 'expanded state has a text signal as well as colour');
+okv_test_ok(str_contains($component, 'Expand') && str_contains($component, 'Close'), 'expanded state has a text signal as well as colour');
 okv_test_ok(str_contains($component, 'min-h-[56px]'), 'every question summary exceeds the 44px touch target');
 okv_test_ok(str_contains($script, '.open = open') && !str_contains($script, 'innerHTML'), 'bulk controls use the native open property and never unsafe HTML');
 okv_test_ok(str_contains($page, 'There are no published questions just now.'), 'a published FAQ with no valid items has a useful empty state');

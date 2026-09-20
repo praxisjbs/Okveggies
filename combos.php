@@ -19,6 +19,8 @@ require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
 require_once __DIR__ . '/includes/components/shop/combo_card.php';
 require_once __DIR__ . '/includes/components/shop/combo_spread.php';
+require_once __DIR__ . '/includes/components/shop/icons.php';
+require_once __DIR__ . '/includes/components/shop/empty_state.php';
 
 /** How many baskets get the full editorial spread before the grid takes over. */
 const OKV_COMBO_SPREADS = 2;
@@ -65,7 +67,7 @@ $noticeMessages = [
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header('combos'); ?>
 
-<main>
+<main id="okv-main">
   <section class="bg-forest text-white">
     <div class="okv-container py-10 md:py-16">
       <nav class="mb-6 text-sm text-white/70" aria-label="Breadcrumb">
@@ -76,7 +78,7 @@ $noticeMessages = [
         <div class="md:col-span-8">
           <p class="okv-eyebrow-invert">Cooked together, priced together</p>
           <h1 class="mt-3 font-editorial text-okv-h4 md:text-okv-h3">Ready baskets for this week</h1>
-          <p class="mt-4 max-w-2xl text-okv-lead text-white/85">Every combo is a set of items priced together, at a saving against buying the pieces one by one. One tap adds the full basket to your order.</p>
+          <p class="mt-4 max-w-2xl text-okv-lead text-white/85">One tap adds the full basket to your order.</p>
           <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-5 text-white/75'); ?>
         </div>
         <div class="md:col-span-4 md:text-right">
@@ -121,13 +123,10 @@ $noticeMessages = [
     <?php endif; ?>
   <?php else: ?>
     <section class="okv-container py-8 md:py-12">
-      <div class="rounded-lg bg-white px-6 py-16 text-center shadow-okv-1">
-        <?php okv_seal(120, 'mx-auto', ''); ?>
-        <p class="okv-eyebrow mt-6">Still packing</p>
-        <h2 class="mt-3 font-editorial text-okv-h5 text-ink">We are still building this week's combos</h2>
-        <p class="mx-auto mt-3 max-w-md text-ink-60">The individual items are ready now. Combos land back on this page as soon as they are set.</p>
-        <a href="/shop.php" class="okv-btn mt-6">Shop the produce</a>
-      </div>
+      <?php okv_empty_state('basket-empty', 'We are still building this week\'s combos', 'The individual items are ready now.', [
+          ['href' => '/shop.php', 'label' => 'Shop the produce', 'icon' => 'leaf'],
+          ['href' => '/kitchen-runs.php', 'label' => 'Send a Kitchen Run', 'style' => 'outline', 'icon' => 'list'],
+      ]); ?>
     </section>
   <?php endif; ?>
 </main>
