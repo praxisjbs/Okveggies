@@ -33,7 +33,7 @@ if (!$combo) {
     <body class="min-h-screen bg-forest-tint">
     <?php okv_activation_banner(); okv_shop_header('combos'); ?>
     <main id="okv-main" class="okv-container py-16 md:py-24">
-      <?php okv_empty_state('basket-empty', 'That basket is not on the shop', 'It may have moved or left this week\'s list.', [
+      <?php okv_empty_state('basket-empty', 'Basket not on shop', 'It may have moved or left this week\'s list.', [
           ['href' => '/combos.php', 'label' => 'See this week\'s combos', 'icon' => 'basket'],
           ['href' => '/shop.php', 'label' => 'Browse the shop', 'style' => 'outline', 'icon' => 'leaf'],
       ], ['heading_tag' => 'h1']); ?>
@@ -95,6 +95,7 @@ $componentCount = (int) $combo['component_count'];
                 'class' => 'aspect-square w-full rounded-md object-cover',
                 'sizes' => '(min-width: 1024px) 50vw, 100vw',
                 'lazy' => false,
+                'priority' => true,
             ]); ?>
           <?php else: ?>
             <div class="flex aspect-square items-center justify-center text-ink-40">Photo coming soon</div>

@@ -92,7 +92,7 @@ $noticeMessages = [
   <section class="okv-container py-8 md:py-12">
     <div class="mb-6 flex items-center justify-between gap-4 lg:hidden">
       <p class="text-sm font-semibold text-ink" data-shop-summary aria-live="polite"><?= okv_e(okv_page_summary($page, $total, $perPage, 'item')) ?></p>
-      <button type="button" class="okv-btn-outline px-4" data-filter-open aria-controls="shop-filter-sheet" aria-expanded="false">Filter by category</button>
+      <button type="button" class="okv-btn-outline min-h-[44px] px-4" data-filter-open aria-controls="shop-filter-sheet" aria-expanded="false"><?php okv_icon('magnifier', 'h-4 w-4'); ?> Filter by category</button>
     </div>
 
     <div class="mb-6 flex gap-2 overflow-x-auto pb-2 lg:hidden" aria-label="Quick category filters">

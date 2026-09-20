@@ -9,7 +9,10 @@
     "build:js": "node scripts/build-js.mjs",
     "build": "npm run build:css && npm run build:js",
     "test:visual": "node scripts/tests/visual_pass.mjs",
-    "test:axe": "node scripts/tests/axe_suite.mjs"
+    "test:axe": "node scripts/tests/axe_suite.mjs",
+    "test:lesser": "node scripts/tests/lesser_text_test.mjs",
+    "test:images": "node scripts/tests/image_contract_test.mjs",
+    "test:pr6": "node scripts/tests/lesser_text_test.mjs && node scripts/tests/image_contract_test.mjs"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.7",

@@ -59,10 +59,10 @@ if ($databaseFailed || $page === null) {
     }
     header('X-Robots-Tag: noindex, nofollow');
     $errorTitle = $databaseFailed ? 'Page temporarily unavailable' : 'Page not found';
-    $errorHeading = $databaseFailed ? 'We cannot open that page just now' : 'That page is not on the stall';
+    $errorHeading = $databaseFailed ? 'Page is resting' : 'Page not found';
     $errorCopy = $databaseFailed
-        ? 'The content store is not responding. Nothing has been replaced with old or placeholder copy. Please try again shortly.'
-        : 'The page may be unpublished, may have moved, or the address may be wrong. You can keep browsing from here.';
+        ? 'Try again shortly. Nothing was replaced with old copy.'
+        : 'The address may be wrong. Keep browsing from here.';
     ?><!doctype html>
 <html lang="en">
 <head>
@@ -162,7 +162,12 @@ $actions = match ($slug) {
           </div>
           <figure class="bg-forest-tint lg:col-span-6">
             <?php if ((string) $page['image_url'] !== ''): ?>
-              <img src="<?= okv_e(okv_image_url((string) $page['image_url'])) ?>" alt="<?= okv_e((string) $page['image_alt']) ?>" class="h-full min-h-80 w-full object-cover" fetchpriority="high">
+              <?php $storyImage = ContentImages::presentation((string) $page['image_url']); ?>
+              <img src="<?= okv_e(okv_image_url((string) $page['image_url'])) ?>"<?= $storyImage['srcset'] !== '' ? ' srcset="' . okv_e($storyImage['srcset']) . '" sizes="(min-width: 1024px) 50vw, 100vw"' : '' ?>
+                   alt="<?= okv_e((string) $page['image_alt']) ?>"
+                   width="<?= $storyImage['width'] > 0 ? (int) $storyImage['width'] : 1280 ?>"
+                   height="<?= $storyImage['height'] > 0 ? (int) $storyImage['height'] : 960 ?>"
+                   class="h-full min-h-80 w-full object-cover" fetchpriority="high" decoding="async">
             <?php else: ?>
               <div class="flex min-h-80 flex-col items-center justify-center p-8 text-center">
                 <?php okv_seal(160, '', ''); ?>
@@ -200,8 +205,8 @@ $actions = match ($slug) {
         <?php endif; ?>
         <?php if ($faqItems): ?><aside class="mt-8 border-t border-mist pt-6">
           <h2 class="font-editorial text-okv-h6 text-ink">Still need a hand?</h2>
-          <p class="mt-2 text-ink-60">Send the details through our contact form or start a WhatsApp chat.</p>
-          <div class="mt-5 flex flex-wrap gap-3"><a class="okv-btn" href="/contact.php">Contact us</a><a class="okv-btn-outline" href="<?= okv_e(okv_support_whatsapp_url()) ?>" target="_blank" rel="noopener noreferrer">Chat on WhatsApp</a></div>
+          <p class="mt-2 text-ink-60">Send a form or start a chat.</p>
+          <div class="mt-5 flex flex-wrap gap-3"><a class="okv-btn" href="/contact.php"><?php okv_icon('user', 'h-4 w-4'); ?> Contact us</a><a class="okv-btn-outline" href="<?= okv_e(okv_support_whatsapp_url()) ?>" target="_blank" rel="noopener noreferrer"><?php okv_icon('phone', 'h-4 w-4'); ?> Chat on WhatsApp</a></div>
         </aside><?php endif; ?>
       </article>
     <?php elseif ($isLegal): ?>

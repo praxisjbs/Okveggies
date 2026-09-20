@@ -61,7 +61,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
       <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Your order</p>
       <h1 class="mt-2 font-display text-4xl font-extrabold text-ink">Your basket</h1>
     </div>
-    <a href="/shop.php" class="okv-btn-outline px-4">Keep shopping</a>
+    <a href="/shop.php" class="okv-btn-outline min-h-[44px] px-4"><?php okv_icon('leaf', 'h-4 w-4'); ?> Keep shopping</a>
   </div>
 
   <?php if (isset($notices[$notice])): ?>

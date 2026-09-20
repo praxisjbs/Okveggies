@@ -24,7 +24,7 @@ if (!$product) {
     <body class="min-h-screen bg-forest-tint">
     <?php okv_activation_banner(); okv_shop_header('shop'); ?>
     <main id="okv-main" class="okv-container py-16 md:py-24">
-      <?php okv_empty_state('leaf', 'That item is not on the stall', 'It may have moved or left this week\'s catalogue.', [
+      <?php okv_empty_state('leaf', 'Item not on stall', 'It may have moved or left this week\'s catalogue.', [
           ['href' => '/shop.php', 'label' => 'Back to the shop', 'icon' => 'leaf'],
           ['href' => '/combos.php', 'label' => 'See the combos', 'style' => 'outline', 'icon' => 'basket'],
       ], ['heading_tag' => 'h1']); ?>
@@ -83,7 +83,7 @@ $basketNotice = (string) okv_input('basket', '');
                     'class' => 'aspect-square w-full rounded-md object-cover',
                     'sizes' => '(min-width: 1024px) 50vw, 100vw',
                     'lazy' => $index !== 0,
-                    'priority' => false,
+                    'priority' => $index === 0,
                 ]); ?>
               </div>
             <?php endforeach; ?>

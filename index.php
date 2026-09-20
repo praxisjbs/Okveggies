@@ -150,7 +150,7 @@ $noticeMessages = [
       <aside class="flex aspect-[4/3] flex-col items-center justify-center rounded-xl border border-white/25 bg-white/10 p-6 text-center md:p-10" aria-label="Documentary photograph pending">
         <?php okv_seal(120, 'mx-auto', ''); ?>
         <p class="mt-6 text-sm font-semibold uppercase tracking-wider text-white">Documentary photograph pending</p>
-        <p class="mt-3 text-sm leading-6 text-white/75">A rights-cleared photograph of the real OK Veggies operation has not been published yet. We will not replace it with stock photography.</p>
+        <p class="mt-3 text-sm leading-6 text-white/75">We will not replace it with stock photography.</p>
       </aside>
     <?php endif; ?>
   </div>

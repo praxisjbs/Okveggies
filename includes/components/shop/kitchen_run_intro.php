@@ -23,7 +23,7 @@ $steps = [
     ['icon' => 'trail', 'wash' => 'bg-clay-tint', 'title' => 'You approve, we shop', 'line' => 'Nothing is charged until you say yes.'],
 ];
 
-$sheetBody = '<p>This is how OK Veggies started. Write out what your kitchen needs, including pomo, meat, oil or anything not on the shop, and we buy it at the market and bring it.</p>'
+$sheetBody = '<p>This is how OK Veggies started. Send the list, we buy it at the market and bring it.</p>'
     . '<p class="mt-3">Four ways to send it:</p>'
     . '<ul class="mt-2 list-disc pl-5">'
     . '<li>Pick from the shop at the shop price.</li>'
@@ -31,7 +31,7 @@ $sheetBody = '<p>This is how OK Veggies started. Write out what your kitchen nee
     . '<li>Upload a photo of the paper, or a PDF.</li>'
     . '<li>Already priced: we only confirm it and get moving.</li>'
     . '</ul>'
-    . '<p class="mt-3">We price a kitchen list by hand, so we need somewhere to send the prices and a way to reach you about them. Your account holds the list, the quote, your delivery address and every run you have sent us before. It takes about 1 minute to open.</p>';
+    . '<p class="mt-3">We price by hand, so we need a way to reach you. Your account holds the list, the quote and the address. It takes about 1 minute to open.</p>';
 ?><!doctype html>
 <html lang="en">
 <head>

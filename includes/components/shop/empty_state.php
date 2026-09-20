@@ -32,7 +32,7 @@ if (!function_exists('okv_empty_state')) {
                   $btn = $style === 'outline' ? 'okv-btn-outline' : 'okv-btn';
                   $actionIcon = (string) ($action['icon'] ?? '');
               ?>
-                <a href="<?= okv_e((string) $action['href']) ?>" class="<?= $btn ?> w-full justify-center rounded-xl sm:w-auto">
+                <a href="<?= okv_e((string) $action['href']) ?>" class="<?= $btn ?> min-h-[44px] w-full justify-center rounded-xl sm:w-auto">
                   <?php if ($actionIcon !== ''): ?><?php okv_icon($actionIcon, 'h-4 w-4'); ?><?php endif; ?>
                   <?= okv_e((string) $action['label']) ?>
                 </a>

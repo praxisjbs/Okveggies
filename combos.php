@@ -123,7 +123,7 @@ $noticeMessages = [
     <?php endif; ?>
   <?php else: ?>
     <section class="okv-container py-8 md:py-12">
-      <?php okv_empty_state('basket-empty', 'We are still building this week\'s combos', 'The individual items are ready now.', [
+      <?php okv_empty_state('basket-empty', 'Combos coming this week', 'The individual items are ready now.', [
           ['href' => '/shop.php', 'label' => 'Shop the produce', 'icon' => 'leaf'],
           ['href' => '/kitchen-runs.php', 'label' => 'Send a Kitchen Run', 'style' => 'outline', 'icon' => 'list'],
       ]); ?>

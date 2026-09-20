@@ -12,6 +12,8 @@
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/components/shop/header.php';
 require_once __DIR__ . '/../includes/components/shop/footer.php';
+require_once __DIR__ . '/../includes/components/shop/empty_state.php';
+require_once __DIR__ . '/../includes/components/shop/icons.php';
 
 $token   = trim((string) okv_input('token', ''));
 $orderId = (int) okv_input('order', 0);
@@ -48,10 +50,11 @@ if (!$order) {
     </head>
     <body class="min-h-screen bg-forest-tint">
     <?php okv_shop_header(); ?>
-    <main id="okv-main" class="okv-container py-16 text-center">
-      <h1 class="font-display text-3xl font-extrabold text-ink">We could not find that order</h1>
-      <p class="mt-3 text-ink-60">Check the link, or sign in to open your order.</p>
-      <a class="okv-btn mt-6 px-4" href="/account.php?mode=signin">Sign in</a>
+    <main id="okv-main" class="okv-container py-16">
+      <?php okv_empty_state('leaf', 'Order not found', 'We could not find that order. Sign in to look it up.', [
+          ['href' => '/account.php?mode=signin', 'label' => 'Sign in', 'icon' => 'user'],
+          ['href' => '/shop.php', 'label' => 'Browse the shop', 'style' => 'outline', 'icon' => 'leaf'],
+      ], ['heading_tag' => 'h1']); ?>
     </main>
     <?php okv_shop_footer(); ?>
     </body>
@@ -349,7 +352,8 @@ $publicStatus = [
                        aria-label="Open photo <?= $photoIndex + 1 ?> for order <?= okv_e($order['order_number']) ?> at full size">
                       <img src="/public/issue_photo.php?photo=<?= (int) $photo['id'] ?>"
                            alt="Photo <?= $photoIndex + 1 ?> supplied for order <?= okv_e($order['order_number']) ?>"
-                           class="aspect-square w-full rounded-md border border-mist object-cover" loading="lazy">
+                           width="400" height="400"
+                           class="aspect-square w-full rounded-md border border-mist object-cover" loading="lazy" decoding="async">
                     </a>
                   <?php endforeach; ?>
                 </div>

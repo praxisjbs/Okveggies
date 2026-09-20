@@ -96,18 +96,18 @@ try {
       const navigation = performance.getEntriesByType('navigation')[0];
       const vh = window.innerHeight;
       let words = 0;
-      const walker = document.createTreeWalker(document.querySelector('main') || document.body, NodeFilter.SHOW_TEXT);
-      let node;
-      while ((node = walker.nextNode())) {
-        const parent = node.parentElement;
-        if (!parent) { continue; }
-        const style = getComputedStyle(parent);
-        if (style.display === 'none' || style.visibility === 'hidden') { continue; }
-        const box = parent.getBoundingClientRect();
-        if (box.bottom <= 0 || box.top >= vh) { continue; }
-        const text = (node.textContent || '').trim();
+      const main = document.querySelector('main') || document.body;
+      main.querySelectorAll('h1, h2, h3, p').forEach((el) => {
+        if (el.closest('button, a.okv-btn, a.okv-btn-outline, a.okv-btn-outline-invert, [hidden], .okv-sheet-backdrop')) {
+          return;
+        }
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') { return; }
+        const box = el.getBoundingClientRect();
+        if (box.bottom <= 0 || box.top >= vh) { return; }
+        const text = (el.innerText || '').trim();
         if (text) { words += text.split(/\s+/).length; }
-      }
+      });
       return {
         fcp: paint?.startTime || 0,
         lcp: lcpEntries.length ? lcpEntries[lcpEntries.length - 1].startTime : 0,

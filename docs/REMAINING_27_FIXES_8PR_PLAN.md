@@ -447,7 +447,7 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 | PR8 | Motion System - Make It Move | 30 | [ ] Not started | - | - | 95% | - | - |
 | PR9 | Luxurious Daring Hero + Full Palette | 31 | [ ] Not started | - | - | 95% | - | - |
 | PR7 | Release Gate and Privacy Handover (last) | 4,5,26,27 | [ ] Not started | - | - | - | - | - |
-| **Total** | **31 fixes** | **1 to 31** | **4 of 9 PRs done (PR1, PR2, PR3, PR6), 5 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
+| **Total** | **31 fixes** | **1 to 31** | **3 of 9 PRs done (PR1, PR2, PR3), PR6 open pending PHP/axe/visual proof, 5 remaining, PR0 100%** | **100% mapped** | **>=95% required** | **>=95% on UI PRs** | - | - |
 
 **How to update:** After green, change `[ ]` to `[x] Done`, fill coverage `100%`, confidence `97%` etc., beauty `96%`, SHA `abc1234`, date. Keep row honest, never mark green with failing suite.
 
