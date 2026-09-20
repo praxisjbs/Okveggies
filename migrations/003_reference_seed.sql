@@ -26,15 +26,12 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), symbol = VALUES(symbol), allows_dec
 
 -- Allowed delivery days.
 -- Households: Monday, Wednesday, Thursday, Saturday.
--- Businesses: Monday, Tuesday, Friday (restaurant and mart supply). Monday was
--- opened to businesses as well on 3 September 2026; migration 051 carries the
--- same decision to databases seeded before that change.
+-- Businesses: Tuesday, Friday (restaurant and mart supply).
 INSERT INTO allowed_delivery_days (customer_type, day_of_week, is_active, cutoff_time, minimum_lead_days) VALUES
   ('household', 1, TRUE, '16:00:00', 1),
   ('household', 3, TRUE, '16:00:00', 1),
   ('household', 4, TRUE, '16:00:00', 1),
   ('household', 6, TRUE, '16:00:00', 1),
-  ('business',  1, TRUE, '16:00:00', 1),
   ('business',  2, TRUE, '16:00:00', 1),
   ('business',  5, TRUE, '16:00:00', 1)
 ON DUPLICATE KEY UPDATE is_active = VALUES(is_active), cutoff_time = VALUES(cutoff_time), minimum_lead_days = VALUES(minimum_lead_days);
@@ -97,4 +94,3 @@ COMMIT;
 --   SELECT COUNT(*) FROM units_of_measurement; -- 4
 --   SELECT COUNT(*) FROM delivery_zones;       -- 30
 --   SELECT customer_type, COUNT(*) FROM allowed_delivery_days GROUP BY customer_type;
---   -- household 4 (Mon, Wed, Thu, Sat), business 3 (Mon, Tue, Fri)
