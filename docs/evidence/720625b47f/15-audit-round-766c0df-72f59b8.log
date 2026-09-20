@@ -109,3 +109,27 @@ local    (exit 0)
        - (or point OKV_PLAYWRIGHT_PATH at a playwright module already on this machine)
 [gate] Nothing was run and nothing was written.
   exit: 2
+
+== 12. SECOND MERGE: origin/main moved again during the audit; PR #67 (homepage hero redesign, 72f59b8) landed. Merge + re-prove ==
+  CI on 72f59b8 (main): success; deploy run for 72f59b8:
+    72f59b8 2026-09-20T16:35:40Z => success
+
+  The suite-wiring guard, run BEFORE wiring the PR #67 suite in (expected: catches homepage_hero_visual_test.mjs):
+    catches: homepage_hero_visual_test.mjs
+    unaccounted=1
+  AFTER wiring homepage_hero_visual_test.mjs into gate section 7 (and into the accounted list):
+    unaccounted=0
+
+== 13. full battery re-run on the second merged tree (72f59b8 + PR66 glue) ==
+  ok bash -n release_gate.sh
+  ok bash -n run_all.sh
+  ok php -l document.php (comment edit survives merge)
+  ok php -l invoice.php
+3456 / 3456 assertions passed.
+All green.
+[brand] all green. On brand.
+128 / 128 lesser-text assertions passed.
+116 / 116 image-contract assertions passed.
+52 / 52 motion coverage assertions passed.
+  php -l sweep: 321 files, 0 failed
+  *_test.mjs on disk now: 9 (9, PR #67 added the hero suite)

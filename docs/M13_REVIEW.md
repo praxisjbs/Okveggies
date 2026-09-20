@@ -17,7 +17,8 @@ degradation), and finally `766c0df` (PR #65, "Restore production deploys" plus
 the Owner's letterhead decision). The first two changed nothing this pack
 certifies. The third closed this part's blockers B1 and B2 as written, so a
 post-PR audit round re-ran the whole battery on `766c0df` merged into this
-branch; its raw output is evidence file `15-audit-round-766c0df.log` and every
+branch, and on a second merge that brought `72f59b8` (PR #67, homepage hero)
+sixteen minutes later; raw output is evidence file `15-audit-round-766c0df-72f59b8.log` and every
 "now" statement below reflects it. Where a sentence describes the frozen SHA as
 red, that remains true of `720625b47f`; it is no longer true of `main`.
 **Date of run:** 20 September 2026; audit round the same day, after 16:19 UTC.
@@ -85,8 +86,9 @@ suggestion, and it is the Owner's to take; the brand bible comment in
 `brand-check.sh` was amended in the same PR. Two stale doc-comments still named
 the mono-green mark (`includes/components/documents/document.php:22`,
 `public/documents/invoice.php:16`); the PR66 branch corrected those two comment
-blocks, text only, no behaviour. Unit at the merged tree: 3,426/3,426 green
-(evidence `15`, section 4; CI on `766c0df` green independently).
+blocks, text only, no behaviour. Unit at the merged tree: 3,426/3,426 green at `766c0df`, 3,456/3,456 after
+the second merge to `72f59b8` (evidence `15`, sections 4 and 13). CI on main is
+green at both.
 
 **B3. The prompt's premise "PR1 to PR6 plus PR8 PR9 have merged" is not the
 repo's state.** Merged to `main`: PR0 54, PR2 55, PR3 56, PR1 57, PR4 59, PR6
@@ -108,7 +110,8 @@ maintenance state in `includes/bootstrap.php`, `ci.yml` still runs the four
 static jobs only, and `total_count: 0` environments. Two of the consequences
 loosened: the deploy pipeline now reaches its own "Verify the deployed site"
 step and passes it (run `35522368135`), which is the fix 25 live evidence
-line, and fix 26's "deploy tested" precondition is met. Fix 12's cron proof and
+line, and fix 26's "deploy tested" precondition is met (the `72f59b8` deploy
+re-ran `verify.sh` green the same afternoon). Fix 12's cron proof and
 fix 11's rehearsal stay blocked behind PR5, and fix 24's CI-as-gate remains
 unmerged, so the MySQL 8 gate sections have no host anywhere, not even CI.
 
@@ -148,12 +151,16 @@ not been achieved for this SHA, so it is not claimed.
 ### 2b. Audit round: the same battery on the merged tree
 
 The table above stays valid for `720625b47f`. PR #65 having closed B1 and B2,
-the battery was re-run with `766c0df` merged into this branch; raw output is
-evidence `15`. Result: unit suite 3,426/3,426 GREEN (the unit-floor line reads
-3,426 over the 3,374 floor); `php -l` 321/321; shell syntax `bash -n` over both
-edited runners clean; brand guard green under the Owner's full-colour call; the
-three static node guards 52 + 128 + 98 (lesser text grew by two assertions in
-PR #65); guard matrix, all 8 `.env` shapes, refuse-or-admit exactly as designed
+the battery was re-run with `766c0df` merged into this branch, then again after
+merging `72f59b8` (PR #67); raw output is evidence `15`. Result on the final
+tree: unit suite 3,456/3,456 GREEN (the floor line reads 3,456 over 3,374; the
+`766c0df` pass showed 3,426/3,426); `php -l` 321/321; shell syntax `bash -n`
+over both edited runners clean; brand guard green under the Owner's full-colour
+call; the three static node guards 52 + 128 + 116 (lesser text grew by two in
+PR #65, image contract by eighteen hero assertions in PR #67); the wiring check
+earned its keep immediately, flagging `homepage_hero_visual_test.mjs` as PR #67
+landed it unwired; it was then wired into section 7 and the count returned to
+zero; guard matrix, all 8 `.env` shapes, refuse-or-admit exactly as designed
 (5 refusals at exit 2, 3 admissions); gate preflight refuses a production `.env`
 by name ("APP_ENV=production ... DB_NAME is 'okveggies' ... Nothing was run and
 nothing was written", exit 2) and an absent `.env` likewise; the unit floor's
@@ -199,7 +206,9 @@ unaccounted on disk, fires on a deliberately orphaned file, evidence `15`
 section 6). `run_all.sh`'s hand-maintained database and HTTP lists are gone;
 both loop over the same globs the gate uses, refund's gateway-conditional
 handled inside the loop logic. That is the "hand-maintained list" class fixed in
-both runners at once. Sections 1, 3, 4, 5, 7, 8, 9 remain the open half, and
+both runners at once. The wiring check's first real catch came within the hour:
+PR #67 landed `homepage_hero_visual_test.mjs` unwired, the check flagged it, it
+was wired into section 7 (evidence `15`, section 12). Sections 1, 3, 4, 5, 7, 8, 9 remain the open half, and
 until one full green run exists on some host, fix 5 stays OPEN.
 
 **Fix 27, skip tolerance removed.** Proven executed, two ways. Behaviourally:

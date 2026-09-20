@@ -333,6 +333,7 @@ section "7. Browser pass at 390px and 1440px"
 run "seed_visual_fixture" php scripts/tests/seed_visual_fixture.php
 run "visual_pass.mjs" node scripts/tests/visual_pass.mjs
 run "homepage_visual_test.mjs" node scripts/tests/homepage_visual_test.mjs
+run "homepage_hero_visual_test.mjs" node scripts/tests/homepage_hero_visual_test.mjs
 run "axe_suite.mjs" node scripts/tests/axe_suite.mjs
 run "content_admin_visual_test.mjs" node scripts/tests/content_admin_visual_test.mjs
 run "public_content_visual_test.mjs" php scripts/tests/public_content_visual_fixture.php
@@ -345,7 +346,7 @@ run "role_journeys.mjs" node scripts/tests/role_journeys.mjs
 # A suite added to scripts/tests and forgotten by every runner is how a
 # milestone passes on nine tenths of its evidence.
 for mjs in scripts/tests/*_test.mjs; do
-  case " homepage_visual_test.mjs content_admin_visual_test.mjs public_content_visual_test.mjs checkout_visual_test.mjs motion_visual_test.mjs lesser_text_test.mjs image_contract_test.mjs motion_coverage_test.mjs " in
+  case " homepage_visual_test.mjs homepage_hero_visual_test.mjs content_admin_visual_test.mjs public_content_visual_test.mjs checkout_visual_test.mjs motion_visual_test.mjs lesser_text_test.mjs image_contract_test.mjs motion_coverage_test.mjs " in
     *" $(basename "$mjs") "*) ;;
     *)
       printf '  FAIL %-38s %s\n' "suite wiring" "$(basename "$mjs") is on disk and wired into no gate section"
