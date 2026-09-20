@@ -1,0 +1,12 @@
+OK Veggies PR7 release-gate evidence pack
+frozen SHA:      720625b47f5e10ace8289cbaff674bb1168630ce (main; branch base for arena/01a0bf64-okveggies)
+frozen at:       2026-09-20 15:39:00 UTC
+worktree clean at freeze: 0 tracked files changed (evidence dir and gitignored .env excluded)
+toolchain:
+  php:  8.3.33 (cli) via @php-wasm/node 3.1.54, host-filesystem mount, PATH shim at /home/user/.gate-tools/bin/php
+  node: v22.22.3, npm 10.9.8
+  os:   Debian GNU/Linux 12 (bookworm)
+  mysql server: UNAVAILABLE (apt mirrors, dev.mysql.com, cdn.mysql.com, conda, docker all unreachable from this sandbox; npm search shows no Linux MySQL 8 binary package)
+  chromium: Playwright browser CDNs unreachable; site cannot boot without MySQL, so browser pass is out of reach on this machine
+
+main moved twice during evidence, to 02645aa (PR #63, PR1 audit follow-ups) and d8e3c65 (PR #64, catalogue graceful degradation). Both carry the identical red unit gate (at d8e3c65 the unit suite prints 3425 / 3426 with the same single DocumentTest failure, re-run in a throwaway worktree, not merged into this branch) and the identical failed deploy runs. All gate evidence below is generated on 720625b47f; the pack names that SHA end to end.

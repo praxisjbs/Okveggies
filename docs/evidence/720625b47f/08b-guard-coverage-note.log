@@ -1,0 +1,5 @@
+=== guard coverage: every fixture-writing file carries a refusal rule ===
+files requiring scripts/tests/lib/scratch_guard.php: 66
+db_reset.php and seed_visual_fixture.php carry the identical rules inline
+(they predate the shared guard; each refuses APP_ENV=production and a DB_NAME
+without the _test suffix, both failing closed). No writer lacks the rule.

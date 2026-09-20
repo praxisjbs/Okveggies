@@ -12,7 +12,9 @@
 # It proves, in order:
 #   1. that the server really is MySQL 8, then the migration chain from empty,
 #      then a second run that applies nothing;
-#   2. the unit suite, and PHP and JavaScript syntax on every file we ship;
+#   2. the unit suite (against a floor of 3,374 assertions, so an assertion
+#      cannot vanish unnoticed), and PHP, JavaScript and shell syntax on every
+#      file we ship;
 #   3. every database suite on disk, by glob, so a new suite cannot be forgotten;
 #   4. every HTTP suite on disk, by glob;
 #   5. that the suites cleaned up after themselves;
@@ -64,6 +66,8 @@ run() { # label  command...
   local code=$?
   local summary
   summary="$(grep -E 'assertions? passed|checks passed|RELEASE MIGRATE OK|ORPHANS OK|FIXTURE TEARDOWN OK|MIGRATE OK' "$out" | tail -1)"
+  # Exported for callers that inspect one run after the fact (the unit floor).
+  RUN_LOG="$out"; RUN_EXIT=$code
   if [ $code -eq 0 ]; then
     printf '  ok   %-38s %s\n' "$label" "${summary:-done}"
     passed=$((passed + 1))
@@ -206,7 +210,25 @@ run "db_reset (fresh + second run)" php scripts/tests/db_reset.php
 
 # -----------------------------------------------------------------------------
 section "2. Unit suite, PHP syntax and JavaScript syntax"
+# The unit floor. run.php exits 0 when nothing fails, and nothing fails when
+# nothing runs. A suite quietly lost from disk therefore reads as a pass to the
+# exit code alone, so the plan's release floor is asserted by name here: 3,374
+# assertions is the count senior review certified on pull request 53, and the
+# number only ever rises. Override deliberately via OKV_MIN_UNIT_ASSERTIONS.
 run "unit (run.php)" php scripts/tests/run.php
+OKV_MIN_UNIT_ASSERTIONS="${OKV_MIN_UNIT_ASSERTIONS:-3374}"
+unit_total="$(sed -nE 's#^ *[0-9]+ / ([0-9]+) assertions passed.?$#\1#p' "$RUN_LOG" | tail -1)"
+unit_total="${unit_total:-0}"
+if [ "$RUN_EXIT" -ne 0 ]; then
+  : # run.php failed as a suite already; run() recorded it. The floor is moot.
+elif [ "$unit_total" -lt "$OKV_MIN_UNIT_ASSERTIONS" ]; then
+  printf '  FAIL unit floor: %s assertions < %s required\n' "$unit_total" "$OKV_MIN_UNIT_ASSERTIONS"
+  passed=$((passed - 1)); failed=$((failed + 1))
+  failures+=("unit floor $unit_total < $OKV_MIN_UNIT_ASSERTIONS")
+else
+  printf '  ok   %-38s %s\n' "unit floor" "$unit_total assertions >= $OKV_MIN_UNIT_ASSERTIONS"
+  passed=$((passed + 1))
+fi
 
 # PHP is the language this release ships. The gate linted every JavaScript file
 # and none of the PHP, so a parse error in a rarely loaded page could reach a
@@ -247,6 +269,28 @@ else
   printf '  FAIL %-38s %s\n' "javascript syntax" "$js_fail of $js_count failed"
   failed=$((failed + 1))
   failures+=("javascript syntax")
+fi
+
+# The contract's mandatory gate lists shell syntax beside PHP and JavaScript,
+# and until PR 7 the gate proved two of the three. This gate is itself a shell
+# script the release depends on, which is the argument for checking it too.
+sh_fail=0
+sh_count=0
+while IFS= read -r file; do
+  sh_count=$((sh_count + 1))
+  if ! bash -n "$file" >"$LOG_DIR/sh-$(basename "$file").log" 2>&1; then
+    sh_fail=$((sh_fail + 1))
+    printf '  FAIL %s\n' "$file"
+    tail -3 "$LOG_DIR/sh-$(basename "$file").log" | sed 's/^/         /'
+  fi
+done < <(find . -name '*.sh' -not -path './node_modules/*' -not -path './vendor/*' -not -path './.git/*' -not -path './_dist/*')
+if [ $sh_fail -eq 0 ]; then
+  printf '  ok   %-38s %s\n' "shell syntax" "$sh_count file(s) parsed"
+  passed=$((passed + 1))
+else
+  printf '  FAIL %-38s %s\n' "shell syntax" "$sh_fail of $sh_count failed"
+  failed=$((failed + 1))
+  failures+=("shell syntax")
 fi
 
 # -----------------------------------------------------------------------------

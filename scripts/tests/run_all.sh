@@ -3,6 +3,13 @@
 # scripts/tests/run_all.sh
 # OK Veggies. Every suite, in one command, with one count at the end.
 #
+# THIS IS NOT THE RELEASE GATE. It reports skips (this line here is the whole
+# difference), because on a laptop "no Chromium installed" is information, not
+# a defect. A release cannot carry that meaning, so for release evidence run
+# scripts/tests/release_gate.sh instead: it refuses to start unless everything
+# it needs is present and a suite that did not run is a failure, never a skip.
+# Both read .env through the same parser, scripts/tests/lib/env_value.php.
+#
 # The unit suite needs nothing. The database suites need a migrated scratch
 # database in .env. The HTTP suites need the site answering, and the refund
 # suite needs the stand-in gateway. This starts what it can and says plainly
