@@ -35,7 +35,10 @@ function kr_wants_json(): bool
 function kr_ok(array $payload, string $redirectTo): void
 {
     if (kr_wants_json()) {
-        okv_json(['status' => 'ok'] + $payload);
+        // The redirect rides along in the body, so a fetch caller follows the
+        // same decision the 303 carries for a plain form post, including the
+        // success flag on the URL, rather than rebuilding it from guesswork.
+        okv_json(['status' => 'ok', 'redirect' => $redirectTo] + $payload);
     }
     okv_redirect($redirectTo, 303);
 }
@@ -192,6 +195,16 @@ try {
             );
 
             Audit::record('kitchen_run.submit', 'kitchen_run', (int) $result['id'], null, ['request_number' => $result['request_number']], (int) Customer::id());
+            if (($result['status'] ?? '') === 'quoted') {
+                // A list picked entirely from the shop priced itself on the way
+                // in. The customer hears the total and how long it stands, and
+                // the team hear the honest instruction, check and convert,
+                // rather than the "somebody price this" of an ordinary list.
+                Notifications::announceKitchenRunShopPriced((int) $result['id']);
+                Notifications::announceKitchenRunQuoted((int) $result['id']);
+                kr_ok($result, '/kitchen-runs.php?request=' . $result['id'] . '&quoted=1');
+                break;
+            }
             Notifications::announceKitchenRunSubmitted((int) $result['id']);
             Notifications::announceKitchenRunReceived((int) $result['id']);
             kr_ok($result, '/kitchen-runs.php?request=' . $result['id'] . '&submitted=1');

@@ -203,6 +203,8 @@ Some customers say "no matter the cost, just source it, I will pay". For these:
 
 Submitted, then Quoted (admin fills the blanks, live totals), then Approved by the customer, then Converted to an order (with deposit or credit), then normal fulfilment. A request can also be Declined or Cancelled. Saved lists in the Pro Portal let B2B customers reuse a list next week.
 
+One shortcut. A "Pick from shop" list whose every line is a catalogue item is quoted the moment it is sent: every line already carries a shop price read from the products table on the server, so the request lands as Quoted at today's shop prices and the customer only approves. A list with any typed line on it, an open-budget list, or a list a colleague typed in on somebody's behalf still waits for the team to quote it, because those lines carry no price of ours. The quote window and the approval rules are the same either way.
+
 ### 8.4 Data
 
 New tables: `kitchen_run_requests` (mode, status, budget ceiling, estimated total, deposit amount, cap, uploaded-list attachment, notes, converted order id) and `kitchen_run_items` (free-text item name, optional product link, quantity, unit, unit price, line total, price source). See Section 20.

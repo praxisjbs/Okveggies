@@ -180,6 +180,38 @@ final class KitchenRunWorkflow
                     : 'List received with ' . $lineCount . '.'
             );
 
+            // A list the customer picked entirely from the shop is already
+            // priced: every line carries the shop price read from the products
+            // table above, never from the form. So the request goes straight to
+            // Quoted with that total and the customer only has to approve it.
+            // A list with one typed line on it, an open budget, or one a
+            // colleague typed in for somebody still waits for a person to price
+            // it, because a line without a price is not a quote.
+            $status     = 'submitted';
+            $autoQuoted = null;
+            if (!$byStaff) {
+                $autoQuoted = KitchenRuns::autoQuoteTotal($mode, $pricing, $open, $lines);
+            }
+            if ($autoQuoted !== null) {
+                Database::run(
+                    'UPDATE kitchen_run_requests
+                        SET quoted_total_subunit    = :total,
+                            estimated_total_subunit = :total,
+                            quoted_at               = NOW()
+                      WHERE id = :id',
+                    [':total' => $autoQuoted, ':id' => $id]
+                );
+                self::transition(
+                    $id,
+                    'submitted',
+                    'quoted',
+                    'customer',
+                    $userId,
+                    'Shop prices attached at ' . Money::format($autoQuoted) . '. Every line came from the shop, so no line needed pricing by the team.'
+                );
+                $status = 'quoted';
+            }
+
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -188,7 +220,13 @@ final class KitchenRunWorkflow
             throw $e;
         }
 
-        return ['id' => $id, 'request_number' => $number, 'status' => 'submitted', 'line_count' => count($lines)];
+        return [
+            'id'            => $id,
+            'request_number' => $number,
+            'status'        => $status,
+            'line_count'    => count($lines),
+            'total_subunit' => $autoQuoted,
+        ];
     }
 
     /**

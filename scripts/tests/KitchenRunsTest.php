@@ -107,6 +107,37 @@ $mixed = KitchenRuns::validateSubmission('mixed', 'by_us', [
 ]);
 okv_test_ok($mixed['ok'], 'a shop item and a free-text item may sit on one list, because a kitchen list does');
 
+// ---------------------------------------------------------------------------
+// 1b. A shop-picked list quotes itself (PRD 8.3), and only a shop list.
+// ---------------------------------------------------------------------------
+
+// The lines as hydrateCatalogueLines() hands them on: a product, a shop price
+// read on the server, and the line total already multiplied out.
+$shopLines = [
+    ['product_id' => 7, 'item_name' => 'Tomatoes', 'quantity' => '2.500', 'unit_id' => 1, 'unit_label' => 'kg',
+     'unit_price_subunit' => 270000, 'line_total_subunit' => 675000, 'price_source' => 'catalogue'],
+    ['product_id' => 9, 'item_name' => 'Ata rodo', 'quantity' => '1.000', 'unit_id' => 1, 'unit_label' => 'kg',
+     'unit_price_subunit' => 400000, 'line_total_subunit' => 400000, 'price_source' => 'catalogue'],
+];
+okv_test_eq(1075000, KitchenRuns::autoQuoteTotal('catalogue', 'by_us', false, $shopLines), 'a shop-picked list quotes itself at the exact sum of its lines');
+
+$withTypedLine = array_merge($shopLines, [[
+    'product_id' => null, 'item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1, 'unit_label' => 'kg',
+    'unit_price_subunit' => null, 'line_total_subunit' => null, 'price_source' => 'admin',
+]]);
+okv_test_eq(null, KitchenRuns::autoQuoteTotal('catalogue', 'by_us', false, $withTypedLine), 'one typed line among the shop lines and the whole list waits for a person');
+okv_test_eq(null, KitchenRuns::autoQuoteTotal('catalogue', 'by_us', true, $shopLines), 'an open budget is a judgement call that wants a deposit, so it never quotes itself');
+okv_test_eq(null, KitchenRuns::autoQuoteTotal('mixed', 'by_us', false, $shopLines), 'a list that did not come in as a shop list keeps its staff quote');
+okv_test_eq(null, KitchenRuns::autoQuoteTotal('catalogue', 'already_priced', false, $shopLines), 'a customer-priced list is never quoted by us automatically');
+okv_test_eq(null, KitchenRuns::autoQuoteTotal('catalogue', 'by_us', false, []), 'an empty list has nothing to quote');
+okv_test_eq(null, KitchenRuns::autoQuoteTotal('catalogue', 'by_us', false, [[
+    'product_id' => 7, 'unit_price_subunit' => 270000, 'line_total_subunit' => 675000, 'price_source' => 'admin',
+]]), 'a line not priced from the catalogue has no place in an automatic quote');
+okv_test_eq(null, KitchenRuns::autoQuoteTotal('catalogue', 'by_us', false, [[
+    'product_id' => 7, 'price_source' => 'catalogue', 'line_total_subunit' => null,
+]]), 'a line with no total on it is not quoted by arithmetic that is not there');
+okv_test_ok(is_int(KitchenRuns::autoQuoteTotal('catalogue', 'by_us', false, $shopLines)), 'an automatic quote is an integer of kobo, like every other figure');
+
 // What each mode refuses, and the reason it gives back.
 okv_test_eq('bad_mode', KitchenRuns::validateSubmission('telepathy', 'by_us', [['item_name' => 'Pomo', 'quantity' => '1', 'unit_id' => 1]])['error'], 'an unknown input mode is named as the problem');
 okv_test_eq('bad_pricing_mode', KitchenRuns::validateSubmission('custom', 'guesswork', [['item_name' => 'Pomo']])['error'], 'an unknown pricing mode is named as the problem');
@@ -387,7 +418,7 @@ okv_test_ok(method_exists(Notifications::class, 'announceKitchenRunReceived'), '
 okv_test_ok(method_exists(Notifications::class, 'announceKitchenRunCancelled'), 'the team hears when an approved run is withdrawn');
 foreach ([
     'kitchen_run_received', 'kitchen_run_quoted', 'kitchen_run_declined',
-    'admin_new_kitchen_run', 'admin_kitchen_run_approved', 'admin_kitchen_run_cancelled',
+    'admin_new_kitchen_run', 'admin_kitchen_run_shop_priced', 'admin_kitchen_run_approved', 'admin_kitchen_run_cancelled',
 ] as $event) {
     okv_test_ok(isset(Notifications::EVENTS[$event]), "$event is a registered notification event, not a template nothing can send");
 }

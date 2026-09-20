@@ -248,6 +248,50 @@ final class KitchenRuns
     }
 
     /**
+     * The total a "Pick from shop" list already carries when it is sent, in
+     * kobo, or null when the list is not one of those.
+     *
+     * A list whose every line was picked from the shop is fully priced the
+     * moment it exists, because hydrateCatalogueLines() put the shop price on
+     * every line after reading it from the products table on the server. There
+     * is nothing for the team to fill in, so the request can go straight to
+     * Quoted and the customer only has to approve it (PRD 8.3).
+     *
+     * The rule is deliberately narrow. It asks for the 'catalogue' mode and
+     * 'by_us' pricing, the way the customer's own form sends it, never a list
+     * a colleague typed in on somebody's behalf. It refuses an open budget,
+     * because an open budget is a judgement call that still wants a deposit
+     * set by a person. And it demands a complete catalogue line every time:
+     * one typed line of pomo among the shop lines and the whole list waits
+     * for the team, because that line has no price on it.
+     *
+     * It reads the hydrated lines, never the posted ones, so a browser cannot
+     * quote itself a total. Null rather than false, so a caller cannot mistake
+     * "not quotable" for a total of zero kobo.
+     */
+    public static function autoQuoteTotal(string $mode, string $pricing, bool $open, array $lines): ?int
+    {
+        if ($mode !== 'catalogue' || $pricing !== 'by_us' || $open || !$lines) {
+            return null;
+        }
+        $total = 0;
+        foreach ($lines as $line) {
+            if (!is_array($line)) {
+                return null;
+            }
+            if (($line['product_id'] ?? null) === null || ($line['price_source'] ?? '') !== 'catalogue') {
+                return null;
+            }
+            $lineTotal = $line['line_total_subunit'] ?? null;
+            if (!is_int($lineTotal) || $lineTotal < 0) {
+                return null;
+            }
+            $total += $lineTotal;
+        }
+        return $total;
+    }
+
+    /**
      * Whether an uploaded list may be saved. Uploads::saveUploadedFile() sniffs
      * the real MIME type and randomises the name, and this runs first so a
      * rejection is a plain sentence to the customer rather than an exception,
