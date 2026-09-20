@@ -194,7 +194,13 @@ try {
     $history = ContentPages::history('about', 100);
     cpdb_ok(count($history) >= 3, 'page-scoped history returns the draft, image and publish events');
     cpdb_ok(is_array($history[0]['old_values']) && is_array($history[0]['new_values']), 'history returns decoded presentation-neutral snapshots');
-    cpdb_ok(!in_array(ContentPages::ACTION_PUBLISH, array_column(ContentPages::history('privacy'), 'action'), true), 'one page history does not leak another page events');
+    $privacyRow = Database::one('SELECT id FROM content_pages WHERE slug = :slug', [':slug' => 'privacy']);
+    $privacyAuditIds = array_map('intval', array_column(Database::all(
+        'SELECT id FROM audit_logs WHERE entity_type = :entity AND entity_id = :id ORDER BY id DESC LIMIT 100',
+        [':entity' => ContentPages::AUDIT_ENTITY, ':id' => $privacyRow['id']]
+    ), 'id'));
+    cpdb_ok(array_map('intval', array_column(ContentPages::history('privacy', 100), 'id')) === $privacyAuditIds, 'one page history does not leak another page events');
+    cpdb_ok(in_array(ContentPages::ACTION_PUBLISH, array_column(ContentPages::history('privacy'), 'action'), true), 'privacy history carries its own attested publish event');
 
     $currentAbout = ContentPages::findForAdmin('about');
     $staleUnpublish = ContentPages::unpublish('about', $actorId, $about['fingerprint']);
