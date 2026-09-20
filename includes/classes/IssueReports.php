@@ -478,6 +478,7 @@ final class IssueReports
      * Batch detailed context for many reports in 2 queries after the main report fetch.
      * Photos and items are fetched together via UNION ALL, history is the second query.
      * This removes the N+1 that forStaff plus per-report findForStaff would cause.
+     * Handles multiple reports sharing the same order_id by mapping order_id to all issue_ids.
      *
      * @param array<int> $issueIds
      * @return array<int, array{photos: array, items: array, history: array}>
@@ -503,8 +504,12 @@ final class IssueReports
             $params
         );
         $orderMap = [];
+        $orderToIssues = [];
         foreach ($reports as $r) {
-            $orderMap[(int) $r['id']] = (int) $r['order_id'];
+            $issueId = (int) $r['id'];
+            $orderId = (int) $r['order_id'];
+            $orderMap[$issueId] = $orderId;
+            $orderToIssues[$orderId][] = $issueId;
         }
         $orderIds = array_values(array_unique(array_filter($orderMap)));
         if (!$orderIds) {
@@ -549,23 +554,21 @@ final class IssueReports
 
         foreach ($combined as $row) {
             $owner = (int) $row['owner_id'];
-            $issueOwner = $owner;
-            if ((string) $row['kind'] === 'item') {
-                $issueOwner = array_search($owner, $orderMap, true);
-                if ($issueOwner === false) {
-                    continue;
+            $kind = (string) $row['kind'];
+            if ($kind === 'item') {
+                $issueIdsForOrder = $orderToIssues[$owner] ?? [];
+                foreach ($issueIdsForOrder as $issueOwner) {
+                    if (!isset($grouped[$issueOwner])) {
+                        continue;
+                    }
+                    $grouped[$issueOwner]['items'][] = [
+                        'id' => (int) $row['id'],
+                        'item_name' => (string) $row['c1'],
+                        'quantity' => $row['c2'],
+                        'unit_name' => (string) $row['c3'],
+                        'line_total_subunit' => $row['c4'] === null ? null : (int) $row['c4'],
+                    ];
                 }
-                $issueOwner = (int) $issueOwner;
-                if (!isset($grouped[$issueOwner])) {
-                    continue;
-                }
-                $grouped[$issueOwner]['items'][] = [
-                    'id' => (int) $row['id'],
-                    'item_name' => (string) $row['c1'],
-                    'quantity' => $row['c2'],
-                    'unit_name' => (string) $row['c3'],
-                    'line_total_subunit' => $row['c4'] === null ? null : (int) $row['c4'],
-                ];
             } else {
                 if (!isset($grouped[$owner])) {
                     continue;
