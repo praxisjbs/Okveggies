@@ -17,6 +17,8 @@
  */
 
 $root = dirname(__DIR__, 2);
+
+require_once __DIR__ . '/lib/scratch_guard.php';
 require_once $root . '/includes/config/db.php';
 require_once $root . '/includes/classes/Database.php';
 require_once $root . '/includes/classes/Money.php';
@@ -59,7 +61,7 @@ Database::run(
 $categoryId = (int) Database::getInstance()->getConnection()->lastInsertId();
 
 /** Make a throwaway product and return its id. */
-function make_product(int $categoryId, string $suffix, string $name, int $priceSubunit): int {
+function make_product(int $categoryId, string $suffix, string $name, int $priceSubunit, ?string $sourceRegion = null): int {
     [$clean, $errors] = Products::validate([
         'name'        => $name . ' ' . $suffix,
         'sku'         => 'ZZ-' . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $name)) . '-' . $suffix,
@@ -69,6 +71,7 @@ function make_product(int $categoryId, string $suffix, string $name, int $priceS
         'minimum_quantity'   => '1',
         'quantity_increment' => '1',
         'is_active'   => 1,
+        'source_region' => $sourceRegion,
     ]);
     if ($errors) {
         fwrite(STDERR, "fixture failed: " . json_encode($errors) . "\n");
@@ -77,7 +80,7 @@ function make_product(int $categoryId, string $suffix, string $name, int $priceS
     return Products::create($clean, null);
 }
 
-$tomato = make_product($categoryId, $suffix, 'Test Tomato', 270000); // ₦2,700
+$tomato = make_product($categoryId, $suffix, 'Test Tomato', 270000, 'Ogun State'); // ₦2,700
 $onion  = make_product($categoryId, $suffix, 'Test Onion', 140000);  // ₦1,400
 $draft  = make_product($categoryId, $suffix, 'Test Draft', 0);       // no price yet
 
@@ -99,6 +102,8 @@ t_eq(null, $opening['old_price_subunit'], 'the opening row has no old price');
 t_eq(270000, (int) $opening['new_price_subunit'], 'the opening row carries the opening price');
 t_eq(null, $opening['effective_to'], 'the opening row is left open');
 t_eq(0, count(Pricing::history($draft)), 'a product created without a price writes no history');
+$row = Database::one('SELECT source_region FROM products WHERE id = :id', [':id' => $tomato]);
+t_eq('Ogun State', $row['source_region'], 'a product keeps its optional source region');
 
 // --- A single price change --------------------------------------------------
 

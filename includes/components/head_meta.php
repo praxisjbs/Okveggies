@@ -16,6 +16,25 @@
  * -----------------------------------------------------------------------------
  */
 
+if (!function_exists('okv_motion_pending')) {
+    /**
+     * One line of glue printed before any motion-owned content parses, so the
+     * blocks okv-motion.js will animate are held invisible from the first
+     * paint and never flash visible and then hide. Pages that load the motion
+     * system (storefront, Pro, account) call this right after <body> opens;
+     * admin never does, so nothing there is ever held. Two safety nets: the
+     * 2.5 second dead man switch here uncovers the page even if every script
+     * is blocked, and okv-motion.js removes the class the moment it runs.
+     * With JavaScript off this never executes and nothing is ever hidden.
+     */
+    function okv_motion_pending(): void
+    {
+        ?>
+  <script>document.documentElement.classList.add('okv-motion-pending');setTimeout(function(){document.documentElement.classList.remove('okv-motion-pending');},2500);</script>
+        <?php
+    }
+}
+
 if (!function_exists('okv_head_meta')) {
     function okv_head_meta(array $o = []): void
     {
@@ -43,7 +62,6 @@ if (!function_exists('okv_head_meta')) {
   <link rel="apple-touch-icon" sizes="180x180" href="<?= okv_e(okv_asset('/assets/img/brand/icons/apple-touch-icon.png')) ?>">
   <link rel="manifest" href="<?= okv_e(okv_asset('/site.webmanifest')) ?>">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="<?= okv_e(okv_asset('/assets/fonts/hanken-grotesk-latin.woff2')) ?>">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="<?= okv_e(okv_asset('/assets/fonts/jetbrains-mono-latin.woff2')) ?>">
   <meta property="og:site_name" content="OK Veggies">
   <meta property="og:type" content="<?= okv_e($ogType) ?>">
   <meta property="og:title" content="<?= okv_e($ogTitle) ?>">

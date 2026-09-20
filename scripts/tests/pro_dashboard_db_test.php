@@ -2,6 +2,8 @@
 /** Task B dashboard reads, credit arithmetic and business isolation on MySQL 8. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 $tests = 0;
 $passed = 0;
 function pdb_ok($condition, string $label): void

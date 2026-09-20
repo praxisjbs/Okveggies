@@ -411,6 +411,12 @@ final class SettingsEditor
             'contact_name'    => 'Ada Obi',
             'contact_method'  => 'ada@example.com',
             'message_preview' => 'Please help me check whether my order can arrive before noon.',
+            'reported_at'     => date('l jS F, H:i'),
+            'category'        => 'Damaged',
+            'description_preview' => '2 tomato packs arrived crushed at the bottom of the basket.',
+            'outcome_line'    => 'We approved a partial refund for the damaged produce.',
+            'amount_line'     => 'Amount: ' . Money::format(250000) . '.',
+            'issue_url'       => $base . '/public/order.php?order=14',
         ];
         if ($templateKey === 'admin_new_contact') {
             $all['admin_url'] = $base . '/admin/content.php?message=1';

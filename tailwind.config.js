@@ -15,6 +15,11 @@ module.exports = {
     './includes/components/**/*.php',
     './assets/js/**/*.js',
   ],
+  // Category marks are assembled from AdminDashboard's trusted token names at
+  // runtime, so the scanner cannot see their complete class names in markup.
+  safelist: [
+    { pattern: /^okv-chart-token-(foliage|forest|gold|tomato|clay|ink|gold-ink)$/ },
+  ],
   theme: {
     extend: {
       colors: {
@@ -60,6 +65,10 @@ module.exports = {
           DEFAULT: '#03100A',
           60:      'rgba(3,16,10,0.62)',
           40:      'rgba(3,16,10,0.40)',
+          // The quietest border in the system: the resting edge of a tappable
+          // choice card. Added for the checkout payment cards, where a full
+          // mist border fought the card fill and a hairline was wanted.
+          10:      'rgba(3,16,10,0.10)',
         },
         mist: '#EAE8E8',
       },
@@ -89,12 +98,16 @@ module.exports = {
         'okv-lead':    ['1.25rem',   { lineHeight: '1.5' }],  // 20px
         'okv-body':    ['1rem',      { lineHeight: '1.7' }],  // 16px
         'okv-label':   ['0.8125rem', { lineHeight: '1.5' }],  // 13px
-        'okv-caption': ['0.625rem',  { lineHeight: '1.4' }],  // 10px
+        'okv-micro':   ['0.6875rem',  { lineHeight: '1.4' }],  // 11px operational metadata
+        'okv-caption': ['0.625rem',  { lineHeight: '1.4' }],  // 10px badges
       },
       borderRadius: {
         sm: '3px',
         md: '6px',
         lg: '12px',
+        // The slide-up sheet corner. The plan asks for a 24px top radius on
+        // mobile sheets, so it is a named token rather than an arbitrary value.
+        sheet: '24px',
         full: '9999px',
       },
       boxShadow: {

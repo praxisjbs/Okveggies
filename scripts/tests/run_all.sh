@@ -51,15 +51,17 @@ run "run.php" php scripts/tests/run.php
 
 echo
 echo "[tests] 2. Database suites (MySQL 8 from .env)"
-if php -r 'require "includes/bootstrap.php"; Database::one("SELECT 1");' >/dev/null 2>&1; then
+db_probe="$(php -r 'require "includes/bootstrap.php"; Database::one("SELECT 1"); fwrite(STDOUT, "OKV_DB_READY");' 2>/dev/null)"
+if [ "$db_probe" = "OKV_DB_READY" ]; then
   for suite in \
-    auth_db_test basket_db_test cancellation_db_test checkout_db_test combos_db_test \
-    contact_db_test contact_admin_db_test \
+    admin_dashboard_db_test admin_notifications_db_test customer_notifications_db_test auth_db_test basket_db_test cancellation_db_test checkout_db_test combos_db_test \
+    contact_db_test contact_admin_db_test content_pages_db_test \
     credit_admin_db_test credit_customer_db_test credit_orders_db_test \
     customer_auth_db_test customers_db_test delivery_db_test kitchen_lists_db_test \
-    kitchen_runs_db_test manifest_db_test notifications_db_test order_lifecycle_db_test \
+    issue_reports_db_test issue_workflow_db_test issue_resolutions_db_test issue_customer_outcome_db_test issue_notifications_db_test \
+    kitchen_runs_db_test manifest_db_test manual_operations_db_test notifications_db_test order_lifecycle_db_test \
     payments_db_test pricing_db_test pro_dashboard_db_test pro_orders_db_test \
-    settings_db_test staff_password_reset_db_test
+    reference_seed_db_test settings_db_test staff_password_reset_db_test
   do
     run "$suite" php "scripts/tests/$suite.php"
   done
@@ -77,9 +79,12 @@ echo
 echo "[tests] 3. HTTP suites (the site answering on $BASE)"
 if curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
   for suite in \
-    cancellation_http_test contact_http_test contact_admin_http_test \
+    admin_dashboard_http_test admin_notifications_http_test customer_notifications_http_test cancellation_http_test contact_http_test contact_admin_http_test content_admin_http_test public_content_http_test m12_storefront_access_http_test sitemap_http_test homepage_http_test \
     credit_checkout_http_test customer_http_test delivery_http_test \
-    kitchen_runs_http_test order_lifecycle_http_test order_trail_http_test settings_http_test
+    issue_reports_http_test issue_photos_http_test issue_workflow_http_test issue_resolutions_http_test \
+    product_uploads_http_test smtp_delivery_http_test \
+    kitchen_runs_http_test manual_operations_http_test order_lifecycle_http_test order_trail_http_test \
+    role_leak_matrix_http_test settings_http_test
   do
     run "$suite" php "scripts/tests/$suite.php"
   done
@@ -91,15 +96,28 @@ echo
 echo "[tests] 4. Browser pass at 390px and 1440px"
 if [ ! -d node_modules/playwright ]; then
   skip "visual_pass.mjs" "playwright not installed (npm install)"
+  skip "axe_suite.mjs" "playwright not installed (npm install)"
+  skip "motion_visual_test.mjs" "playwright not installed (npm install)"
 elif ! curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
   skip "visual_pass.mjs" "nothing answering on $BASE"
+  skip "axe_suite.mjs" "nothing answering on $BASE"
+  run "motion_visual_test.mjs" node scripts/tests/motion_visual_test.mjs
 else
   run "visual_pass.mjs" node scripts/tests/visual_pass.mjs
+  run "homepage_visual_test.mjs" node scripts/tests/homepage_visual_test.mjs
+  run "axe_suite.mjs" node scripts/tests/axe_suite.mjs
+  run "content_admin_visual_test.mjs" node scripts/tests/content_admin_visual_test.mjs
+  run "public_content_visual_test.mjs" php scripts/tests/public_content_visual_fixture.php
+  run "role_journeys.mjs" node scripts/tests/role_journeys.mjs
+  run "motion_visual_test.mjs" node scripts/tests/motion_visual_test.mjs
 fi
 
 echo
 echo "[tests] 5. Static guards"
 run "brand-check.sh" bash scripts/brand-check.sh
+run "motion_coverage_test.mjs" node scripts/tests/motion_coverage_test.mjs
+run "lesser_text_test.mjs" node scripts/tests/lesser_text_test.mjs
+run "image_contract_test.mjs" node scripts/tests/image_contract_test.mjs
 
 echo
 echo "-------------------------------------------------------------"

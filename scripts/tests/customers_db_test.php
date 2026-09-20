@@ -11,6 +11,8 @@
  */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 $t = 0; $p = 0;
 function cus_ok($condition, string $label): void
 {

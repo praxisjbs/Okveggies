@@ -16,6 +16,8 @@
  */
 require_once __DIR__ . '/brand.php';
 require_once __DIR__ . '/combo_card.php';
+require_once __DIR__ . '/picture.php';
+require_once __DIR__ . '/icons.php';
 
 if (!function_exists('okv_combo_spread')) {
     /**
@@ -47,7 +49,7 @@ if (!function_exists('okv_combo_spread')) {
         $preview = array_slice($components, 0, 6);
         $remaining = max(0, count($components) - count($preview));
         ?>
-        <article class="overflow-hidden rounded-lg bg-white shadow-okv-1" data-combo-spread>
+        <article class="okv-enter overflow-hidden rounded-lg bg-white shadow-okv-1" data-combo-spread>
           <div class="grid gap-0 lg:grid-cols-2">
             <!--
               The photo links to the same place the name does. It is taken out
@@ -67,9 +69,11 @@ if (!function_exists('okv_combo_spread')) {
               -->
               <div class="aspect-[4/3] w-full overflow-hidden lg:aspect-auto lg:h-full">
                 <?php if ($image !== ''): ?>
-                  <img src="<?= okv_e(okv_image_url($image)) ?>"
-                       alt="<?= okv_e($name) ?>, ready basket of <?= (int) $componentCount ?> items<?= $sourceRegions !== '' ? ', sourced from ' . okv_e($sourceRegions) : '' ?>"
-                       class="h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105" loading="lazy">
+                  <?php okv_picture($image, $name . ', ready basket of ' . (int) $componentCount . ' items' . ($sourceRegions !== '' ? ', sourced from ' . $sourceRegions : ''), [
+                      'class' => 'h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105',
+                      'sizes' => '(min-width: 1024px) 50vw, 100vw',
+                      'lazy' => true,
+                  ]); ?>
                 <?php else: ?>
                   <div class="flex h-full items-center justify-center p-6 text-center text-sm text-ink-40">Photo coming soon</div>
                 <?php endif; ?>
@@ -82,7 +86,7 @@ if (!function_exists('okv_combo_spread')) {
                 <a href="<?= okv_e($detailUrl) ?>" class="transition-colors duration-botanical ease-botanical hover:text-forest"><?= okv_e($name) ?></a>
               </h2>
               <?php if ($description !== ''): ?>
-                <p class="mt-4 max-w-prose text-okv-lead text-ink-60"><?= okv_e($description) ?></p>
+                <p class="mt-4 line-clamp-2 max-w-prose text-okv-lead text-ink-60"><?= okv_e($description) ?></p>
               <?php endif; ?>
 
               <?php if ($preview): ?>
@@ -119,7 +123,7 @@ if (!function_exists('okv_combo_spread')) {
                   <input type="hidden" name="action" value="add_combo">
                   <input type="hidden" name="combo_id" value="<?= (int) $comboId ?>">
                   <input type="hidden" name="return_to" value="<?= okv_e($returnTo) ?>">
-                  <button type="submit" class="okv-btn w-full" data-add-button>Add full basket</button>
+                  <button type="submit" class="okv-btn w-full rounded-xl" data-add-button><?php okv_icon('basket', 'h-4 w-4'); ?> Add full basket</button>
                 </form>
                 <a href="<?= okv_e($detailUrl) ?>" class="okv-btn-outline sm:flex-1">
                   See the <?= (int) $componentCount ?> <?= $componentCount === 1 ? 'item' : 'items' ?>

@@ -23,5 +23,14 @@ $okv_pro_whatsapp = preg_replace('/\D+/', '', Settings::str('support_whatsapp_nu
       </div>
     </div>
   </footer>
+
+  <?php
+  // PR8 motion on the Pro routes too: same self-hosted GSAP with SRI pins and
+  // the same one owner in okv-motion.js. If the files cannot load, the portal
+  // stays still and fully working.
+  ?>
+  <script src="<?= okv_e(okv_asset('/assets/js/vendor/gsap.min.js')) ?>" integrity="sha384-g4NTh/Iv5PPU4xPyhEWqPcwtNXOvdaDI8LLnyYfyNZOjKJeYQyjzQ9X5275eBjpt" crossorigin="anonymous" defer></script>
+  <script src="<?= okv_e(okv_asset('/assets/js/vendor/ScrollTrigger.min.js')) ?>" integrity="sha384-Z3REaz79l2IaAZqJsSABtTbhjgOUYyV3p90XNnAPCSHg3EMTz1fouunq9WZRtj3d" crossorigin="anonymous" defer></script>
+  <script src="<?= okv_e(okv_asset('/assets/js/okv-motion.min.js')) ?>" defer></script>
 </body>
 </html>

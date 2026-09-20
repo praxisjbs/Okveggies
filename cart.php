@@ -13,8 +13,12 @@ require_once __DIR__ . '/includes/components/shop/activation_banner.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
+require_once __DIR__ . '/includes/components/shop/icons.php';
+require_once __DIR__ . '/includes/components/shop/empty_state.php';
+require_once __DIR__ . '/includes/components/shop/picture.php';
 
 $basket = Basket::state();
+$sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
 $notice = (string) okv_input('basket', '');
 $notices = [
     'added'    => 'Added to your basket.',
@@ -47,9 +51,9 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header('basket'); ?>
 
-<main class="okv-container py-8 md:py-12">
+<main id="okv-main" class="okv-container py-8 md:py-12">
   <nav class="mb-6 text-sm text-ink-60" aria-label="Breadcrumb">
-    <a href="/" class="hover:text-forest">Home</a> / <span aria-current="page">Basket</span>
+    <a href="/" class="inline-flex min-h-[44px] items-center hover:text-forest">Home</a> / <span aria-current="page">Basket</span>
   </nav>
 
   <div class="flex flex-wrap items-end justify-between gap-4">
@@ -57,7 +61,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
       <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Your order</p>
       <h1 class="mt-2 font-display text-4xl font-extrabold text-ink">Your basket</h1>
     </div>
-    <a href="/shop.php" class="okv-btn-outline px-4">Keep shopping</a>
+    <a href="/shop.php" class="okv-btn-outline min-h-[44px] px-4"><?php okv_icon('leaf', 'h-4 w-4'); ?> Keep shopping</a>
   </div>
 
   <?php if (isset($notices[$notice])): ?>
@@ -73,28 +77,30 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
   <?php endif; ?>
 
   <?php if (!$basket['lines']): ?>
-    <section class="mt-8 rounded-lg bg-white px-6 py-16 text-center shadow-okv-1">
-      <h2 class="font-display text-2xl font-bold text-ink">Your basket is empty</h2>
-      <p class="mx-auto mt-3 max-w-md text-ink-60">Pick the produce or ready baskets you need for the kitchen.</p>
-      <div class="mt-6 flex flex-wrap justify-center gap-3">
-        <a href="/shop.php" class="okv-btn px-4">Shop produce</a>
-        <a href="/combos.php" class="okv-btn-outline px-4">See combos</a>
-      </div>
-    </section>
+    <div class="mt-8">
+      <?php okv_empty_state('basket-empty', 'Your basket is empty', 'Pick the produce or ready baskets you need.', [
+          ['href' => '/shop.php', 'label' => 'Shop produce', 'icon' => 'leaf'],
+          ['href' => '/combos.php', 'label' => 'See combos', 'style' => 'outline', 'icon' => 'basket'],
+      ]); ?>
+    </div>
   <?php else: ?>
     <div class="mt-8 grid gap-8 lg:grid-cols-12">
       <section class="space-y-4 lg:col-span-8" aria-label="Basket items">
         <?php foreach ($basket['lines'] as $line): $combo = $line['item_type'] === 'combo'; ?>
-          <article class="rounded-lg bg-white p-4 shadow-okv-1 sm:flex sm:items-start sm:gap-5">
+          <article class="okv-enter rounded-lg bg-white p-4 shadow-okv-1 sm:flex sm:items-start sm:gap-5">
             <div class="hidden h-20 w-20 flex-none overflow-hidden rounded-md bg-forest-tint sm:block">
               <?php if ($line['image_url'] !== ''): ?>
-                <img src="<?= okv_e($line['image_url']) ?>" alt="<?= okv_e($line['name']) ?>" width="80" height="80" class="h-full w-full object-cover" loading="lazy">
+                <img src="<?= okv_e($line['image_url']) ?>"
+                     alt="<?= okv_e($combo
+                       ? (string) $line['name'] . ', ready basket'
+                       : okv_produce_alt((string) $line['name'], (string) $line['unit'], $sourceRegions)) ?>"
+                     width="80" height="80" class="h-full w-full object-cover" loading="lazy" decoding="async">
               <?php endif; ?>
             </div>
             <div class="min-w-0 flex-1">
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-gold-ink"><?= $combo ? 'Ready basket' : 'Produce' ?></p>
               <h2 class="mt-1 font-display text-lg font-bold text-ink">
-                <a href="<?= okv_e($line['url']) ?>" class="hover:text-forest"><?= okv_e($line['name']) ?></a>
+                <a href="<?= okv_e($line['url']) ?>" class="inline-flex min-h-[44px] items-center hover:text-forest"><?= okv_e($line['name']) ?></a>
               </h2>
               <p class="mt-1 text-sm text-ink-60">
                 <?= okv_e($line['quantity_display']) ?> <?= okv_e($line['unit']) ?> at <?= okv_e($line['unit_price_display']) ?><?= $combo ? '' : ' per ' . okv_e($line['unit']) ?>
@@ -131,14 +137,15 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
       </section>
 
       <aside class="lg:col-span-4">
-        <div class="sticky top-24 rounded-lg bg-white p-6 shadow-okv-2">
+        <div class="okv-enter okv-enter-2 sticky top-24 rounded-xl bg-white p-6 shadow-okv-2">
           <h2 class="font-display text-xl font-bold text-ink">Basket total</h2>
-          <div class="mt-6 flex justify-between font-mono text-lg font-semibold text-forest">
+          <span class="mt-2 block w-12 border-t-2 border-gold" aria-hidden="true"></span>
+          <div class="mt-5 flex justify-between font-mono text-lg font-semibold text-forest">
             <span>Subtotal</span>
             <span><?= okv_e($basket['subtotal_display']) ?></span>
           </div>
-          <p class="mt-3 text-sm text-ink-60">Delivery is arranged and settled separately after we confirm your area.</p>
-          <a href="/checkout.php" class="okv-btn mt-6 w-full justify-center">Continue to checkout</a>
+          <p class="okv-trust-line mt-4"><?php okv_icon('leaf', 'mt-0.5 h-4 w-4 flex-none text-forest'); ?> Delivery is arranged and settled after we confirm your area.</p>
+          <a href="/checkout.php" class="okv-btn mt-6 h-14 w-full justify-center rounded-xl text-base shadow-lg shadow-forest/20 active:scale-[0.98]">Continue to checkout <?php okv_icon('arrow-right', 'h-5 w-5'); ?></a>
         </div>
       </aside>
     </div>

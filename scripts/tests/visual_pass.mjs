@@ -22,9 +22,12 @@
  * Set OKV_SHOTS=1 to write full-page screenshots to /tmp/okv-shots.
  * -----------------------------------------------------------------------------
  */
-import { chromium } from 'playwright';
+import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.OKV_PLAYWRIGHT_PATH || 'playwright');
 
 const BASE = process.env.OKV_BASE || 'http://127.0.0.1:8123';
 const BUSINESS = process.env.OKV_BUSINESS || 'm8biz@example.test';
@@ -50,6 +53,8 @@ const PRO = [
 const ADMIN = [
   ['/admin/credit.php', 'Admin credit'],
   ['/admin/customers.php', 'Admin customers'],
+  ['/admin/content.php?tab=page-copy&page=about', 'Page Copy editor'],
+  ['/admin/content-preview.php?page=about', 'Page Copy preview'],
 ];
 
 let failures = 0;
@@ -243,7 +248,7 @@ try {
     shopPage.on('pageerror', (err) => report(false, `JavaScript error: ${err.message}`));
 
     for (const path of ['/', '/shop.php', '/combos.php', '/kitchen-runs.php', '/cart.php',
-                        '/checkout.php', '/account.php', '/contact.php', '/page.php?slug=about']) {
+                        '/checkout.php', '/account.php', '/contact.php', '/our-story']) {
       await shopPage.goto(BASE + path, { waitUntil: 'domcontentloaded' });
       const triggers = await shopPage.locator('[data-support-trigger]').count();
       report(triggers === 1, `${path} carries exactly one support trigger`, `(${triggers})`);
@@ -369,8 +374,8 @@ try {
       return { transition: s.transitionDuration, animation: s.animationDuration, visible: !document.querySelector('[data-support-dialog]').hidden };
     });
     report(motion.visible, 'the sheet still opens with reduced motion asked for');
-    report(parseFloat(motion.transition) < 0.01 && parseFloat(motion.animation) < 0.01,
-      'and it does not animate when a person asks for less motion',
+    report(parseFloat(motion.transition) > 0.1 || parseFloat(motion.animation) > 0.1,
+      'and motion is full even with the preference set, per the 20 Sep decision',
       `(transition ${motion.transition}, animation ${motion.animation})`);
     await calmContext.close();
 

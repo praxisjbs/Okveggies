@@ -14,30 +14,50 @@
  */
 require_once __DIR__ . '/brand.php';
 require_once __DIR__ . '/support_widget.php';
+require_once __DIR__ . '/../../config/nav.php';
 
 if (!function_exists('okv_shop_footer')) {
-    function okv_shop_footer(): void
+    function okv_shop_footer(?array $contentNavigation = null): void
     {
         $name = Settings::str('business_name', 'OK Veggies');
         $tagline = Settings::str('business_tagline', 'Sourced right. Priced right. Delivered right.');
         $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
         $sourceDay = Settings::str('source_day', '');
+        global $OKV_FOOTER_NAV;
+        if ($contentNavigation === null) {
+            try {
+                $contentNavigation = ContentPages::publishedNavigation($OKV_FOOTER_NAV['content_slugs'] ?? []);
+            } catch (Throwable $e) {
+                error_log('content.footer_navigation failed: ' . $e->getMessage());
+                $contentNavigation = [];
+            }
+        }
+        $company = [];
+        $legal = [];
+        foreach ($contentNavigation as $item) {
+            $link = [(string) $item['path'], (string) $item['label']];
+            if (!empty($item['legal'])) {
+                $legal[] = $link;
+            } else {
+                $company[] = $link;
+            }
+        }
+        foreach (($OKV_FOOTER_NAV['static'] ?? []) as $item) {
+            $link = [(string) $item['href'], (string) $item['label']];
+            if (($item['group'] ?? '') === 'Legal') {
+                $legal[] = $link;
+            } else {
+                $company[] = $link;
+            }
+        }
         $columns = [
-            'Company' => [
-                ['/page.php?slug=about', 'Our Story'],
-                ['/page.php?slug=how-it-works', 'How It Works'],
-                ['/page.php?slug=faq', 'Questions'],
-            ],
+            'Company' => $company,
             'Shop' => [
                 ['/shop.php', 'All produce'],
                 ['/combos.php', 'Combos'],
                 ['/kitchen-runs.php', 'Kitchen Runs'],
             ],
-            'Legal' => [
-                ['/page.php?slug=terms', 'Terms'],
-                ['/page.php?slug=privacy', 'Privacy'],
-                ['/page.php?slug=delivery-policy', 'Delivery Policy'],
-            ],
+            'Legal' => $legal,
         ];
         ?>
         <footer class="mb-14 bg-forest text-white md:mb-0">
@@ -49,7 +69,7 @@ if (!function_exists('okv_shop_footer')) {
               <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-4 text-white/75'); ?>
             </div>
 
-            <?php foreach ($columns as $heading => $items): ?>
+            <?php foreach ($columns as $heading => $items): if (!$items) { continue; } ?>
               <nav class="md:col-span-2" aria-label="<?= okv_e($heading) ?>">
                 <p class="okv-eyebrow-invert"><?= okv_e($heading) ?></p>
                 <ul class="mt-2">
@@ -75,7 +95,7 @@ if (!function_exists('okv_shop_footer')) {
                   <p class="mt-1 text-sm text-white/70">Farms we have visited. Prices we can explain. A day you picked.</p>
                 </div>
               </div>
-              <p class="text-xs text-white/60">&copy; <?= date('Y') ?> <?= okv_e($name) ?>. Powered by JBS Praxis.</p>
+              <p class="text-xs text-white/70">&copy; <?= date('Y') ?> <?= okv_e($name) ?>. Powered by JBS Praxis.</p>
             </div>
           </div>
         </footer>
@@ -84,7 +104,16 @@ if (!function_exists('okv_shop_footer')) {
         // storefront page, so its behaviour loads here, once, alongside it.
         // Without JavaScript the header basket control stays a real link to
         // /cart.php, so nothing here is required for the basket to work.
+        //
+        // PR8 motion: GSAP 3.12 and ScrollTrigger, self-hosted under
+        // assets/js/vendor/ with SRI pins, no npm step. okv-motion.js owns
+        // every scroll entrance, hero moment, sheet and micro feedback. If the
+        // vendored files cannot load it retries the pinned backup CDN copies
+        // of the same bytes, and failing that the page simply stays still.
         ?>
+        <script src="<?= okv_e(okv_asset('/assets/js/vendor/gsap.min.js')) ?>" integrity="sha384-g4NTh/Iv5PPU4xPyhEWqPcwtNXOvdaDI8LLnyYfyNZOjKJeYQyjzQ9X5275eBjpt" crossorigin="anonymous" defer></script>
+        <script src="<?= okv_e(okv_asset('/assets/js/vendor/ScrollTrigger.min.js')) ?>" integrity="sha384-Z3REaz79l2IaAZqJsSABtTbhjgOUYyV3p90XNnAPCSHg3EMTz1fouunq9WZRtj3d" crossorigin="anonymous" defer></script>
+        <script src="<?= okv_e(okv_asset('/assets/js/okv-motion.min.js')) ?>" defer></script>
         <script src="<?= okv_e(okv_asset('/assets/js/basket.min.js')) ?>" defer></script>
         <?php okv_support_widget(); ?>
         <?php

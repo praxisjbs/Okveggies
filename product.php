@@ -7,6 +7,10 @@ require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/product_card.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
+require_once __DIR__ . '/includes/components/shop/picture.php';
+require_once __DIR__ . '/includes/components/shop/icons.php';
+require_once __DIR__ . '/includes/components/shop/empty_state.php';
+require_once __DIR__ . '/includes/components/shop/help_sheet.php';
 
 $product = Catalogue::productBySlug((string) okv_input('slug', ''));
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
@@ -19,18 +23,18 @@ if (!$product) {
     <title>Product not found. OK Veggies</title><meta name="robots" content="noindex"><?php okv_head_meta(); ?><link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
     <body class="min-h-screen bg-forest-tint">
     <?php okv_activation_banner(); okv_shop_header('shop'); ?>
-    <main class="okv-container py-16 text-center md:py-24">
-      <?php okv_seal(120, 'mx-auto', ''); ?>
-      <p class="okv-eyebrow mt-6">Product not found</p>
-      <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3">That item is not on the stall</h1>
-      <p class="mx-auto mt-4 max-w-lg text-ink-60">It may have moved or is no longer in this week's catalogue. Browse the shop to see what is available and what is restocking.</p>
-      <a href="/shop.php" class="okv-btn mt-8">Back to the shop</a>
+    <main id="okv-main" class="okv-container py-16 md:py-24">
+      <?php okv_empty_state('leaf', 'Item not on stall', 'It may have moved or left this week\'s catalogue.', [
+          ['href' => '/shop.php', 'label' => 'Back to the shop', 'icon' => 'leaf'],
+          ['href' => '/combos.php', 'label' => 'See the combos', 'style' => 'outline', 'icon' => 'basket'],
+      ], ['heading_tag' => 'h1']); ?>
     </main>
     <?php okv_shop_footer(); ?>
     </body></html><?php
     exit;
 }
 
+$productSourceRegion = trim((string) ($product['source_region'] ?? '')) ?: trim($sourceRegions);
 $images = Catalogue::images((int) $product['id']);
 $suggestions = Catalogue::suggestions((int) $product['id'], (int) $product['category_id']);
 $availability = okv_availability((string) $product['availability_status'], $product['restock_date'] ?? null);
@@ -55,7 +59,7 @@ $basketNotice = (string) okv_input('basket', '');
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header('shop'); ?>
 
-<main>
+<main id="okv-main">
   <div class="okv-container py-6 md:py-10">
     <nav class="mb-6 text-sm text-ink-60" aria-label="Breadcrumb">
       <a href="/" class="hover:text-forest">Home</a> <span aria-hidden="true">/</span>
@@ -76,7 +80,12 @@ $basketNotice = (string) okv_input('basket', '');
           <div class="grid gap-4 <?= count($images) > 1 ? 'sm:grid-cols-2' : '' ?>">
             <?php foreach ($images as $index => $image): ?>
               <div class="overflow-hidden rounded-lg bg-white p-4 shadow-okv-1 <?= $index === 0 && count($images) > 2 ? 'sm:col-span-2' : '' ?>">
-                <img src="<?= okv_e(okv_image_url($image['image_url'])) ?>" alt="<?= okv_e($product['name']) ?>, <?= okv_e($product['unit']) ?>, sourced from <?= okv_e($sourceRegions) ?>" class="aspect-square w-full rounded-md object-cover">
+                <?php okv_picture((string) $image['image_url'], okv_produce_alt((string) $product['name'], (string) $product['unit'], $productSourceRegion), [
+                    'class' => 'aspect-square w-full rounded-md object-cover',
+                    'sizes' => '(min-width: 1024px) 50vw, 100vw',
+                    'lazy' => $index !== 0,
+                    'priority' => $index === 0,
+                ]); ?>
               </div>
             <?php endforeach; ?>
           </div>
@@ -95,10 +104,13 @@ $basketNotice = (string) okv_input('basket', '');
             <span class="okv-badge <?= $availability['key'] === 'available' ? 'okv-badge-available' : 'okv-badge-out' ?>"><?= okv_e($availability['label']) ?></span>
           </div>
 
-          <p class="mt-6 text-okv-lead text-ink-60"><?= nl2br(okv_e($product['description'])) ?></p>
+          <?php if (trim((string) $product['description']) !== ''): ?>
+            <p class="mt-6 line-clamp-2 text-okv-lead text-ink-60"><?= okv_e((string) $product['description']) ?></p>
+            <button type="button" class="okv-btn-text mt-2 min-h-[44px]" data-sheet-open="product-read" aria-haspopup="dialog"><?php okv_icon('info', 'h-4 w-4'); ?> Read</button>
+          <?php endif; ?>
 
           <div class="mt-6 rounded-lg border border-mist bg-white p-4">
-            <?php okv_sourced_note($sourceRegions, $sourceDay, 'font-semibold text-ink'); ?>
+            <?php okv_sourced_note($productSourceRegion, $sourceDay, 'font-semibold text-ink'); ?>
             <p class="mt-2 text-sm text-ink-60">Sold per <?= okv_e($product['unit']) ?>. Minimum <?= okv_e(okv_quantity($product['minimum_quantity'])) ?><?= okv_e($product['unit']) ?>, added in steps of <?= okv_e(okv_quantity($product['quantity_increment'])) ?><?= okv_e($product['unit']) ?>.</p>
           </div>
 
@@ -137,7 +149,7 @@ $basketNotice = (string) okv_input('basket', '');
               </div>
             <?php endif; ?>
 
-            <button type="submit" class="okv-btn w-full min-h-[44px]" <?= $availability['can_add'] ? '' : 'disabled' ?> data-add-button><?= $availability['can_add'] ? 'Add to basket' : $availability['short_label'] ?></button>
+            <button type="submit" class="okv-btn min-h-[44px] w-full rounded-xl" <?= $availability['can_add'] ? '' : 'disabled' ?> data-add-button><?php if ($availability['can_add']): ?><?php okv_icon('basket', 'h-4 w-4'); ?> Add to basket<?php else: ?><?= okv_e($availability['short_label']) ?><?php endif; ?></button>
           </form>
           <?php if (!$availability['can_add']): ?><p class="mt-3 text-center text-sm text-ink-60">Keep this page handy. The status will change when sourcing is complete.</p><?php endif; ?>
         </div>
@@ -160,6 +172,11 @@ $basketNotice = (string) okv_input('basket', '');
   <?php endif; ?>
 </main>
 
+<?php
+if (trim((string) $product['description']) !== '') {
+    okv_help_sheet('product-read', 'leaf', (string) $product['name'], '<p>' . okv_e((string) $product['description']) . '</p>');
+}
+?>
 <?php okv_shop_footer(); ?>
 <script>window.OKV = window.OKV || {}; window.OKV.csrf = <?= json_encode(Csrf::token()) ?>;</script>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>"></script>

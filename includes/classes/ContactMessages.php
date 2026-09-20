@@ -30,7 +30,10 @@ final class ContactMessages
         'support_widget' => 'the support widget',
         'contact_page'   => 'the contact page',
         'storefront_contact_form' => 'the storefront',
+        'staff_initiated' => 'a staff message',
     ];
+
+    public const STAFF_INITIATED_SOURCE = 'staff_initiated';
 
     /** Validate and normalise public fields without trusting browser constraints. */
     public static function validateFields(array $input): array
@@ -131,13 +134,20 @@ final class ContactMessages
                 ]
             );
             $messageId = (int) $pdo->lastInsertId();
+            $actorId = null;
+            if ($customerId !== null && $customerId > 0) {
+                $userExists = (bool) Database::one('SELECT id FROM users WHERE id = :id', [':id' => $customerId]);
+                if ($userExists) {
+                    $actorId = $customerId;
+                }
+            }
             Audit::record(
                 'contact_messages.create',
                 'contact_message',
                 $messageId,
                 null,
                 ['source' => $source, 'customer_id' => $customerId],
-                $customerId
+                $actorId
             );
             $pdo->commit();
         } catch (Throwable $e) {
@@ -152,6 +162,80 @@ final class ContactMessages
         RateLimiter::hit($identityBucket, self::IDENTITY_LIMIT, self::IDENTITY_WINDOW);
 
         return ['ok' => true, 'code' => 'submitted', 'message_id' => $messageId];
+    }
+
+    /**
+     * Staff starts a thread to a customer. No rate limit, no honeypot, but the
+     * same field rules. Creates an inbound-style row with is_staff_initiated=1
+     * so it appears in the admin list and notifies the customer by email.
+     * The customer does not need an account, only an email or phone.
+     */
+    public static function staffInitiate(array $input, int $staffId): array
+    {
+        $clean = self::validateFields($input);
+        if (empty($clean['ok'])) {
+            return $clean;
+        }
+        $pdo = Database::getInstance()->getConnection();
+        $pdo->beginTransaction();
+        try {
+            $hasFlag = Database::one(
+                'SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :col',
+                [':table' => 'contact_messages', ':col' => 'is_staff_initiated']
+            );
+            $hasFlag = $hasFlag !== null && (int) ($hasFlag['n'] ?? 0) > 0;
+            if ($hasFlag) {
+                Database::run(
+                    'INSERT INTO contact_messages (name, email, phone, subject, message, source, status, handled_by, handled_at, is_staff_initiated, ip_address)
+                     VALUES (:name, :email, :phone, :subject, :message, :source, :status, :handled_by, :handled_at, 1, :ip)',
+                    [
+                        ':name' => $clean['name'],
+                        ':email' => $clean['email'],
+                        ':phone' => $clean['phone'],
+                        ':subject' => $clean['subject'],
+                        ':message' => $clean['message'],
+                        ':source' => self::STAFF_INITIATED_SOURCE,
+                        ':status' => 'handled',
+                        ':handled_by' => $staffId > 0 ? $staffId : null,
+                        ':handled_at' => date('Y-m-d H:i:s'),
+                        ':ip' => self::clientIp(),
+                    ]
+                );
+            } else {
+                Database::run(
+                    'INSERT INTO contact_messages (name, email, phone, subject, message, source, status, handled_by, handled_at, ip_address)
+                     VALUES (:name, :email, :phone, :subject, :message, :source, :status, :handled_by, :handled_at, :ip)',
+                    [
+                        ':name' => $clean['name'],
+                        ':email' => $clean['email'],
+                        ':phone' => $clean['phone'],
+                        ':subject' => $clean['subject'],
+                        ':message' => $clean['message'],
+                        ':source' => self::STAFF_INITIATED_SOURCE,
+                        ':status' => 'handled',
+                        ':handled_by' => $staffId > 0 ? $staffId : null,
+                        ':handled_at' => date('Y-m-d H:i:s'),
+                        ':ip' => self::clientIp(),
+                    ]
+                );
+            }
+            $messageId = (int) $pdo->lastInsertId();
+            Audit::record(
+                'contact_messages.create',
+                'contact_message',
+                $messageId,
+                null,
+                ['source' => self::STAFF_INITIATED_SOURCE, 'staff_id' => $staffId, 'is_staff_initiated' => 1],
+                $staffId
+            );
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+        return ['ok' => true, 'code' => 'staff_initiated', 'message_id' => $messageId];
     }
 
     /** How a message is described in a staff alert. */
@@ -187,8 +271,14 @@ final class ContactMessages
     public static function forStaff(string $search = '', string $status = '', string $from = '', string $to = '', int $page = 1): array
     {
         [$where, $params] = self::staffWhere($search, $status, $from, $to);
+        $hasFlag = Database::one(
+            'SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :col',
+            [':table' => 'contact_messages', ':col' => 'is_staff_initiated']
+        );
+        $flagSelect = ($hasFlag !== null && (int) ($hasFlag['n'] ?? 0) > 0) ? ', m.is_staff_initiated' : ', 0 AS is_staff_initiated';
         $sql = 'SELECT m.id, m.name, m.email, m.phone, m.subject, m.status, m.created_at,
-                       m.handled_at, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS handled_by_name
+                       m.handled_at, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS handled_by_name'
+                       . $flagSelect . '
                   FROM contact_messages m
              LEFT JOIN users u ON u.id = m.handled_by'
              . ($where ? ' WHERE ' . implode(' AND ', $where) : '')

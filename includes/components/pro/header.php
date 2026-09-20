@@ -33,6 +33,7 @@ $okv_pro_home   = $okv_pro_active === '/pro/';
   <link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>">
 </head>
 <body class="min-h-screen flex flex-col bg-forest-tint pb-16 text-ink md:pb-0">
+  <?php okv_motion_pending(); ?>
   <a href="#okv-pro-main" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-white focus:px-4 focus:py-2 focus:text-forest">Skip to the screen</a>
 
   <header class="bg-white border-b border-mist">
@@ -43,6 +44,7 @@ $okv_pro_home   = $okv_pro_active === '/pro/';
         <span class="okv-eyebrow text-forest">Pro</span>
       </a>
       <div class="flex items-center gap-2">
+        <?php require __DIR__ . '/../shop/notification_bell.php'; ?>
         <a href="/shop.php" class="okv-btn-text text-sm">Shop</a>
         <a href="/account.php" class="okv-btn-outline-sm">
           <?= $okv_pro_name !== '' ? okv_e($okv_pro_name) : 'Sign in' ?>

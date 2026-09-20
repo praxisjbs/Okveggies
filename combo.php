@@ -16,6 +16,10 @@ require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
 require_once __DIR__ . '/includes/components/shop/combo_card.php';
+require_once __DIR__ . '/includes/components/shop/picture.php';
+require_once __DIR__ . '/includes/components/shop/icons.php';
+require_once __DIR__ . '/includes/components/shop/empty_state.php';
+require_once __DIR__ . '/includes/components/shop/help_sheet.php';
 
 $combo = Catalogue::comboBySlug((string) okv_input('slug', ''));
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
@@ -28,12 +32,11 @@ if (!$combo) {
     <title>Combo not found. OK Veggies</title><meta name="robots" content="noindex"><?php okv_head_meta(); ?><link rel="stylesheet" href="<?= okv_e(okv_asset('/assets/css/tailwind.css')) ?>"></head>
     <body class="min-h-screen bg-forest-tint">
     <?php okv_activation_banner(); okv_shop_header('combos'); ?>
-    <main class="okv-container py-16 text-center md:py-24">
-      <?php okv_seal(120, 'mx-auto', ''); ?>
-      <p class="okv-eyebrow mt-6">Combo not found</p>
-      <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3">That basket is not on the shop</h1>
-      <p class="mx-auto mt-4 max-w-lg text-ink-60">It may have moved or is no longer on this week's list. Browse the combos to see what is ready now.</p>
-      <a href="/combos.php" class="okv-btn mt-8">See this week's combos</a>
+    <main id="okv-main" class="okv-container py-16 md:py-24">
+      <?php okv_empty_state('basket-empty', 'Basket not on shop', 'It may have moved or left this week\'s list.', [
+          ['href' => '/combos.php', 'label' => 'See this week\'s combos', 'icon' => 'basket'],
+          ['href' => '/shop.php', 'label' => 'Browse the shop', 'style' => 'outline', 'icon' => 'leaf'],
+      ], ['heading_tag' => 'h1']); ?>
     </main>
     <?php okv_shop_footer(); ?>
     </body></html><?php
@@ -68,7 +71,7 @@ $componentCount = (int) $combo['component_count'];
 <?php okv_activation_banner(); ?>
 <?php okv_shop_header('combos'); ?>
 
-<main>
+<main id="okv-main">
   <div class="okv-container py-6 md:py-10">
     <nav class="mb-6 text-sm text-ink-60" aria-label="Breadcrumb">
       <a href="/" class="hover:text-forest">Home</a> <span aria-hidden="true">/</span>
@@ -88,7 +91,12 @@ $componentCount = (int) $combo['component_count'];
       <section class="lg:col-span-7" aria-label="Combo photo">
         <div class="overflow-hidden rounded-lg bg-white p-4 shadow-okv-1">
           <?php if ($image !== ''): ?>
-            <img src="<?= okv_e(okv_image_url($image)) ?>" alt="<?= okv_e($combo['name']) ?>, ready basket of <?= $componentCount ?> items, sourced from <?= okv_e($sourceRegions) ?>" class="aspect-square w-full rounded-md object-cover">
+            <?php okv_picture($image, $combo['name'] . ', ready basket of ' . $componentCount . ' items, sourced from ' . $sourceRegions, [
+                'class' => 'aspect-square w-full rounded-md object-cover',
+                'sizes' => '(min-width: 1024px) 50vw, 100vw',
+                'lazy' => false,
+                'priority' => true,
+            ]); ?>
           <?php else: ?>
             <div class="flex aspect-square items-center justify-center text-ink-40">Photo coming soon</div>
           <?php endif; ?>
@@ -111,7 +119,8 @@ $componentCount = (int) $combo['component_count'];
           <?php endif; ?>
 
           <?php if ($description !== ''): ?>
-            <p class="mt-6 text-okv-lead text-ink-60"><?= nl2br(okv_e($description)) ?></p>
+            <p class="mt-6 line-clamp-2 text-okv-lead text-ink-60"><?= okv_e($description) ?></p>
+            <button type="button" class="okv-btn-text mt-2 min-h-[44px]" data-sheet-open="combo-read" aria-haspopup="dialog"><?php okv_icon('info', 'h-4 w-4'); ?> Read</button>
           <?php endif; ?>
 
           <div class="mt-6 rounded-lg border border-mist bg-white p-4">
@@ -124,7 +133,7 @@ $componentCount = (int) $combo['component_count'];
             <input type="hidden" name="action" value="add_combo">
             <input type="hidden" name="combo_id" value="<?= (int) $combo['id'] ?>">
             <input type="hidden" name="return_to" value="<?= okv_e($returnTo) ?>">
-            <button type="submit" class="okv-btn w-full" data-add-button>Add full basket</button>
+            <button type="submit" class="okv-btn w-full rounded-xl" data-add-button><?php okv_icon('basket', 'h-4 w-4'); ?> Add full basket</button>
           </form>
         </div>
       </section>
@@ -147,7 +156,11 @@ $componentCount = (int) $combo['component_count'];
               <li class="flex items-center gap-4 py-3">
                 <div class="h-14 w-14 flex-none overflow-hidden rounded-md bg-forest-tint">
                   <?php if (!empty($line['image'])): ?>
-                    <img src="<?= okv_e(okv_image_url((string) $line['image'])) ?>" alt="<?= okv_e($productName) ?>, per <?= okv_e($unit) ?>, sourced from <?= okv_e($sourceRegions) ?>" class="h-full w-full object-cover" loading="lazy">
+                    <?php okv_picture((string) $line['image'], okv_produce_alt($productName, $unit, $sourceRegions), [
+                        'class' => 'h-full w-full object-cover',
+                        'sizes' => '56px',
+                        'lazy' => true,
+                    ]); ?>
                   <?php endif; ?>
                 </div>
                 <div class="min-w-0 flex-1">
@@ -166,6 +179,11 @@ $componentCount = (int) $combo['component_count'];
   </div>
 </main>
 
+<?php
+if ($description !== '') {
+    okv_help_sheet('combo-read', 'basket', (string) $combo['name'], '<p>' . okv_e($description) . '</p>');
+}
+?>
 <?php okv_shop_footer(); ?>
 <script>window.OKV = window.OKV || {}; window.OKV.csrf = <?= json_encode(Csrf::token()) ?>;</script>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>"></script>

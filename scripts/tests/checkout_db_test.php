@@ -18,6 +18,8 @@
  */
 
 $root = dirname(__DIR__, 2);
+
+require_once __DIR__ . '/lib/scratch_guard.php';
 require_once $root . '/includes/config/db.php';
 require_once $root . '/includes/classes/Database.php';
 require_once $root . '/includes/classes/Money.php';
@@ -120,6 +122,7 @@ try {
 
     $items = Database::all('SELECT * FROM order_items WHERE order_id = :id', [':id' => $orderId]);
     t_eq(count($state['lines']), count($items), 'every basket line is snapshotted as an order item');
+    t_eq($categoryId, (int) $items[0]['snapshot_category_id'], 'checkout snapshots the product category at order placement');
 
     t_ok((bool) Database::one('SELECT id FROM order_addresses WHERE order_id = :id', [':id' => $orderId]), 'the delivery address is snapshotted');
     t_ok((bool) Database::one('SELECT id FROM order_status_history WHERE order_id = :id AND new_status = \'pending\'', [':id' => $orderId]), 'the first status event is written');

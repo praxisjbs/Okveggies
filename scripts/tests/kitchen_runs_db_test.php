@@ -20,6 +20,8 @@
  */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 $tests = 0;
 $passed = 0;
 
@@ -298,6 +300,8 @@ try {
     $orderItems = Database::all('SELECT * FROM order_items WHERE order_id = :id ORDER BY id', [':id' => $orderId]);
     krdb_eq(3, count($orderItems), 'every quoted line becomes an order line');
     krdb_eq('Palm oil', (string) $orderItems[2]['item_name'], 'a line that was never a shop product still reaches the packing list');
+    krdb_eq((int) $product['category_id'], (int) $orderItems[0]['snapshot_category_id'], 'Kitchen Run conversion snapshots the product category');
+    krdb_eq(null, $orderItems[2]['snapshot_category_id'], 'a free-text Kitchen Run line has no product category');
     krdb_ok(trim((string) $orderItems[2]['sku']) !== '', 'a line with no catalogue product still carries a sku, so the packing list reads');
 
     // The unit, not only the name and the price. "4 palm oil" is not a packing

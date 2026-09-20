@@ -11,6 +11,8 @@
  * -----------------------------------------------------------------------------
  */
 
+require_once __DIR__ . '/empty_state.php';
+
 if (!function_exists('okv_shop_url')) {
     /**
      * A shop URL for a search, a category and a page. Page 1 and empty filters
@@ -69,25 +71,27 @@ if (!function_exists('okv_shop_results')) {
           </div>
           <?php okv_pagination($page, $lastPage, static fn (int $n): string => okv_shop_url($search, $category, $n), 'Produce pages'); ?>
         <?php else: ?>
-          <div class="rounded-lg bg-white px-6 py-16 text-center shadow-okv-1">
-            <?php if ($search !== ''): ?>
-              <p class="okv-eyebrow">No match</p>
-              <h2 class="mt-3 font-editorial text-okv-h5 text-ink">Nothing matched &ldquo;<?= okv_e($search) ?>&rdquo;</h2>
-              <p class="mx-auto mt-3 max-w-md text-ink-60">Try another produce name<?= $category !== '' ? ', or clear the category to search everything available this week' : '' ?>. Tomatoes, garlic and herbs are all in this week.</p>
-              <div class="mt-6 flex flex-wrap justify-center gap-3">
-                <a href="/shop.php" class="okv-btn">See all produce</a>
-                <a href="/combos.php" class="okv-btn-outline">See the combos</a>
-              </div>
-            <?php else: ?>
-              <p class="okv-eyebrow">Still sourcing</p>
-              <h2 class="mt-3 font-editorial text-okv-h5 text-ink">Nothing in <?= okv_e($activeCategory['name'] ?? 'this category') ?> this week</h2>
-              <p class="mx-auto mt-3 max-w-md text-ink-60">We are still sourcing for this one. The rest of the week's produce is ready now, and this page fills back up as soon as it lands.</p>
-              <div class="mt-6 flex flex-wrap justify-center gap-3">
-                <a href="/shop.php" class="okv-btn">See all produce</a>
-                <a href="/combos.php" class="okv-btn-outline">See the combos</a>
-              </div>
-            <?php endif; ?>
-          </div>
+          <?php if ($search !== ''): ?>
+            <?php okv_empty_state(
+                'magnifier',
+                'Nothing matched that',
+                'Try another produce name. Tomatoes, garlic and herbs are in this week.',
+                [
+                    ['href' => '/shop.php', 'label' => 'See all produce', 'icon' => 'leaf'],
+                    ['href' => '/combos.php', 'label' => 'See the combos', 'style' => 'outline', 'icon' => 'basket'],
+                ]
+            ); ?>
+          <?php else: ?>
+            <?php okv_empty_state(
+                'leaf',
+                'Nothing in this aisle',
+                'We are still sourcing here. The rest of the stall is ready now.',
+                [
+                    ['href' => '/shop.php', 'label' => 'See all produce', 'icon' => 'leaf'],
+                    ['href' => '/combos.php', 'label' => 'See the combos', 'style' => 'outline', 'icon' => 'basket'],
+                ]
+            ); ?>
+          <?php endif; ?>
         <?php endif; ?>
         <?php
     }

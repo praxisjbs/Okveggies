@@ -20,6 +20,8 @@
 
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 $GLOBALS['t'] = 0; $GLOBALS['p'] = 0;
 function co_ok($cond, string $label): void {
     $GLOBALS['t']++;

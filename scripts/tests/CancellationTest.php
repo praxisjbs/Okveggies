@@ -88,13 +88,33 @@ okv_test_eq(0,      $odd['refund_subunit'],  'a part paid deposit is kept in ful
 okv_test_eq(100000, $odd['forfeit_subunit'], 'but never more than was actually paid');
 
 // -----------------------------------------------------------------------------
+// The deposit share: one rule for every payment option (Owner, 20 Sep 2026)
+// -----------------------------------------------------------------------------
+// A deposit order names its figure. An order paid in full never wrote one down,
+// because none was asked for, so its late cancellation used to refund
+// everything while a deposit customer lost the deposit share. The Owner
+// settled that asymmetry on 20 September 2026: the same percentage of the
+// order total stands in when no deposit was taken.
+// -----------------------------------------------------------------------------
+okv_test_eq($deposit, Cancellation::depositShare($deposit, $full, 30.0), 'a deposit order stakes exactly the deposit it took');
+okv_test_eq(507000,   Cancellation::depositShare(0, $full, 30.0),       'an order paid in full stakes the same 30 percent share');
+okv_test_eq(0,        Cancellation::depositShare(0, 0, 30.0),           'an order with no total stakes nothing');
+okv_test_eq(0,        Cancellation::depositShare(0, $full, 0.0),        'a 0 percent deposit protects nothing, however it was paid');
+
+// The symmetric outcome: same basket, same forfeit, whichever option was picked.
+$fullAfterCutoff = Cancellation::moneyOutcome($full, Cancellation::depositShare(0, $full, 30.0), false, true);
+okv_test_eq($full - $deposit, $fullAfterCutoff['refund_subunit'], 'a pay-in-full cancellation after the cutoff returns everything above the deposit share');
+okv_test_eq($deposit,         $fullAfterCutoff['forfeit_subunit'], 'and keeps exactly what a deposit customer would have lost');
+okv_test_eq('deposit_kept',   $fullAfterCutoff['reason'],          'the reason is the same whichever way it was paid');
+
+// -----------------------------------------------------------------------------
 // The copy, which is what makes the rule fair rather than a nasty surprise
 // -----------------------------------------------------------------------------
 $strict = Cancellation::policyLine('18:00', true);
 okv_test_ok(str_contains($strict, '18:00'),           'the checkout line names the cutoff time');
-okv_test_ok(str_contains($strict, 'not returned'),    'the checkout line says a deposit is kept, before the customer pays');
+okv_test_ok(str_contains($strict, 'deposit part of what you paid'), 'the checkout line says the deposit part is kept, before the customer pays');
 
-okv_test_ok(str_contains($strict, 'comes back to you'), 'the checkout line says what does come back, so pay in full is not read as losing everything');
+okv_test_ok(str_contains($strict, 'return the rest'), 'the checkout line says what does come back, so pay in full is not read as losing everything');
 
 $soft = Cancellation::policyLine('18:00', false);
 okv_test_ok(str_contains($soft, 'return everything you have paid'), 'with forfeiting off the copy promises the money back');
@@ -177,10 +197,11 @@ okv_test_eq(100000, $overDeposit['forfeit_subunit'], 'the forfeit never exceeds 
 // The words. These are what a customer reads, so each branch is checked.
 $terms = Cancellation::termsLine('dispatched', '18:00', true, true, true);
 okv_test_ok(str_contains($terms, 'on the way'), 'the dispatched terms say the order is on the way');
-okv_test_ok(str_contains($terms, 'deposit is kept'), 'the dispatched terms say the deposit is kept');
+okv_test_ok(str_contains($terms, 'deposit part of what you paid is kept'), 'the dispatched terms say the deposit part is kept');
 okv_test_ok(!str_contains($terms, "\u{2014}"), 'the dispatched terms carry no em dash');
 
 okv_test_ok(str_contains(Cancellation::termsLine('pending', '18:00', true, true, true, '2026-09-10'), 'on Wednesday 9th'), 'a pending order names its own deadline day');
+okv_test_ok(str_contains(Cancellation::termsLine('pending', '18:00', true), 'deposit part of what you paid is kept'), 'a pending order says the deposit part is what a late cancellation loses');
 
 $termsGenerous = Cancellation::termsLine('dispatched', '18:00', true, true, false);
 okv_test_ok(str_contains($termsGenerous, 'return anything you have paid'), 'with the dispatch rule off the terms promise the money back');

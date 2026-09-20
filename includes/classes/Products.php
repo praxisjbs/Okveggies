@@ -33,9 +33,9 @@ final class Products
         [$where, $params] = self::whereParts($search, $category, $status);
 
         return Database::all(
-            'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.current_price_subunit,
-                    p.minimum_quantity, p.quantity_increment, p.is_featured, p.is_active,
-                    p.category_id, p.unit_id,
+            'SELECT p.id, p.name, p.slug, p.sku, p.short_description, p.source_region,
+                    p.current_price_subunit, p.minimum_quantity, p.quantity_increment,
+                    p.is_featured, p.is_active, p.category_id, p.unit_id,
                     c.name AS category_name, c.slug AS category_slug,
                     u.symbol AS unit,
                     COALESCE(pa.availability_status, \'available\') AS availability_status,
@@ -236,6 +236,11 @@ final class Products
             $errors['price'] = 'That price is outside the range we allow. Leave it empty to save a draft.';
         }
 
+        $sourceRegion = trim((string) ($input['source_region'] ?? ''));
+        if (mb_strlen($sourceRegion) > 255) {
+            $errors['source_region'] = 'Keep the source region under 255 characters.';
+        }
+
         $minimum = self::cleanQuantity($input['minimum_quantity'] ?? '1', $unit);
         $increment = self::cleanQuantity($input['quantity_increment'] ?? '1', $unit);
         if ($minimum <= 0) {
@@ -252,6 +257,7 @@ final class Products
             'unit_id'            => $unitId,
             'short_description'  => mb_substr(trim((string) ($input['short_description'] ?? '')), 0, 300),
             'description'        => trim((string) ($input['description'] ?? '')),
+            'source_region'      => mb_substr($sourceRegion, 0, 255) ?: null,
             'price_subunit'      => $priceSubunit,
             'minimum_quantity'   => $minimum,
             'quantity_increment' => $increment,
@@ -286,9 +292,9 @@ final class Products
         try {
             Database::run(
                 'INSERT INTO products
-                    (category_id, unit_id, name, slug, sku, short_description, description,
+                    (category_id, unit_id, name, slug, sku, short_description, description, source_region,
                      current_price_subunit, minimum_quantity, quantity_increment, is_featured, is_active)
-                 VALUES (:category_id, :unit_id, :name, :slug, :sku, :short_description, :description,
+                 VALUES (:category_id, :unit_id, :name, :slug, :sku, :short_description, :description, :source_region,
                      :price, :minimum_quantity, :quantity_increment, :is_featured, :is_active)',
                 [
                     ':category_id'        => $clean['category_id'],
@@ -298,6 +304,7 @@ final class Products
                     ':sku'                => $clean['sku'],
                     ':short_description'  => $clean['short_description'],
                     ':description'        => $clean['description'],
+                    ':source_region'      => $clean['source_region'],
                     ':price'              => $clean['price_subunit'],
                     ':minimum_quantity'   => $clean['minimum_quantity'],
                     ':quantity_increment' => $clean['quantity_increment'],
@@ -351,6 +358,7 @@ final class Products
                 'UPDATE products
                     SET category_id = :category_id, unit_id = :unit_id, name = :name, slug = :slug,
                         sku = :sku, short_description = :short_description, description = :description,
+                        source_region = :source_region,
                         minimum_quantity = :minimum_quantity, quantity_increment = :quantity_increment,
                         is_featured = :is_featured, is_active = :is_active
                   WHERE id = :id',
@@ -362,6 +370,7 @@ final class Products
                     ':sku'                => $clean['sku'],
                     ':short_description'  => $clean['short_description'],
                     ':description'        => $clean['description'],
+                    ':source_region'      => $clean['source_region'],
                     ':minimum_quantity'   => $clean['minimum_quantity'],
                     ':quantity_increment' => $clean['quantity_increment'],
                     ':is_featured'        => $clean['is_featured'],

@@ -10,6 +10,8 @@
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/header.php';
 require_once __DIR__ . '/includes/components/shop/footer.php';
+require_once __DIR__ . '/includes/components/shop/icons.php';
+require_once __DIR__ . '/includes/components/shop/empty_state.php';
 
 $errors = [
     'name_required' => 'Enter your name.',
@@ -40,13 +42,13 @@ $sent = okv_input('sent', '') === '1';
 </head>
 <body class="min-h-screen bg-forest-tint text-ink">
 <?php okv_shop_header(); ?>
-<main class="okv-container py-8 md:py-12">
+<main id="okv-main" class="okv-container py-8 md:py-12">
   <div class="mx-auto max-w-2xl">
-    <a href="/" class="okv-btn-text"><span aria-hidden="true">&larr;</span> Back to the shop</a>
+    <a href="/" class="okv-btn-text"><?php okv_icon('arrow-left', 'h-4 w-4'); ?> Back to the shop</a>
     <p class="okv-eyebrow mt-6">Support</p>
     <h1 class="mt-2 font-editorial text-okv-h4 text-ink">Contact us</h1>
-    <p class="mt-3 text-ink-60">Send us a message here, or open WhatsApp if that is easier. We reply within 1 working day, Monday to Saturday.</p>
-    <a href="<?= okv_e(okv_support_whatsapp_url()) ?>" class="okv-btn-outline mt-5" target="_blank" rel="noopener">Chat on WhatsApp</a>
+    <p class="mt-3 text-ink-60">We reply within 1 working day, Monday to Saturday.</p>
+    <a href="<?= okv_e(okv_support_whatsapp_url()) ?>" class="okv-btn-outline mt-5 rounded-xl" target="_blank" rel="noopener"><?php okv_icon('phone', 'h-4 w-4'); ?> Chat on WhatsApp</a>
 
     <section class="okv-panel mt-6 p-5 md:p-8" aria-labelledby="contact-form-heading">
       <h2 id="contact-form-heading" class="font-editorial text-okv-h6 text-ink">Send a message</h2>
@@ -54,11 +56,10 @@ $sent = okv_input('sent', '') === '1';
         <p class="okv-note mt-4 bg-clay-tint" role="alert"><?= okv_e($errors[$errorCode] ?? $errors['failed']) ?></p>
       <?php endif; ?>
       <?php if ($sent): ?>
-        <section class="mt-4 rounded-md bg-foliage-tint p-5 text-center" role="status">
-          <h3 class="font-editorial text-okv-h6 text-ink">We have your message</h3>
-          <p class="mt-2 text-sm text-ink-60">Thank you. We reply within 1 working day, Monday to Saturday, using the details you gave us.</p>
-          <a href="/shop.php" class="okv-btn-outline mt-4">Back to the shop</a>
-        </section>
+        <div class="mt-4"><?php okv_empty_state('leaf', 'We have your message', 'We reply within 1 working day, Monday to Saturday.', [
+            ['href' => '/shop.php', 'label' => 'Back to the shop', 'icon' => 'leaf'],
+            ['href' => '/combos.php', 'label' => 'See the combos', 'style' => 'outline', 'icon' => 'basket'],
+        ], ['heading_tag' => 'h3', 'class' => 'bg-foliage-tint shadow-none']); ?></div>
       <?php else: ?>
         <div class="mt-5"><?php okv_contact_form('contact_page'); ?></div>
       <?php endif; ?>

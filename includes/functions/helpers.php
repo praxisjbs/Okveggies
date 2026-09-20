@@ -239,6 +239,20 @@ if (!function_exists('okv_sourced_line')) {
     }
 }
 
+if (!function_exists('okv_produce_alt')) {
+    /** Build truthful produce-photo text from whichever source fields exist. */
+    function okv_produce_alt(string $name, string $unit = '', string $regions = ''): string
+    {
+        $parts = array_values(array_filter([
+            trim($name),
+            trim($unit),
+        ], static fn(string $part): bool => $part !== ''));
+        $alt = implode(', ', $parts);
+        $regions = trim($regions);
+        return $regions === '' ? $alt : $alt . ', sourced from ' . $regions;
+    }
+}
+
 if (!function_exists('okv_send_account_code')) {
     /**
      * Issue a one-time code and email it from a notification template, in one
@@ -390,5 +404,24 @@ if (!function_exists('okv_support_whatsapp_url')) {
             : (preg_replace('/\D+/', '', $configured) ?: '2348000000000');
         $message = 'Hello OK Veggies, I need help with an order or produce question.';
         return 'https://wa.me/' . rawurlencode($number) . '?text=' . rawurlencode($message);
+    }
+}
+
+if (!function_exists('okv_make_it_right_policy_url')) {
+    /**
+     * Prefer the published Delivery Policy section without ever exposing a
+     * draft. How It Works is the safe public transition while that legal page
+     * is awaiting approval or the content store cannot be read.
+     */
+    function okv_make_it_right_policy_url(): string
+    {
+        try {
+            if (ContentPages::findPublished('delivery-policy') !== null) {
+                return '/delivery-policy#make-it-right';
+            }
+        } catch (Throwable $e) {
+            error_log('content.make_it_right_link failed: ' . $e->getMessage());
+        }
+        return '/how-it-works#make-it-right';
     }
 }

@@ -8,15 +8,22 @@
     "watch:css": "tailwindcss -i ./assets/css/src/input.css -o ./assets/css/tailwind.css --watch",
     "build:js": "node scripts/build-js.mjs",
     "build": "npm run build:css && npm run build:js",
-    "test:visual": "node scripts/tests/visual_pass.mjs"
+    "test:visual": "node scripts/tests/visual_pass.mjs",
+    "test:motion": "node scripts/tests/motion_visual_test.mjs",
+    "test:motion-coverage": "node scripts/tests/motion_coverage_test.mjs",
+    "test:axe": "node scripts/tests/axe_suite.mjs",
+    "test:lesser": "node scripts/tests/lesser_text_test.mjs",
+    "test:images": "node scripts/tests/image_contract_test.mjs",
+    "test:pr6": "node scripts/tests/lesser_text_test.mjs && node scripts/tests/image_contract_test.mjs"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.7",
     "@tailwindcss/typography": "^0.5.13",
     "autoprefixer": "^10.4.20",
+    "axe-core": "^4.13.0",
     "esbuild": "^0.24.0",
+    "playwright": "^1.49.0",
     "postcss": "^8.4.41",
-    "tailwindcss": "^3.4.10",
-    "playwright": "^1.49.0"
+    "tailwindcss": "^3.4.10"
   }
 }

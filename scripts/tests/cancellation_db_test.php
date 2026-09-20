@@ -5,6 +5,8 @@
  */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+require_once __DIR__ . '/lib/scratch_guard.php';
+
 $tests = 0; $passed = 0;
 function c_ok($condition, string $label): void {
     global $tests, $passed;
@@ -22,6 +24,7 @@ $oldCutoff = Settings::str('cancellation_cutoff_time', '18:00');
 $oldForfeit = Settings::bool('cancellation_deposit_forfeit_after_cutoff', true);
 $oldDispatchAllowed = Settings::bool('cancellation_after_dispatch_allowed', true);
 $oldDispatchForfeit = Settings::bool('cancellation_dispatched_forfeit_deposit', true);
+$oldDepositPercentage = Settings::str('deposit_percentage_default', '30');
 function c_order(int $userId, string $status, string $paymentStatus, int $paid, int $deposit, string $date, string $suffix): int {
     Database::run(
         'INSERT INTO orders
@@ -33,6 +36,26 @@ function c_order(int $userId, string $status, string $paymentStatus, int $paid, 
         [':number' => 'ZZ-CAN-' . $suffix . '-' . random_int(100, 999), ':user' => $userId,
          ':status' => $status, ':payment' => $paymentStatus, ':deposit' => $deposit,
          ':paid' => $paid, ':balance' => max(0, 1000000 - $paid), ':delivery' => $date]
+    );
+    return (int) Database::getInstance()->getConnection()->lastInsertId();
+}
+/**
+ * A pay-in-full twin of c_order: same total, but no deposit was asked for and
+ * none was recorded. Before the Owner settled the cancellation asymmetry on
+ * 20 September 2026, cancelling this order after the cutoff refunded
+ * everything, because the forfeit cap read deposit_required_subunit as 0.
+ */
+function c_full_order(int $userId, string $status, string $paymentStatus, int $paid, string $date, string $suffix): int {
+    Database::run(
+        'INSERT INTO orders
+            (order_number, user_id, customer_type, order_status, payment_option, payment_status,
+             subtotal_subunit, order_total_subunit, deposit_required_subunit, deposit_percentage,
+             amount_paid_subunit, balance_due_subunit, preferred_delivery_date)
+         VALUES (:number, :user, \'household\', :status, \'pay_in_full\', :payment,
+                 1000000, 1000000, NULL, NULL, :paid, :balance, :delivery)',
+        [':number' => 'ZZ-CAN-' . $suffix . '-' . random_int(100, 999), ':user' => $userId,
+         ':status' => $status, ':payment' => $paymentStatus, ':paid' => $paid,
+         ':balance' => max(0, 1000000 - $paid), ':delivery' => $date]
     );
     return (int) Database::getInstance()->getConnection()->lastInsertId();
 }
@@ -99,6 +122,34 @@ try {
     c_eq('manual_required', $manualDone['refund_status'], 'manual money is left visibly requiring return');
     c_eq(300000, $manualDone['manual_subunit'], 'the exact manual amount is reported');
 
+    // --- The same share for an order paid in full (Owner, 20 Sep 2026) ------
+    // A pay-in-full order records no deposit, so its late cancellation used to
+    // refund everything while a deposit customer lost 30 percent. The rule is
+    // symmetric now: the deposit share of the total is what is at stake. The
+    // delivery date is today, so with the cutoff at 23:59 the day before, the
+    // cancellation is past the cutoff.
+    Settings::set('deposit_percentage_default', 30, 'int', null);
+    Settings::flushCache();
+    $fullPaid = c_full_order($userIds[0], 'confirmed', 'paid', 1000000, date('Y-m-d'), $suffix . '-f');
+    $orderIds[] = $fullPaid;
+    Database::run(
+        'INSERT INTO payments (payment_number, user_id, order_id, provider, payment_type, expected_amount_subunit, paid_amount_subunit, status)
+         VALUES (:number, :user, :order, \'manual\', \'full\', 1000000, 1000000, \'paid\')',
+        [':number' => 'ZZ-PAY-' . $suffix . '-F', ':user' => $userIds[0], ':order' => $fullPaid]
+    );
+    $fullPaymentId = (int) Database::getInstance()->getConnection()->lastInsertId();
+    Database::run(
+        'INSERT INTO payment_transactions
+            (payment_id, provider, reference, domain, status, requested_amount_subunit, amount_subunit, customer_email, paid_at)
+         VALUES (:payment, \'manual\', :reference, \'test\', \'success\', 1000000, 1000000, :email, NOW())',
+        [':payment' => $fullPaymentId, ':reference' => 'ZZ-MAN-' . $suffix . '-F', ':email' => 'cancel-two-' . $suffix . '@example.test']
+    );
+    $fullDone = OrderCancellation::cancelForStaff($fullPaid, $userIds[0], 'customer_requested', '', true);
+    c_ok($fullDone['ok'], 'staff may cancel an order that was paid in full');
+    c_eq(300000, (int) $fullDone['forfeit_subunit'], 'a late pay-in-full cancellation keeps the same 30 percent share a deposit customer would lose');
+    c_eq(700000, (int) $fullDone['refund_subunit'], 'and returns everything above that share');
+    c_eq('deposit_kept', (string) $fullDone['forfeit_reason'], 'the outcome names the deposit rule, not a full refund');
+
     // --- An order already on the van -------------------------------------
     // The client's rule: a dispatched order can still be cancelled, but the
     // terms are different and whoever presses the button has to say so.
@@ -146,6 +197,7 @@ try {
     Settings::set('cancellation_deposit_forfeit_after_cutoff', $oldForfeit, 'bool', null);
     Settings::set('cancellation_after_dispatch_allowed', $oldDispatchAllowed, 'bool', null);
     Settings::set('cancellation_dispatched_forfeit_deposit', $oldDispatchForfeit, 'bool', null);
+    Settings::set('deposit_percentage_default', $oldDepositPercentage, 'int', null);
     Settings::flushCache();
     foreach ($orderIds as $id) {
         Database::run('DELETE FROM refund_status_history WHERE refund_id IN (SELECT id FROM refunds WHERE order_id = :id)', [':id' => $id]);

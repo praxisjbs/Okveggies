@@ -1,6 +1,8 @@
 <?php
 /** Task F customer applications, signed journal, statement and isolation. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
+
+require_once __DIR__ . '/lib/scratch_guard.php';
 $tests=0;$passed=0;
 function ccdb_ok($v,string $l):void{global $tests,$passed;$tests++;if($v){$passed++;}else{fwrite(STDERR,"  FAIL: $l\n");}}
 function ccdb_eq($e,$a,string $l):void{ccdb_ok($e===$a,$l.($e===$a?'':' (expected '.var_export($e,true).', got '.var_export($a,true).')'));}
