@@ -23,7 +23,7 @@
  *     dismisses.
  *   - Micro: add-to-basket pops with the icon stroke drawing, an invalid form
  *     shakes on x.
- *   - The 20 Sep decision: under prefers-reduced-motion motion still runs.
+ *   - The hero respects reduced motion; the older policy elsewhere is unchanged.
  *   - Resilience: with the vendored files blocked the pinned backup CDN
  *     answers; with every copy blocked the page stays visible and quiet.
  *
@@ -174,7 +174,7 @@ try {
     });
     ok(settled.seal === '1' && settled.heading === '1' && settled.sub === '1' && settled.cta === '1',
       'hero seal, heading, sub and CTA settle at full opacity');
-    ok(settled.hairline === 'matrix(1, 0, 0, 1, 0, 0)',
+    ok(settled.hairline === 'none' || settled.hairline === 'matrix(1, 0, 0, 1, 0, 0)',
       'gold hairline drew to full width (scaleX 1)', `(${settled.hairline})`);
 
     const heldBeforeScroll = await page.evaluate(() => {
@@ -360,8 +360,8 @@ try {
     await fpsContext.close();
   }
 
-  // Reduced motion is not collapsed, per the client decision of 20 Sep 2026.
-  console.log('\n[reduced motion, full motion still runs]');
+  // The approved hero policy is scoped, not a change to other page motion.
+  console.log('\n[reduced motion, hero still and unrelated motion unchanged]');
   const reduceContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const reducePage = await newPage(reduceContext);
   await reducePage.addInitScript(() => {
@@ -393,8 +393,12 @@ try {
     });
   }));
   ok(reduce.elapsed >= 200 && reduce.elapsed <= 900,
-    'a tween runs at full real-time speed with the reduced-motion preference set', `(${reduce.elapsed}ms for a 300ms tween)`);
-  ok(reduce.rise !== '0s', 'the CSS entrance is not collapsed under reduced motion', `(${reduce.rise})`);
+    'unrelated tweens retain the existing motion policy', `(${reduce.elapsed}ms for a 300ms tween)`);
+  ok(reduce.rise === '0s', 'the hero CSS entrance is disabled under reduced motion', `(${reduce.rise})`);
+  ok(await reducePage.locator('[data-okv-hero-seal]').evaluate((el) => getComputedStyle(el).transform === 'none' && getComputedStyle(el).opacity === '1'),
+    'the hero seal is in its final still state under reduced motion');
+  ok(await reducePage.locator('[data-okv-word]').count() === 0,
+    'reduced motion does not split or animate the hero heading');
   await reduceContext.close();
 
   // Vendor blocked: the pinned backup CDN carries the page.
