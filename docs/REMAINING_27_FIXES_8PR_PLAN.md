@@ -438,7 +438,7 @@ Mark `[ ]` to `[x]` only when coverage 100% and confidence at least 95% and beau
 |----|-------|-------|--------|----------|------------|--------|------------|------|
 | PR0 | Foundation and plan | - | [x] Done `a936d8e` PR #54 open, now 31 fixes | 100% docs | 98% | - | `a936d8e` | 20 Sep 2026 |
 | PR1 | Legal Truth and Delivery Truth | 1,3,14,18 | [ ] Not started | - | - | 95% | - | - |
-| PR2 | Operational Messaging + Kitchen Runs Native | 15,16,21,22,23,28 | [x] Done PR2 6 fixes: item_table in admin_new_kitchen_run, staff-initiated thread, lock before Paystack, batch N+1, one recipient helper, 3-tap native kitchen flow | 100% | 97% | 96% | - | 20 Sep 2026 |
+| PR2 | Operational Messaging + Kitchen Runs Native | 15,16,21,22,23,28 | [x] Done PR2 6 fixes: item_table in admin_new_kitchen_run, staff-initiated thread, lock before Paystack, batch N+1, one recipient helper, 3-tap native kitchen flow | 100% | 97% | 96% | `9fd9fa2` | 20 Sep 2026 |
 | PR3 | Checkout Beauty and Trust | 13 | [ ] Not started | - | - | 95% | - | - |
 | PR4 | Catalogue Truth and Analytics | 17,19,20 | [ ] Not started | - | - | 95% | - | - |
 | PR5 | Infrastructure Hardening - Live Direct | 8,9,10,11,12,24,25 | [ ] Not started | - | - | 95% maint page | - | - |
