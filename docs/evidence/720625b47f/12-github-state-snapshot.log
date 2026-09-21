@@ -1,0 +1,65 @@
+=== GitHub-side state for fixes 26 and 9(5.2) and the live deploy picture, 2026-09-20 ~15:5x UTC ===
+--- repository (fix 26 target state: private after approval; current state, read via gh):
+  private: false  default: main  created: 2026-08-25T21:16:59Z  pushed: 2026-09-20T15:54:38Z
+--- collaborators (audit item 3 of contract Section 15):
+  LoveDatax (permission: pull,push,triage)
+  tomblakeasaah196 (permission: pull,push,triage)
+  praxisjbs (permission: admin,maintain,pull,push,triage)
+--- environments (fix 9: required reviewers gate; contract Section 5.2):
+  total_count: 0
+  (0 = the protected 'production' environment PR5 was meant to create does not exist;
+   PR5 is not on main. Deploy currently runs on push to main with no human gate.)
+--- Actions secrets (audit item 3): read requires admin read on secrets; this token gets:
+  }gh: Not Found (HTTP 404)
+  '404' here means UNVERIFIED with this credential, not proven absent, the same
+  wording the contract Section 1 uses for branch protection. The deploy runs do pull
+  SFTP_HOST/SFTP_USER/SFTP_PASSWORD/MIGRATE_TOKEN from secrets and have reached the
+  migrate step, so the secrets exist and are wired (evidence 11 deploy runs).
+--- branch protection on main:
+  {"message":"Resource not accessible by integration","documentation_url":"https://docs.github.com/rest/branches/branch-protection#get-branch-protection","status":"403"}gh: Resource not accessible by integration (HTTP 403)
+  (403 = unreadable with this token: unverified, not proven absent. Section 1 posture.)
+--- recent workflow history (both red; run ids for the record):
+  2026-09-20T15:54:54Z 8ae07c5 CI: failure
+  2026-09-20T15:54:41Z 8ae07c5 CI: failure
+  2026-09-20T15:37:01Z d8e3c65 CI: failure
+  2026-09-20T15:37:01Z d8e3c65 Deploy to production (SFTP): failure
+  2026-09-20T15:34:34Z d9edcf4 CI: failure
+  2026-09-20T15:25:02Z 02645aa Deploy to production (SFTP): failure
+
+=== fix 26 conclusion ===
+Repository stays PUBLIC for this PR. The contract Section 15 order is: RC integrated
+and approved, deploy access tested, collaborator/Actions/secrets audit done, Owner
+approves impact, production no longer depends on anonymous repo access, THEN flip.
+Two of those five are false today: the RC is not approved (B1/B2 open, gate not
+green on any candidate) and deploy access is not 'tested working' - the last eight
+production deploys failed at the migration step (evidence 11). Flipping to private
+now would make a broken deploy path harder to see, not safer. The audit above is the
+first of the five steps, recorded, not executed; the flip and its retest are Owner
+actions after B1 lands. deploy.yml does not read repository visibility, so the flip
+itself will not change deploy behaviour, but the deploy must be retested after it
+per Section 15 item 2; that retest line is in the M13_REVIEW handover table.
+
+=== clarification on the two 8ae07c5 CI lines above ===
+main's tip at snapshot time was d8e3c65 (PR #64). 8ae07c5 is a push to an open
+feature branch (ci.yml runs on every push); it is not a mainline deploy and does
+not move the frozen candidate. The tip of main is re-checked at 15:55 UTC and is
+still d8e3c65. The latest FAILED PRODUCTION deploy run is 35520141104 on d8e3c65
+at 15:37 UTC, which extends the failure chain in evidence 11 to nine runs.
+=== Live-host probe from this sandbox (fix 25 re-proof attempt) ===
+2026-09-20T15:56Z: curl to https://okveggies.com.ng returns no route (HTTP code 000,
+connection failure), for the storefront and for protected paths alike. This sandbox's
+egress policy allows npm, GitHub and a few hosts; the production host is not among them.
+scripts/verify.sh therefore cannot be executed against the live base from PR7.
+
+What the live security posture IS, from CI-side evidence:
+  - deploy.yml runs 'bash scripts/verify.sh' as its last step on every deploy; with
+    nine consecutive deploys failing at the step BEFORE verify, live verify results
+    since 09:33 UTC do not exist. The last completed live verify is the be1cb99
+    deploy recorded in M13 Section 13; it predates PR1/2/4/6/8 code on the host.
+  - The contract's rule (Section 13): protected-path evidence is re-run for the frozen
+    candidate and never inherited. So fix 25's live 403 proof is PENDING, and the first
+    thing it needs is B1 gone (a deploy that reaches the verify step at all).
+  - Until then the live host is running 2026-09-20 code against a 2026-09-17-era
+    schema (050). Anyone with the host's own shell access should run, read-only:
+      bash scripts/verify.sh https://okveggies.com.ng
+    and curl -i the five protected paths; append the output here. Owner action.

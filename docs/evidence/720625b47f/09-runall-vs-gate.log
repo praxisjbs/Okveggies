@@ -1,0 +1,35 @@
+=== run_all.sh vs release_gate.sh on this box: the skip-tolerance contrast (fix 27) ===
+run_all.sh is the developer runner: it starts what it can and reports skips plainly.
+Same tree, same .env (the gate shape). Output:
+  [tests] 1. Unit suite (no database needed)
+    FAIL run.php                            3421 / 3422 assertions passed.
+             FAIL: the letterhead carries the single-ink mono-green lockup
+
+  [tests] 2. Database suites (MySQL 8 from .env)
+    skip all database suites                no database reachable from .env
+
+  [tests] 3. HTTP suites (the site answering on http://127.0.0.1:8123)
+    skip all HTTP suites                    nothing answering on http://127.0.0.1:8123
+
+  [tests] 4. Browser pass at 390px and 1440px
+    skip visual_pass.mjs                    playwright not installed (npm install)
+    skip axe_suite.mjs                      playwright not installed (npm install)
+    skip motion_visual_test.mjs             playwright not installed (npm install)
+
+  [tests] 5. Static guards
+    ok   brand-check.sh                     done
+    ok   motion_coverage_test.mjs           52 / 52 motion coverage assertions passed.
+    ok   lesser_text_test.mjs               126 / 126 lesser-text assertions passed.
+    ok   image_contract_test.mjs            98 / 98 image-contract assertions passed.
+
+  -------------------------------------------------------------
+  [tests] 4 suites passed, 1 failed, 5 skipped.
+  [tests] failing: run.php
+  [run_all.sh exit=1]
+
+  Meaning: on a box missing MySQL and Chromium, run_all prints 'N suites passed, M
+  failed, K skipped'. A release must not accept that sentence, so the release gate on
+  the same box never starts (evidence 01, case 8: 'REFUSING TO START ... nothing was
+  run'). '0 failed, 0 skipped' from release_gate.sh can therefore only ever describe
+  a run where every section actually executed: sections 1 to 9 have no skip path, and
+  each glob is counted so an empty section fails the gate ('no database suites found').

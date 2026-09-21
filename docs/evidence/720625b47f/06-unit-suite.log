@@ -1,0 +1,15 @@
+=== unit suite, CI-equivalent (no .env, PHP 8.3.33) ===
+  [test] TrustSignalsTest.php
+
+  3421 / 3422 assertions passed.
+    FAIL: the letterhead carries the single-ink mono-green lockup
+  Settings load: Undefined constant "DB_HOST"
+  1 failed.
+  3421 / 3422 assertions passed.
+exit=1 (0 = green; run.php exits non-zero on any failed assertion)
+
+=== unit suite, gate env (scripts/tests/ci.env.example as .env, BCRYPT_COST=4) ===
+  3420 / 3422 assertions passed.
+    FAIL: the letterhead carries the single-ink mono-green lockup
+    FAIL: a weaker-cost hash needs a rehash
+exit=1

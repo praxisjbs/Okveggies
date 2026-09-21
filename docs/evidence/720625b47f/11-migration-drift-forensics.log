@@ -1,0 +1,67 @@
+=== B1 forensics: why every production deploy fails at 'Apply migrations on the server' ===
+
+The chain, each link evidenced below:
+ 1. M13 contract task 1 rule: no shipped migration may be edited; numbers never reused.
+    'Confirm one complete migration series ... no shipped migration edited.'
+ 2. PR1's merge (7847cc9, PR #57, 2026-09-20 09:33 UTC) EDITED migrations/003_reference_seed.sql
+    (+6/-1: 003 now seeds Monday for business directly). 051 was correctly added as the
+    carrier for already-seeded databases, but 003 was rewritten underneath it.
+ 3. The live schema_migrations row for 003 holds the OLD file's sha256. The Migrator compares
+    hashes and refuses drift without an explicit force; the deploy step never forces:
+      'Refusing to skip : checksum changed. Create a new migration or force.'
+    public/migrate.php only forces when ?force is present in the request; deploy.yml calls it
+    without the parameter (curl -fsS -H X-Migrate-Token .../public/migrate.php).
+ 4. So the apply loop throws before touching 051-054. The grep for 'MIGRATE OK' fails,
+    the step exits 1, and every deploy since has failed identically.
+
+--- checksum evidence (git-computed, not server-state) ---
+sha256 of 003 at the last green deploy tree (f527ff4, PR #56 merge):
+  3816e5fa8f56acb9f22d1c953abf5634e8633a1e11690229425aeb160180ad47  -
+sha256 of 003 at the first red deploy tree (7847cc9, PR #1 merge) and at the frozen SHA:
+  394dae0a3e3970a547fde014998a92cf118c493d4eaf9b6dd85dcb0c6db55fe4  -
+  394dae0a3e3970a547fde014998a92cf118c493d4eaf9b6dd85dcb0c6db55fe4  -
+diff the first red deploy introduced into 003:
+  +  ('business',  1, TRUE, '16:00:00', 1),
+
+--- the failing step, per GitHub (no server log needed to see WHICH step died) ---
+  deploy run 35520141104 on d8e3c65 at 2026-09-20T15:37:01Z: FAILED
+  deploy run 35519505971 on 02645aa at 2026-09-20T15:25:02Z: FAILED
+  deploy run 35517060223 on 720625b at 2026-09-20T14:37:34Z: FAILED
+  deploy run 35516205349 on d262d0b at 2026-09-20T14:20:53Z: FAILED
+  deploy run 35516078261 on 1467fe7 at 2026-09-20T14:18:26Z: FAILED
+  deploy run 35514461643 on ef3764b at 2026-09-20T13:45:57Z: FAILED
+  deploy run 35509167789 on 980acd4 at 2026-09-20T11:55:30Z: FAILED
+  deploy run 35502653512 on 7847cc9 at 2026-09-20T09:33:48Z: FAILED
+--- run 35517060223 failed step (annotation):
+  line 14: Process completed with exit code 1.
+=== migrations and last green deploy:
+  last SUCCESSFUL deploy run: f527ff4 at 2026-09-20T06:09 UTC (PR #56, migrations up to 050).
+  first FAILED deploy run:  7847cc9 at 2026-09-20T09:33 UTC (PR #57, lands 051 + the 003 edit).
+  every deploy since fails at the same step (ef3764b, 1467fe7, d262d0b, 720625b, 02645aa...).
+
+=== Consequences on the live host, in plain terms:
+  Files uploaded, migrations not applied, 7 deploys since 09:33 UTC: live CODE contains
+  PR1/PR2/PR4/PR6/PR8 changes; live SCHEMA stops at 050. Products.source_region,
+  order_items.snapshot_category_id, contact_messages.is_staff_initiated and the 052 template
+  update have never run there. M13 Section 11.2 trigger 'a failed or partially applied
+  migration' is ACTIVE on production right now. Until B1 is resolved there is no path to a
+  gated deploy, and PR7's live items (verify.sh re-proof, cron timestamp check, controlled
+  Paystack transaction) cannot be scheduled honestly.
+
+=== Remedies, in order of preference (decision belongs to the technical release owner;
+=== PR7 recommends, it does not act on live):
+  R1 (recommended): a corrective PR that restores migrations/003_reference_seed.sql to its
+     shipped (pre-#57) bytes and lets 051 carry Monday for every database, fresh or existing.
+     051 already does exactly that (INSERT business Monday ON DUPLICATE KEY UPDATE is_active),
+     and fresh databases run the full chain 000..054 anyway, so 051 lands the decision in both
+     worlds. The only loss is that a ZERO-from-scratch database no longer gets Monday inside the
+     003 seed itself; it gets it one migration later, at 051, which the fresh-migration proof
+     (gate section 1) covers in full. This keeps 'no shipped migration is ever edited' intact
+     and unsticks every deploy without touching the live database by hand.
+  R2 (rejected here): operator runs migrate.php?force once. Force RE-APPLIES the modified
+     003 to the LIVE database and permanently records the new checksum. 003 is seed-only
+     INSERT ... ON DUPLICATE-key style, but a re-run of an edited shipped file against live
+     is exactly the improvised action contract Section 11.3 forbids: 'never improvised ... SQL
+     and never an unproved down-migration'.
+  R3: accept the drift by re-baselining - requires Owner sign-off, new migration numbering
+     from 055, and the M13 Section 17 task-1 rule recorded as consciously amended. Heaviest.

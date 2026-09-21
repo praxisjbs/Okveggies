@@ -1,0 +1,4 @@
+=== php -l sweep (exact gate find) on frozen SHA 720625b47f, PHP 8.3.33 ===
+start: 15:39:23
+php syntax: 321 file(s), 0 failed
+end: 15:42:36

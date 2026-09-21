@@ -1,0 +1,20 @@
+=== unit suite re-recorded after the ci.env.example glue fix (06 has the before) ===
+--- gate env (scripts/tests/ci.env.example copied to .env, now BCRYPT_COST=11):
+    3421 / 3422 assertions passed.
+      FAIL: the letterhead carries the single-ink mono-green lockup
+    exit=1
+--- CI-equivalent (no .env at all, the flow GitHub Actions runs today):
+    3421 / 3422 assertions passed.
+      FAIL: the letterhead carries the single-ink mono-green lockup
+    exit=1
+
+Both configurations reduce to exactly ONE failure on this SHA:
+  'the letterhead carries the single-ink mono-green lockup' (DocumentTest).
+This is a genuine product regression introduced by #62 (720625b47f): the squash
+changed includes/components/documents/document.php line 148 from the single-ink
+lockup-mono-green.svg back to the colour lockup.svg, while the assertion, the file's
+own comment (line 22, 'the mark is the single-ink mono-green lockup'), public/documents/
+invoice.php's docblock and Brand bible 3.7a all still require mono-green. It is the
+reason CI is red on main at both 720625b47f and 02645aa. One-line app fix; NOT applied
+here: PR7 carries evidence, not features. Until it lands, no SHA on main passes the
+release gate's unit section, so no SHA can be frozen green.

@@ -1,0 +1,29 @@
+=== DB-dependent gate sections: attempted on this box, refused at the database, NOT run ===
+These three commands are what a MySQL 8 host executes for gate sections 1, 5 and 9.
+Recorded here so the pack shows exactly what is missing, not an implied pass.
+
+--- php scripts/tests/db_reset.php (gate section 1: fresh chain from zero + idempotency)
+
+  DB connection failed: SQLSTATE[HY000] [2006] MySQL server has gone away
+  exit=2
+
+--- php scripts/tests/fixture_orphans.php (gate sections 5 and 9: LEFT JOIN + ZZ sweep)
+
+  FAIL: could not count users: SQLSTATE[HY000] [2006] MySQL server has gone away
+  exit=1
+
+--- php scripts/tests/seed_visual_fixture.php (gate section 7 prelude)
+
+
+  exit=255
+
+Read this file next to 06: the ORPHANS FAIL line above is a connection failure surfacing as
+a count failure, not a finding that fixtures leak. It is recorded because the gate would
+also stop here on a box this bare; it is NOT substituted for the real run.
+
+The browser suites, verify.sh and the 62 DB/HTTP suites share the same single missing
+dependency on this machine: no MySQL 8 server exists in this sandbox (apt mirrors,
+dev.mysql.com, cdn.mysql.com, conda, docker and the Playwright browser CDNs are all
+unreachable; the npm registry carries no Linux MySQL 8 binary package - mysql-memory-
+server downloads from the blocked mirrors at runtime). A full green gate run on this SHA
+therefore belongs to a MySQL 8 host, per the recipe in docs/M13_REVIEW.md section 8.
