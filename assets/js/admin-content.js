@@ -75,7 +75,11 @@
         clearErrors();
         var button = form.querySelector('[type="submit"]');
         if (button) { button.disabled = true; }
-        fetch(form.action, {
+        // The forms carry <input name="action">. That control shadows the form's
+        // action property, so form.action is the input, not the URL, and fetch
+        // would post to /admin/[object HTMLInputElement]. Read the attribute.
+        var endpoint = form.getAttribute('action') || '/api/v1/content.php';
+        fetch(endpoint, {
           method: 'POST', credentials: 'same-origin',
           headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' },
           body: new FormData(form)

@@ -63,7 +63,8 @@ okv_test_ok(str_contains($head, '/favicon.ico'), 'head links the favicon');
 okv_test_ok(str_contains($head, 'apple-touch-icon'), 'head links the apple touch icon');
 okv_test_ok(str_contains($head, 'site.webmanifest'), 'head links the web manifest');
 okv_test_ok(str_contains($head, 'og:image') && str_contains($head, 'og-image.png'), 'head sets a default social image');
-okv_test_ok(str_contains($head, 'preload') && str_contains($head, 'hanken-grotesk-latin.woff2'), 'head preloads the brand body font');
+okv_test_ok(str_contains($head, 'preload') && str_contains($head, 'href="/assets/fonts/hanken-grotesk-latin.woff2"'), 'head preloads the brand body font at the same URL the stylesheet uses');
+okv_test_ok(str_contains($head, 'name="mobile-web-app-capable"'), 'head emits the standard web-app capable meta alongside the Apple one');
 
 // A page can override the social image; the partial must respect it.
 ob_start();

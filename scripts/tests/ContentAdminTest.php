@@ -43,3 +43,4 @@ okv_test_ok(str_contains($page, '$canEdit = Rbac::can(\'content.edit\')'), 'view
 okv_test_ok(!str_contains($script, 'innerHTML'), 'content JavaScript never inserts stored data as HTML');
 okv_test_ok(str_contains($script, 'beforeunload') && str_contains($script, 'last saved draft'), 'dirty edits are warned before leaving or previewing');
 okv_test_ok(str_contains($script, "method: 'POST'") && str_contains($script, 'new FormData(form)'), 'progressive enhancement keeps POST form semantics');
+okv_test_ok(str_contains($script, "form.getAttribute('action')") && !str_contains($script, 'fetch(form.action'), 'content saves read the form action attribute, because the action field shadows form.action');
