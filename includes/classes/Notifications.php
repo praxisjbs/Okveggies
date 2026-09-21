@@ -86,6 +86,7 @@ final class Notifications
         'kitchen_run_quoted'   => ['template' => 'kitchen_run_quoted',   'label' => 'Kitchen Run priced',        'audience' => 'customer'],
         'kitchen_run_declined' => ['template' => 'kitchen_run_declined', 'label' => 'Kitchen Run declined',      'audience' => 'customer'],
         'admin_new_kitchen_run'      => ['template' => 'admin_new_kitchen_run',      'label' => 'New Kitchen Run, for staff',      'audience' => 'staff'],
+        'admin_kitchen_run_shop_priced' => ['template' => 'admin_kitchen_run_shop_priced', 'label' => 'Shop-priced Kitchen Run, for staff', 'audience' => 'staff'],
         'admin_kitchen_run_approved' => ['template' => 'admin_kitchen_run_approved', 'label' => 'Kitchen Run approved, for staff', 'audience' => 'staff'],
         'admin_kitchen_run_cancelled' => ['template' => 'admin_kitchen_run_cancelled', 'label' => 'Kitchen Run withdrawn after approval, for staff', 'audience' => 'staff'],
 
@@ -121,6 +122,7 @@ final class Notifications
         'kitchen_run_quoted'   => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'quote_expiry', 'request_url'],
         'kitchen_run_declined' => ['customer_name', 'request_number', 'decline_reason', 'request_url'],
         'admin_new_kitchen_run'      => ['customer_name', 'request_number', 'line_count', 'input_mode_label', 'pricing_mode_label', 'budget_line', 'item_table', 'admin_url'],
+        'admin_kitchen_run_shop_priced' => ['customer_name', 'request_number', 'quote_total', 'line_count', 'delivery_day', 'item_table', 'admin_url'],
         'admin_kitchen_run_approved' => ['customer_name', 'request_number', 'quote_total', 'deposit_line', 'admin_url'],
         'admin_kitchen_run_cancelled' => ['customer_name', 'request_number', 'quote_total', 'admin_url'],
 
@@ -1155,6 +1157,22 @@ final class Notifications
             return;
         }
         self::send('admin_new_kitchen_run', $context['vars'], self::staffRecipients('kitchen_runs.view'), 'kitchen_run', $requestId);
+    }
+
+    /**
+     * A shop-picked list priced itself (PRD Section 8.3). Every line came from
+     * the shop at today's price, so the quote is already with the customer and
+     * there is nothing to fill in. The team's part is to check the list and
+     * convert it once the customer approves, which is what this says, rather
+     * than the "go and price this" the ordinary new-run alert would say.
+     */
+    public static function announceKitchenRunShopPriced(int $requestId): void
+    {
+        $context = self::kitchenRunContext($requestId);
+        if ($context === null) {
+            return;
+        }
+        self::send('admin_kitchen_run_shop_priced', $context['vars'], self::staffRecipients('kitchen_runs.view'), 'kitchen_run', $requestId);
     }
 
     /**

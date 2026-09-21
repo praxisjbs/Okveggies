@@ -1,0 +1,20 @@
+=== brand-check.sh (gate section 6) on frozen SHA 720625b47f ===
+[brand] 1. em dash
+  ok   no em dash in shipped source
+[brand] 2. banned jargon
+  ok   no banned jargon
+[brand] 3. gold as a button fill
+  ok   gold is never a solid fill
+[brand] 4. arbitrary colour
+  ok   no arbitrary hex in markup
+[brand] 5. an outline button on a dark ground
+  ok   no outline button painting white on white
+[brand] 6. brand assets present
+  ok   all brand assets present
+[brand] 7. every page carries the brand head partial
+  ok   every page emits okv_head_meta()
+[brand] 8. compiled stylesheet is current with the brand
+  ok   stylesheet self-hosts the three brand faces
+
+[brand] all green. On brand.
+brand-check exit=0

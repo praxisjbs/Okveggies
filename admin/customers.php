@@ -25,6 +25,7 @@ $canSeeCredit    = Rbac::can('credit.view');
 $canSeeRuns      = Rbac::can('kitchen_runs.view');
 $canSeeOrders    = Rbac::can('orders.view');
 $canGrantCredit  = Rbac::can('credit.grant');
+$canCreate       = Rbac::can('customers.create');
 
 $filters = Customers::normaliseFilters([
     'search' => okv_input('search', ''),
@@ -34,6 +35,15 @@ $filters = Customers::normaliseFilters([
 $listing = Customers::listing($filters, $filters['page']);
 
 $selectedId = (int) okv_input('customer', 0);
+
+// A successful create redirects back with user_id set, and the new customer
+// opens automatically. A failed create bounces back with error, and the
+// screen says so in plain words instead of a silent empty form.
+$createdId   = (int) okv_input('user_id', 0);
+$justCreated = $createdId > 0;
+if ($justCreated && $selectedId === 0) { $selectedId = $createdId; }
+$createError = (string) okv_input('error', '');
+
 $customer   = $selectedId > 0 ? Customers::find($selectedId) : null;
 $notFound   = $selectedId > 0 && $customer === null;
 
@@ -73,6 +83,12 @@ $okv_admin_note  = 'Households and businesses, their addresses, their orders and
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
 
+<?php if ($justCreated && $customer): ?>
+  <p class="okv-note okv-note-ok mt-4" role="status">Customer added: <strong><?= okv_e(Customers::displayName($customer)) ?></strong>. The account stays inactive until they enter the code we send to their phone, or set a password from the sign in screen.</p>
+<?php endif; ?>
+<?php if ($createError !== '' && !($justCreated && $customer)): ?>
+  <p class="okv-note okv-note-bad mt-4" role="alert"><?= okv_e(StaffCustomers::message($createError)) ?></p>
+<?php endif; ?>
 <?php if ($notFound): ?>
   <p class="okv-note" role="status">That customer is not available. Choose one from the list below.</p>
 <?php endif; ?>
@@ -132,6 +148,53 @@ require __DIR__ . '/../includes/components/admin/header.php';
   </section>
 
   <div class="min-w-0 space-y-5">
+    <?php if ($customer === null && $canCreate): ?>
+      <section class="okv-panel" aria-labelledby="new-customer-heading" data-perm="customers.create">
+        <div class="okv-panel-head">
+          <h2 id="new-customer-heading" class="okv-panel-title">New customer</h2>
+          <span class="text-xs text-ink-60">For a first-time caller who is not in the system yet</span>
+        </div>
+        <div class="okv-panel-body">
+          <form method="post" action="/api/v1/customers.php" class="grid gap-3 sm:grid-cols-2">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="action" value="create">
+            <input type="hidden" name="return_to" value="/admin/customers.php">
+            <div>
+              <label class="okv-label" for="new-customer-first">First name</label>
+              <input class="okv-input" id="new-customer-first" name="first_name" required maxlength="100" autocomplete="off">
+            </div>
+            <div>
+              <label class="okv-label" for="new-customer-last">Last name</label>
+              <input class="okv-input" id="new-customer-last" name="last_name" required maxlength="100" autocomplete="off">
+            </div>
+            <div>
+              <label class="okv-label" for="new-customer-phone">Phone</label>
+              <input class="okv-input" id="new-customer-phone" name="phone" type="tel" required placeholder="0803 000 0000" autocomplete="off">
+            </div>
+            <div>
+              <label class="okv-label" for="new-customer-email">Email</label>
+              <input class="okv-input" id="new-customer-email" name="email" type="email" placeholder="Leave blank if they did not give one" autocomplete="off">
+            </div>
+            <div>
+              <label class="okv-label" for="new-customer-type">Account type</label>
+              <select class="okv-input" id="new-customer-type" name="customer_type">
+                <?php foreach (Customers::TYPES as $type): ?>
+                  <option value="<?= okv_e($type) ?>" <?= $type === 'household' ? 'selected' : '' ?>><?= okv_e(Customers::typeLabel($type)) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div>
+              <label class="okv-label" for="new-customer-business">Business name</label>
+              <input class="okv-input" id="new-customer-business" name="business_name" maxlength="200" placeholder="Business accounts only" autocomplete="off">
+            </div>
+            <p class="text-xs text-ink-60 sm:col-span-2">The account is created inactive. They activate it with the code we send to their phone, or set a password from the sign in screen.</p>
+            <div class="sm:col-span-2">
+              <button type="submit" class="okv-btn">Create customer</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    <?php endif; ?>
     <?php if ($customer === null): ?>
       <section class="okv-panel" aria-labelledby="customer-empty-heading">
         <div class="okv-panel-body">

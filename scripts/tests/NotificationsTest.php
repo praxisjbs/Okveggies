@@ -187,8 +187,10 @@ okv_test_ok(str_contains($creditApi, 'Notifications::announceCreditGranted'), 'a
 okv_test_ok(str_contains($checkout, 'Notifications::announceCreditChargePosted'), 'an on-account checkout tells the customer the amount and due date');
 $kitchenApi = file_get_contents(dirname(__DIR__, 2) . '/api/v1/kitchen_runs.php');
 okv_test_ok(str_contains($kitchenApi, 'Notifications::announceCreditChargePosted'), 'a converted Kitchen Run on account tells the customer the amount and due date');
+okv_test_ok(str_contains($kitchenApi, 'Notifications::announceKitchenRunShopPriced'), 'a shop-priced Kitchen Run tells staff to check and convert it, not to price it');
 
 $dispatcher = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Notifications.php');
+okv_test_ok(str_contains($dispatcher, "'admin_kitchen_run_shop_priced'"), 'a shop-priced Kitchen Run is a registered staff alert');
 okv_test_ok(str_contains($dispatcher, "'credit_approved'"), 'credit approved is a registered event');
 okv_test_ok(str_contains($dispatcher, "'credit_declined'"), 'credit declined is a registered event');
 okv_test_ok(str_contains($dispatcher, "'credit_charge_posted'"), 'credit charge is a registered event');

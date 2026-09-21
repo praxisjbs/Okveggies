@@ -10,9 +10,9 @@
  * copies; failing that the page stays still and fully working, and the header's
  * dead man switch uncovers content after 2.5 seconds.
  * House rules: transform and opacity only, never width or height; will-change
- * cleared at tween end; entrances generous at 400 to 650ms; per the client
- * decision of 20 Sep 2026 prefers-reduced-motion does not collapse motion and
- * is ignored on purpose; no colour is set here. Presets: ui-ux-pro-max GSAP
+ * cleared at tween end; entrances generous at 400 to 650ms. The homepage
+ * hero now respects reduced motion; the older policy elsewhere is unchanged.
+ * No colour is set here. Presets: ui-ux-pro-max GSAP
  * catalogue (plan Section 12.4).
  */
 (function () {
@@ -23,6 +23,7 @@
   var root = document.documentElement;
   var started = false;
   var touched = [];
+  var heroMedia = null;
   // The scroll entrance family. A component opts in by carrying one of these
   // classes, so new screens move with no JavaScript anywhere.
   var GROUP_SEL = '.okv-panel, .okv-card, .okv-step-card, .okv-empty, .okv-enter, '
@@ -49,6 +50,7 @@
   /** If anything faults, hand the page back to the stylesheet untouched. */
   function fallBackToStatic() {
     try {
+      if (heroMedia) { heroMedia.revert(); heroMedia = null; }
       if (window.ScrollTrigger) { ScrollTrigger.getAll().forEach(function (t) { t.kill(); }); }
       if (window.gsap) { gsap.killTweensOf('*'); }
     } catch (e) { /* the static page is the goal */ }
@@ -100,33 +102,49 @@
     var hero = document.querySelector('[data-okv-hero]');
     if (!hero) { return; }
     var section = hero.closest('section') || hero;
-    var tl = gsap.timeline();
-    var seal = hero.querySelector('[data-okv-hero-seal]');
     var h1 = hero.querySelector('h1');
-    var sub = hero.querySelector('[data-okv-hero-sub]');
-    var cta = hero.querySelector('[data-okv-hero-cta]');
-    var hairline = hero.querySelector('[data-okv-hero-hairline]');
-    if (seal) { remember(seal); tl.fromTo(seal, { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.2)' }, 0); }
-    var headingStart = 0.15;
-    var headingEnd = headingStart + 0.55;
-    if (h1) {
-      var spans = remember(splitWords(h1));
-      tl.fromTo(spans, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.55, ease: 'power2.out', stagger: 0.04 }, headingStart);
-      headingEnd = headingStart + 0.55 + 0.04 * Math.max(spans.length - 1, 0);
-    }
-    var follow = headingEnd + 0.12;
-    if (sub) { remember(sub); tl.fromTo(sub, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, follow); }
-    if (cta) { remember(cta); tl.fromTo(cta, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, follow); }
-    if (hairline) { remember(hairline); tl.fromTo(hairline, { scaleX: 0 }, { scaleX: 1, duration: 0.9, ease: 'expo.out', transformOrigin: 'left center' }, follow); }
-    // The documentary photograph drifts 8% slower than the page, inside its
-    // own clipping figure, so no layout ever moves. The extra scale covers the
-    // drift so no edge shows.
-    var photo = hero.querySelector('[data-okv-parallax]');
-    if (photo) {
-      remember(photo);
-      gsap.set(photo, { scale: 1.08 });
-      gsap.to(photo, { yPercent: -8, ease: 'none', scrollTrigger: { trigger: section, start: 'top top', end: 'bottom top', scrub: 1 } });
-    }
+    var headingText = h1 ? h1.textContent : '';
+    heroMedia = gsap.matchMedia();
+    // MatchMedia reverts the timeline and both triggers if the preference
+    // changes mid-entrance. CSS already exposes the final still state.
+    heroMedia.add('(prefers-reduced-motion: no-preference)', function () {
+      var tl = gsap.timeline({ paused: true, defaults: { clearProps: 'transform,opacity,will-change' } });
+      var seal = hero.querySelector('[data-okv-hero-seal]');
+      var sub = hero.querySelector('[data-okv-hero-sub]');
+      var cta = hero.querySelector('[data-okv-hero-cta]');
+      var hairline = hero.querySelector('[data-okv-hero-hairline]');
+      if (seal) { remember(seal); tl.fromTo(seal, { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.2)' }, 0); }
+      var headingStart = 0.15;
+      var headingEnd = headingStart + 0.55;
+      if (h1) {
+        var spans = remember(splitWords(h1));
+        tl.fromTo(spans, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.55, ease: 'power2.out', stagger: 0.04 }, headingStart);
+        headingEnd = headingStart + 0.55 + 0.04 * Math.max(spans.length - 1, 0);
+      }
+      var follow = headingEnd + 0.12;
+      if (sub) { remember(sub); tl.fromTo(sub, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, follow); }
+      if (cta) { remember(cta); tl.fromTo(cta, { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, follow); }
+      if (hairline) { remember(hairline); tl.fromTo(hairline, { scaleX: 0 }, { scaleX: 1, duration: 0.9, ease: 'expo.out', transformOrigin: 'left center' }, follow); }
+      // The photo, not the wash or copy, owns the cinematic entrance and
+      // 7% parallax. CSS overscan covers the drift at the final scale of 1.
+      var photo = section.querySelector('[data-okv-parallax]');
+      if (photo) {
+        remember(photo);
+        tl.fromTo(photo, { scale: 1.06, willChange: 'transform' }, { scale: 1, duration: 8, ease: 'power2.out', clearProps: 'will-change' }, 0);
+        gsap.fromTo(photo, { yPercent: 0 }, { yPercent: -7, ease: 'none', scrollTrigger: { trigger: section, start: 'top top', end: 'bottom top', scrub: 1 } });
+      }
+      var finish = function () { tl.progress(1).pause(); };
+      var play = function () { if (hero.contains(document.activeElement)) { finish(); } else { tl.restart(); } };
+      ScrollTrigger.create({ trigger: section, start: 'top bottom', end: 'bottom top', onEnter: play, onEnterBack: play, onLeave: finish, onLeaveBack: finish });
+      var bounds = section.getBoundingClientRect();
+      if (bounds.top < window.innerHeight && bounds.bottom > 0) { play(); } else { finish(); }
+      // Keyboard focus must never wait behind an invisible CTA entrance.
+      hero.addEventListener('focusin', finish);
+      return function () {
+        hero.removeEventListener('focusin', finish);
+        if (h1) { h1.textContent = headingText; }
+      };
+    });
   }
 
   // ---- Scroll entrances: every panel and card rises 20px, staggered ---------
@@ -311,6 +329,7 @@
     document.addEventListener('pointerdown', function (event) {
       var btn = event.target.closest ? event.target.closest('.okv-btn, .okv-btn-outline, .okv-btn-outline-invert, button') : null;
       if (!btn || btn.disabled || btn.getAttribute('aria-disabled') === 'true' || /active:scale/.test(btn.className)) { return; }
+      if (btn.closest('[data-okv-hero]') && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
       remember(btn);
       gsap.to(btn, { scale: 0.98, duration: 0.1, ease: 'power2.out', overwrite: 'auto' });
       var release = function () { gsap.to(btn, { scale: 1, duration: 0.25, ease: 'back.out(2)', overwrite: 'auto', clearProps: 'transform' }); };

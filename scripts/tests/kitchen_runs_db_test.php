@@ -168,6 +168,64 @@ try {
     $cheatLine = Database::one('SELECT unit_price_subunit FROM kitchen_run_items WHERE request_id = :id', [':id' => (int) $cheat['id']]);
     krdb_eq((int) $product['current_price_subunit'], (int) $cheatLine['unit_price_subunit'], 'a price posted against a shop item is overwritten by the real one');
 
+    // -----------------------------------------------------------------------
+    // 1b. A shop-picked list quotes itself (PRD 8.3). Every line carries a
+    // shop price read on the server, so the request lands as Quoted the
+    // moment it is sent and the customer only has to approve it.
+    // -----------------------------------------------------------------------
+    $shopPriced = KitchenRunWorkflow::submit($users[1], 'household', $address + $askFor + [
+        'input_mode' => 'catalogue',
+        'pricing_mode' => 'by_us',
+        'items' => [
+            ['product_id' => $product['id'], 'quantity' => '2.000'],
+            ['product_id' => $product['id'], 'quantity' => '1.000'],
+        ],
+    ]);
+    $requestIds[] = (int) $shopPriced['id'];
+    $shopExpected = 3 * (int) $product['current_price_subunit'];
+
+    krdb_eq('quoted', (string) $shopPriced['status'], 'a shop-picked list is quoted the moment it is sent');
+    krdb_eq($shopExpected, (int) $shopPriced['total_subunit'], 'the automatic quote is the exact sum of the shop line totals, in kobo');
+    krdb_eq(2, (int) $shopPriced['line_count'], 'both shop lines reach the quote');
+
+    $shopRow = Database::one(
+        'SELECT status, quoted_total_subunit, estimated_total_subunit, quoted_at, deposit_subunit, state_version
+           FROM kitchen_run_requests WHERE id = :id',
+        [':id' => (int) $shopPriced['id']]
+    );
+    krdb_eq('quoted', (string) $shopRow['status'], 'the row itself is Quoted');
+    krdb_eq($shopExpected, (int) $shopRow['quoted_total_subunit'], 'the quoted total is stored on the row');
+    krdb_eq($shopExpected, (int) $shopRow['estimated_total_subunit'], 'the estimated total is the same figure');
+    krdb_ok($shopRow['quoted_at'] !== null, 'the quote is stamped, so the quote window starts at send-off');
+    krdb_eq(null, $shopRow['deposit_subunit'], 'an automatic quote invents no deposit');
+
+    $shopTrail = KitchenRuns::history((int) $shopPriced['id']);
+    krdb_eq(2, count($shopTrail), 'the trail shows the list arriving and the prices attaching');
+    krdb_eq('quoted', (string) $shopTrail[1]['new_status'], 'the second line of the trail is the quote');
+
+    $shopApproved = KitchenRunWorkflow::approve((int) $shopPriced['id'], $users[1], (int) $shopRow['state_version']);
+    krdb_eq('approved', (string) $shopApproved['status'], 'an automatic quote is approved the ordinary way');
+
+    // The lists that must NOT quote themselves, each for its own reason.
+    $openBudgetShop = KitchenRunWorkflow::submit($users[1], 'household', $address + $askFor + [
+        'input_mode' => 'catalogue',
+        'pricing_mode' => 'by_us',
+        'is_open_budget' => true,
+        'spend_cap_subunit' => 500000,
+        'items' => [['product_id' => $product['id'], 'quantity' => '1.000']],
+    ]);
+    $requestIds[] = (int) $openBudgetShop['id'];
+    krdb_eq('submitted', (string) $openBudgetShop['status'], 'an open budget waits for a person, whatever its lines are');
+
+    $staffTypedShop = KitchenRunWorkflow::submit($users[1], 'household', $address + $askFor + [
+        'input_mode' => 'catalogue',
+        'pricing_mode' => 'by_us',
+        'arrived_by' => 'whatsapp',
+        'items' => [['product_id' => $product['id'], 'quantity' => '1.000']],
+    ], null, $staffId);
+    $requestIds[] = (int) $staffTypedShop['id'];
+    krdb_eq('submitted', (string) $staffTypedShop['status'], 'a list a colleague typed in is priced by that colleague, not by the clock');
+
     // A submission with no address is refused, because it becomes an order.
     krdb_refuses(
         static fn() => KitchenRunWorkflow::submit($users[0], 'household', $askFor + ['input_mode' => 'custom', 'pricing_mode' => 'by_us', 'items' => [['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => $unitId]]]),

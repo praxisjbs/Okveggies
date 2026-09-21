@@ -169,6 +169,47 @@
     @apply inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-mist bg-white px-4 text-sm font-medium text-ink-60;
   }
   .okv-filter-chip-active { @apply border-forest bg-forest text-white; }
+
+  /*
+   * Category buttons, home page only: the chip strip under the hero and the
+   * Shop by category grid. The button reads as one colour, forest, and the
+   * photo of one product from that aisle sits behind a heavy wash as a faint
+   * texture. Hover lifts the wash (the photo becomes visible) and the card
+   * version slides a Shop-this-aisle line up from the bottom. The press state
+   * answers a tap on touch screens, where there is no hover. An empty aisle
+   * has no photo, keeps the plain ground and its Being sourced tag, so a
+   * missing picture never reads as a broken one.
+   */
+  /* The group class rides in the markup, because Tailwind forbids it in @apply. */
+  .okv-cat-chip {
+    @apply relative isolate inline-flex min-h-[52px] shrink-0 items-center gap-2 overflow-hidden rounded-full border border-forest/40 bg-forest px-4 text-sm font-semibold text-white
+           transition duration-botanical ease-botanical
+           hover:border-forest hover:shadow-okv-1 active:scale-[0.98];
+  }
+  .okv-cat-chip-photo {
+    @apply pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-10
+           transition duration-botanical ease-botanical;
+  }
+  .okv-cat-chip:hover .okv-cat-chip-photo,
+  .okv-cat-chip:focus-visible .okv-cat-chip-photo { @apply opacity-35; }
+
+  .okv-cat-card {
+    @apply relative isolate flex min-h-[136px] flex-col justify-between overflow-hidden rounded-lg border border-forest/40 bg-forest p-4 text-white
+           transition duration-botanical ease-botanical
+           hover:-translate-y-1 hover:border-forest hover:shadow-okv-2 active:scale-[0.98];
+  }
+  .okv-cat-card-photo {
+    @apply pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-10
+           transition duration-botanical ease-botanical;
+  }
+  .okv-cat-card:hover .okv-cat-card-photo,
+  .okv-cat-card:focus-visible .okv-cat-card-photo { @apply opacity-35; }
+  .okv-cat-card-cta {
+    @apply flex translate-y-full items-center justify-between gap-2 border-t border-white/15 bg-forest/90 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.14em]
+           transition duration-botanical ease-botanical;
+  }
+  .okv-cat-card:hover .okv-cat-card-cta,
+  .okv-cat-card:focus-visible .okv-cat-card-cta { @apply translate-y-0; }
   .okv-category-link {
     @apply flex min-h-[44px] items-center justify-between gap-2 rounded-md px-3 text-sm font-medium text-ink-60 transition duration-botanical ease-botanical hover:bg-forest-tint hover:text-forest;
   }
@@ -176,6 +217,40 @@
 
   /* Page container width. */
   .okv-container { @apply max-w-content mx-auto px-4 md:px-8; }
+
+  /*
+   * Homepage only. The photo and forest wash fill the same unframed viewport.
+   * Vertical image overscan covers the 7% scroll drift even at scale 1.
+   * No height is animated, and the static composition needs no JavaScript.
+   */
+  .okv-home-hero {
+    @apply relative isolate grid items-center overflow-hidden;
+    min-height: 100vh;
+    min-height: 100svh;
+    overflow-wrap: anywhere;
+  }
+  .okv-home-hero-media { @apply absolute inset-0 overflow-hidden; }
+  .okv-home-hero-image {
+    @apply absolute left-0 top-0;
+    height: 116%;
+    object-position: 58% center;
+  }
+  .okv-home-hero-wash {
+    @apply pointer-events-none absolute inset-0;
+    background: linear-gradient(160deg,
+      theme('colors.forest.DEFAULT / 76%') 0%,
+      theme('colors.forest.DEFAULT / 84%') 50%,
+      theme('colors.forest.DEFAULT / 90%') 100%);
+  }
+  @screen md {
+    .okv-home-hero-image { object-position: center; }
+    .okv-home-hero-wash {
+      background: linear-gradient(90deg,
+        theme('colors.forest.DEFAULT / 80%') 0%,
+        theme('colors.forest.DEFAULT / 77%') 50%,
+        theme('colors.forest.DEFAULT / 74%') 100%);
+    }
+  }
 
   /* Slide-up sheets on mobile that become a centred dialog on wider screens.
      The 24px top radius and the blurred backdrop are the house sheet pattern. */
@@ -257,10 +332,9 @@
  * the 2.5 second dead man switch in the inline glue and okv-motion.js itself.
  *
  * okv-motion-on means GSAP owns the element now, so the plain CSS entrances
- * stand down rather than run twice. The hero container's animate-okv-rise is
- * deliberately left alone: its children are hidden while it plays, and the
- * homepage browser test asserts the CSS animation is still full under the
- * reduced-motion preference.
+ * stand down rather than run twice. The homepage hero has no CSS entrance:
+ * its timeline is owned here only when motion is allowed. The scoped reduced
+ * motion rule below also keeps its copy visible before the controller loads.
  */
 .okv-motion-pending [data-okv-hero-seal],
 .okv-motion-pending [data-okv-hero] h1,
@@ -271,6 +345,19 @@
   .okv-enter, [data-product-card], [data-combo-card], [data-faq-item],
   [data-kr-mode], [data-payment-options] > .okv-choice, [data-okv-rise]) {
   opacity: 0;
+}
+
+/* This hero's approved still state takes precedence over the older site policy. */
+@media (prefers-reduced-motion: reduce) {
+  [data-okv-hero], [data-okv-hero] * {
+    animation: none !important;
+    transition: none !important;
+  }
+  [data-okv-hero] :is(h1, [data-okv-word], [data-okv-hero-seal],
+    [data-okv-hero-sub], [data-okv-hero-cta], [data-okv-hero-hairline], [data-okv-parallax]) {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 .okv-motion-on .okv-sheet { animation: none; }

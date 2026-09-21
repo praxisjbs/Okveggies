@@ -1,0 +1,78 @@
+=== suite inventory on the frozen SHA (the gate's own globs) ===
+database suites glob scripts/tests/*_db_test.php : 36
+  scripts/tests/admin_dashboard_db_test.php
+  scripts/tests/admin_notifications_db_test.php
+  scripts/tests/auth_db_test.php
+  scripts/tests/basket_db_test.php
+  scripts/tests/cancellation_db_test.php
+  scripts/tests/checkout_db_test.php
+  scripts/tests/combos_db_test.php
+  scripts/tests/contact_admin_db_test.php
+  scripts/tests/contact_db_test.php
+  scripts/tests/content_pages_db_test.php
+  scripts/tests/credit_admin_db_test.php
+  scripts/tests/credit_customer_db_test.php
+  scripts/tests/credit_orders_db_test.php
+  scripts/tests/customer_auth_db_test.php
+  scripts/tests/customer_notifications_db_test.php
+  scripts/tests/customers_db_test.php
+  scripts/tests/delivery_db_test.php
+  scripts/tests/issue_customer_outcome_db_test.php
+  scripts/tests/issue_notifications_db_test.php
+  scripts/tests/issue_reports_db_test.php
+  scripts/tests/issue_resolutions_db_test.php
+  scripts/tests/issue_workflow_db_test.php
+  scripts/tests/kitchen_lists_db_test.php
+  scripts/tests/kitchen_runs_db_test.php
+  scripts/tests/manifest_db_test.php
+  scripts/tests/manual_operations_db_test.php
+  scripts/tests/notifications_db_test.php
+  scripts/tests/order_lifecycle_db_test.php
+  scripts/tests/payments_db_test.php
+  scripts/tests/pricing_db_test.php
+  scripts/tests/pro_dashboard_db_test.php
+  scripts/tests/pro_orders_db_test.php
+  scripts/tests/reference_seed_db_test.php
+  scripts/tests/refund_cancellation_db_test.php
+  scripts/tests/settings_db_test.php
+  scripts/tests/staff_password_reset_db_test.php
+http suites glob scripts/tests/*_http_test.php   : 26
+  scripts/tests/admin_dashboard_http_test.php
+  scripts/tests/admin_notifications_http_test.php
+  scripts/tests/cancellation_http_test.php
+  scripts/tests/contact_admin_http_test.php
+  scripts/tests/contact_http_test.php
+  scripts/tests/content_admin_http_test.php
+  scripts/tests/credit_checkout_http_test.php
+  scripts/tests/customer_http_test.php
+  scripts/tests/customer_notifications_http_test.php
+  scripts/tests/delivery_http_test.php
+  scripts/tests/homepage_http_test.php
+  scripts/tests/issue_photos_http_test.php
+  scripts/tests/issue_reports_http_test.php
+  scripts/tests/issue_resolutions_http_test.php
+  scripts/tests/issue_workflow_http_test.php
+  scripts/tests/kitchen_runs_http_test.php
+  scripts/tests/m12_storefront_access_http_test.php
+  scripts/tests/manual_operations_http_test.php
+  scripts/tests/order_lifecycle_http_test.php
+  scripts/tests/order_trail_http_test.php
+  scripts/tests/product_uploads_http_test.php
+  scripts/tests/public_content_http_test.php
+  scripts/tests/role_leak_matrix_http_test.php
+  scripts/tests/settings_http_test.php
+  scripts/tests/sitemap_http_test.php
+  scripts/tests/smtp_delivery_http_test.php
+unit files *Test.php                              : 57
+browser/other .mjs suites                         : 11
+migrations                                        : 47 files, highest 054_order_item_snapshot_category.sql
+
+=== guard coverage: every fixture-writing file must require lib/scratch_guard.php ===
+  UNGUARDED: scripts/tests/db_reset.php
+  UNGUARDED: scripts/tests/seed_visual_fixture.php
+unguarded fixture writers: 2 (0 = every file that writes rows carries the guard)
+files requiring scratch_guard in total: 66
+
+=== the gate runs both globs; nothing on disk can be forgotten by it ===
+  301:for file in scripts/tests/*_db_test.php; do
+  309:for file in scripts/tests/*_http_test.php; do

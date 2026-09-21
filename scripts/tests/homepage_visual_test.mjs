@@ -42,6 +42,15 @@ try {
     });
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
+    await page.addInitScript(() => {
+      window.__homeVitals = { cls: 0, lcp: 0 };
+      new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => { if (!entry.hadRecentInput) { window.__homeVitals.cls += entry.value; } });
+      }).observe({ type: 'layout-shift', buffered: true });
+      new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => { window.__homeVitals.lcp = entry.startTime; });
+      }).observe({ type: 'largest-contentful-paint', buffered: true });
+    });
     const response = await page.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 30000 });
     ok(response?.status() === 200, `${viewport.name}: homepage returns 200`);
     ok(errors.length === 0, `${viewport.name}: homepage has no JavaScript errors`, errors.join(', '));
@@ -78,8 +87,11 @@ try {
       });
       ok(undersized.length === 0, `${viewport.name}: visible controls meet the 44px target`, undersized.join(', '));
     }
-    const motion = await page.locator('.animate-okv-rise').evaluate((element) => getComputedStyle(element).animationDuration);
-    ok(parseFloat(motion) > 0.1, `${viewport.name}: motion is full even with the reduced-motion preference set`, `(${motion})`);
+    const still = await page.locator('[data-okv-hero]').evaluate((hero) =>
+      [hero, ...hero.querySelectorAll('h1, [data-okv-hero-seal], [data-okv-parallax], [data-okv-hero-cta]')]
+        .every((element) => getComputedStyle(element).animationName === 'none'
+          && getComputedStyle(element).transform === 'none' && getComputedStyle(element).opacity === '1'));
+    ok(still, `${viewport.name}: the hero honours reduced motion with a complete final still state`);
     const metadata = await page.evaluate(() => ({
       canonical: document.querySelector('link[rel=canonical]')?.href || '',
       og: document.querySelector('meta[property="og:url"]')?.content || '',
@@ -88,10 +100,7 @@ try {
 
     const performance = await page.evaluate(() => {
       const paint = performance.getEntriesByType('paint').find((entry) => entry.name === 'first-contentful-paint');
-      const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
-      const cls = performance.getEntriesByType('layout-shift')
-        .filter((entry) => !entry.hadRecentInput)
-        .reduce((sum, entry) => sum + entry.value, 0);
+      const { cls, lcp } = window.__homeVitals;
       const bytes = performance.getEntriesByType('resource').reduce((sum, entry) => sum + (entry.transferSize || entry.encodedBodySize || 0), 0);
       const navigation = performance.getEntriesByType('navigation')[0];
       const vh = window.innerHeight;
@@ -110,7 +119,7 @@ try {
       });
       return {
         fcp: paint?.startTime || 0,
-        lcp: lcpEntries.length ? lcpEntries[lcpEntries.length - 1].startTime : 0,
+        lcp,
         cls,
         bytes,
         words,
@@ -120,7 +129,7 @@ try {
       };
     });
     // Before (M12, no hero photo, same frozen profile): FCP 3,780ms.
-    const lcp = performance.lcp > 0 ? performance.lcp : performance.fcp;
+    const lcp = performance.lcp;
     ok(performance.fcp > 0 && performance.fcp <= 3000, `${viewport.name}: throttled first contentful paint is 3.0s or less`,
       `(fcp ${Math.round(performance.fcp)}ms, was 3780ms, response ${Math.round(performance.responseStart)}-${Math.round(performance.responseEnd)}ms, dom ${Math.round(performance.domContentLoaded)}ms)`);
     ok(lcp > 0 && lcp <= 4000, `${viewport.name}: throttled largest contentful paint is 4.0s or less`,

@@ -12,6 +12,9 @@ uploads/*/*
 
 # Logs and OS cruft.
 *.log
+# Exception: release evidence logs ARE the deliverable (PR7, M13). Scoped to the
+evidence directory only; real error logs stay ignored.
+!docs/evidence/**/*.log
 error_log
 .DS_Store
 Thumbs.db

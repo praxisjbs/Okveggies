@@ -1,0 +1,27 @@
+=== PR7 gate-glue self-test: the two checks added for fix 5/27 acceptance ===
+
+The plan's gate spec is 'unit 3,374+ via run.php'. run.php's EXIT CODE alone
+cannot see assertions vanishing (0 run, 0 fail = exit 0). release_gate.sh now
+parses the count line and pins the floor; it also gained the shell syntax sweep
+the contract Section 6 lists and the gate previously lacked. Both additions
+verified against synthetic and real inputs, same parsing code as in the file:
+
+  f1  120 / 121 assertions passed.                   -> total=121   FAIL unit floor (121 < 3374)
+  f2  0 / 0 assertions passed.                       -> total=0     FAIL unit floor (0 < 3374)
+  f3  3422 / 3422 assertions passed.
+All green.      -> total=3422  ok unit floor (3422 >= 3374)
+  f4  no summary line (suite died mid-run)           -> total=0     FAIL unit floor (0 < 3374)
+  f5  [test] AdminCommandPaletteTest.php
+[test] Ad   -> total=3422  ok unit floor (3422 >= 3374)
+
+  (f5 is the real unit log from 06: it FAILS the gate via run.php's own exit 1;
+   the floor then correctly abstains rather than double-reporting. A shrinking
+   suite f1, an emptied suite f2 and a crashed run f4 are all caught by the floor.)
+
+--- shell syntax sweep over the repo, same find the gate uses ---
+  shell syntax: 9 file(s), 0 failed (includes release_gate.sh itself, now edited)
+
+--- release_gate.sh after edit passes its own syntax gate, and the full gate still
+--- refuses to start on this box at the database (unchanged fail-closed posture):
+  bash -n release_gate.sh: ok
+  [gate] REFUSING TO START: the database in .env is not reachable.

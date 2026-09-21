@@ -1,0 +1,66 @@
+=== release_gate.sh preflight refusals, frozen SHA 720625b47f, 20 Sep 2026 ===
+=== The gate cannot be talked into a partial run: every unsafe or missing input is a
+=== refusal (exit 2) that names the remedy. PHP 8.3.33 via @php-wasm/node, no MySQL present.
+
+--- case 1: .env absent entirely (file moved away, nothing left behind)
+    [gate] REFUSING TO START. The release gate runs every suite or nothing.
+           - .env is missing. Run: cp scripts/tests/ci.env.example .env
+           - playwright is not installed. Run: npm install && npx playwright install chromium
+           - (or point OKV_PLAYWRIGHT_PATH at a playwright module already on this machine)
+    [gate] Nothing was run and nothing was written.
+    exit=2
+
+--- case 2: APP_ENV=production
+    [gate] REFUSING TO START. The release gate runs every suite or nothing.
+           - APP_ENV=production in .env. The gate writes fixture rows and will not run against production.
+           - playwright is not installed. Run: npm install && npx playwright install chromium
+           - (or point OKV_PLAYWRIGHT_PATH at a playwright module already on this machine)
+    [gate] Nothing was run and nothing was written.
+    exit=2
+
+--- case 3: trailing comment (the exact form cut -d= would miss; the shared parser catches it)
+    [gate] REFUSING TO START. The release gate runs every suite or nothing.
+           - APP_ENV=production in .env. The gate writes fixture rows and will not run against production.
+           - playwright is not installed. Run: npm install && npx playwright install chromium
+           - (or point OKV_PLAYWRIGHT_PATH at a playwright module already on this machine)
+    [gate] Nothing was run and nothing was written.
+    exit=2
+
+--- case 4: quoted value
+    [gate] REFUSING TO START. The release gate runs every suite or nothing.
+           - APP_ENV=production in .env. The gate writes fixture rows and will not run against production.
+           - playwright is not installed. Run: npm install && npx playwright install chromium
+           - (or point OKV_PLAYWRIGHT_PATH at a playwright module already on this machine)
+    [gate] Nothing was run and nothing was written.
+    exit=2
+
+--- case 5: APP_ENV=testing but DB_NAME lacks the _test suffix
+    [gate] REFUSING TO START. The release gate runs every suite or nothing.
+           - DB_NAME is 'okveggies_live_shadow'. A destructive release run needs a name ending in _test.
+           - playwright is not installed. Run: npm install && npx playwright install chromium
+           - (or point OKV_PLAYWRIGHT_PATH at a playwright module already on this machine)
+    [gate] Nothing was run and nothing was written.
+    exit=2
+
+--- case 6: APP_ENV line absent, DB_NAME lacks the _test suffix
+    [gate] REFUSING TO START. The release gate runs every suite or nothing.
+           - DB_NAME is 'okveggies'. A destructive release run needs a name ending in _test.
+           - playwright is not installed. Run: npm install && npx playwright install chromium
+           - (or point OKV_PLAYWRIGHT_PATH at a playwright module already on this machine)
+    [gate] Nothing was run and nothing was written.
+    exit=2
+
+--- case 7: production PLUS the deliberate DB override; the override unlocks the name rule, never production
+    [gate] REFUSING TO START. The release gate runs every suite or nothing.
+           - APP_ENV=production in .env. The gate writes fixture rows and will not run against production.
+           - playwright is not installed. Run: npm install && npx playwright install chromium
+           - (or point OKV_PLAYWRIGHT_PATH at a playwright module already on this machine)
+    [gate] Nothing was run and nothing was written.
+    exit=2
+
+=== case 8: valid gate env (scripts/tests/ci.env.example). Static preflight passes; the
+=== run still refuses, because no MySQL 8 instance answers. No section runs silently.
+    [gate] REFUSING TO START: the database in .env is not reachable.
+    exit=2
+=== OKV_PLAYWRIGHT_PATH is set only so the database is the reported blocker on this box;
+=== unset, the same output adds 'playwright is not installed' to the list of reasons.
