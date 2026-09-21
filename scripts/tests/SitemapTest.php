@@ -44,3 +44,14 @@ okv_test_ok(str_contains($apache, 'RewriteRule ^sitemap\\.xml$ sitemap.php [END]
 okv_test_ok(str_contains($robots, 'Sitemap: https://okveggies.com.ng/sitemap.xml'), 'robots.txt advertises the canonical sitemap URL');
 okv_test_ok(str_contains($footer, 'ContentPages::publishedNavigation') && str_contains($footer, "['path']"), 'footer resolves published paths from ContentPages');
 okv_test_ok(!str_contains($nav, "'href' => '/our-story'"), 'navigation config carries no duplicate managed-page path');
+
+// The auth, transactional and backend surfaces stay out of the index: robots.txt
+// disallows the token and utility endpoints, and the pages a crawler must still
+// fetch (sign in, register, password reset, basket, checkout) carry noindex.
+foreach (['/public/auth/', '/public/documents/', '/public/payment/', '/public/order.php', '/public/issue_photo.php', '/public/kitchen_run_attachment.php', '/public/cron.php', '/public/healthcheck.php', '/public/migrate.php', '/public/setup.php'] as $backend) {
+    okv_test_ok(str_contains($robots, 'Disallow: ' . $backend), "robots.txt keeps crawlers out of $backend");
+}
+foreach (['account.php', 'cart.php', 'checkout.php'] as $noindexed) {
+    $source = (string) file_get_contents($root . '/' . $noindexed);
+    okv_test_ok(str_contains($source, '<meta name="robots" content="noindex">'), "$noindexed carries noindex so the auth and transactional pages stay out of the index");
+}

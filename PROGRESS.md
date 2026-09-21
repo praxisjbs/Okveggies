@@ -740,6 +740,14 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 
 ## Session log (newest first)
 
+### 21 Sep 2026, sitemap gaps on main closed: the auth page noindexed, robots.txt covering public/
+
+- Main received the complete sitemap while a parallel branch carried its own (the polish pass, pull request 71): the generated /sitemap.xml with lastmod dates, the robots.txt discovery line, the 503 on database failure and both test suites. That parallel branch was rebuilt on top of main so it carries only what main still lacked, rather than a second sitemap.
+- Gap 1: account.php, the sign in, create account and password reset page, emitted no robots meta, so the one auth page a crawler could reach was indexable while cart and checkout were not. It now carries the same `<meta name="robots" content="noindex">`.
+- Gap 2: robots.txt disallowed the admin panel, the Pro Portal and the API but said nothing about the token and utility endpoints under public/ (auth, documents, payment callback, order trail, issue photos, kitchen run attachments, cron, healthcheck, migrate, setup). All ten are now Disallowed.
+- SitemapTest.php pins both gaps shut: every new Disallow line, and the noindex meta present on account.php, cart.php and checkout.php, so a future edit cannot silently drop one.
+- Local verification: scripts/brand-check.sh green. The unit runner belongs to CI, as this container has no PHP or database.
+
 ### 21 Sep 2026, the polish pass made green, and main integrated
 
 - The polish pass below went to CI red on one assertion, twice, on `50266fc`: `3494 / 3495`, exit 1, `FAIL: the customer screen writes nothing: every action links out to the module that owns it`, while `main` was green on both jobs. Cause: `CustomersTest.php` had pinned "the screen writes nothing" as "no `method="post"` anywhere in this file", and request 6 gave `admin/customers.php` one `<form method="post" action="/api/v1/customers.php">`. The screen still handles no write, so the assertion was pinning the wrong thing.
