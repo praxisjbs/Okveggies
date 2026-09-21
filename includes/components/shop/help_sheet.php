@@ -27,9 +27,18 @@ if (!function_exists('okv_help_sheet')) {
             <?php if ($actions): ?>
               <div class="mt-6 flex flex-col gap-3 sm:flex-row">
                 <?php foreach ($actions as $action):
-                    $btn = (($action['style'] ?? 'primary') === 'outline') ? 'okv-btn-outline' : 'okv-btn';
+                    // 'danger' is the tomato fill, for the one action the
+                    // reader has to see: the sign-in that unlocks reporting.
+                    $btn = match ($action['style'] ?? 'primary') {
+                        'outline' => 'okv-btn-outline',
+                        'danger'  => 'okv-btn border border-tomato bg-tomato text-white hover:bg-tomato-hover active:bg-tomato-active',
+                        default   => 'okv-btn',
+                    };
                 ?>
-                  <a href="<?= okv_e((string) $action['href']) ?>" class="<?= $btn ?> w-full justify-center rounded-xl sm:w-auto"><?= okv_e((string) $action['label']) ?></a>
+                  <a href="<?= okv_e((string) $action['href']) ?>" class="<?= $btn ?> w-full justify-center rounded-xl sm:w-auto">
+                    <?php if (!empty($action['icon'])): ?><?php okv_icon((string) $action['icon'], 'h-4 w-4'); ?><?php endif; ?>
+                    <?= okv_e((string) $action['label']) ?>
+                  </a>
                 <?php endforeach; ?>
               </div>
             <?php endif; ?>

@@ -52,6 +52,7 @@ $OKV_PERMISSIONS = [
     ],
     'customers' => [
         'customers.view'               => 'View customers',
+        'customers.create'             => 'Create a customer account',
         'customers.edit'               => 'Edit a customer',
         'customers.addresses.view'     => 'View customer addresses',
     ],
