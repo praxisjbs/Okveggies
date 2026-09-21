@@ -740,6 +740,12 @@ The platform shipped M0 to M3 with no logo, no favicon and the fonts falling bac
 
 ## Session log (newest first)
 
+### 21 Sep 2026, Page copy save posted to a made-up admin URL
+
+- Save draft and Publish on Page copy never reached the content API. `assets/js/admin-content.js` called `fetch(form.action)`, and those forms carry `<input name="action">`, which shadows the form action property. The browser posted the homepage draft to `/admin/[object HTMLInputElement]`. LiteSpeed answered 404 with its own HTML, so the draft was not saved. The script now reads `form.getAttribute('action')`, the same fix already used by the contact widget and Kitchen Runs. `ContentAdminTest.php` pins it.
+- The photograph form is a normal post to `/api/v1/content.php` and was not the failing request. The console lines beside it are warnings: Chrome wants `mobile-web-app-capable` as well as the Apple meta, and the font preload carried a cache-bust query the stylesheet does not, so the browser treated it as unused. Both are corrected in `head_meta.php`.
+- Not run here: the unit suite. This container has no PHP binary. `scripts/brand-check.sh` is green and `node --check` passes on the content script.
+
 ### 21 Sep 2026, sitemap gaps on main closed: the auth page noindexed, robots.txt covering public/
 
 - Main received the complete sitemap while a parallel branch carried its own (the polish pass, pull request 71): the generated /sitemap.xml with lastmod dates, the robots.txt discovery line, the 503 on database failure and both test suites. That parallel branch was rebuilt on top of main so it carries only what main still lacked, rather than a second sitemap.

@@ -52,6 +52,7 @@ if (!function_exists('okv_head_meta')) {
   <meta name="color-scheme" content="light">
   <meta name="application-name" content="OK Veggies">
   <meta name="apple-mobile-web-app-title" content="OK Veggies">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="msapplication-TileColor" content="#0F5132">
@@ -61,7 +62,8 @@ if (!function_exists('okv_head_meta')) {
   <link rel="icon" type="image/png" sizes="16x16" href="<?= okv_e(okv_asset('/assets/img/brand/icons/favicon-16.png')) ?>">
   <link rel="apple-touch-icon" sizes="180x180" href="<?= okv_e(okv_asset('/assets/img/brand/icons/apple-touch-icon.png')) ?>">
   <link rel="manifest" href="<?= okv_e(okv_asset('/site.webmanifest')) ?>">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="<?= okv_e(okv_asset('/assets/fonts/hanken-grotesk-latin.woff2')) ?>">
+  <?php /* The stylesheet names this file with no cache-bust query. The preload must use that exact URL, or the browser fetches the font twice and warns that the preload was unused. */ ?>
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/assets/fonts/hanken-grotesk-latin.woff2">
   <meta property="og:site_name" content="OK Veggies">
   <meta property="og:type" content="<?= okv_e($ogType) ?>">
   <meta property="og:title" content="<?= okv_e($ogTitle) ?>">
