@@ -1,0 +1,3 @@
+=== node --check + bash -n on frozen SHA 720625b47f ===
+javascript syntax: 39 file(s), 0 failed
+shell syntax: 11 file(s), 0 failed

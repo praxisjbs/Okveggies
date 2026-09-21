@@ -19,9 +19,10 @@
  *   2. An order number is whatever OrderNumber issued and the order stored. A
  *      document never builds one and never invents one: no number means the
  *      document says so.
- *   3. The mark is the single-ink mono-green lockup (bible 3.7a names receipts
- *      and invoices as its use), never the photographic seal desaturated, which
- *      3.8 forbids. It prints correctly on a mono laser and on a colour one.
+ *   3. The mark is the full-colour horizontal lockup, per the Owner's logo-
+ *      harmony decision of 20 September 2026; the single-ink set stays in the
+ *      brand assets for anyone who needs it. It prints correctly on a mono
+ *      laser and on a colour one.
  *
  * The markup is plain blocks and tables, not flex or grid, because the same
  * markup goes through dompdf when M5 builds the real documents and dompdf reads

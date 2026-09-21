@@ -1,0 +1,46 @@
+=== scripts/tests/lib/scratch_guard.php at the suite level, frozen SHA 720625b47f
+=== A hand-run fixture-writing suite (auth_db_test.php) against each .env shape. The
+=== suites carry the same two rules as the gate, read through the same parser
+=== (lib/env_value.php), so a suite invoked by a person is no weaker than a batch run.
+--- APP_ENV=production (expect refusal, exit 2)
+    REFUSING TO RUN
+    This suite writes fixture rows and must never touch production.
+    APP_ENV is production.
+    exit=2
+--- APP_ENV=production # live server (expect refusal: comments stripped, the guard reads 'production')
+    REFUSING TO RUN
+    This suite writes fixture rows and must never touch production.
+    APP_ENV is production.
+    exit=2
+--- APP_ENV absent (fail-closed: cannot tell is treated as production)
+    REFUSING TO RUN
+    This suite writes fixture rows and must never touch production.
+    APP_ENV is not set in the process environment or in /tmp/okv-shape.env.
+    exit=2
+--- APP_ENV=staging on a live-shaped DB name (expect refusal on the name rule)
+    REFUSING TO RUN
+    This suite writes fixture rows and must never touch production.
+    DB_NAME is 'ibbbnlso_okveggies'.
+    exit=2
+--- APP_ENV="production" (quoted, expect refusal)
+    REFUSING TO RUN
+    This suite writes fixture rows and must never touch production.
+    APP_ENV is production.
+    exit=2
+--- no .env file anywhere (expect refusal: unreadable config is production)
+    REFUSING TO RUN
+    This suite writes fixture rows and must never touch production.
+    APP_ENV is not set in the process environment or in /tmp/definitely-not-here.env.
+    exit=2
+
+--- the gate's own shape PASSES the guard; the suite then dies at the absent database
+--- (exit 255 connection failure), which proves the guard is a targeted rule, not a blanket no.
+    guard refused: 0 ; exit=255
+
+--- OKV_ALLOW_DB_RESET=yes on a deliberately-named disposable DB passes the name rule
+--- (APP_ENV=testing is still required; production is never unlocked by the override):
+    guard refused: 0 ; exit=255 (past the guard into the connection attempt)
+    REFUSING TO RUN
+    This suite writes fixture rows and must never touch production.
+    APP_ENV is production.
+    exit=2 (override + production: still refused)
