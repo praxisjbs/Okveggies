@@ -97,11 +97,11 @@ $rendered = $slug === 'faq'
     ? ['html' => '', 'headings' => []]
     : ContentRenderer::render((string) $page['body']);
 if ($slug === 'about') {
-    $founderPhotoPath = __DIR__ . '/assets/img/brand/founder-kumbish-emmanuel-putleh.jpg';
+    $founderPhotoPath = __DIR__ . '/assets/img/story/founder-kumbish-emmanuel-putleh.jpg';
     $rendered['html'] = okv_story_founder_portrait($rendered['html'], [
         'anchor' => 'the-person-behind-it',
         'file' => $founderPhotoPath,
-        'url' => okv_asset('/assets/img/brand/founder-kumbish-emmanuel-putleh.jpg'),
+        'url' => okv_asset('/assets/img/story/founder-kumbish-emmanuel-putleh.jpg'),
         'alt' => 'Kumbish Emmanuel Putleh, founder of OK Veggies',
         'caption' => 'Kumbish Emmanuel Putleh, Founder',
     ]);

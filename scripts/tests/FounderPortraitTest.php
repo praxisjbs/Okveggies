@@ -23,7 +23,7 @@ file_put_contents($portraitFile, $miniJpeg);
 $portrait = [
     'anchor' => 'the-person-behind-it',
     'file' => $portraitFile,
-    'url' => '/assets/img/brand/founder-kumbish-emmanuel-putleh.jpg',
+    'url' => '/assets/img/story/founder-kumbish-emmanuel-putleh.jpg',
     'alt' => 'Kumbish Emmanuel Putleh, founder of OK Veggies',
     'caption' => 'Kumbish Emmanuel Putleh, Founder',
 ];
