@@ -425,3 +425,47 @@ if (!function_exists('okv_make_it_right_policy_url')) {
         return '/how-it-works#make-it-right';
     }
 }
+
+if (!function_exists('okv_story_founder_portrait')) {
+    /**
+     * OK Veggies. Places the founder portrait in the "The person behind it"
+     * section of the Our Story page. The page body is admin editable Markdown
+     * rendered by ContentRenderer, so the figure is inserted directly after
+     * the deterministic heading anchor. The width and height attributes come
+     * from the photograph itself, so the committed image and the markup can
+     * never disagree. If the heading is gone or the photograph is not in the
+     * tree, the body renders exactly as written.
+     *
+     * $portrait keys: anchor, file (absolute path in this tree), url, alt,
+     * caption.
+     */
+    function okv_story_founder_portrait(string $html, array $portrait): string
+    {
+        $anchor = (string) ($portrait['anchor'] ?? '');
+        if ($anchor === '') {
+            return $html;
+        }
+        $position = strpos($html, 'id="' . $anchor . '"');
+        if ($position === false) {
+            return $html;
+        }
+        $file = (string) ($portrait['file'] ?? '');
+        $size = $file !== '' ? @getimagesize($file) : false;
+        if ($size === false) {
+            return $html;
+        }
+        $closing = strpos($html, '</h2>', $position);
+        if ($closing === false) {
+            return $html;
+        }
+        $insertAt = $closing + 5;
+        $figure = '<figure class="okv-founder mt-6">'
+            . '<img src="' . okv_e((string) ($portrait['url'] ?? '')) . '"'
+            . ' alt="' . okv_e((string) ($portrait['alt'] ?? '')) . '"'
+            . ' width="' . (int) $size[0] . '" height="' . (int) $size[1] . '"'
+            . ' loading="lazy" decoding="async" class="h-auto w-full max-w-md rounded-xl shadow-okv-1">'
+            . '<figcaption class="mt-3 text-sm font-medium text-ink-60">'
+            . okv_e((string) ($portrait['caption'] ?? '')) . '</figcaption></figure>';
+        return substr($html, 0, $insertAt) . "\n" . $figure . substr($html, $insertAt);
+    }
+}
