@@ -169,11 +169,22 @@ $actions = match ($slug) {
                    height="<?= $storyImage['height'] > 0 ? (int) $storyImage['height'] : 960 ?>"
                    class="h-full min-h-80 w-full object-cover" fetchpriority="high" decoding="async">
             <?php else: ?>
-              <div class="flex min-h-80 flex-col items-center justify-center p-8 text-center">
-                <?php okv_seal(160, '', ''); ?>
-                <p class="mt-5 max-w-sm text-sm font-semibold text-forest">Approved documentary photograph pending</p>
-                <p class="mt-2 max-w-sm text-sm text-ink-60">This space is reserved for a rights-cleared photograph of the real OK Veggies operation.</p>
-              </div>
+              <!--
+                The static story photograph. A photograph of the operation
+                published through the Content module always wins over this
+                fallback. If the file is missing, the seal stands in, so the
+                page never shows a broken image or an apology line.
+              -->
+              <?php if (is_file(__DIR__ . '/assets/img/story/story-hero-1280.jpg')): ?>
+                <img src="<?= okv_e(okv_asset('/assets/img/story/story-hero-1280.jpg')) ?>"
+                     alt="Crates of tomatoes, peppers, okra and onions at the farm gate in the morning light."
+                     width="1280" height="960"
+                     class="h-full min-h-80 w-full object-cover" fetchpriority="high" decoding="async">
+              <?php else: ?>
+                <div class="flex min-h-80 flex-col items-center justify-center p-8">
+                  <?php okv_seal(160, '', ''); ?>
+                </div>
+              <?php endif; ?>
             <?php endif; ?>
           </figure>
         </header>

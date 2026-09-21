@@ -169,6 +169,47 @@
     @apply inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-mist bg-white px-4 text-sm font-medium text-ink-60;
   }
   .okv-filter-chip-active { @apply border-forest bg-forest text-white; }
+
+  /*
+   * Category buttons, home page only: the chip strip under the hero and the
+   * Shop by category grid. The button reads as one colour, forest, and the
+   * photo of one product from that aisle sits behind a heavy wash as a faint
+   * texture. Hover lifts the wash (the photo becomes visible) and the card
+   * version slides a Shop-this-aisle line up from the bottom. The press state
+   * answers a tap on touch screens, where there is no hover. An empty aisle
+   * has no photo, keeps the plain ground and its Being sourced tag, so a
+   * missing picture never reads as a broken one.
+   */
+  /* The group class rides in the markup, because Tailwind forbids it in @apply. */
+  .okv-cat-chip {
+    @apply relative isolate inline-flex min-h-[52px] shrink-0 items-center gap-2 overflow-hidden rounded-full border border-forest/40 bg-forest px-4 text-sm font-semibold text-white
+           transition duration-botanical ease-botanical
+           hover:border-forest hover:shadow-okv-1 active:scale-[0.98];
+  }
+  .okv-cat-chip-photo {
+    @apply pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-10
+           transition duration-botanical ease-botanical;
+  }
+  .okv-cat-chip:hover .okv-cat-chip-photo,
+  .okv-cat-chip:focus-visible .okv-cat-chip-photo { @apply opacity-35; }
+
+  .okv-cat-card {
+    @apply relative isolate flex min-h-[136px] flex-col justify-between overflow-hidden rounded-lg border border-forest/40 bg-forest p-4 text-white
+           transition duration-botanical ease-botanical
+           hover:-translate-y-1 hover:border-forest hover:shadow-okv-2 active:scale-[0.98];
+  }
+  .okv-cat-card-photo {
+    @apply pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-10
+           transition duration-botanical ease-botanical;
+  }
+  .okv-cat-card:hover .okv-cat-card-photo,
+  .okv-cat-card:focus-visible .okv-cat-card-photo { @apply opacity-35; }
+  .okv-cat-card-cta {
+    @apply flex translate-y-full items-center justify-between gap-2 border-t border-white/15 bg-forest/90 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.14em]
+           transition duration-botanical ease-botanical;
+  }
+  .okv-cat-card:hover .okv-cat-card-cta,
+  .okv-cat-card:focus-visible .okv-cat-card-cta { @apply translate-y-0; }
   .okv-category-link {
     @apply flex min-h-[44px] items-center justify-between gap-2 rounded-md px-3 text-sm font-medium text-ink-60 transition duration-botanical ease-botanical hover:bg-forest-tint hover:text-forest;
   }

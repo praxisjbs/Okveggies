@@ -201,11 +201,24 @@ $noticeMessages = [
 <?php if ($categories && !$categoriesError): ?>
   <nav class="border-b border-mist bg-white" aria-label="Shop by category">
     <div class="okv-container flex gap-2 overflow-x-auto py-3">
-      <?php foreach ($categories as $pill): $count = (int) $pill['product_count']; ?>
-        <a href="/shop.php?category=<?= okv_e($pill['slug']) ?>" class="okv-filter-chip inline-flex items-center gap-2">
-          <?php okv_icon('leaf', 'h-4 w-4 text-forest'); ?>
-          <span><?= okv_e($pill['name']) ?></span>
-          <?php if ($count === 0): ?><span class="text-ink-40">Being sourced</span><?php endif; ?>
+      <?php foreach ($categories as $pill):
+          $count = (int) $pill['product_count'];
+          $chipImage = (string) ($pill['sample_image'] ?? '');
+      ?>
+        <a href="/shop.php?category=<?= okv_e($pill['slug']) ?>"
+           class="okv-cat-chip group"
+           aria-label="<?= okv_e($pill['name']) ?>, <?= $count === 0 ? 'being sourced' : $count . ' items' ?>">
+          <?php if ($chipImage !== ''): ?>
+            <img src="<?= okv_e(okv_image_url($chipImage)) ?>" alt="" class="okv-cat-chip-photo" loading="lazy" aria-hidden="true">
+          <?php endif; ?>
+          <?php okv_icon('leaf', 'h-4 w-4 text-white/70'); ?>
+          <span class="relative"><?= okv_e($pill['name']) ?></span>
+          <?php if ($count === 0): ?>
+            <span class="relative rounded-full border border-white/30 px-2 py-0.5 text-okv-micro font-semibold uppercase tracking-wide text-white/80">Being sourced</span>
+          <?php else: ?>
+            <span class="relative font-mono text-xs text-white/75"><?= $count ?></span>
+          <?php endif; ?>
+          <span class="relative transition-transform duration-botanical ease-botanical group-hover:translate-x-1" aria-hidden="true">&rarr;</span>
         </a>
       <?php endforeach; ?>
     </div>
@@ -222,17 +235,17 @@ $noticeMessages = [
     <h2 id="promise-heading" class="mt-2 font-editorial text-okv-h5 text-ink md:text-okv-h4"><?= okv_e($copy['promise_heading']) ?></h2>
     <ol class="mt-8 grid gap-4 sm:grid-cols-3">
       <li class="okv-step-card okv-enter bg-foliage-tint/60">
-        <span class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white text-forest"><?php okv_icon('leaf', 'h-12 w-12'); ?></span>
+        <span class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-forest text-white"><?php okv_icon('leaf', 'h-12 w-12'); ?></span>
         <h3 class="mt-4 font-editorial text-okv-h6 text-ink">Sourced right</h3>
         <p class="mt-2 text-sm text-ink-60">Farms we have visited.</p>
       </li>
       <li class="okv-step-card okv-enter okv-enter-2 bg-gold-tint2">
-        <span class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white text-forest"><?php okv_icon('sparkle', 'h-12 w-12'); ?></span>
+        <span class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-forest text-white"><?php okv_icon('sparkle', 'h-12 w-12'); ?></span>
         <h3 class="mt-4 font-editorial text-okv-h6 text-ink">Priced right</h3>
         <p class="mt-2 text-sm text-ink-60">Prices we can explain.</p>
       </li>
       <li class="okv-step-card okv-enter okv-enter-3 bg-clay-tint">
-        <span class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white text-forest"><?php okv_icon('trail', 'h-12 w-12'); ?></span>
+        <span class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-forest text-white"><?php okv_icon('trail', 'h-12 w-12'); ?></span>
         <h3 class="mt-4 font-editorial text-okv-h6 text-ink">Delivered right</h3>
         <p class="mt-2 text-sm text-ink-60">A delivery day you picked.</p>
       </li>
@@ -240,17 +253,28 @@ $noticeMessages = [
     <p class="mt-5">
       <button type="button" class="okv-btn-text min-h-[44px]" data-sheet-open="promise" aria-haspopup="dialog"><?php okv_icon('info', 'h-4 w-4'); ?> Learn</button>
     </p>
-    <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-4 text-sm text-ink-60'); ?>
+    <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-4 flex w-fit items-center gap-2 rounded-full border border-forest/25 bg-white px-4 py-2.5 text-sm font-medium text-forest shadow-okv-1'); ?>
+    <!--
+      Shop produce is the primary order path, so it takes the solid forest
+      fill. The other two paths stay outlined on white: the colour marks the
+      main action, and the outline keeps the choice legible at a glance.
+    -->
     <nav class="mt-8 grid gap-3 sm:grid-cols-3" aria-label="Start an order">
-      <a class="okv-card min-h-[72px] text-ink hover:text-forest" href="/shop.php"><strong class="flex items-center gap-2"><?php okv_icon('leaf', 'h-4 w-4 text-forest'); ?> Shop produce</strong><span class="mt-1 block text-sm text-ink-60">Pick this week's items.</span></a>
-      <a class="okv-card min-h-[72px] text-ink hover:text-forest" href="/combos.php"><strong class="flex items-center gap-2"><?php okv_icon('basket', 'h-4 w-4 text-forest'); ?> Choose a Combo</strong><span class="mt-1 block text-sm text-ink-60">A ready basket for the pot.</span></a>
-      <a class="okv-card min-h-[72px] text-ink hover:text-forest" href="/kitchen-runs.php"><strong class="flex items-center gap-2"><?php okv_icon('list', 'h-4 w-4 text-forest'); ?> Send a Kitchen Run</strong><span class="mt-1 block text-sm text-ink-60">Send your list. We source it.</span></a>
+      <a class="okv-card min-h-[72px] bg-forest text-white shadow-okv-2 hover:bg-forest-hover" href="/shop.php"><strong class="flex items-center gap-2"><?php okv_icon('leaf', 'h-4 w-4 text-white'); ?> Shop produce</strong><span class="mt-1 block text-sm text-white/75">Pick this week's items.</span></a>
+      <a class="okv-card min-h-[72px] border border-forest/40 text-ink hover:border-forest hover:text-forest" href="/combos.php"><strong class="flex items-center gap-2"><?php okv_icon('basket', 'h-4 w-4 text-forest'); ?> Choose a Combo</strong><span class="mt-1 block text-sm text-ink-60">A ready basket for the pot.</span></a>
+      <a class="okv-card min-h-[72px] border border-forest/40 text-ink hover:border-forest hover:text-forest" href="/kitchen-runs.php"><strong class="flex items-center gap-2"><?php okv_icon('list', 'h-4 w-4 text-forest'); ?> Send a Kitchen Run</strong><span class="mt-1 block text-sm text-ink-60">Send your list. We source it.</span></a>
     </nav>
   </div>
 </section>
 <?php okv_help_sheet('promise', 'leaf', 'The OK Veggies promise', $promise['html']); ?>
 
-<section class="okv-container pt-14" aria-labelledby="combos-heading">
+<!--
+  The combos strip sits on a soft forest band (one step deeper than the
+  promise tint), so the page graduates from the green hero toward the white
+  sections below instead of jumping straight from tint to white.
+-->
+<section class="bg-forest-tint2" aria-labelledby="combos-heading">
+  <div class="okv-container py-14">
   <div class="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p class="okv-eyebrow"><?= okv_e($copy['combos_eyebrow']) ?></p><h2 id="combos-heading" class="mt-2 font-editorial text-okv-h5 text-ink md:text-okv-h4"><?= okv_e($copy['combos_heading']) ?></h2></div><a href="/combos.php" class="okv-btn-text">See all combos <span aria-hidden="true">&rarr;</span></a></div>
   <?php if ($combosError): ?>
     <?php okv_empty_state('cloud', 'Combos are paused', 'Browse the full list or send us your own kitchen list.', [
@@ -265,6 +289,7 @@ $noticeMessages = [
   <?php else: ?>
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"><?php foreach ($featuredCombos as $combo): ?><?php okv_combo_card($combo, $returnTo, $sourceRegions, $sourceDay); ?><?php endforeach; ?></div>
   <?php endif; ?>
+  </div>
 </section>
 
 <section class="okv-container py-14" aria-labelledby="categories-heading">
@@ -281,7 +306,32 @@ $noticeMessages = [
         ['href' => '/kitchen-runs.php', 'label' => 'Send a Kitchen Run', 'style' => 'outline', 'icon' => 'list'],
     ], ['heading_tag' => 'h3', 'class' => 'border border-mist bg-forest-tint shadow-none']); ?></div>
   <?php else: ?>
-    <div class="mt-6 grid grid-cols-2 gap-4 md:grid-cols-5"><?php foreach ($categories as $category): $count = (int) $category['product_count']; ?><a href="/shop.php?category=<?= okv_e($category['slug']) ?>" class="okv-card group text-ink hover:text-forest"><span class="block font-semibold leading-tight"><?= okv_e($category['name']) ?></span><span class="mt-1 flex items-center gap-2 text-sm text-ink-60"><?php if ($count === 0): ?><span>Being sourced</span><?php else: ?><span class="font-mono"><?= $count ?></span> <?= $count === 1 ? 'item' : 'items' ?><?php endif; ?><span class="ml-auto transition-transform duration-botanical ease-botanical group-hover:translate-x-1" aria-hidden="true">&rarr;</span></span></a><?php endforeach; ?></div>
+    <div class="mt-6 grid grid-cols-2 gap-4 md:grid-cols-5"><?php foreach ($categories as $category):
+        $count = (int) $category['product_count'];
+        $cardImage = (string) ($category['sample_image'] ?? '');
+    ?>
+      <a href="/shop.php?category=<?= okv_e($category['slug']) ?>" class="okv-cat-card group">
+        <?php if ($cardImage !== ''): ?>
+          <img src="<?= okv_e(okv_image_url($cardImage)) ?>" alt="" class="okv-cat-card-photo" loading="lazy" aria-hidden="true">
+        <?php else: ?>
+          <span class="pointer-events-none absolute -bottom-4 -right-4 -z-10 text-white/10" aria-hidden="true"><?php okv_icon('leaf', 'h-24 w-24'); ?></span>
+        <?php endif; ?>
+        <span class="relative flex items-start justify-between gap-2">
+          <span class="block font-semibold leading-tight"><?= okv_e($category['name']) ?></span>
+          <span class="transition-transform duration-botanical ease-botanical group-hover:translate-x-1" aria-hidden="true">&rarr;</span>
+        </span>
+        <span class="relative mt-3 flex items-center gap-2 text-sm text-white/75">
+          <?php if ($count === 0): ?>
+            <span class="rounded-full border border-white/30 px-2 py-0.5 text-okv-micro font-semibold uppercase tracking-wide">Being sourced</span>
+          <?php else: ?>
+            <span class="font-mono"><?= $count ?></span> <?= $count === 1 ? 'item' : 'items' ?>
+          <?php endif; ?>
+        </span>
+        <span class="okv-cat-card-cta pointer-events-none absolute inset-x-0 bottom-0" aria-hidden="true">
+          <span>Shop <?= okv_e($category['name']) ?></span><span aria-hidden="true">&rarr;</span>
+        </span>
+      </a>
+    <?php endforeach; ?></div>
   <?php endif; ?>
 </section>
 

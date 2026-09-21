@@ -25,12 +25,15 @@ $sheetBody = '<p>After dispatch or delivery, report a wrong, missing, damaged or
     <?php if (Customer::isLoggedIn()): ?>
       <a class="okv-btn-outline rounded-xl" href="/account.php"><?php okv_icon('user', 'h-4 w-4'); ?> Open your orders</a>
     <?php else: ?>
-      <a class="okv-btn-outline rounded-xl" href="/account.php?mode=signin"><?php okv_icon('user', 'h-4 w-4'); ?> Sign in to report</a>
+      <!-- Sign in to report is a solid tomato button on purpose: it is the one
+           moment the interface should look like a fire exit, not a footnote.
+           The same fill as the hero CTA, which the brand allows. -->
+      <a class="okv-btn rounded-xl border border-tomato bg-tomato px-6 text-white hover:bg-tomato-hover active:bg-tomato-active" href="/account.php?mode=signin"><?php okv_icon('user', 'h-4 w-4'); ?> Sign in to report</a>
     <?php endif; ?>
   </div>
 </section>
 <?php okv_help_sheet('make-it-right-sheet', 'shield', 'If something is not right', $sheetBody, [
     Customer::isLoggedIn()
         ? ['href' => '/account.php', 'label' => 'Open your orders']
-        : ['href' => '/account.php?mode=signin', 'label' => 'Sign in to report'],
+        : ['href' => '/account.php?mode=signin', 'label' => 'Sign in to report', 'style' => 'danger'],
 ]); ?>

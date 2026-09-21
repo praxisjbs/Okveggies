@@ -36,11 +36,25 @@ final class Catalogue
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term);
     }
 
+    /**
+     * Active categories for the storefront, with the home page extras: the
+     * item count and one sample photo. The sample is the primary image of the
+     * first active product in the category (or its first image), and it feeds
+     * the faint photo texture behind the category buttons. It is decorative,
+     * so an empty category simply has none and the button falls back to the
+     * plain forest ground.
+     */
     public static function categories(): array
     {
         return Database::all(
             'SELECT c.id, c.name, c.slug, c.description,
-                    (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.is_active = 1) AS product_count
+                    (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.is_active = 1) AS product_count,
+                    (SELECT pi.image_url
+                       FROM product_images pi
+                       JOIN products p2 ON p2.id = pi.product_id
+                      WHERE p2.category_id = c.id AND p2.is_active = 1
+                      ORDER BY pi.is_primary DESC, pi.sort_order ASC, pi.id ASC
+                      LIMIT 1) AS sample_image
                FROM product_categories c
               WHERE c.is_active = 1
               ORDER BY c.sort_order, c.name'

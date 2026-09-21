@@ -31,6 +31,8 @@ if (!function_exists('okv_admin_nav_icon')) {
             'chat'      => '<path d="M5 5h14v10H9l-4 4V5Z"/>',
             'cog'       => '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
             'shield'    => '<path d="M12 3 5 6v6c0 4 3 6.5 7 9 4-2.5 7-5 7-9V6Z"/>',
+            'user'      => '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1.2-3.2 3.8-4.8 7-4.8s5.8 1.6 7 4.8"/>',
+            'logout'    => '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="m15 8 4 4-4 4"/><path d="M19 12H9"/>',
         ];
         $inner = $paths[$name] ?? '<rect x="5" y="5" width="14" height="14" rx="2"/>';
         return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" '
@@ -61,6 +63,11 @@ $okv_sb_me   = Database::one('SELECT first_name, last_name FROM users WHERE id =
 $okv_sb_name = trim(((string) ($okv_sb_me['first_name'] ?? '')) . ' ' . ((string) ($okv_sb_me['last_name'] ?? '')));
 if ($okv_sb_name === '') { $okv_sb_name = 'Signed in'; }
 $okv_sb_role = in_array('owner', Rbac::roles(), true) ? 'Owner' : (in_array('manager', Rbac::roles(), true) ? 'Manager' : 'Staff');
+// The avatar is initials until the team has a real photo pipeline; the
+// circle stays the same shape either way, so a photo can drop in later.
+$okv_sb_parts = preg_split('/\s+/', $okv_sb_name, -1, PREG_SPLIT_NO_EMPTY);
+$okv_sb_initials = strtoupper(substr((string) ($okv_sb_parts[0] ?? 'O'), 0, 1)
+    . (isset($okv_sb_parts[1]) ? substr((string) $okv_sb_parts[1], 0, 1) : ''));
 
 // Counters a nav item can carry. Resolved once per render, and only when the
 // user can actually open the screen, so nothing here is a query a reader of
@@ -103,15 +110,30 @@ if (Rbac::can('messages.view')) {
     <?php endforeach; ?>
   </nav>
 
-  <div class="border-t border-white/10 px-5 py-4">
-    <p class="text-sm font-medium leading-tight"><?= okv_e($okv_sb_name) ?></p>
-    <p class="mt-1 inline-flex items-center rounded-full border border-white/25 px-2 py-0.5 text-okv-micro font-semibold uppercase tracking-[0.12em] text-white/75"><?= okv_e($okv_sb_role) ?></p>
-    <div class="mt-2 flex items-center gap-4">
-      <a href="/admin/account.php" class="inline-flex min-h-[44px] items-center text-xs text-white/80 hover:text-white underline underline-offset-2">Your account</a>
-      <form method="POST" action="/api/v1/auth.php" class="inline">
+  <!--
+    The signed-in bar, pinned to the bottom of the sidebar: the nav above it
+    scrolls inside the aside, so the bar stays put while a long screen scrolls.
+    Avatar, full name and role on the left; Your account and Sign out as icon
+    buttons on the right, because a colleague on a phone-sized screen should
+    see buttons, not deep-link text. Sign out keeps the POST form and its CSRF
+    field; the icon is the target, not the text.
+  -->
+  <div class="border-t border-white/10 bg-white/5 px-4 py-3">
+    <div class="flex items-center gap-3">
+      <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-white/15 font-mono text-sm font-semibold text-white" aria-hidden="true"><?= okv_e($okv_sb_initials) ?></span>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-medium leading-tight" title="<?= okv_e($okv_sb_name) ?>"><?= okv_e($okv_sb_name) ?></p>
+        <p class="mt-1 inline-flex items-center rounded-full border border-white/25 px-2 py-0.5 text-okv-micro font-semibold uppercase tracking-[0.12em] text-white/75"><?= okv_e($okv_sb_role) ?></p>
+      </div>
+      <a href="/admin/account.php"
+         class="inline-flex h-11 w-11 flex-none items-center justify-center rounded-md border border-white/25 text-white/85 transition-colors duration-botanical hover:bg-white/10 hover:text-white"
+         aria-label="Your account" title="Your account"><?= okv_admin_nav_icon('user') ?></a>
+      <form method="POST" action="/api/v1/auth.php" class="m-0 flex-none">
         <?= Csrf::field() ?>
         <input type="hidden" name="action" value="logout">
-        <button type="submit" class="inline-flex min-h-[44px] items-center text-xs text-white/80 hover:text-white underline underline-offset-2">Sign out</button>
+        <button type="submit"
+                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-tomato/70 bg-tomato/20 text-white transition-colors duration-botanical hover:bg-tomato"
+                aria-label="Sign out" title="Sign out"><?= okv_admin_nav_icon('logout') ?></button>
       </form>
     </div>
   </div>

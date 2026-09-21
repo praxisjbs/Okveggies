@@ -6,9 +6,10 @@
  * The card mirrors product_card.php: a link on the photo, name and description
  * area, and a separate Add form at the bottom. The card image falls back to the
  * first component's primary photo when the combo has no image_url of its own
- * (M3 decision Q6). The saving line shows the strike-through component total
- * and a "You save" label only when the sell price is below the components,
- * which is what Combos::customerSaving returns for us.
+ * (M3 decision Q6). The saving is a single red badge on the photo corner,
+ * and the struck-through component total sits once under the price, only when
+ * the sell price is below the components, which is what
+ * Combos::customerSaving returns for us.
  *
  * Combo names are set in DM Serif Display through font-editorial: bible 5.1
  * gives the serif combo-pack names, pull quotes and section titles, and the
@@ -52,7 +53,7 @@ if (!function_exists('okv_combo_card')) {
         ?>
         <article class="okv-card group flex h-full flex-col active:scale-[0.98]" data-combo-card>
           <a href="<?= okv_e($detailUrl) ?>" class="block">
-            <div class="aspect-[4/3] overflow-hidden rounded-md bg-clay-tint">
+            <div class="relative aspect-[4/3] overflow-hidden rounded-md bg-clay-tint">
               <?php if ($image !== ''): ?>
                 <?php okv_picture($image, $name . ', ready basket of ' . (int) $componentCount . ' items' . ($sourceRegions !== '' ? ', sourced from ' . $sourceRegions : ''), [
                     'class' => 'h-full w-full object-cover transition duration-botanical ease-botanical group-hover:scale-105',
@@ -61,6 +62,9 @@ if (!function_exists('okv_combo_card')) {
                 ]); ?>
               <?php else: ?>
                 <div class="flex h-full items-center justify-center p-4 text-center text-sm text-ink-40">Photo coming soon</div>
+              <?php endif; ?>
+              <?php if ($saving > 0): ?>
+                <span class="absolute right-2 top-2 inline-flex rounded-full bg-tomato px-2.5 py-1 text-xs font-semibold text-white shadow-okv-1">You save <?= okv_e(Money::format($saving)) ?></span>
               <?php endif; ?>
             </div>
             <div class="mt-4 flex items-start justify-between gap-2">
@@ -77,11 +81,11 @@ if (!function_exists('okv_combo_card')) {
           <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-2 text-xs text-ink-60'); ?>
           <div class="mt-auto pt-4">
             <?php if ($saving > 0): ?>
+              <!-- The saving is stated once, as the red badge on the photo above. The struck-through total stays here as the price anchor. -->
               <div class="flex flex-wrap items-baseline gap-2">
                 <p class="font-mono text-okv-lead font-semibold text-forest"><?= okv_e(Money::format($price)) ?></p>
                 <p class="font-mono text-sm text-ink-40 line-through" aria-label="Component total"><?= okv_e(Money::format($componentTotal)) ?></p>
               </div>
-              <p class="okv-badge okv-badge-available mt-1">You save <?= okv_e(Money::format($saving)) ?></p>
             <?php else: ?>
               <p class="font-mono text-okv-lead font-semibold text-forest"><?= okv_e(Money::format($price)) ?></p>
             <?php endif; ?>

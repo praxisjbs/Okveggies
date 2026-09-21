@@ -141,10 +141,26 @@ okv_test_ok(str_contains($screen, "Rbac::can('kitchen_runs.view')"), 'the Kitche
 okv_test_ok(str_contains($screen, '$business && $canSeeCredit'), 'a household is never shown a credit facility');
 okv_test_ok(str_contains($screen, 'Credit::customerAccount('), 'credit figures come from the shared credit class');
 okv_test_ok(str_contains($screen, "\$canGrantCredit  = Rbac::can('credit.grant')"), 'granting credit is offered only to staff who may grant it');
-okv_test_ok(
-    !str_contains($screen, 'method="post"') && !str_contains($screen, "method='post'"),
-    'the customer screen writes nothing: every action links out to the module that owns it'
+// "The screen writes nothing" was pinned as "no method=post anywhere in this
+// file" when the screen only ever linked out. The Owner then asked to make a
+// first-time caller's account from here, so the screen grew one form. What made
+// the old wording worth keeping is still true and is the real property: the
+// screen never handles a write itself. The form posts to the endpoint that owns
+// the write, which does the CSRF check and holds the customers.create
+// permission. So this pins that instead: one form, addressed to that endpoint,
+// carrying a token, offered only to staff who may create.
+okv_test_eq(
+    1,
+    preg_match_all('/<form\b[^>]*\bmethod=["\']post["\'][^>]*>/i', $screen, $okvScreenForms),
+    'the customer screen carries exactly one form, the one that asks the endpoint to make the customer'
 );
+okv_test_eq(
+    1,
+    preg_match('/<form\b[^>]*\bmethod=["\']post["\'][^>]*\baction=["\']\/api\/v1\/customers\.php["\'][^>]*>/i', $screen),
+    'the only write on the customer screen is handed to the endpoint that owns it, never handled on the screen'
+);
+okv_test_ok(str_contains($screen, 'Csrf::field()'), 'the one form on the screen carries a CSRF token');
+okv_test_ok(str_contains($screen, "\$canCreate       = Rbac::can('customers.create')"), 'making a customer is offered only to staff who may create one');
 okv_test_ok(str_contains($screen, 'okv_pagination('), 'the customer list uses the shared pagination component');
 okv_test_ok(str_contains($screen, 'Customers::PER_PAGE') === false, 'the screen takes its page size from the domain class rather than repeating it');
 foreach ([
