@@ -3,5 +3,16 @@ Allow: /
 Disallow: /admin/
 Disallow: /pro/
 Disallow: /api/
+# Token and utility endpoints under public/: never for crawlers.
+Disallow: /public/auth/
+Disallow: /public/documents/
+Disallow: /public/payment/
+Disallow: /public/order.php
+Disallow: /public/issue_photo.php
+Disallow: /public/kitchen_run_attachment.php
+Disallow: /public/cron.php
+Disallow: /public/healthcheck.php
+Disallow: /public/migrate.php
+Disallow: /public/setup.php
 
 Sitemap: https://okveggies.com.ng/sitemap.xml
