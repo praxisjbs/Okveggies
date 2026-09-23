@@ -70,14 +70,15 @@ function kr_posted_items(): array
         return [];
     }
 
+    // Rows the person left completely blank stay in the list and in their
+    // positions: the line numbers in a refusal have to match the labels on the
+    // screen, and the screen counts every slot the form offers. Validation
+    // numbers them on the way in, and the workflow drops the blanks for
+    // storage.
     $clean = [];
     foreach ($items as $item) {
         if (!is_array($item)) {
-            continue;
-        }
-        // A row the person left completely blank is not an error, it is an
-        // unused row on a form that offers several. Drop it quietly.
-        if (kr_row_is_blank($item)) {
+            $clean[] = $item;
             continue;
         }
         foreach (['unit_price' => 'unit_price_subunit', 'target_price' => 'target_price_subunit'] as $typed => $kobo) {
@@ -93,16 +94,6 @@ function kr_posted_items(): array
         $clean[] = $item;
     }
     return $clean;
-}
-
-function kr_row_is_blank(array $item): bool
-{
-    foreach (['product_id', 'item_name', 'quantity', 'unit_price', 'unit_price_subunit', 'target_price', 'target_price_subunit', 'note'] as $key) {
-        if (trim((string) ($item[$key] ?? '')) !== '') {
-            return false;
-        }
-    }
-    return true;
 }
 
 /**

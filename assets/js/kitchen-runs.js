@@ -44,9 +44,13 @@
   var helpSheet = document.getElementById('kr-help-sheet');
   var helpText = helpSheet ? helpSheet.querySelector('[data-kr-help-text]') : null;
 
-  // A list has an upper bound on the server (KitchenRuns::MAX_LINES), so it
-  // has one here too, and the count is of lines across both kinds.
-  var MAX_ROWS = 100;
+  // A list has an upper bound on the server (KitchenRuns::MAX_LINES). It is
+  // rendered onto the form as data-max-lines, so there is one limit and not two
+  // that can drift apart, and the count is of lines across both kinds. The
+  // server re-checks it, so a form rendered without the attribute never caps
+  // here and the server stays the only limit.
+  var MAX_ROWS = parseInt(form.getAttribute('data-max-lines') || '', 10);
+  if (!isFinite(MAX_ROWS) || MAX_ROWS < 1) { MAX_ROWS = Infinity; }
 
   var currentStep = 1;
 
@@ -156,22 +160,38 @@
     });
 
     if (subLine) { subLine.textContent = SUBTITLES[mode] || SUBTITLES.custom; }
+
+    // The numbering follows the visible half of the step: a typed list starts
+    // at Item 1, and in "Pick from shop" the typed lines continue the count
+    // after the shop lines. Switching modes changes which rows post, so the
+    // numbers move with the rows.
+    renumber();
     updateTotals();
   }
 
   // --- Rows: add, remove, renumber ------------------------------------------
 
-  /** Every row of the form in the order the fields will be numbered: shop
-   *  lines first, then the typed lines. One shared index, because they all
-   *  post into the one items[] list. */
+  /** Every row that actually posts, in the order the fields are numbered: the
+   *  rows of the half of the step the chosen mode is using. A hidden half is
+   *  disabled, so its rows take no number at all: in "Type my list" the first
+   *  row is Item 1, and in "Pick from shop" the typed rows continue the count
+   *  after the shop rows. One shared index, because they all post into the
+   *  one items[] list. */
   function allRows() {
     var rows = [];
-    if (shopHost) {
-      shopHost.querySelectorAll('[data-kr-row]').forEach(function (row) { rows.push(row); });
-    }
-    form.querySelectorAll('[data-kr-rows]').forEach(function (host) {
+    function add(host) {
+      if (!host) { return; }
       host.querySelectorAll('[data-kr-row]').forEach(function (row) { rows.push(row); });
-    });
+    }
+    var shopVisible = shopSection ? !shopSection.hidden : true;
+    var textVisible = textSection ? !textSection.hidden : !shopVisible;
+    if (shopVisible) {
+      add(shopHost);
+      add(shopSection.querySelector('[data-kr-rows]'));
+    }
+    if (textVisible) {
+      add(textSection.querySelector('[data-kr-rows]'));
+    }
     return rows;
   }
 
@@ -191,6 +211,41 @@
 
   function renumber() {
     allRows().forEach(function (row, idx) { renumberRow(row, idx); });
+    updateReorderButtons();
+  }
+
+  /** Reveal the reorder buttons JavaScript turned on, and hide the ones at the
+   *  ends of their own container, so a line can only move where there is room.
+   *  Containers are handled one at a time: a shop line and a typed line live in
+   *  different sections and never trade places. */
+  function updateReorderButtons() {
+    form.querySelectorAll('[data-kr-rows], [data-kr-shop-rows]').forEach(function (host) {
+      var rows = host.querySelectorAll('[data-kr-row]');
+      Array.prototype.forEach.call(rows, function (row, i) {
+        var up = row.querySelector('[data-kr-up]');
+        var down = row.querySelector('[data-kr-down]');
+        if (up) { up.hidden = i === 0; }
+        if (down) { down.hidden = i === rows.length - 1; }
+      });
+    });
+  }
+
+  /** Move a row one place up or down inside its own container, then renumber. */
+  function moveRow(row, direction) {
+    if (!row) { return; }
+    var host = row.closest('[data-kr-rows], [data-kr-shop-rows]');
+    if (!host) { return; }
+    var rows = Array.prototype.slice.call(host.querySelectorAll('[data-kr-row]'));
+    var idx = rows.indexOf(row);
+    var target = idx + direction;
+    if (idx < 0 || target < 0 || target >= rows.length) { return; }
+    if (direction < 0) {
+      host.insertBefore(row, rows[target]);
+    } else {
+      host.insertBefore(row, rows[target].nextSibling);
+    }
+    renumber();
+    updateTotals();
   }
 
   function rowCount() {
@@ -224,9 +279,23 @@
     if (focus) { focus.focus(); }
   }
 
+  /** The rows container an "Add item" button belongs to. The button sits beside
+   *  its rows, not inside them, so closest() (which only walks ancestors) finds
+   *  nothing and the old code silently added no row at all. Walk up to the
+   *  nearest block that holds a rows container. */
+  function rowsHostNear(btn) {
+    var node = btn.parentElement;
+    while (node && node !== form) {
+      var host = node.querySelector('[data-kr-rows]');
+      if (host) { return host; }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
   form.querySelectorAll('[data-kr-add]').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      addRowTo(btn.closest('[data-kr-rows]'), '[data-kr-name]');
+      addRowTo(rowsHostNear(btn), '[data-kr-name]');
     });
   });
   if (addShopBtn) {
@@ -236,6 +305,10 @@
   }
 
   form.addEventListener('click', function (e) {
+    var up = e.target.closest('[data-kr-up]');
+    if (up) { moveRow(up.closest('[data-kr-row]'), -1); return; }
+    var down = e.target.closest('[data-kr-down]');
+    if (down) { moveRow(down.closest('[data-kr-row]'), 1); return; }
     var remove = e.target.closest('[data-kr-remove]');
     if (!remove) return;
     var row = remove.closest('[data-kr-row]');
@@ -377,11 +450,13 @@
       var qty = row.querySelector('[data-kr-qty]');
       var unit = row.querySelector('[data-kr-unit]');
       var price = row.querySelector('[data-kr-price]');
+      var note = row.querySelector('[data-kr-note]');
       var hasName = !!(name && String(name.value).trim() !== '');
       var hasQty = !!(qty && String(qty.value).trim() !== '');
       var hasUnit = !!(unit && String(unit.value) !== '');
       var hasPrice = !!(price && String(price.value).trim() !== '');
-      var touched = hasName || hasQty || hasUnit || hasPrice;
+      var hasNote = !!(note && String(note.value).trim() !== '');
+      var touched = hasName || hasQty || hasUnit || hasPrice || hasNote;
       if (!touched) { return; }
       if (hasName && hasQty && hasUnit && (mode !== 'priced' || hasPrice)) {
         typedComplete++;

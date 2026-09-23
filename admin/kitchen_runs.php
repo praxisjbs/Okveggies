@@ -41,7 +41,16 @@ $queryWith = static function (array $extra) use ($filter, $customer): string {
     return $query ? '?' . http_build_query($query) : '?';
 };
 
-$units    = Database::all('SELECT id, name FROM units_of_measurement ORDER BY id');
+// Active units fill the picker, the way the customer's own form is limited to
+// them. The full id-to-name map rides along so a line whose unit was retired
+// after it was sent still shows the unit it carries, rather than silently
+// resetting to "Choose" and losing it on the next save.
+$allUnits  = Database::all('SELECT id, name, is_active FROM units_of_measurement ORDER BY id');
+$units     = array_values(array_filter($allUnits, static fn($u): bool => (int) $u['is_active'] === 1));
+$unitNames = [];
+foreach ($allUnits as $u) {
+    $unitNames[(int) $u['id']] = (string) $u['name'];
+}
 $zones    = Delivery::zonesActive();
 $products = Database::all(
     'SELECT p.id, p.name, p.current_price_subunit, u.name AS unit_name

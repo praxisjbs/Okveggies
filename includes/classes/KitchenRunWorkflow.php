@@ -81,9 +81,6 @@ final class KitchenRunWorkflow
             // both be true of one list.
             throw new DomainException('open_budget_pricing');
         }
-        if ($mode === 'upload' && $attachment === null) {
-            throw new DomainException('attachment_required');
-        }
 
         $items = is_array($input['items'] ?? null) ? $input['items'] : [];
         $lines = self::submissionLines($mode, $pricing, $items, $attachment !== null);
@@ -248,6 +245,7 @@ final class KitchenRunWorkflow
                 throw new DomainException('quantity_unit_required');
             }
         }
+        self::assertActiveUnits($items);
         $quoted = KitchenRuns::quoteLines($items);
 
         $deposit = KitchenRuns::optionalMoney($input['deposit_subunit'] ?? null);
@@ -804,22 +802,38 @@ final class KitchenRunWorkflow
      */
     private static function submissionLines(string $mode, string $pricing, array $items, bool $hasAttachment): array
     {
-        if (!$items) {
-            if ($mode === 'upload' && $hasAttachment) {
-                // The list is in the attachment. Staff transcribe it into real
-                // lines when they price it, and this placeholder holds its place
-                // until then.
-                return [[
-                    'product_id'         => null,
-                    'item_name'          => 'List awaiting transcription',
-                    'quantity'           => null,
-                    'unit_id'            => null,
-                    'unit_label'         => null,
-                    'unit_price_subunit' => null,
-                    'line_total_subunit' => null,
-                    'price_source'       => 'admin',
-                    'note'               => null,
-                ]];
+        // The slots a person left completely blank are not lines, they are
+        // unused rows on a form that offers several. Validation has already
+        // numbered them on the way in, and storage does not want them.
+        $lines = [];
+        foreach ($items as $item) {
+            if (is_array($item) && !KitchenRuns::rowIsBlank($item)) {
+                $lines[] = $item;
+            }
+        }
+
+        if (!$lines) {
+            if ($mode === 'upload') {
+                if ($hasAttachment) {
+                    // The list is in the attachment. Staff transcribe it into
+                    // real lines when they price it, and this placeholder holds
+                    // its place until then.
+                    return [[
+                        'product_id'         => null,
+                        'item_name'          => 'List awaiting transcription',
+                        'quantity'           => null,
+                        'unit_id'            => null,
+                        'unit_label'         => null,
+                        'unit_price_subunit' => null,
+                        'line_total_subunit' => null,
+                        'price_source'       => 'admin',
+                        'note'               => null,
+                    ]];
+                }
+                // A customer can type lines into the upload form without a
+                // photograph of the list, so a file is only required when there
+                // is nothing to read from anywhere else.
+                throw new DomainException('attachment_required');
             }
             throw new DomainException('no_items');
         }
@@ -830,7 +844,7 @@ final class KitchenRunWorkflow
         }
 
         $out = [];
-        foreach ($items as $item) {
+        foreach ($lines as $item) {
             $productId = KitchenRuns::positiveInt($item['product_id'] ?? null);
             $quantity  = KitchenRuns::quantity($item['quantity'] ?? null);
             $unitId    = KitchenRuns::positiveInt($item['unit_id'] ?? null);
@@ -849,7 +863,49 @@ final class KitchenRunWorkflow
             ];
         }
 
+        self::assertActiveUnits($out);
         return self::hydrateCatalogueLines($out);
+    }
+
+    /**
+     * A free-text line's unit must be one we actually offer right now. The
+     * customer's dropdown only lists active units, and this proves it on the
+     * server, so a line naming a unit we have since retired is refused with the
+     * line number rather than stored against a unit nobody can price. A
+     * catalogue line is left alone: its unit comes from the product, not the
+     * form. One query for the whole list, not one per line.
+     */
+    private static function assertActiveUnits(array $lines): void
+    {
+        $wanted = [];
+        foreach ($lines as $index => $line) {
+            if (($line['product_id'] ?? null) !== null) {
+                continue;
+            }
+            $unitId = KitchenRuns::positiveInt($line['unit_id'] ?? null);
+            if ($unitId !== null) {
+                $wanted[$unitId][] = $index + 1;
+            }
+        }
+        if (!$wanted) {
+            return;
+        }
+
+        $ids   = array_keys($wanted);
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $stmt  = Database::getInstance()->getConnection()->prepare(
+            'SELECT id FROM units_of_measurement WHERE id IN (' . $marks . ') AND is_active = 1'
+        );
+        $stmt->execute($ids);
+        $active = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $active[(int) $row['id']] = true;
+        }
+        foreach ($wanted as $unitId => $lineNumbers) {
+            if (!isset($active[$unitId])) {
+                throw new DomainException('unit_not_active:' . $lineNumbers[0]);
+            }
+        }
     }
 
     /**

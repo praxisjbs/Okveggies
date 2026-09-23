@@ -48,7 +48,7 @@ foreach ($products as $product) {
     $productById[(int) $product['id']] = $product;
 }
 
-$units = Database::all('SELECT id, name FROM units_of_measurement ORDER BY id');
+$units = Database::all('SELECT id, name FROM units_of_measurement WHERE is_active = 1 ORDER BY id');
 $zones = Delivery::zonesActive();
 
 $prefillDate = '';
@@ -60,6 +60,14 @@ $lastDay = Database::one(
 );
 if ($lastDay && !empty(Delivery::isEligible((string) $lastDay['preferred_delivery_date'], $customerType)['eligible'])) {
     $prefillDate = (string) $lastDay['preferred_delivery_date'];
+}
+// With JavaScript off there is no day picker to press, so the hidden field
+// needs a day that is actually deliverable. Fall back to the next one we run.
+if ($prefillDate === '') {
+    $upcoming = Delivery::nextEligibleDates($customerType, 1);
+    if ($upcoming) {
+        $prefillDate = (string) ($upcoming[0]['date'] ?? '');
+    }
 }
 
 // A saved list may mix shop lines and typed lines. The shop lines go to the
@@ -138,6 +146,13 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
     .kr-backdrop{background:rgba(3,16,10,0.4);backdrop-filter:blur(8px)}
     .kr-sticky-cta{position:sticky;bottom:0;z-index:20;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(to top, #fff 80%, rgba(255,255,255,0))}
   </style>
+  <?php // With JavaScript off the step wizard cannot collapse, so reveal every
+        // step as one flat form. The controller posts natively, the delivery
+        // day and area already carry a valid default, and a single typed row
+        // goes through. The JS collapses this back to the wizard. ?>
+  <noscript>
+    <style>[data-kr-step]{display:block !important}</style>
+  </noscript>
 </head>
 <body class="bg-canvas text-ink antialiased">
 <?php okv_shop_header('kitchen-runs'); ?>
@@ -185,7 +200,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
       <button type="button" class="kr-dot" data-kr-step-dot="3" aria-label="Step 3 delivery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8l2-4h12l2 4v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/><path d="M7 12h10"/></svg></button>
     </div>
 
-    <form action="/api/v1/kitchen_runs.php" method="post" enctype="multipart/form-data" class="mt-6" data-kr-form data-start="<?= okv_e($chosen) ?>">
+    <form action="/api/v1/kitchen_runs.php" method="post" enctype="multipart/form-data" class="mt-6" data-kr-form data-start="<?= okv_e($chosen) ?>" data-max-lines="<?= (int) KitchenRuns::MAX_LINES ?>">
       <?= Csrf::field() ?>
       <input type="hidden" name="action" value="submit">
       <input type="hidden" name="input_mode" value="<?= okv_e($chosen) ?>" data-kr-input-mode>
@@ -241,6 +256,13 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 
         <!-- Pick from shop: a picker line per item, an Add a line under them, -->
         <!-- the live total, and the off-shop block for everything else. -->
+        <?php
+        // How many numbered slots the shop rows take. The off-shop rows below
+        // continue the numbering after them, so a mixed list posts one items[]
+        // where every row keeps its on-screen number. Zero when there is
+        // nothing to pick, so the off-shop rows start the list.
+        $shopRowCount = $products ? max(1, count($shopPrefill)) : 0;
+        ?>
         <div data-kr-section-shop <?php if ($chosen !== 'catalogue') { echo 'hidden'; } ?>>
           <?php if (!$products): ?>
             <p class="mt-4 rounded-xl border border-dashed border-ink-20 bg-white p-4 text-sm text-ink-60">
@@ -248,7 +270,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
             </p>
           <?php else: ?>
             <div class="mt-4 space-y-3" data-kr-shop-rows>
-              <?php $shopRowCount = max(1, count($shopPrefill)); for ($row = 0; $row < $shopRowCount; $row++): $prefillLine = $shopPrefill[$row] ?? []; ?>
+              <?php for ($row = 0; $row < $shopRowCount; $row++): $prefillLine = $shopPrefill[$row] ?? []; $rowDisabled = $chosen !== 'catalogue'; ?>
                 <?php require __DIR__ . '/includes/components/shop/kitchen_run_shop_row.php'; ?>
               <?php endfor; ?>
             </div>
@@ -275,8 +297,8 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
             <div class="border-t border-ink-10 p-4">
               <p class="text-xs text-ink-60">Pomo, meat, oil, anything else. These lines go to the team to price.</p>
               <div class="mt-3 space-y-3" data-kr-rows>
-                <?php $freeRowCount = max(1, count($freePrefill)); for ($row = 0; $row < $freeRowCount; $row++): ?>
-                  <?php $prefillLine = $freePrefill[$row] ?? []; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
+                <?php $freeRowCount = max(1, count($freePrefill)); for ($row = $shopRowCount; $row < $shopRowCount + $freeRowCount; $row++): ?>
+                  <?php $prefillLine = $freePrefill[$row - $shopRowCount] ?? []; $rowDisabled = $chosen !== 'catalogue'; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
                 <?php endfor; ?>
               </div>
               <button type="button" data-kr-add class="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink-20 bg-white text-sm text-ink-60 hover:bg-mist">
@@ -290,7 +312,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
         <div data-kr-section-text <?php if ($chosen === 'catalogue') { echo 'hidden'; } ?>>
           <div class="mt-4 space-y-3" data-kr-rows>
             <?php $textRowCount = max(1, count($freePrefill)); for ($row = 0; $row < $textRowCount; $row++): ?>
-              <?php $prefillLine = $freePrefill[$row] ?? []; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
+              <?php $prefillLine = $freePrefill[$row] ?? []; $rowDisabled = $chosen === 'catalogue'; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
             <?php endfor; ?>
           </div>
 
@@ -298,6 +320,12 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg> Add item
           </button>
         </div>
+
+      <noscript>
+        <p class="mt-3 text-sm text-ink-60">
+          Without JavaScript only the lines you can see here are sent, and you can send the rest as a second run. Lines are saved in the order they appear.
+        </p>
+      </noscript>
 
         <div class="mt-4 rounded-xl bg-mist/60 p-3">
           <label class="flex items-start gap-3">

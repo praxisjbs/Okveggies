@@ -185,10 +185,32 @@ final class KitchenRuns
     }
 
     /**
+     * Whether a posted line is an unused slot on a form that offers several,
+     * rather than a line the person started filling in. A completely blank
+     * line is dropped quietly; a line with anything on it is checked, because
+     * that is the one the person is looking at.
+     */
+    public static function rowIsBlank(array $item): bool
+    {
+        foreach (['product_id', 'item_name', 'quantity', 'unit_id', 'unit_price', 'unit_price_subunit', 'target_price', 'target_price_subunit', 'note'] as $key) {
+            if (trim((string) ($item[$key] ?? '')) !== '') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Whether a submission is well formed, without writing anything. The
      * storefront calls this to show a customer what is missing before it posts,
      * and submit() calls it again on the server, because the first check is a
      * courtesy and the second one is the rule.
+     *
+     * The lines arrive the way the form posts them: the slots the person left
+     * completely blank still ride along, so the line numbers below count every
+     * posted slot, blank ones included. That is what makes "line 3" mean the
+     * row labelled Item 3 on the screen, even when row 2 was left empty. The
+     * upper bound counts the lines that actually post, not the blank slots.
      *
      * @return array{ok: bool, error: string|null}
      */
@@ -200,46 +222,71 @@ final class KitchenRuns
         if (!in_array($pricing, self::PRICING_MODES, true)) {
             return self::invalid('bad_pricing_mode');
         }
-        if (!$items) {
+
+        $posted = 0;
+        foreach ($items as $item) {
+            if (is_array($item) && !self::rowIsBlank($item)) {
+                $posted++;
+            }
+        }
+        if ($posted === 0) {
             return self::invalid('no_items');
         }
-        if (count($items) > self::MAX_LINES) {
+        if ($posted > self::MAX_LINES) {
             return self::invalid('too_many_items');
         }
 
+        $line = 0;
         foreach ($items as $item) {
+            // The line number a person sees on the form is one-based, and it
+            // counts the blank slots they left behind, so the refusal that
+            // comes back names the row they are looking at rather than saying
+            // "every line" and leaving them to count.
+            $line++;
             if (!is_array($item)) {
                 return self::invalid('invalid_line');
             }
+            if (self::rowIsBlank($item)) {
+                continue;
+            }
             $isCatalogue = self::positiveInt($item['product_id'] ?? null) !== null;
             if (!$isCatalogue && trim((string) ($item['item_name'] ?? '')) === '') {
-                return self::invalid('invalid_line');
+                return self::invalid('line_name:' . $line);
             }
+
+            $quantity = self::quantity($item['quantity'] ?? null);
+            $unitId   = self::positiveInt($item['unit_id'] ?? null);
 
             // Priced by us: we need to know what to buy, not what it costs.
             if ($pricing === 'by_us' && !$isCatalogue) {
-                if (self::quantity($item['quantity'] ?? null) === null || self::positiveInt($item['unit_id'] ?? null) === null) {
-                    return self::invalid('quantity_unit_required');
+                if ($quantity === null) {
+                    return self::invalid('line_quantity:' . $line);
+                }
+                if ($unitId === null) {
+                    return self::invalid('line_unit:' . $line);
                 }
             }
             // A catalogue line always needs its quantity, whoever is pricing it.
-            if ($isCatalogue && self::quantity($item['quantity'] ?? null) === null) {
-                return self::invalid('quantity_unit_required');
+            if ($isCatalogue && $quantity === null) {
+                return self::invalid('line_quantity:' . $line);
             }
             // Priced by the customer: a target price, and we fill the rest in.
             if ($pricing === 'by_customer' && !$isCatalogue) {
                 $price = $item['target_price_subunit'] ?? $item['unit_price_subunit'] ?? null;
                 if (self::positiveInt($price) === null) {
-                    return self::invalid('price_required');
+                    return self::invalid('line_price:' . $line);
                 }
             }
             // Already priced: the line is complete and we are only confirming it.
             if ($pricing === 'already_priced' && !$isCatalogue) {
-                if (self::quantity($item['quantity'] ?? null) === null || self::positiveInt($item['unit_id'] ?? null) === null) {
-                    return self::invalid('quantity_unit_required');
+                if ($quantity === null) {
+                    return self::invalid('line_quantity:' . $line);
+                }
+                if ($unitId === null) {
+                    return self::invalid('line_unit:' . $line);
                 }
                 if (self::positiveInt($item['unit_price_subunit'] ?? null) === null) {
-                    return self::invalid('price_required');
+                    return self::invalid('line_price:' . $line);
                 }
             }
         }
@@ -410,7 +457,20 @@ final class KitchenRuns
      */
     public static function message(string $code): string
     {
-        return [
+        // A line-scoped refusal carries the line a person is looking at, as
+        // "line_name:3", so the sentence can name that line rather than say
+        // "every line" and leave them counting rows on a phone. The template
+        // placeholders sit where the phrase "line 3" or "this line" belongs,
+        // so a code that loses its number still reads as English.
+        $line = null;
+        if (str_contains($code, ':')) {
+            [$code, $suffix] = explode(':', $code, 2);
+            if (ctype_digit($suffix)) {
+                $line = (int) $suffix;
+            }
+        }
+
+        $text = [
             'bad_mode'               => 'Choose how you want to send your list.',
             'bad_pricing_mode'       => 'Choose who should put the prices on this list.',
             'bad_address'            => 'We need a delivery name, phone number, street, city and state.',
@@ -429,6 +489,14 @@ final class KitchenRuns
             'invalid_catalogue_item' => 'One of the shop items on your list is no longer available. Remove it and send again.',
             'quantity_unit_required' => 'Give a quantity and a unit for every item we should price.',
             'price_required'         => 'Give your target price for every item.',
+            // Line-scoped. The placeholder is filled with "line 3" below, or
+            // "this line" when the number is missing, so the customer is told
+            // exactly which line and what is missing.
+            'line_name'              => 'Give :line an item name.',
+            'line_quantity'          => 'Give :line a quantity.',
+            'line_unit'              => 'Give :line a unit.',
+            'line_price'             => 'Give :line a price.',
+            'unit_not_active'        => 'The unit on :line is no longer available. Pick another one.',
             'budget_not_open'        => 'A spend cap only applies to an open-budget run.',
             'note_too_long'          => 'Keep your note under ' . number_format(self::NOTE_MAX) . ' characters.',
             'budget_not_a_number'    => 'Write the spend cap as a plain amount, for example 150,000.',
@@ -453,6 +521,11 @@ final class KitchenRuns
             'invalid_charge'         => 'There is no amount on this run to place on account.',
             'not_found'              => 'We could not find that Kitchen Run.',
         ][$code] ?? 'We could not save that Kitchen Run. Please try again.';
+
+        // Only the line-scoped sentences carry the placeholder. Replacing it in
+        // the others is a no-op, so this runs for every code; a line-scoped code
+        // that somehow arrived without its number still reads as English.
+        return str_replace(':line', $line !== null ? 'line ' . $line : 'this line', $text);
     }
 
     /** The HTTP status a refusal deserves. Kept beside the words on purpose. */
