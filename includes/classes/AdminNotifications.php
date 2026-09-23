@@ -10,6 +10,11 @@ final class AdminNotifications
 
     public const EVENTS = [
         'admin_new_order' => ['permission' => 'orders.view', 'related_type' => 'order'],
+        // A cancellation is order work that stopped, so it sits behind the same
+        // gate as the order it links to: whoever may open Order 360 may read
+        // that it was cancelled, by whom and why, and whoever may not gets
+        // neither the bell row nor the unread count for it.
+        'admin_order_cancelled' => ['permission' => 'orders.view', 'related_type' => 'order'],
         'admin_new_kitchen_run' => ['permission' => 'kitchen_runs.view', 'related_type' => 'kitchen_run'],
         'admin_kitchen_run_approved' => ['permission' => 'kitchen_runs.view', 'related_type' => 'kitchen_run'],
         'admin_kitchen_run_cancelled' => ['permission' => 'kitchen_runs.view', 'related_type' => 'kitchen_run'],

@@ -121,6 +121,41 @@ try {
     $count = Database::one('SELECT COUNT(*) AS n FROM order_cancellations WHERE order_id = :id', [':id' => $owned]);
     h_eq(1, (int) $count['n'], 'repeat clicks create one cancellation record');
 
+    // The controller is the seam that was missing: a cancellation used to reach
+    // the customer and nobody else. Proving it over HTTP means a future edit to
+    // api/v1/orders.php cannot quietly drop the team alert again, and proving it
+    // across the repeat request means the idempotency is in the path a browser
+    // actually takes, not only in the class.
+    $alerts = Database::all(
+        'SELECT id, body, cta_url FROM notifications
+          WHERE event_type = :event AND related_type = :type AND related_id = :id ORDER BY id',
+        [':event' => 'admin_order_cancelled', ':type' => 'order', ':id' => $owned]
+    );
+    h_eq(1, count($alerts), 'a customer cancellation over HTTP tells the team exactly once, repeat clicks included');
+    $alertId = (int) ($alerts[0]['id'] ?? 0);
+    h_ok(str_contains((string) ($alerts[0]['body'] ?? ''), 'Cancelled by the customer.'), 'the alert the controller produced says where the cancellation came from');
+    h_ok(str_contains((string) ($alerts[0]['body'] ?? ''), 'I changed my mind'), 'and carries the reason the customer picked');
+    h_ok(
+        str_ends_with((string) ($alerts[0]['cta_url'] ?? ''), '/admin/orders.php?order=' . $owned),
+        'the alert the controller produced links to the admin order, built from the configured base URL'
+    );
+    // The Manager fixture holds orders.view through the seeded manager role, so
+    // they are a recipient by permission rather than by name.
+    $managerRow = Database::one(
+        'SELECT channel, status FROM notification_deliveries
+          WHERE notification_id = :notification AND user_id = :user ORDER BY channel',
+        [':notification' => $alertId, ':user' => $users[2]]
+    );
+    h_eq('email', (string) ($managerRow['channel'] ?? ''), 'a colleague who may open orders is told by email over the HTTP path');
+    h_eq(2, (int) (Database::one(
+        'SELECT COUNT(*) AS n FROM notification_deliveries WHERE notification_id = :notification AND user_id = :user',
+        [':notification' => $alertId, ':user' => $users[2]]
+    )['n'] ?? 0), 'and in the app, one row per channel');
+    h_eq(1, (int) (Database::one(
+        'SELECT COUNT(*) AS n FROM notifications WHERE event_type = :event AND related_type = :type AND related_id = :id',
+        [':event' => 'order_cancelled', ':type' => 'order', ':id' => $owned]
+    )['n'] ?? 0), 'the customer still hears about their own cancellation over the HTTP path, exactly once');
+
     [$code] = h_req($jars[2], $base . '/api/v1/orders.php', [
         'action' => 'cancel_staff', 'order_id' => $paid, 'reason_code' => 'customer_requested', 'confirmed' => '1', 'okv_csrf' => $csrfManager,
     ]);
@@ -132,6 +167,12 @@ try {
     Settings::set('cancellation_cutoff_time', $oldCutoff, 'string', null);
     Settings::flushCache();
     foreach ($orders as $id) {
+        Database::run(
+            'DELETE FROM notification_deliveries WHERE notification_id IN
+               (SELECT id FROM notifications WHERE related_type = \'order\' AND related_id = :id)',
+            [':id' => $id]
+        );
+        Database::run('DELETE FROM notifications WHERE related_type = \'order\' AND related_id = :id', [':id' => $id]);
         Database::run('DELETE FROM order_status_history WHERE order_id = :id', [':id' => $id]);
         Database::run('DELETE FROM order_cancellations WHERE order_id = :id', [':id' => $id]);
         Database::run('DELETE FROM orders WHERE id = :id', [':id' => $id]);

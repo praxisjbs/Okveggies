@@ -99,6 +99,45 @@ try {
     anh_eq(200, $historyStatus, 'the full notification history renders');
     anh_ok(str_contains($history, 'Order needs attention'), 'history contains the permitted update');
     anh_ok(!str_contains($history, 'Secret payment proof'), 'history excludes the forbidden update');
+
+    // A cancelled order is order work that stopped, so it arrives in the same
+    // bell, behind the same orders.view gate, with the same deep link. Written
+    // here rather than in the fixture above so the counts the earlier
+    // assertions pin down stay exactly what they were.
+    $cancellationTitle = 'Order ZZ-BELL-' . $suffix . ' has been cancelled';
+    Database::run(
+        'INSERT INTO notifications (event_type, related_type, related_id, title, body, status)
+         VALUES (:event, :type, :related, :title, :body, :status)',
+        [
+            ':event' => 'admin_order_cancelled', ':type' => 'order', ':related' => 43,
+            ':title' => $cancellationTitle, ':body' => 'Cancelled by the customer.', ':status' => 'sent',
+        ]
+    );
+    $cancellationId = (int) Database::getInstance()->getConnection()->lastInsertId();
+    $notificationIds[] = $cancellationId;
+    Database::run(
+        'INSERT INTO notification_deliveries (notification_id, user_id, channel, recipient_address, status, attempt_count, sent_at)
+         VALUES (:notification, :user, :channel, :address, :status, :attempts, NOW())',
+        [
+            ':notification' => $cancellationId, ':user' => $userId,
+            ':channel' => Notifications::CHANNEL_IN_APP, ':address' => 'in-app',
+            ':status' => Notifications::STATUS_SENT, ':attempts' => 1,
+        ]
+    );
+    $deliveries['admin_order_cancelled'] = (int) Database::getInstance()->getConnection()->lastInsertId();
+
+    [$afterStatus, $afterBody] = anh_request($base, $jar, '/api/v1/admin_notifications.php?action=list');
+    $after = json_decode($afterBody, true);
+    anh_eq(200, $afterStatus, 'the feed still answers after a cancellation lands');
+    anh_eq('admin_order_cancelled', (string) ($after['notifications'][0]['event_type'] ?? ''), 'the newest alert in the bell is the cancellation');
+    anh_eq('/admin/orders.php?order=43', (string) ($after['notifications'][0]['href'] ?? ''), 'the cancellation alert deep-links to Order 360');
+    anh_eq(1, (int) ($after['unread_count'] ?? -1), 'the cancellation alert is the one unread row, the order alert having been read');
+    [$cancelReadStatus, $cancelReadBody] = anh_request($base, $jar, '/api/v1/admin_notifications.php', ['action' => 'mark_read', 'delivery_id' => $deliveries['admin_order_cancelled'], 'okv_csrf' => $csrf]);
+    anh_eq(200, $cancelReadStatus, 'a cancellation alert can be marked read');
+    anh_eq(true, (bool) (json_decode($cancelReadBody, true)['changed'] ?? false), 'and the read is recorded');
+
+    [, $historyAfter] = anh_request($base, $jar, '/admin/notifications.php');
+    anh_ok(str_contains($historyAfter, $cancellationTitle), 'the history page lists the cancellation alert');
 } finally {
     foreach ($notificationIds as $id) { Database::run('DELETE FROM notification_deliveries WHERE notification_id = :id', [':id' => $id]); Database::run('DELETE FROM notifications WHERE id = :id', [':id' => $id]); }
     if ($userId > 0) { Database::run('DELETE FROM user_roles WHERE user_id = :id', [':id' => $userId]); Database::run('DELETE FROM users WHERE id = :id', [':id' => $userId]); }

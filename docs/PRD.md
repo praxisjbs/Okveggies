@@ -314,7 +314,7 @@ Every order, B2C or B2B, gets a visible trail the customer can open from a link 
 - **Email (SMTP, via a `Mail` class on PHPMailer):** order placed, payment confirmed, deposit received, order dispatched, order delivered, and the order-trail link. Transactional, plain, always with a next step. Templates live in `notification_templates`; deliveries are tracked in `notification_deliveries`.
 - **WhatsApp:** the floating support widget opens `wa.me` with a prefilled message. WhatsApp remains the human, trust-building channel. Automated WhatsApp Business API messaging is Phase 2.
 - **Contact form:** the "Contact us" option lands a `contact_messages` row in the admin panel and notifies staff.
-- **Admin alerts:** new order, new kitchen run, new manual payment proof to review, new contact message, new make-it-right report.
+- **Admin alerts:** new order, new kitchen run, new manual payment proof to review, new contact message, new make-it-right report, and a cancelled order (Owner decision, 23 September 2026: a cancellation reaches every active staff member who may open the order, whichever side pressed the button, telling them the order number, the customer, who cancelled it and why, the delivery date it was going out on, and where the money now stands. The alert carries no naira figure; the amounts stay on Order 360 behind the same `orders.view` gate, and a refund that failed still reaches the payments team through its own alert with the figure attached).
 
 ---
 

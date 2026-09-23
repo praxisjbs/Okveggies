@@ -14,17 +14,92 @@
 
 final class Mail
 {
+    /**
+     * Why the most recent send() failed, as one short sentence.
+     *
+     * The delivery ledger records this beside the failed row, and the Order 360
+     * screen prints it next to the "Send it again" button, so the person
+     * chasing a bounced staff alert can tell a dead mail host from a wrong
+     * password without opening a log file. It is never the driver's own text:
+     * PHPMailer's message can carry the SMTP host, the port and the account
+     * name, and the house rule is that an exception message is logged and never
+     * shown. The detail goes to error_log; this holds the category.
+     */
+    private static string $lastError = '';
+
+    /** The sanitised reason the last send failed, or the plain fallback. */
+    public static function lastError(): string
+    {
+        return self::$lastError !== '' ? self::$lastError : self::FAIL_UNKNOWN;
+    }
+
+    public const FAIL_UNKNOWN = 'The mail server would not take the message.';
+    public const FAIL_NO_TRANSPORT = 'No mail transport is installed on this server.';
+    public const FAIL_UNREACHABLE = 'The mail server could not be reached.';
+    public const FAIL_AUTH = 'The mail server refused our sign-in details.';
+    public const FAIL_TIMEOUT = 'The mail server did not answer in time.';
+    public const FAIL_RECIPIENT = 'That address was not accepted by the mail server.';
+    public const FAIL_SENDER = 'The address we sent from is not usable.';
+
+    /**
+     * Sort one driver complaint into a sentence we are willing to store and
+     * show. Pure and public so the categories are unit tested rather than
+     * discovered in production, and so a caller can classify a failure it caught
+     * itself. Returns only one of the FAIL_* sentences above, whatever it is
+     * given, which is what makes it safe to print.
+     */
+    public static function classifyFailure(string $detail): string
+    {
+        $needle = mb_strtolower(trim($detail));
+        if ($needle === '') {
+            return self::FAIL_UNKNOWN;
+        }
+
+        // Order matters: a complaint that says both "connect" and "timed out"
+        // is more useful as a timeout, and an authentication refusal is more
+        // useful than the generic rejection it also mentions.
+        $rules = [
+            self::FAIL_AUTH => [
+                'could not authenticate', 'authentication failed', 'authentication unsuccessful',
+                'auth login', 'auth plain', '535', 'login failed',
+            ],
+            self::FAIL_TIMEOUT => ['timed out', 'timeout', 'stream timeout'],
+            self::FAIL_RECIPIENT => [
+                'rcpt to', 'mail from', 'recipient', '550', '553', '554', 'relay',
+                'not accepted', 'unknown user', 'mailbox unavailable', 'no such user',
+            ],
+            self::FAIL_SENDER => ['invalid address', 'setfrom', 'from address failed'],
+            self::FAIL_UNREACHABLE => [
+                'smtp connect() failed', 'could not connect', 'failed to connect',
+                'connection refused', 'connection reset', 'no route to host',
+                'stream_socket_client', 'name or service not known',
+                'temporary failure in name resolution', 'network is unreachable',
+            ],
+        ];
+        foreach ($rules as $sentence => $needles) {
+            foreach ($needles as $fragment) {
+                if (str_contains($needle, $fragment)) {
+                    return $sentence;
+                }
+            }
+        }
+        return self::FAIL_UNKNOWN;
+    }
+
     /** Send an email. Returns true if handed to SMTP, false if it could not be sent. */
     public static function send(string $to, string $subject, string $htmlBody, ?string $textBody = null): bool
     {
+        self::$lastError = '';
         $fromEmail = (string) env('SMTP_FROM_EMAIL', env('SMTP_USER', 'noreply@okveggies.com.ng'));
         $fromName  = (string) env('SMTP_FROM_NAME', 'OK Veggies');
 
         if (!class_exists(\PHPMailer\PHPMailer\PHPMailer::class)) {
             error_log("Mail (PHPMailer missing) to=$to subject=" . $subject);
+            self::$lastError = self::FAIL_NO_TRANSPORT;
             return false;
         }
 
+        $mailer = null;
         try {
             $mailer = new \PHPMailer\PHPMailer\PHPMailer(true);
             $mailer->isSMTP();
@@ -55,6 +130,13 @@ final class Mail
             return true;
         } catch (Throwable $e) {
             error_log('Mail send failed to=' . $to . ' error=' . $e->getMessage());
+            // The driver's own words go to the log only. What reaches the
+            // delivery ledger, and the screen that prints it, is the category.
+            $detail = $e->getMessage();
+            if ($mailer !== null && trim((string) ($mailer->ErrorInfo ?? '')) !== '') {
+                $detail .= ' ' . (string) $mailer->ErrorInfo;
+            }
+            self::$lastError = self::classifyFailure($detail);
             return false;
         }
     }
