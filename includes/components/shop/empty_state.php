@@ -15,7 +15,14 @@ if (!function_exists('okv_empty_state')) {
      */
     function okv_empty_state(string $icon, string $heading, string $line, array $actions, array $opts = []): void
     {
-        $tag = in_array(($opts['heading_tag'] ?? 'h2'), ['h1', 'h2', 'h3', 'p'], true) ? (string) $opts['heading_tag'] : 'h2';
+        // Read the option once, then whitelist it. Reading $opts['heading_tag']
+        // a second time inside the true branch is what used to print an empty
+        // tag name: when a caller passed no opts at all, the ?? 'h2' default
+        // passed the in_array check and the raw read returned null, so the
+        // heading came out as "< id=...>Your basket is empty</>" and the
+        // browser showed the attributes as text on the page.
+        $headingTag = trim((string) ($opts['heading_tag'] ?? ''));
+        $tag = in_array($headingTag, ['h1', 'h2', 'h3', 'p'], true) ? $headingTag : 'h2';
         $role = (string) ($opts['role'] ?? 'status');
         $id = (string) ($opts['id'] ?? '');
         $class = (string) ($opts['class'] ?? '');
@@ -32,9 +39,9 @@ if (!function_exists('okv_empty_state')) {
                   $btn = $style === 'outline' ? 'okv-btn-outline' : 'okv-btn';
                   $actionIcon = (string) ($action['icon'] ?? '');
               ?>
-                <a href="<?= okv_e((string) $action['href']) ?>" class="<?= $btn ?> min-h-[44px] w-full justify-center rounded-xl sm:w-auto">
+                <a href="<?= okv_e($action['href'] ?? '') ?>" class="<?= $btn ?> min-h-[44px] w-full justify-center rounded-xl sm:w-auto">
                   <?php if ($actionIcon !== ''): ?><?php okv_icon($actionIcon, 'h-4 w-4'); ?><?php endif; ?>
-                  <?= okv_e((string) $action['label']) ?>
+                  <?= okv_e($action['label'] ?? '') ?>
                 </a>
               <?php endforeach; ?>
             </div>
