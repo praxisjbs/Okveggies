@@ -15,6 +15,11 @@ final class AdminNotifications
         // that it was cancelled, by whom and why, and whoever may not gets
         // neither the bell row nor the unread count for it.
         'admin_order_cancelled' => ['permission' => 'orders.view', 'related_type' => 'order'],
+        // A stage email that never reached the customer is fulfilment work
+        // going quiet, so it sits behind the same gate as the order it links
+        // to: whoever may open Order 360 and send it again may read that it
+        // failed, and whoever may not gets neither the bell row nor the count.
+        'admin_stage_email_failed' => ['permission' => 'orders.view', 'related_type' => 'order'],
         'admin_new_kitchen_run' => ['permission' => 'kitchen_runs.view', 'related_type' => 'kitchen_run'],
         'admin_kitchen_run_approved' => ['permission' => 'kitchen_runs.view', 'related_type' => 'kitchen_run'],
         'admin_kitchen_run_cancelled' => ['permission' => 'kitchen_runs.view', 'related_type' => 'kitchen_run'],

@@ -225,9 +225,14 @@ $announce = new ReflectionMethod(Notifications::class, 'alreadyAnnounced');
 okv_test_ok($announce->isPublic() && $announce->isStatic(), 'the idempotency check is callable, so a suite can prove it rather than trust it');
 okv_test_eq(3, $announce->getNumberOfParameters(), 'the idempotency check asks for the event, the record type and the record');
 okv_test_eq(
-    2,
-    substr_count($dispatcher, "self::alreadyAnnounced("),
-    'both halves of a cancellation check before they write, the customer half and the team half'
+    1,
+    substr_count($dispatcher, "self::alreadyAnnounced('order_cancelled',"),
+    'the customer half of a cancellation checks before it writes'
+);
+okv_test_eq(
+    1,
+    substr_count($dispatcher, "self::alreadyAnnounced('admin_order_cancelled',"),
+    'the team half of a cancellation checks before it writes'
 );
 okv_test_ok(str_contains($dispatcher, "self::send(\n            'admin_order_cancelled',"), 'the team alert goes through the one dispatcher');
 okv_test_ok(str_contains($dispatcher, "self::staffRecipients('orders.view')"), 'the recipients come from active users holding the order visibility permission');
