@@ -81,6 +81,7 @@ require_once __DIR__ . '/classes/Customer.php';
 require_once __DIR__ . '/classes/IssueReports.php';
 require_once __DIR__ . '/classes/ContactMessages.php';
 require_once __DIR__ . '/classes/Catalogue.php';
+require_once __DIR__ . '/classes/CatalogueSettings.php';
 require_once __DIR__ . '/classes/Sitemap.php';
 require_once __DIR__ . '/classes/Basket.php';
 require_once __DIR__ . '/classes/Pricing.php';
