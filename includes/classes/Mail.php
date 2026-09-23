@@ -86,6 +86,27 @@ final class Mail
         return self::FAIL_UNKNOWN;
     }
 
+    /**
+     * A customer address safe to write to the error log: the first letter of
+     * the name part plus the domain, so operations can tell a typo from a dead
+     * host without the log carrying anything that identifies the customer.
+     * Pure, so the masking itself is unit tested.
+     */
+    public static function maskAddress(string $address): string
+    {
+        $address = trim($address);
+        $at = strrpos($address, '@');
+        if ($at === false) {
+            return $address === '' ? '(no address)' : '(invalid address)';
+        }
+        $name = substr($address, 0, $at);
+        $domain = substr($address, $at + 1);
+        if ($name === '' || $domain === '' || !filter_var($address, FILTER_VALIDATE_EMAIL)) {
+            return '(invalid address)';
+        }
+        return mb_substr($name, 0, 1) . '***@' . $domain;
+    }
+
     /** Send an email. Returns true if handed to SMTP, false if it could not be sent. */
     public static function send(string $to, string $subject, string $htmlBody, ?string $textBody = null): bool
     {
@@ -94,7 +115,7 @@ final class Mail
         $fromName  = (string) env('SMTP_FROM_NAME', 'OK Veggies');
 
         if (!class_exists(\PHPMailer\PHPMailer\PHPMailer::class)) {
-            error_log("Mail (PHPMailer missing) to=$to subject=" . $subject);
+            error_log('Mail (PHPMailer missing) to=' . self::maskAddress($to) . ' subject=' . $subject);
             self::$lastError = self::FAIL_NO_TRANSPORT;
             return false;
         }
@@ -121,6 +142,12 @@ final class Mail
             $mailer->Timeout = max(2, (int) env('SMTP_TIMEOUT', 10));
             $mailer->CharSet = 'UTF-8';
             $mailer->setFrom($fromEmail, $fromName);
+            // Replies go to the support inbox the customer already sees in the
+            // email footer, never to the sending mailbox nobody reads.
+            $replyTo = defined('OKV_BOOTSTRAPPED') ? Settings::str('support_email', '') : '';
+            if ($replyTo !== '' && filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+                $mailer->addReplyTo($replyTo, $fromName);
+            }
             $mailer->addAddress($to);
             $mailer->Subject = $subject;
             $mailer->isHTML(true);
@@ -129,7 +156,12 @@ final class Mail
             $mailer->send();
             return true;
         } catch (Throwable $e) {
-            error_log('Mail send failed to=' . $to . ' error=' . $e->getMessage());
+            // Masked, never the address itself: the delivery ledger already
+            // holds the full address for staff, and the log must not become a
+            // second copy of customer data. Credentials never reach this line:
+            // PHPMailer errors carry the host and the account name at most,
+            // and the classified category is what is stored and shown.
+            error_log('Mail send failed to=' . self::maskAddress($to) . ' error=' . $e->getMessage());
             // The driver's own words go to the log only. What reaches the
             // delivery ledger, and the screen that prints it, is the category.
             $detail = $e->getMessage();
