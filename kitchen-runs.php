@@ -48,7 +48,7 @@ foreach ($products as $product) {
     $productById[(int) $product['id']] = $product;
 }
 
-$units = Database::all('SELECT id, name FROM units_of_measurement ORDER BY id');
+$units = Database::all('SELECT id, name FROM units_of_measurement WHERE is_active = 1 ORDER BY id');
 $zones = Delivery::zonesActive();
 
 $prefillDate = '';
@@ -60,6 +60,14 @@ $lastDay = Database::one(
 );
 if ($lastDay && !empty(Delivery::isEligible((string) $lastDay['preferred_delivery_date'], $customerType)['eligible'])) {
     $prefillDate = (string) $lastDay['preferred_delivery_date'];
+}
+// With JavaScript off there is no day picker to press, so the hidden field
+// needs a day that is actually deliverable. Fall back to the next one we run.
+if ($prefillDate === '') {
+    $upcoming = Delivery::nextEligibleDates($customerType, 1);
+    if ($upcoming) {
+        $prefillDate = (string) ($upcoming[0]['date'] ?? '');
+    }
 }
 
 // A saved list may mix shop lines and typed lines. The shop lines go to the
@@ -138,6 +146,13 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
     .kr-backdrop{background:rgba(3,16,10,0.4);backdrop-filter:blur(8px)}
     .kr-sticky-cta{position:sticky;bottom:0;z-index:20;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(to top, #fff 80%, rgba(255,255,255,0))}
   </style>
+  <?php // With JavaScript off the step wizard cannot collapse, so reveal every
+        // step as one flat form. The controller posts natively, the delivery
+        // day and area already carry a valid default, and a single typed row
+        // goes through. The JS collapses this back to the wizard. ?>
+  <noscript>
+    <style>[data-kr-step]{display:block !important}</style>
+  </noscript>
 </head>
 <body class="bg-canvas text-ink antialiased">
 <?php okv_shop_header('kitchen-runs'); ?>
@@ -185,7 +200,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
       <button type="button" class="kr-dot" data-kr-step-dot="3" aria-label="Step 3 delivery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8l2-4h12l2 4v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/><path d="M7 12h10"/></svg></button>
     </div>
 
-    <form action="/api/v1/kitchen_runs.php" method="post" enctype="multipart/form-data" class="mt-6" data-kr-form data-start="<?= okv_e($chosen) ?>">
+    <form action="/api/v1/kitchen_runs.php" method="post" enctype="multipart/form-data" class="mt-6" data-kr-form data-start="<?= okv_e($chosen) ?>" data-max-lines="<?= (int) KitchenRuns::MAX_LINES ?>">
       <?= Csrf::field() ?>
       <input type="hidden" name="action" value="submit">
       <input type="hidden" name="input_mode" value="<?= okv_e($chosen) ?>" data-kr-input-mode>
@@ -298,6 +313,12 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg> Add item
           </button>
         </div>
+
+      <noscript>
+        <p class="mt-3 text-sm text-ink-60">
+          Without JavaScript you get one line here, and you can send the rest as a second run. Lines are saved in the order they appear.
+        </p>
+      </noscript>
 
         <div class="mt-4 rounded-xl bg-mist/60 p-3">
           <label class="flex items-start gap-3">

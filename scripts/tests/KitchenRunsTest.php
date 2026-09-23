@@ -92,7 +92,7 @@ okv_test_ok(KitchenRuns::validateSubmission('priced', 'already_priced', [
     ['product_id' => 7, 'quantity' => '2.000'],
     ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1, 'unit_price_subunit' => 400000],
 ])['ok'], 'a priced list may still carry a shop item, the way a mixed one does');
-okv_test_eq('price_required', KitchenRuns::validateSubmission('priced', 'already_priced', [
+okv_test_eq('line_price:1', KitchenRuns::validateSubmission('priced', 'already_priced', [
     ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1],
 ])['error'], 'a priced line with no price on it is refused, whatever the mode is called');
 okv_test_ok(in_array('mixed', KitchenRuns::MODES, true), 'rows written before the new mode existed are still legal');
@@ -142,13 +142,27 @@ okv_test_ok(is_int(KitchenRuns::autoQuoteTotal('catalogue', 'by_us', false, $sho
 okv_test_eq('bad_mode', KitchenRuns::validateSubmission('telepathy', 'by_us', [['item_name' => 'Pomo', 'quantity' => '1', 'unit_id' => 1]])['error'], 'an unknown input mode is named as the problem');
 okv_test_eq('bad_pricing_mode', KitchenRuns::validateSubmission('custom', 'guesswork', [['item_name' => 'Pomo']])['error'], 'an unknown pricing mode is named as the problem');
 okv_test_eq('no_items', KitchenRuns::validateSubmission('custom', 'by_us', [])['error'], 'an empty list is refused, not saved as an empty request');
-okv_test_eq('invalid_line', KitchenRuns::validateSubmission('custom', 'by_us', [['quantity' => '1.000', 'unit_id' => 1]])['error'], 'a line with no name and no product is not a line');
-okv_test_eq('quantity_unit_required', KitchenRuns::validateSubmission('custom', 'by_us', [['item_name' => 'Pomo', 'quantity' => '10']])['error'], 'a list we price needs the unit, or we do not know what to buy');
-okv_test_eq('price_required', KitchenRuns::validateSubmission('custom', 'by_customer', [['item_name' => 'Pomo']])['error'], 'a customer-priced line without a figure is refused');
-okv_test_eq('price_required', KitchenRuns::validateSubmission('custom', 'already_priced', [['item_name' => 'Pomo', 'quantity' => '2', 'unit_id' => 1]])['error'], 'an already-priced line without its price is refused');
+okv_test_eq('line_name:1', KitchenRuns::validateSubmission('custom', 'by_us', [['quantity' => '1.000', 'unit_id' => 1]])['error'], 'a line with no name and no product is not a line');
+okv_test_eq('line_unit:1', KitchenRuns::validateSubmission('custom', 'by_us', [['item_name' => 'Pomo', 'quantity' => '10']])['error'], 'a list we price needs the unit, or we do not know what to buy');
+okv_test_eq('line_quantity:1', KitchenRuns::validateSubmission('custom', 'by_us', [['item_name' => 'Pomo', 'unit_id' => 1]])['error'], 'a typed line with no quantity is refused');
+okv_test_eq('line_price:1', KitchenRuns::validateSubmission('custom', 'by_customer', [['item_name' => 'Pomo']])['error'], 'a customer-priced line without a figure is refused');
+okv_test_eq('line_price:1', KitchenRuns::validateSubmission('custom', 'already_priced', [['item_name' => 'Pomo', 'quantity' => '2', 'unit_id' => 1]])['error'], 'an already-priced line without its price is refused');
+
+// The line number in the code is the line a person is looking at, so a fault on
+// the third line is reported as line three, not as "every line".
+okv_test_eq('line_unit:3', KitchenRuns::validateSubmission('custom', 'by_us', [
+    ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1],
+    ['item_name' => 'Yam', 'quantity' => '2.000', 'unit_id' => 1],
+    ['item_name' => 'Oil', 'quantity' => '1.000'],
+])['error'], 'a fault on the third line names the third line, so the customer is not left counting rows');
 
 $tooMany = array_fill(0, KitchenRuns::MAX_LINES + 1, ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1]);
 okv_test_eq('too_many_items', KitchenRuns::validateSubmission('custom', 'by_us', $tooMany)['error'], 'a list has an upper bound, so one request cannot become a denial of service');
+
+// The cap the form enforces in JavaScript is the same constant the server
+// enforces, rendered onto the form as data-max-lines, so the two cannot drift.
+$storefrontSource = (string) file_get_contents($okvRoot . '/kitchen-runs.php');
+okv_test_ok(str_contains($storefrontSource, 'data-max-lines="<?= (int) KitchenRuns::MAX_LINES ?>"'), 'the storefront renders the row cap from the constant, so the JS and the server share one limit');
 
 foreach ([['quantity' => '0'], ['quantity' => '-1'], ['quantity' => '1.0000'], ['quantity' => 'abc'], ['quantity' => '1e3']] as $bad) {
     $line = ['item_name' => 'Pomo', 'unit_id' => 1] + $bad;
@@ -387,13 +401,21 @@ $codes = [
     'delivery_unavailable', 'zone_unavailable', 'quote_expired', 'total_moved', 'reason_required',
     'stale', 'stale_or_not_owned', 'illegal_transition', 'payment_not_allowed', 'not_found',
     'budget_not_a_number', 'deposit_not_a_number', 'authorisation_required', 'not_quoted',
+    // The line-scoped refusals, each with the line a person is looking at.
+    'line_name:2', 'line_quantity:2', 'line_unit:2', 'line_price:2', 'unit_not_active:2',
 ];
 foreach ($codes as $code) {
     $message = KitchenRuns::message($code);
     okv_test_ok($message !== '' && $message !== 'We could not save that Kitchen Run. Please try again.', "$code has words of its own, not the catch-all");
     okv_test_ok(!str_contains($message, '_'), "$code speaks English to the customer, not a code name");
     okv_test_ok(!str_contains($message, "\u{2014}"), "$code carries no em dash");
+    okv_test_ok(!str_contains($message, ':line'), "$code leaves no placeholder unfilled");
 }
+// The line number is filled into the sentence, and the sentence names the line.
+okv_test_eq('Give line 3 an item name.', KitchenRuns::message('line_name:3'), 'a missing name names the line it is missing on');
+okv_test_eq('Give line 2 a unit.', KitchenRuns::message('line_unit:2'), 'a missing unit names its line and says what to add');
+okv_test_eq('The unit on line 4 is no longer available. Pick another one.', KitchenRuns::message('unit_not_active:4'), 'a retired unit names its line and says what to do');
+okv_test_eq('Give this line a quantity.', KitchenRuns::message('line_quantity'), 'a line-scoped code that lost its number still reads as English, never as a placeholder');
 okv_test_ok(KitchenRuns::message('something_new') !== '', 'an unmapped code still gets a sentence rather than a blank screen');
 okv_test_eq(404, KitchenRuns::statusCode('not_found'), 'a missing request is a 404');
 okv_test_eq(409, KitchenRuns::statusCode('stale'), 'a request that moved under the caller is a conflict, not a bad request');

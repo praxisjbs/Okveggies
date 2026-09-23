@@ -207,39 +207,52 @@ final class KitchenRuns
             return self::invalid('too_many_items');
         }
 
-        foreach ($items as $item) {
+        foreach ($items as $index => $item) {
+            // The line number a person sees on the form is one-based, so the
+            // refusal that comes back names the line they are looking at rather
+            // than saying "every line" and leaving them to count.
+            $line = $index + 1;
             if (!is_array($item)) {
                 return self::invalid('invalid_line');
             }
             $isCatalogue = self::positiveInt($item['product_id'] ?? null) !== null;
             if (!$isCatalogue && trim((string) ($item['item_name'] ?? '')) === '') {
-                return self::invalid('invalid_line');
+                return self::invalid('line_name:' . $line);
             }
+
+            $quantity = self::quantity($item['quantity'] ?? null);
+            $unitId   = self::positiveInt($item['unit_id'] ?? null);
 
             // Priced by us: we need to know what to buy, not what it costs.
             if ($pricing === 'by_us' && !$isCatalogue) {
-                if (self::quantity($item['quantity'] ?? null) === null || self::positiveInt($item['unit_id'] ?? null) === null) {
-                    return self::invalid('quantity_unit_required');
+                if ($quantity === null) {
+                    return self::invalid('line_quantity:' . $line);
+                }
+                if ($unitId === null) {
+                    return self::invalid('line_unit:' . $line);
                 }
             }
             // A catalogue line always needs its quantity, whoever is pricing it.
-            if ($isCatalogue && self::quantity($item['quantity'] ?? null) === null) {
-                return self::invalid('quantity_unit_required');
+            if ($isCatalogue && $quantity === null) {
+                return self::invalid('line_quantity:' . $line);
             }
             // Priced by the customer: a target price, and we fill the rest in.
             if ($pricing === 'by_customer' && !$isCatalogue) {
                 $price = $item['target_price_subunit'] ?? $item['unit_price_subunit'] ?? null;
                 if (self::positiveInt($price) === null) {
-                    return self::invalid('price_required');
+                    return self::invalid('line_price:' . $line);
                 }
             }
             // Already priced: the line is complete and we are only confirming it.
             if ($pricing === 'already_priced' && !$isCatalogue) {
-                if (self::quantity($item['quantity'] ?? null) === null || self::positiveInt($item['unit_id'] ?? null) === null) {
-                    return self::invalid('quantity_unit_required');
+                if ($quantity === null) {
+                    return self::invalid('line_quantity:' . $line);
+                }
+                if ($unitId === null) {
+                    return self::invalid('line_unit:' . $line);
                 }
                 if (self::positiveInt($item['unit_price_subunit'] ?? null) === null) {
-                    return self::invalid('price_required');
+                    return self::invalid('line_price:' . $line);
                 }
             }
         }
@@ -410,7 +423,18 @@ final class KitchenRuns
      */
     public static function message(string $code): string
     {
-        return [
+        // A line-scoped refusal carries the line a person is looking at, as
+        // "line_name:3", so the sentence can name that line rather than say
+        // "every line" and leave them counting rows on a phone.
+        $line = null;
+        if (str_contains($code, ':')) {
+            [$code, $suffix] = explode(':', $code, 2);
+            if (ctype_digit($suffix)) {
+                $line = (int) $suffix;
+            }
+        }
+
+        $text = [
             'bad_mode'               => 'Choose how you want to send your list.',
             'bad_pricing_mode'       => 'Choose who should put the prices on this list.',
             'bad_address'            => 'We need a delivery name, phone number, street, city and state.',
@@ -429,6 +453,13 @@ final class KitchenRuns
             'invalid_catalogue_item' => 'One of the shop items on your list is no longer available. Remove it and send again.',
             'quantity_unit_required' => 'Give a quantity and a unit for every item we should price.',
             'price_required'         => 'Give your target price for every item.',
+            // Line-scoped. The placeholder is filled with the line number below,
+            // so the customer is told exactly which line and what is missing.
+            'line_name'              => 'Give line :line an item name.',
+            'line_quantity'          => 'Give line :line a quantity.',
+            'line_unit'              => 'Give line :line a unit.',
+            'line_price'             => 'Give line :line a price.',
+            'unit_not_active'        => 'The unit on line :line is no longer available. Pick another one.',
             'budget_not_open'        => 'A spend cap only applies to an open-budget run.',
             'note_too_long'          => 'Keep your note under ' . number_format(self::NOTE_MAX) . ' characters.',
             'budget_not_a_number'    => 'Write the spend cap as a plain amount, for example 150,000.',
@@ -453,6 +484,11 @@ final class KitchenRuns
             'invalid_charge'         => 'There is no amount on this run to place on account.',
             'not_found'              => 'We could not find that Kitchen Run.',
         ][$code] ?? 'We could not save that Kitchen Run. Please try again.';
+
+        // Only the line-scoped sentences carry the placeholder. Replacing it in
+        // the others is a no-op, so this runs for every code; a line-scoped code
+        // that somehow arrived without its number still reads as English.
+        return str_replace(':line', $line !== null ? (string) $line : 'this', $text);
     }
 
     /** The HTTP status a refusal deserves. Kept beside the words on purpose. */

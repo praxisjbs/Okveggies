@@ -85,6 +85,7 @@ $suffix = substr(bin2hex(random_bytes(5)), 0, 10);
 $password = 'kitchen-http-777';
 $users = [];
 $requestIds = [];
+$retiredUnitId = 0;
 $jars = [
     tempnam(sys_get_temp_dir(), 'okv-krh-m-'),
     tempnam(sys_get_temp_dir(), 'okv-krh-a-'),
@@ -271,6 +272,66 @@ try {
     ]);
     krh_eq(422, $code, 'a day the shop does not run is refused at the door, not stored and argued about later');
 
+    // --- 3b-again. The typed list exactly as the storefront form names it:
+    //     items[N][item_name], [quantity], [unit_id], and the optional [note].
+    //     This is posted the plain way, with no fetch headers at all, which is
+    //     what a browser sends when JavaScript never runs. If these assertions
+    //     are green, the field names on the page are the names the server reads
+    //     and a customer whose script failed is not stranded.
+    Database::run('INSERT INTO units_of_measurement (name, symbol, allows_decimal, is_active) VALUES (:n, :s, 0, 0)', [':n' => 'Retired ' . $suffix, ':s' => 'ret' . $suffix]);
+    $retiredUnitId = (int) Database::getInstance()->getConnection()->lastInsertId();
+    $nativeCsrf = krh_csrf($jars[1], $base . '/kitchen-runs.php');
+    [$code] = krh_req($jars[1], $base . '/api/v1/kitchen_runs.php', [
+        'action' => 'submit', 'okv_csrf' => $nativeCsrf,
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'recipient_name' => 'Kitchen Owner', 'recipient_phone' => '08031234567',
+        'address_line_1' => '5 Bourdillon Road', 'city' => 'Lagos', 'state' => 'Lagos',
+        'preferred_delivery_date' => $date, 'delivery_zone_id' => $zoneId,
+        'items' => [
+            ['item_name' => 'Pomo', 'quantity' => '6.000', 'unit_id' => $unitId, 'note' => 'Soft ones.'],
+            ['item_name' => 'Palm oil', 'quantity' => '4.000', 'unit_id' => $unitId],
+        ],
+    ], false);  // false = a plain form post, no X-Requested-With, Accept text/html: the no-JS case
+    krh_eq(303, $code, 'a plain form post with no JavaScript is answered with a redirect to the run, not JSON');
+    $nativeId = (int) Database::one('SELECT id FROM kitchen_run_requests WHERE user_id = :u ORDER BY id DESC LIMIT 1', [':u' => $users[1]])['id'];
+    $requestIds[] = $nativeId;
+    $nativeLines = KitchenRuns::lines($nativeId);
+    krh_eq(2, count($nativeLines), 'both lines posted under the storefront field names reach storage with no JavaScript');
+    krh_eq('Pomo', (string) $nativeLines[0]['item_name'], 'the field names the form renders are the names the server reads');
+    krh_eq('6.000', (string) $nativeLines[0]['quantity'], 'the quantity arrives exactly');
+    krh_eq('Soft ones.', (string) $nativeLines[0]['note'], 'the optional note on the line arrives too');
+    krh_eq(null, $nativeLines[1]['product_id'], 'a typed line is never handed a product it never had');
+
+    // A typed line that names a unit we have retired is refused over the route,
+    // naming the line, because the server owns which units exist, not the page.
+    [$code, $body] = krh_req($jars[1], $base . '/api/v1/kitchen_runs.php', [
+        'action' => 'submit', 'okv_csrf' => $nativeCsrf,
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'recipient_name' => 'Kitchen Owner', 'recipient_phone' => '08031234567',
+        'address_line_1' => '5 Bourdillon Road', 'city' => 'Lagos', 'state' => 'Lagos',
+        'preferred_delivery_date' => $date, 'delivery_zone_id' => $zoneId,
+        'items' => [['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => $retiredUnitId]],
+    ]);
+    krh_eq(422, $code, 'a typed line cannot name a unit the shop no longer offers, over the route');
+    krh_eq('unit_not_active:1', (string) (json_decode($body, true)['code'] ?? ''), 'the error code names the line at fault');
+
+    // The row-specific refusal, over the route: the second line has no name.
+    [$code, $body] = krh_req($jars[1], $base . '/api/v1/kitchen_runs.php', [
+        'action' => 'submit', 'okv_csrf' => $nativeCsrf,
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'recipient_name' => 'Kitchen Owner', 'recipient_phone' => '08031234567',
+        'address_line_1' => '5 Bourdillon Road', 'city' => 'Lagos', 'state' => 'Lagos',
+        'preferred_delivery_date' => $date, 'delivery_zone_id' => $zoneId,
+        'items' => [
+            ['item_name' => 'Pomo', 'quantity' => '6.000', 'unit_id' => $unitId],
+            ['quantity' => '4.000', 'unit_id' => $unitId],
+        ],
+    ]);
+    krh_eq(422, $code, 'a typed line with no item name is refused over the route');
+    $rowErr = json_decode($body, true) ?: [];
+    krh_eq('line_name:2', (string) ($rowErr['code'] ?? ''), 'the error code names the line that is at fault');
+    krh_eq('Give line 2 an item name.', (string) ($rowErr['message'] ?? ''), 'and the sentence the customer reads names that line');
+
     // --- 3c. Staff approve for a customer who rang up (item 23), and the
     //     customer withdraws an approved run (item 26), both over the routes.
     $phoneVersion = (int) Database::one('SELECT state_version FROM kitchen_run_requests WHERE id = :id', [':id' => $phoneId])['state_version'];
@@ -438,6 +499,9 @@ try {
     [$code] = krh_req($jars[1], $base . '/pro/kitchen_lists.php', null, false);
     krh_eq(302, $code, 'a household customer is sent to the storefront Kitchen Runs screen');
 } finally {
+    if ($retiredUnitId) {
+        Database::run('DELETE FROM units_of_measurement WHERE id = :id', [':id' => $retiredUnitId]);
+    }
     foreach ($requestIds as $id) {
         $orderRow = Database::one('SELECT converted_order_id FROM kitchen_run_requests WHERE id = :id', [':id' => $id]);
         $orderId = $orderRow && $orderRow['converted_order_id'] !== null ? (int) $orderRow['converted_order_id'] : 0;

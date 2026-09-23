@@ -248,6 +248,7 @@ final class KitchenRunWorkflow
                 throw new DomainException('quantity_unit_required');
             }
         }
+        self::assertActiveUnits($items);
         $quoted = KitchenRuns::quoteLines($items);
 
         $deposit = KitchenRuns::optionalMoney($input['deposit_subunit'] ?? null);
@@ -849,7 +850,49 @@ final class KitchenRunWorkflow
             ];
         }
 
+        self::assertActiveUnits($out);
         return self::hydrateCatalogueLines($out);
+    }
+
+    /**
+     * A free-text line's unit must be one we actually offer right now. The
+     * customer's dropdown only lists active units, and this proves it on the
+     * server, so a line naming a unit we have since retired is refused with the
+     * line number rather than stored against a unit nobody can price. A
+     * catalogue line is left alone: its unit comes from the product, not the
+     * form. One query for the whole list, not one per line.
+     */
+    private static function assertActiveUnits(array $lines): void
+    {
+        $wanted = [];
+        foreach ($lines as $index => $line) {
+            if (($line['product_id'] ?? null) !== null) {
+                continue;
+            }
+            $unitId = KitchenRuns::positiveInt($line['unit_id'] ?? null);
+            if ($unitId !== null) {
+                $wanted[$unitId][] = $index + 1;
+            }
+        }
+        if (!$wanted) {
+            return;
+        }
+
+        $ids   = array_keys($wanted);
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $stmt  = Database::getInstance()->getConnection()->prepare(
+            'SELECT id FROM units_of_measurement WHERE id IN (' . $marks . ') AND is_active = 1'
+        );
+        $stmt->execute($ids);
+        $active = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $active[(int) $row['id']] = true;
+        }
+        foreach ($wanted as $unitId => $lineNumbers) {
+            if (!isset($active[$unitId])) {
+                throw new DomainException('unit_not_active:' . $lineNumbers[0]);
+            }
+        }
     }
 
     /**

@@ -160,6 +160,20 @@ $creditRefusal  = (string) $request['customer_type'] === 'business'
               <label class="okv-label" for="kr-a-unit-<?= (int) $index ?>">Unit</label>
               <select class="okv-input" id="kr-a-unit-<?= (int) $index ?>" name="items[<?= (int) $index ?>][unit_id]">
                 <option value="">Choose</option>
+                <?php
+                  // A unit retired after this line was sent is not in the active
+                  // picker, so show the one the line still carries, marked, and
+                  // let staff keep or replace it. The server refuses a retired
+                  // unit on save, which is the honest outcome.
+                  $lineUnitId = (int) ($line['unit_id'] ?? 0);
+                  $lineUnitActive = false;
+                  foreach ($units as $u) {
+                      if ((int) $u['id'] === $lineUnitId) { $lineUnitActive = true; break; }
+                  }
+                  if ($lineUnitId > 0 && !$lineUnitActive && isset($unitNames[$lineUnitId])):
+                ?>
+                  <option value="<?= $lineUnitId ?>" selected><?= okv_e($unitNames[$lineUnitId]) ?> (retired)</option>
+                <?php endif; ?>
                 <?php foreach ($units as $unit): ?>
                   <option value="<?= (int) $unit['id'] ?>" <?= (int) ($line['unit_id'] ?? 0) === (int) $unit['id'] ? 'selected' : '' ?>>
                     <?= okv_e($unit['name']) ?>
