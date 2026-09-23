@@ -24,8 +24,12 @@
   }
 
   function csrfFrom(form) {
-    var field = form.querySelector('input[name="okv_csrf"]');
-    if (field) { return field.value; }
+    var field = form ? form.querySelector('input[name="okv_csrf"]') : null;
+    if (field && field.value) { return field.value; }
+    var modal = document.querySelector('[data-catalogue-settings-modal]');
+    if (modal && modal.getAttribute('data-csrf')) {
+      return modal.getAttribute('data-csrf');
+    }
     return (window.OKV && OKV.csrf) ? OKV.csrf : '';
   }
 
@@ -332,9 +336,760 @@
     });
   }
 
+  function wireCatalogueSettingsModal() {
+    var modal = document.querySelector('[data-catalogue-settings-modal]');
+    var openBtn = document.querySelector('[data-catalogue-settings-open]');
+    if (!modal || !openBtn) { return; }
+
+    var closeBtn = modal.querySelector('[data-catalogue-settings-close]');
+    var opener = null;
+    var catalogueSettingsChanged = false;
+
+    // Tabs
+    var tabCategories = modal.querySelector('[data-tab-btn="categories"]');
+    var tabUnits = modal.querySelector('[data-tab-btn="units"]');
+    var panelCategories = modal.querySelector('[data-tab-panel="categories"]');
+    var panelUnits = modal.querySelector('[data-tab-panel="units"]');
+
+    // Add containers and forms
+    var catAddToggle = modal.querySelector('[data-category-add-toggle]');
+    var catAddContainer = modal.querySelector('[data-category-add-container]');
+    var catAddForm = modal.querySelector('[data-category-add-form]');
+    var catAddCancel = modal.querySelector('[data-category-add-cancel]');
+
+    var unitAddToggle = modal.querySelector('[data-unit-add-toggle]');
+    var unitAddContainer = modal.querySelector('[data-unit-add-container]');
+    var unitAddForm = modal.querySelector('[data-unit-add-form]');
+    var unitAddCancel = modal.querySelector('[data-unit-add-cancel]');
+
+    // Lists
+    var catList = modal.querySelector('[data-category-list]');
+    var unitList = modal.querySelector('[data-unit-list]');
+
+    function getCsrf() {
+      return modal.getAttribute('data-csrf') || (window.OKV && OKV.csrf ? OKV.csrf : '');
+    }
+
+    function shut() {
+      modal.hidden = true;
+      if (opener && typeof opener.focus === 'function') {
+        opener.focus();
+      }
+      if (catalogueSettingsChanged) {
+        window.location.reload();
+      }
+    }
+
+    function open() {
+      opener = openBtn;
+      modal.hidden = false;
+      var first = modal.querySelector('button, input');
+      if (first) { first.focus(); }
+      loadCategories();
+      loadUnits();
+    }
+
+    openBtn.addEventListener('click', open);
+    if (closeBtn) { closeBtn.addEventListener('click', shut); }
+
+    modal.addEventListener('click', function (event) {
+      if (event.target === modal) { shut(); }
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) {
+        shut();
+      }
+    });
+
+    function switchTab(target) {
+      var isCat = (target === 'categories');
+      if (tabCategories) {
+        tabCategories.setAttribute('aria-selected', isCat ? 'true' : 'false');
+        tabCategories.className = 'min-h-[44px] px-3 text-sm font-medium border-b-2 -mb-px transition-colors '
+          + (isCat ? 'border-forest text-forest' : 'border-transparent text-ink-60 hover:text-ink');
+      }
+      if (tabUnits) {
+        tabUnits.setAttribute('aria-selected', !isCat ? 'true' : 'false');
+        tabUnits.className = 'min-h-[44px] px-3 text-sm font-medium border-b-2 -mb-px transition-colors '
+          + (!isCat ? 'border-forest text-forest' : 'border-transparent text-ink-60 hover:text-ink');
+      }
+      if (panelCategories) { panelCategories.hidden = !isCat; }
+      if (panelUnits) { panelUnits.hidden = isCat; }
+    }
+
+    if (tabCategories) {
+      tabCategories.addEventListener('click', function () { switchTab('categories'); });
+    }
+    if (tabUnits) {
+      tabUnits.addEventListener('click', function () { switchTab('units'); });
+    }
+
+    // Toggle Category Add Form
+    if (catAddToggle && catAddContainer) {
+      catAddToggle.addEventListener('click', function () {
+        catAddContainer.hidden = !catAddContainer.hidden;
+        if (!catAddContainer.hidden) {
+          var input = catAddContainer.querySelector('input[name="name"]');
+          if (input) { input.focus(); }
+        }
+      });
+    }
+    if (catAddCancel && catAddContainer && catAddForm) {
+      catAddCancel.addEventListener('click', function () {
+        catAddContainer.hidden = true;
+        catAddForm.reset();
+        var err = catAddContainer.querySelector('[data-category-add-error]');
+        if (err) { err.hidden = true; err.textContent = ''; }
+      });
+    }
+
+    // Toggle Unit Add Form
+    if (unitAddToggle && unitAddContainer) {
+      unitAddToggle.addEventListener('click', function () {
+        unitAddContainer.hidden = !unitAddContainer.hidden;
+        if (!unitAddContainer.hidden) {
+          var input = unitAddContainer.querySelector('input[name="name"]');
+          if (input) { input.focus(); }
+        }
+      });
+    }
+    if (unitAddCancel && unitAddContainer && unitAddForm) {
+      unitAddCancel.addEventListener('click', function () {
+        unitAddContainer.hidden = true;
+        unitAddForm.reset();
+        var err = unitAddContainer.querySelector('[data-unit-add-error]');
+        if (err) { err.hidden = true; err.textContent = ''; }
+      });
+    }
+
+    // Submit Category Add Form
+    if (catAddForm) {
+      catAddForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var errBox = catAddForm.querySelector('[data-category-add-error]');
+        var submitBtn = catAddForm.querySelector('button[type="submit"]');
+        if (errBox) { errBox.hidden = true; errBox.textContent = ''; }
+        if (submitBtn) { submitBtn.disabled = true; }
+
+        var formData = new FormData(catAddForm);
+        var body = new URLSearchParams();
+        body.set('action', 'category_save');
+        body.set('okv_csrf', getCsrf());
+        body.set('name', formData.get('name') || '');
+        body.set('description', formData.get('description') || '');
+        body.set('is_active', formData.get('is_active') ? '1' : '0');
+
+        send(body).then(function (res) {
+          if (submitBtn) { submitBtn.disabled = false; }
+          if (res.ok && res.data.status === 'ok') {
+            toast(res.data.message || 'Category added.', 'ok');
+            catalogueSettingsChanged = true;
+            catAddForm.reset();
+            if (catAddContainer) { catAddContainer.hidden = true; }
+            loadCategories();
+            return;
+          }
+          var msg = res.data.message || 'We could not add that category.';
+          if (res.data.errors && res.data.errors.name) {
+            msg = res.data.errors.name;
+          }
+          if (errBox) { errBox.textContent = msg; errBox.hidden = false; }
+          else { toast(msg, 'error'); }
+        }).catch(function () {
+          if (submitBtn) { submitBtn.disabled = false; }
+          var msg = 'We could not reach the server. Check your connection.';
+          if (errBox) { errBox.textContent = msg; errBox.hidden = false; }
+          else { toast(msg, 'error'); }
+        });
+      });
+    }
+
+    // Submit Unit Add Form
+    if (unitAddForm) {
+      unitAddForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var errBox = unitAddForm.querySelector('[data-unit-add-error]');
+        var submitBtn = unitAddForm.querySelector('button[type="submit"]');
+        if (errBox) { errBox.hidden = true; errBox.textContent = ''; }
+        if (submitBtn) { submitBtn.disabled = true; }
+
+        var formData = new FormData(unitAddForm);
+        var body = new URLSearchParams();
+        body.set('action', 'unit_save');
+        body.set('okv_csrf', getCsrf());
+        body.set('name', formData.get('name') || '');
+        body.set('symbol', formData.get('symbol') || '');
+        body.set('allows_decimal', formData.get('allows_decimal') ? '1' : '0');
+        body.set('is_active', formData.get('is_active') ? '1' : '0');
+
+        send(body).then(function (res) {
+          if (submitBtn) { submitBtn.disabled = false; }
+          if (res.ok && res.data.status === 'ok') {
+            toast(res.data.message || 'Unit added.', 'ok');
+            catalogueSettingsChanged = true;
+            unitAddForm.reset();
+            if (unitAddContainer) { unitAddContainer.hidden = true; }
+            loadUnits();
+            return;
+          }
+          var msg = res.data.message || 'We could not add that unit.';
+          if (res.data.errors) {
+            var firstErr = res.data.errors.name || res.data.errors.symbol;
+            if (firstErr) { msg = firstErr; }
+          }
+          if (errBox) { errBox.textContent = msg; errBox.hidden = false; }
+          else { toast(msg, 'error'); }
+        }).catch(function () {
+          if (submitBtn) { submitBtn.disabled = false; }
+          var msg = 'We could not reach the server. Check your connection.';
+          if (errBox) { errBox.textContent = msg; errBox.hidden = false; }
+          else { toast(msg, 'error'); }
+        });
+      });
+    }
+
+    function loadCategories() {
+      if (!catList) { return; }
+      fetch(ENDPOINT + '?action=category_list', {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; });
+      }).then(function (data) {
+        if (data.status !== 'ok' || !Array.isArray(data.categories)) {
+          catList.innerHTML = '<p class="text-sm text-tomato p-3">Could not load categories.</p>';
+          return;
+        }
+        renderCategoryList(data.categories);
+      }).catch(function () {
+        catList.innerHTML = '<p class="text-sm text-tomato p-3">Could not load categories.</p>';
+      });
+    }
+
+    function renderCategoryList(categories) {
+      catList.innerHTML = '';
+      if (categories.length === 0) {
+        var empty = document.createElement('p');
+        empty.className = 'text-sm text-ink-60 py-3 text-center';
+        empty.textContent = 'No categories found.';
+        catList.appendChild(empty);
+        return;
+      }
+
+      categories.forEach(function (cat) {
+        var card = document.createElement('div');
+        card.className = 'p-4 rounded-lg border border-mist bg-white space-y-3';
+
+        // Row preview
+        var row = document.createElement('div');
+        row.className = 'flex flex-wrap items-start justify-between gap-3';
+
+        var info = document.createElement('div');
+        info.className = 'space-y-1 min-w-0';
+
+        var titleLine = document.createElement('div');
+        titleLine.className = 'flex flex-wrap items-center gap-2';
+
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'font-semibold text-ink text-sm';
+        nameSpan.textContent = cat.name;
+        titleLine.appendChild(nameSpan);
+
+        var slugTag = document.createElement('code');
+        slugTag.className = 'font-mono text-xs text-ink-40 bg-forest-tint/40 px-1.5 py-0.5 rounded';
+        slugTag.textContent = cat.slug;
+        titleLine.appendChild(slugTag);
+
+        var statusBadge = document.createElement('span');
+        statusBadge.className = 'okv-badge ' + (cat.is_active ? 'okv-badge-available' : 'okv-badge-neutral');
+        statusBadge.textContent = cat.is_active ? 'Active' : 'Hidden';
+        titleLine.appendChild(statusBadge);
+
+        var countBadge = document.createElement('span');
+        countBadge.className = 'text-xs text-ink-60 font-mono';
+        var pCount = parseInt(cat.product_count, 10) || 0;
+        countBadge.textContent = pCount + ' ' + (pCount === 1 ? 'product' : 'products');
+        titleLine.appendChild(countBadge);
+
+        info.appendChild(titleLine);
+
+        if (cat.description) {
+          var desc = document.createElement('p');
+          desc.className = 'text-xs text-ink-60 break-words';
+          desc.textContent = cat.description;
+          info.appendChild(desc);
+        }
+
+        row.appendChild(info);
+
+        var editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'okv-btn-outline-sm text-xs py-1 px-3';
+        editBtn.textContent = 'Edit';
+        row.appendChild(editBtn);
+
+        card.appendChild(row);
+
+        // Inline edit form
+        var editForm = document.createElement('form');
+        editForm.className = 'mt-3 pt-3 border-t border-mist space-y-3';
+        editForm.hidden = true;
+
+        var errBox = document.createElement('div');
+        errBox.className = 'okv-note-bad text-xs';
+        errBox.hidden = true;
+        errBox.setAttribute('role', 'alert');
+        editForm.appendChild(errBox);
+
+        // Name input
+        var nameDiv = document.createElement('div');
+        var nameLabel = document.createElement('label');
+        nameLabel.className = 'okv-label text-xs';
+        nameLabel.textContent = 'Category name';
+        var nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.name = 'name';
+        nameInput.required = true;
+        nameInput.maxLength = 120;
+        nameInput.className = 'okv-input text-sm';
+        nameInput.value = cat.name;
+        nameDiv.appendChild(nameLabel);
+        nameDiv.appendChild(nameInput);
+        editForm.appendChild(nameDiv);
+
+        // Slug notice (immutable per Option C)
+        var slugDiv = document.createElement('div');
+        slugDiv.className = 'text-xs text-ink-60 bg-forest-tint/30 rounded p-2';
+        var slugBold = document.createElement('span');
+        slugBold.className = 'font-semibold text-ink';
+        slugBold.textContent = 'Slug: ';
+        slugDiv.appendChild(slugBold);
+        var slugCode = document.createElement('code');
+        slugCode.className = 'font-mono text-xs';
+        slugCode.textContent = cat.slug;
+        slugDiv.appendChild(slugCode);
+        var slugHelp = document.createElement('span');
+        slugHelp.className = 'text-ink-40 ml-1.5';
+        slugHelp.textContent = '(Slug is fixed to protect web links)';
+        slugDiv.appendChild(slugHelp);
+        editForm.appendChild(slugDiv);
+
+        // Description textarea
+        var descDiv = document.createElement('div');
+        var descLabel = document.createElement('label');
+        descLabel.className = 'okv-label text-xs';
+        descLabel.textContent = 'Description';
+        var descInput = document.createElement('textarea');
+        descInput.name = 'description';
+        descInput.rows = 2;
+        descInput.maxLength = 2000;
+        descInput.className = 'okv-input text-sm';
+        descInput.value = cat.description || '';
+        descDiv.appendChild(descLabel);
+        descDiv.appendChild(descInput);
+        editForm.appendChild(descDiv);
+
+        // Active toggle
+        var activeLabel = document.createElement('label');
+        activeLabel.className = 'inline-flex items-center gap-2 cursor-pointer min-h-[44px]';
+        var activeCheck = document.createElement('input');
+        activeCheck.type = 'checkbox';
+        activeCheck.name = 'is_active';
+        activeCheck.value = '1';
+        activeCheck.checked = !!cat.is_active;
+        activeCheck.className = 'rounded border-mist text-forest focus:ring-gold';
+        var activeText = document.createElement('span');
+        activeText.className = 'text-xs font-medium text-ink';
+        activeText.textContent = 'Active on the shop';
+        activeLabel.appendChild(activeCheck);
+        activeLabel.appendChild(activeText);
+        editForm.appendChild(activeLabel);
+
+        // Action buttons
+        var actDiv = document.createElement('div');
+        actDiv.className = 'flex flex-wrap items-center gap-2 pt-1';
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'submit';
+        saveBtn.className = 'okv-btn-sm text-xs';
+        saveBtn.textContent = 'Save changes';
+        var cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'okv-btn-text text-xs';
+        cancelBtn.textContent = 'Cancel';
+        actDiv.appendChild(saveBtn);
+        actDiv.appendChild(cancelBtn);
+        editForm.appendChild(actDiv);
+
+        card.appendChild(editForm);
+        catList.appendChild(card);
+
+        editBtn.addEventListener('click', function () {
+          var willShow = editForm.hidden;
+          editForm.hidden = !willShow;
+          editBtn.textContent = willShow ? 'Close' : 'Edit';
+          if (willShow) {
+            nameInput.focus();
+          }
+        });
+
+        cancelBtn.addEventListener('click', function () {
+          editForm.hidden = true;
+          editBtn.textContent = 'Edit';
+          errBox.hidden = true;
+          errBox.textContent = '';
+          nameInput.value = cat.name;
+          descInput.value = cat.description || '';
+          activeCheck.checked = !!cat.is_active;
+        });
+
+        editForm.addEventListener('submit', function (event) {
+          event.preventDefault();
+          errBox.hidden = true;
+          errBox.textContent = '';
+          saveBtn.disabled = true;
+
+          var body = new URLSearchParams();
+          body.set('action', 'category_save');
+          body.set('category_id', cat.id);
+          body.set('okv_csrf', getCsrf());
+          body.set('name', nameInput.value.trim());
+          body.set('description', descInput.value.trim());
+          body.set('is_active', activeCheck.checked ? '1' : '0');
+
+          send(body).then(function (res) {
+            saveBtn.disabled = false;
+            if (res.ok && res.data.status === 'ok') {
+              toast(res.data.message || 'Category saved.', 'ok');
+              catalogueSettingsChanged = true;
+              loadCategories();
+              return;
+            }
+            var msg = res.data.message || 'We could not save that category.';
+            if (res.data.errors && res.data.errors.name) {
+              msg = res.data.errors.name;
+            }
+            errBox.textContent = msg;
+            errBox.hidden = false;
+          }).catch(function () {
+            saveBtn.disabled = false;
+            errBox.textContent = 'We could not reach the server. Check your connection.';
+            errBox.hidden = false;
+          });
+        });
+      });
+    }
+
+    function loadUnits() {
+      if (!unitList) { return; }
+      fetch(ENDPOINT + '?action=unit_list', {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; });
+      }).then(function (data) {
+        if (data.status !== 'ok' || !Array.isArray(data.units)) {
+          unitList.innerHTML = '<p class="text-sm text-tomato p-3">Could not load units of measurement.</p>';
+          return;
+        }
+        renderUnitList(data.units);
+      }).catch(function () {
+        unitList.innerHTML = '<p class="text-sm text-tomato p-3">Could not load units of measurement.</p>';
+      });
+    }
+
+    function renderUnitList(units) {
+      unitList.innerHTML = '';
+      if (units.length === 0) {
+        var empty = document.createElement('p');
+        empty.className = 'text-sm text-ink-60 py-3 text-center';
+        empty.textContent = 'No units found.';
+        unitList.appendChild(empty);
+        return;
+      }
+
+      units.forEach(function (unit) {
+        var card = document.createElement('div');
+        card.className = 'p-4 rounded-lg border border-mist bg-white space-y-3';
+
+        // Row preview
+        var row = document.createElement('div');
+        row.className = 'flex flex-wrap items-start justify-between gap-3';
+
+        var info = document.createElement('div');
+        info.className = 'space-y-1 min-w-0';
+
+        var titleLine = document.createElement('div');
+        titleLine.className = 'flex flex-wrap items-center gap-2';
+
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'font-semibold text-ink text-sm';
+        nameSpan.textContent = unit.name + ' (' + unit.symbol + ')';
+        titleLine.appendChild(nameSpan);
+
+        var decBadge = document.createElement('span');
+        decBadge.className = 'okv-badge ' + (unit.allows_decimal ? 'okv-badge-info' : 'okv-badge-neutral');
+        decBadge.textContent = unit.allows_decimal ? 'Decimals allowed' : 'Whole units only';
+        titleLine.appendChild(decBadge);
+
+        var statusBadge = document.createElement('span');
+        statusBadge.className = 'okv-badge ' + (unit.is_active ? 'okv-badge-available' : 'okv-badge-neutral');
+        statusBadge.textContent = unit.is_active ? 'Active' : 'Inactive';
+        titleLine.appendChild(statusBadge);
+
+        var countBadge = document.createElement('span');
+        countBadge.className = 'text-xs text-ink-60 font-mono';
+        var pCount = (parseInt(unit.product_count, 10) || 0) + (parseInt(unit.combo_item_count, 10) || 0);
+        countBadge.textContent = pCount + ' ' + (pCount === 1 ? 'item' : 'items');
+        titleLine.appendChild(countBadge);
+
+        info.appendChild(titleLine);
+        row.appendChild(info);
+
+        var editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'okv-btn-outline-sm text-xs py-1 px-3';
+        editBtn.textContent = 'Edit';
+        row.appendChild(editBtn);
+
+        card.appendChild(row);
+
+        // Inline edit form
+        var editForm = document.createElement('form');
+        editForm.className = 'mt-3 pt-3 border-t border-mist space-y-3';
+        editForm.hidden = true;
+
+        var errBox = document.createElement('div');
+        errBox.className = 'okv-note-bad text-xs';
+        errBox.hidden = true;
+        errBox.setAttribute('role', 'alert');
+        editForm.appendChild(errBox);
+
+        // Name and Symbol grid
+        var grid = document.createElement('div');
+        grid.className = 'grid gap-3 sm:grid-cols-2';
+
+        var nameDiv = document.createElement('div');
+        var nameLabel = document.createElement('label');
+        nameLabel.className = 'okv-label text-xs';
+        nameLabel.textContent = 'Unit name';
+        var nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.name = 'name';
+        nameInput.required = true;
+        nameInput.maxLength = 80;
+        nameInput.className = 'okv-input text-sm';
+        nameInput.value = unit.name;
+        nameDiv.appendChild(nameLabel);
+        nameDiv.appendChild(nameInput);
+        grid.appendChild(nameDiv);
+
+        var symDiv = document.createElement('div');
+        var symLabel = document.createElement('label');
+        symLabel.className = 'okv-label text-xs';
+        symLabel.textContent = 'Symbol';
+        var symInput = document.createElement('input');
+        symInput.type = 'text';
+        symInput.name = 'symbol';
+        symInput.required = true;
+        symInput.maxLength = 20;
+        symInput.className = 'okv-input font-mono text-sm';
+        symInput.value = unit.symbol;
+        symDiv.appendChild(symLabel);
+        symDiv.appendChild(symInput);
+        grid.appendChild(symDiv);
+
+        editForm.appendChild(grid);
+
+        // Checkboxes
+        var checkGroup = document.createElement('div');
+        checkGroup.className = 'space-y-2';
+
+        var decLabel = document.createElement('label');
+        decLabel.className = 'flex items-start gap-2 cursor-pointer min-h-[44px]';
+        var decCheck = document.createElement('input');
+        decCheck.type = 'checkbox';
+        decCheck.name = 'allows_decimal';
+        decCheck.value = '1';
+        decCheck.checked = !!unit.allows_decimal;
+        decCheck.className = 'mt-1 rounded border-mist text-forest focus:ring-gold';
+        var decWrap = document.createElement('span');
+        decWrap.className = 'text-xs text-ink';
+        var decBold = document.createElement('span');
+        decBold.className = 'font-medium block';
+        decBold.textContent = 'Allow decimal quantities';
+        var decMuted = document.createElement('span');
+        decMuted.className = 'text-ink-60 block';
+        decMuted.textContent = 'Permit fractions like 0.5 or 1.5 in customer orders.';
+        decWrap.appendChild(decBold);
+        decWrap.appendChild(decMuted);
+        decLabel.appendChild(decCheck);
+        decLabel.appendChild(decWrap);
+        checkGroup.appendChild(decLabel);
+
+        var activeLabel = document.createElement('label');
+        activeLabel.className = 'flex items-start gap-2 cursor-pointer min-h-[44px]';
+        var activeCheck = document.createElement('input');
+        activeCheck.type = 'checkbox';
+        activeCheck.name = 'is_active';
+        activeCheck.value = '1';
+        activeCheck.checked = !!unit.is_active;
+        activeCheck.className = 'mt-1 rounded border-mist text-forest focus:ring-gold';
+        var activeWrap = document.createElement('span');
+        activeWrap.className = 'text-xs text-ink';
+        var activeBold = document.createElement('span');
+        activeBold.className = 'font-medium block';
+        activeBold.textContent = 'Active for new products';
+        var activeMuted = document.createElement('span');
+        activeMuted.className = 'text-ink-60 block';
+        activeMuted.textContent = 'Available when creating or editing produce.';
+        activeWrap.appendChild(activeBold);
+        activeWrap.appendChild(activeMuted);
+        activeLabel.appendChild(activeCheck);
+        activeLabel.appendChild(activeWrap);
+        checkGroup.appendChild(activeLabel);
+
+        editForm.appendChild(checkGroup);
+
+        // Safety confirmation box (Option C: Full editing with confirmation)
+        var confirmBox = document.createElement('div');
+        confirmBox.className = 'p-3 bg-gold-tint2 border border-gold rounded text-xs text-gold-ink space-y-2';
+        confirmBox.hidden = true;
+
+        var confirmTitle = document.createElement('p');
+        confirmTitle.className = 'font-semibold text-ink';
+        confirmTitle.textContent = 'Check before saving:';
+        confirmBox.appendChild(confirmTitle);
+
+        var confirmText = document.createElement('p');
+        var itemCount = (parseInt(unit.product_count, 10) || 0) + (parseInt(unit.combo_item_count, 10) || 0);
+        confirmText.textContent = itemCount + ' catalogue item' + (itemCount === 1 ? ' is' : 's are')
+          + ' currently using this unit. Changing decimal settings or deactivating it may affect pricing and order calculation.';
+        confirmBox.appendChild(confirmText);
+
+        var confirmLabel = document.createElement('label');
+        confirmLabel.className = 'flex items-start gap-2 cursor-pointer font-medium text-ink pt-1';
+        var confirmCheck = document.createElement('input');
+        confirmCheck.type = 'checkbox';
+        confirmCheck.name = 'confirmed';
+        confirmCheck.value = '1';
+        confirmCheck.className = 'mt-0.5 rounded border-mist text-forest focus:ring-gold';
+        var confirmCheckText = document.createElement('span');
+        confirmCheckText.textContent = 'I understand the impact and confirm this change';
+        confirmLabel.appendChild(confirmCheck);
+        confirmLabel.appendChild(confirmCheckText);
+        confirmBox.appendChild(confirmLabel);
+
+        editForm.appendChild(confirmBox);
+
+        function updateSafetyWarning() {
+          if (itemCount > 0) {
+            var decimalChanged = decCheck.checked !== !!unit.allows_decimal;
+            var deactivated = !activeCheck.checked && !!unit.is_active;
+            confirmBox.hidden = !(decimalChanged || deactivated);
+          } else {
+            confirmBox.hidden = true;
+          }
+        }
+
+        decCheck.addEventListener('change', updateSafetyWarning);
+        activeCheck.addEventListener('change', updateSafetyWarning);
+
+        // Action buttons
+        var actDiv = document.createElement('div');
+        actDiv.className = 'flex flex-wrap items-center gap-2 pt-1';
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'submit';
+        saveBtn.className = 'okv-btn-sm text-xs';
+        saveBtn.textContent = 'Save changes';
+        var cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'okv-btn-text text-xs';
+        cancelBtn.textContent = 'Cancel';
+        actDiv.appendChild(saveBtn);
+        actDiv.appendChild(cancelBtn);
+        editForm.appendChild(actDiv);
+
+        card.appendChild(editForm);
+        unitList.appendChild(card);
+
+        editBtn.addEventListener('click', function () {
+          var willShow = editForm.hidden;
+          editForm.hidden = !willShow;
+          editBtn.textContent = willShow ? 'Close' : 'Edit';
+          if (willShow) {
+            nameInput.focus();
+            updateSafetyWarning();
+          }
+        });
+
+        cancelBtn.addEventListener('click', function () {
+          editForm.hidden = true;
+          editBtn.textContent = 'Edit';
+          errBox.hidden = true;
+          errBox.textContent = '';
+          nameInput.value = unit.name;
+          symInput.value = unit.symbol;
+          decCheck.checked = !!unit.allows_decimal;
+          activeCheck.checked = !!unit.is_active;
+          confirmCheck.checked = false;
+          confirmBox.hidden = true;
+        });
+
+        editForm.addEventListener('submit', function (event) {
+          event.preventDefault();
+          errBox.hidden = true;
+          errBox.textContent = '';
+          saveBtn.disabled = true;
+
+          var body = new URLSearchParams();
+          body.set('action', 'unit_save');
+          body.set('unit_id', unit.id);
+          body.set('okv_csrf', getCsrf());
+          body.set('name', nameInput.value.trim());
+          body.set('symbol', symInput.value.trim());
+          body.set('allows_decimal', decCheck.checked ? '1' : '0');
+          body.set('is_active', activeCheck.checked ? '1' : '0');
+          if (confirmCheck.checked) {
+            body.set('confirmed', '1');
+          }
+
+          send(body).then(function (res) {
+            saveBtn.disabled = false;
+            if (res.ok && res.data.status === 'ok') {
+              toast(res.data.message || 'Unit saved.', 'ok');
+              catalogueSettingsChanged = true;
+              loadUnits();
+              return;
+            }
+            if (res.data.code === 'confirmation_required') {
+              confirmBox.hidden = false;
+              confirmCheck.focus();
+              errBox.textContent = res.data.message || 'Please confirm this change before saving.';
+              errBox.hidden = false;
+              return;
+            }
+            var msg = res.data.message || 'We could not save that unit.';
+            if (res.data.errors) {
+              var firstErr = res.data.errors.name || res.data.errors.symbol;
+              if (firstErr) { msg = firstErr; }
+            }
+            errBox.textContent = msg;
+            errBox.hidden = false;
+          }).catch(function () {
+            saveBtn.disabled = false;
+            errBox.textContent = 'We could not reach the server. Check your connection.';
+            errBox.hidden = false;
+          });
+        });
+      });
+    }
+  }
+
   ready(function () {
     wireList(document);
     wirePanel('[data-add-open]', '[data-add-panel]', '[data-add-close]');
+    wireCatalogueSettingsModal();
     liveAdminFilter(document.querySelector('[data-admin-results]'));
 
     // Opened straight from the pricing screen: bring that product into view.

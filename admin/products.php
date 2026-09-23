@@ -44,9 +44,11 @@ $hasFilters = $search !== '' || $category !== '' || $status !== '';
 
 $okv_admin_title   = 'Products';
 $okv_admin_note    = 'Add produce, set what is available this week, and manage the photos customers see. Prices are changed on the Pricing screen, so every change is recorded.';
-$okv_admin_actions = $canCreate
-    ? '<button type="button" class="okv-btn-sm" data-add-open>Add a product</button>'
-    : '';
+$cogIcon           = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>';
+$okv_admin_actions = trim(
+    ($canCreate ? '<button type="button" class="okv-btn-sm" data-add-open>Add a product</button>' : '')
+    . ($canEdit ? '<button type="button" class="okv-btn-outline-sm inline-flex items-center gap-1.5" data-catalogue-settings-open aria-haspopup="dialog">' . $cogIcon . '<span>Settings</span></button>' : '')
+);
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
   <div class="space-y-6">
@@ -178,5 +180,8 @@ require __DIR__ . '/../includes/components/admin/header.php';
     </div>
   </div>
 <?php
+if ($canEdit) {
+    require __DIR__ . '/../includes/components/admin/catalogue_settings_modal.php';
+}
 $okv_admin_script = '/assets/js/admin-products.js';
 require __DIR__ . '/../includes/components/admin/footer.php';

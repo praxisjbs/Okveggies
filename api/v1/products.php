@@ -26,6 +26,10 @@
  *   set_primary_image (POST, products.edit)                 choose the photo the shop leads with
  *   reorder_images    (POST, products.edit)                 set the gallery order
  *   delete_image      (POST, products.edit)                 remove a photo
+ *   category_list     (GET,  products.view)                 all categories with product counts
+ *   category_save     (POST, products.edit)                 add or edit a category
+ *   unit_list         (GET,  products.view)                 all units of measurement with product counts
+ *   unit_save         (POST, products.edit)                 add or edit a unit of measurement
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/../../includes/bootstrap.php';
@@ -59,9 +63,10 @@ function products_fail(Throwable $e, string $context): void
 {
     if ($e instanceof DomainException) {
         $known = [
-            'not_found'  => ['We could not find that product.', 404],
-            'in_use'     => ['That product is in use, so it cannot be removed.', 409],
-            'bad_status' => ['That is not an availability we recognise.', 422],
+            'not_found'             => ['We could not find that product.', 404],
+            'in_use'                => ['That product is in use, so it cannot be removed.', 409],
+            'bad_status'            => ['That is not an availability we recognise.', 422],
+            'confirmation_required' => ['Please confirm this change before saving.', 409],
         ];
         [$message, $code] = $known[$e->getMessage()] ?? ['We could not do that.', 400];
         okv_error($message, $code, $e->getMessage());
@@ -289,6 +294,77 @@ switch ($action) {
             products_fail($e, 'delete_image');
         }
         okv_json(['status' => 'ok', 'message' => 'Photo removed.', 'images' => Products::images($id)]);
+    }
+
+    case 'category_list': {
+        Rbac::requirePermission('products.view');
+        $categories = CatalogueSettings::categories();
+        okv_json([
+            'status'     => 'ok',
+            'categories' => $categories,
+            'count'      => count($categories),
+        ]);
+    }
+
+    case 'category_save': {
+        products_guard_write('products.edit');
+        $id = (int) okv_input('category_id', 0);
+        [$clean, $errors] = CatalogueSettings::validateCategory($_POST, $id > 0 ? $id : null);
+        if ($errors) {
+            okv_json(['status' => 'error', 'code' => 'invalid', 'message' => 'Please check the category fields.', 'errors' => $errors], 422);
+        }
+        try {
+            $saved = CatalogueSettings::saveCategory($clean, $id > 0 ? $id : null, Rbac::userId());
+        } catch (Throwable $e) {
+            products_fail($e, 'category_save');
+        }
+        okv_json([
+            'status'   => 'ok',
+            'message'  => $id > 0 ? 'Category saved.' : 'Category added.',
+            'category' => $saved,
+        ]);
+    }
+
+    case 'unit_list': {
+        Rbac::requirePermission('products.view');
+        $units = CatalogueSettings::units();
+        okv_json([
+            'status' => 'ok',
+            'units'  => $units,
+            'count'  => count($units),
+        ]);
+    }
+
+    case 'unit_save': {
+        products_guard_write('products.edit');
+        $id = (int) okv_input('unit_id', 0);
+        [$clean, $errors] = CatalogueSettings::validateUnit($_POST, $id > 0 ? $id : null);
+        if ($errors) {
+            okv_json(['status' => 'error', 'code' => 'invalid', 'message' => 'Please check the unit fields.', 'errors' => $errors], 422);
+        }
+        $confirmed = !empty($_POST['confirmed']) && (string) $_POST['confirmed'] === '1';
+        if ($id > 0) {
+            $safety = CatalogueSettings::checkUnitSafety($id, $clean);
+            if ($safety['requires_confirmation'] && !$confirmed) {
+                okv_json([
+                    'status'                => 'error',
+                    'code'                  => 'confirmation_required',
+                    'message'               => 'This unit is used by ' . $safety['count'] . ' catalogue item' . ($safety['count'] === 1 ? '' : 's') . '. Please confirm this change.',
+                    'in_use_count'          => $safety['count'],
+                    'requires_confirmation' => true,
+                ], 409);
+            }
+        }
+        try {
+            $saved = CatalogueSettings::saveUnit($clean, $id > 0 ? $id : null, Rbac::userId(), $confirmed);
+        } catch (Throwable $e) {
+            products_fail($e, 'unit_save');
+        }
+        okv_json([
+            'status'  => 'ok',
+            'message' => $id > 0 ? 'Unit saved.' : 'Unit added.',
+            'unit'    => $saved,
+        ]);
     }
 
     default:
