@@ -58,6 +58,7 @@ $users = [];
 $requestIds = [];
 $orderIds = [];
 $staffId = 0;
+$retiredUnitId = 0;
 
 try {
     // --- A household customer, a second one, a business one, and a colleague.
@@ -93,6 +94,13 @@ try {
     );
 
     $unitId = (int) Database::one('SELECT id FROM units_of_measurement ORDER BY id LIMIT 1')['id'];
+    // A unit we have retired, so a typed line naming it can be proved refused.
+    Database::run(
+        'INSERT INTO units_of_measurement (name, symbol, allows_decimal, is_active)
+         VALUES (:name, :symbol, 0, 0)',
+        [':name' => 'Retired ' . $suffix, ':symbol' => 'ret' . $suffix]
+    );
+    $retiredUnitId = (int) Database::getInstance()->getConnection()->lastInsertId();
     $zoneId = (int) Database::one('SELECT id FROM delivery_zones WHERE is_active = 1 ORDER BY id LIMIT 1')['id'];
     $product = Database::one('SELECT id, name, current_price_subunit FROM products WHERE is_active = 1 AND current_price_subunit IS NOT NULL ORDER BY id LIMIT 1');
 
@@ -250,6 +258,126 @@ try {
         static fn() => KitchenRunWorkflow::submit($users[0], 'household', $address + ['preferred_delivery_date' => $deliveryDate, 'delivery_zone_id' => 999999, 'input_mode' => 'custom', 'pricing_mode' => 'by_us', 'items' => [['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => $unitId]]]),
         'zone_unavailable',
         'a delivery area we do not serve is refused at submission'
+    );
+
+    // -----------------------------------------------------------------------
+    // 1c. The typed list, exactly as the customer's own form sends it. This is
+    //     the "items not in the shop" path: one or more free-text lines, a
+    //     positive quantity, an active unit, and no catalogue product. The
+    //     storefront form is what the Kitchen Run "add items not in the shop"
+    //     option drives, and this is its server contract.
+    // -----------------------------------------------------------------------
+
+    // One custom item. No product_id, so nothing here is a catalogue product.
+    $oneCustom = KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'customer_note' => 'Pomo for the stew.',
+        'items' => [['item_name' => 'Pomo', 'quantity' => '6.000', 'unit_id' => $unitId, 'note' => 'Soft, please.']],
+    ]);
+    $oneId = (int) $oneCustom['id'];
+    $requestIds[] = $oneId;
+    $oneLines = KitchenRuns::lines($oneId);
+    krdb_eq(1, count($oneLines), 'one typed item becomes one line');
+    krdb_eq(null, $oneLines[0]['product_id'], 'a typed item is not a catalogue product, and is never invented into one');
+    krdb_eq('Pomo', (string) $oneLines[0]['item_name'], 'the item is kept in the customer\'s own words');
+    krdb_eq('6.000', (string) $oneLines[0]['quantity'], 'the quantity is kept exactly');
+    krdb_eq($unitId, (int) $oneLines[0]['unit_id'], 'the active unit the customer chose is kept');
+    krdb_eq('Soft, please.', (string) $oneLines[0]['note'], 'the optional note on the line is kept');
+    krdb_eq(null, $oneLines[0]['unit_price_subunit'], 'a line we are pricing arrives with no price, for the team to fill in');
+
+    // Several custom items, in the order the customer typed them.
+    $manyCustom = KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'items' => [
+            ['item_name' => 'Tomatoes', 'quantity' => '6.000', 'unit_id' => $unitId],
+            ['item_name' => 'Pomo', 'quantity' => '10.000', 'unit_id' => $unitId],
+            ['item_name' => 'Palm oil', 'quantity' => '4.000', 'unit_id' => $unitId],
+        ],
+    ]);
+    $manyId = (int) $manyCustom['id'];
+    $requestIds[] = $manyId;
+    $manyLines = KitchenRuns::lines($manyId);
+    krdb_eq(3, count($manyLines), 'several typed items each become their own line');
+    krdb_eq(
+        ['Tomatoes', 'Pomo', 'Palm oil'],
+        array_map(static fn(array $l): string => (string) $l['item_name'], $manyLines),
+        'the lines keep the order the customer typed them in'
+    );
+
+    // A fractional quantity survives exactly, the decimal-safe way.
+    $fractional = KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'items' => [['item_name' => 'Ugu', 'quantity' => '2.500', 'unit_id' => $unitId]],
+    ]);
+    $fractionalId = (int) $fractional['id'];
+    $requestIds[] = $fractionalId;
+    krdb_eq('2.500', (string) KitchenRuns::lines($fractionalId)[0]['quantity'], 'a fractional quantity is stored exactly, not rounded away');
+
+    // A catalogue line and a typed line coexist on one list, and the typed one
+    // is never turned into a product (PRD: do not invent catalogue products).
+    $coexist = KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'items' => [
+            ['product_id' => $product['id'], 'quantity' => '2.000'],
+            ['item_name' => 'Cowskin', 'quantity' => '1.000', 'unit_id' => $unitId],
+        ],
+    ]);
+    $coexistId = (int) $coexist['id'];
+    $requestIds[] = $coexistId;
+    $coexistLines = KitchenRuns::lines($coexistId);
+    krdb_eq((int) $product['id'], (int) $coexistLines[0]['product_id'], 'the shop line keeps its product');
+    krdb_eq(null, $coexistLines[1]['product_id'], 'the typed line beside it is not given a product it never had');
+    krdb_eq('submitted', (string) Database::one('SELECT status FROM kitchen_run_requests WHERE id = :id', [':id' => $coexistId])['status'], 'a list with any typed line waits for the team, because that line carries no price of ours');
+
+    // A hostile item name is stored as the customer typed it. It is escaped on
+    // the way out, never on the way in, so what they asked for stays the record.
+    $nasty = '<script>alert(1)</script>"><img src=x onerror=alert(1)>';
+    $escaped = KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'items' => [['item_name' => $nasty, 'quantity' => '1.000', 'unit_id' => $unitId]],
+    ]);
+    $escapedId = (int) $escaped['id'];
+    $requestIds[] = $escapedId;
+    krdb_eq($nasty, (string) KitchenRuns::lines($escapedId)[0]['item_name'], 'a hostile item name is stored verbatim, so escaping at render is the only thing between it and the page');
+
+    // A line that names a unit we have retired is refused, and the refusal
+    // names the line, because the server is the authority on which units exist.
+    krdb_refuses(
+        static fn() => KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+            'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+            'items' => [['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => $retiredUnitId]],
+        ]),
+        'unit_not_active:1',
+        'a typed line cannot name a unit we no longer offer, and the refusal says which line'
+    );
+
+    // The row-specific refusals, each naming the line it is about.
+    krdb_refuses(
+        static fn() => KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+            'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+            'items' => [
+                ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => $unitId],
+                ['quantity' => '1.000', 'unit_id' => $unitId],
+            ],
+        ]),
+        'line_name:2',
+        'a typed line with no item name is refused, and it says which line'
+    );
+    krdb_refuses(
+        static fn() => KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+            'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+            'items' => [['item_name' => 'Pomo', 'unit_id' => $unitId]],
+        ]),
+        'line_quantity:1',
+        'a typed line with no quantity is refused, and it says which line'
+    );
+    krdb_refuses(
+        static fn() => KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+            'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+            'items' => [['item_name' => 'Pomo', 'quantity' => '1.000']],
+        ]),
+        'line_unit:1',
+        'a typed line with no unit is refused, and it says which line'
     );
 
     // -----------------------------------------------------------------------
@@ -784,6 +912,9 @@ try {
     krdb_ok(str_contains((string) $notified['vars']['request_url'], 'kitchen-runs.php'), 'the Kitchen Run email links back to the request, so it is not a dead end');
     krdb_ok((string) $notified['vars']['quote_total'] !== '', 'the quote email carries the figure it is about');
 } finally {
+    if ($retiredUnitId) {
+        Database::run('DELETE FROM units_of_measurement WHERE id = :id', [':id' => $retiredUnitId]);
+    }
     foreach ($orderIds as $id) {
         Database::run('DELETE FROM order_item_components WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id = :id)', [':id' => $id]);
         Database::run('DELETE FROM order_items WHERE order_id = :id', [':id' => $id]);
