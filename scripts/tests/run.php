@@ -59,6 +59,7 @@ require_once $appRoot . '/includes/classes/Paystack.php';
 require_once $appRoot . '/includes/classes/Payments.php';
 require_once $appRoot . '/includes/classes/ManualPayments.php';
 require_once $appRoot . '/includes/classes/Phone.php';
+require_once $appRoot . '/includes/classes/Auth.php';
 require_once $appRoot . '/includes/classes/ContactMessages.php';
 require_once $appRoot . '/includes/classes/IssueReports.php';
 require_once $appRoot . '/includes/classes/Refunds.php';

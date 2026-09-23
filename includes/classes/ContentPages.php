@@ -624,8 +624,12 @@ final class ContentPages
         if ($actorId < 1) {
             return false;
         }
+        // Staff is anyone who holds a role, whatever their account type.
         return Database::one(
-            'SELECT id FROM users WHERE id = :id AND user_type = :type AND status = :status LIMIT 1',
+            'SELECT u.id
+               FROM users u
+              WHERE u.id = :id AND u.status = :status
+                AND (u.user_type = :type OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id))',
             [':id' => $actorId, ':type' => 'staff', ':status' => 'active']
         ) !== null;
     }

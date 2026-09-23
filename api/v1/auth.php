@@ -78,6 +78,44 @@ if (!function_exists('auth_login_back')) {
     }
 }
 
+if (!function_exists('register_is_duplicate_key')) {
+    /** True when a write failed because a UNIQUE identity key already exists. */
+    function register_is_duplicate_key(Throwable $e): bool
+    {
+        return $e instanceof PDOException && str_starts_with((string) ($e->getCode() ?: ''), '23');
+    }
+}
+
+if (!function_exists('register_refuse_if_taken')) {
+    /**
+     * Refuse a registration when the email or phone is already somebody's,
+     * naming the field that collided. The prefill only ever carries the email
+     * the person just typed, and only when the email is the part that matched,
+     * so the sign-in deeplink never points at an address with no account.
+     */
+    function register_refuse_if_taken(string $email, string $phone, string $back): void
+    {
+        $conflict = Auth::findIdentityConflict($email, $phone);
+        if ($conflict === null) {
+            return;
+        }
+        $field = (string) $conflict['field'];
+        $messages = [
+            'email' => 'That email is already registered. Please sign in, or reset its password.',
+            'phone' => 'That phone number is already registered. Please sign in, or reset its password.',
+            'both'  => 'You already have an account with these details. Please sign in.',
+        ];
+        auth_respond(
+            false,
+            $messages[$field] ?? $messages['both'],
+            409,
+            'account_exists',
+            $back,
+            ['prefill' => $field === 'phone' ? '' : $email, 'field' => $field]
+        );
+    }
+}
+
 $action     = okv_action();
 $context    = (string) okv_input('context', '');
 $storefront = ($context === 'storefront');
@@ -181,8 +219,6 @@ switch ($action) {
         $back    = '/account.php?mode=register';
         $first   = trim((string) okv_input('first_name', ''));
         $last    = trim((string) okv_input('last_name', ''));
-        $email   = strtolower(trim((string) okv_input('email', '')));
-        $phoneIn = trim((string) okv_input('phone', ''));
         $pass    = (string) okv_input('password', '');
         $type    = (string) okv_input('account_type', 'household');
         if (!in_array($type, ['household', 'business'], true)) {
@@ -195,10 +231,13 @@ switch ($action) {
         if ($first === '' || $last === '') {
             auth_respond(false, 'Enter your first and last name.', 422, 'missing_name', $back);
         }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        // The one canonicalisation every identity path shares: email lower
+        // cased, phone in E.164. Login stores nothing else, so login matches.
+        $email = Auth::canonicalEmail((string) okv_input('email', ''));
+        if ($email === null) {
             auth_respond(false, 'Enter a valid email address.', 422, 'bad_email', $back);
         }
-        $phone = Phone::normalize($phoneIn);
+        $phone = Phone::normalize((string) okv_input('phone', ''));
         if ($phone === null) {
             auth_respond(false, 'Enter a valid phone number, for example 0803 000 0000.', 422, 'bad_phone', $back);
         }
@@ -210,11 +249,9 @@ switch ($action) {
             auth_respond(false, 'Enter your business name.', 422, 'missing_business', $back);
         }
 
-        // Already registered? Tell them plainly and offer sign in, but reveal
-        // nothing beyond the email they just typed (which they already know).
-        if (Database::one('SELECT id FROM users WHERE email = :e OR phone = :p LIMIT 1', [':e' => $email, ':p' => $phone])) {
-            auth_respond(false, 'You already have an account with these details. Please sign in.', 409, 'account_exists', $back, ['prefill' => $email]);
-        }
+        // Already registered? Say which detail collides and offer sign in, but
+        // reveal nothing beyond what the person just typed (which they know).
+        register_refuse_if_taken($email, $phone, $back);
 
         $pdo = Database::getInstance()->getConnection();
         try {
@@ -245,6 +282,13 @@ switch ($action) {
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
+            }
+            // Two registers of the same person racing: the unique index caught
+            // the second one. Re-run the shared check so the answer names the
+            // field that collided instead of a bare failure.
+            if (register_is_duplicate_key($e)) {
+                register_refuse_if_taken($email, $phone, $back);
+                auth_respond(false, 'You already have an account with these details. Please sign in.', 409, 'account_exists', $back, ['prefill' => $email]);
             }
             error_log('register failed: ' . $e->getMessage());
             auth_respond(false, 'We could not create your account. Please try again.', 500, 'register_failed', $back);
@@ -343,8 +387,10 @@ switch ($action) {
         }
         RateLimiter::hit($cool, 1, (int) env('OTP_RESEND_COOLDOWN_SECONDS', 60));
 
+        // No LIMIT here: the email is unique by invariant, and if that
+        // invariant were ever broken this flow must not quietly pick a row.
         $user = Database::one(
-            "SELECT id, first_name FROM users WHERE email = :e AND user_type IN ('household', 'business') LIMIT 1",
+            "SELECT id, first_name FROM users WHERE email = :e AND user_type IN ('household', 'business')",
             [':e' => $email]
         );
         if ($user) {
@@ -372,7 +418,7 @@ switch ($action) {
             auth_respond(false, 'The two new passwords do not match.', 422, 'mismatch', $back);
         }
 
-        $user   = Database::one("SELECT id, email, phone FROM users WHERE email = :e AND user_type IN ('household', 'business') LIMIT 1", [':e' => $email]);
+        $user   = Database::one("SELECT id, email, phone FROM users WHERE email = :e AND user_type IN ('household', 'business')", [':e' => $email]);
         $policy = Password::policyError($new, $email, (string) ($user['phone'] ?? ''));
         if ($policy !== null) {
             auth_respond(false, $policy, 422, 'weak_password', $back);
@@ -422,7 +468,10 @@ switch ($action) {
         RateLimiter::hit($cool, 1, (int) env('OTP_RESEND_COOLDOWN_SECONDS', 60));
 
         $user = Database::one(
-            "SELECT id, first_name FROM users WHERE email = :e AND user_type = 'staff' AND status = 'active' LIMIT 1",
+            "SELECT u.id, u.first_name
+               FROM users u
+              WHERE u.email = :e AND u.status = 'active'
+                AND (u.user_type = 'staff' OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id))",
             [':e' => $email]
         );
         if ($user) {
@@ -452,7 +501,13 @@ switch ($action) {
             auth_respond(false, 'The two new passwords do not match.', 422, 'mismatch', $back);
         }
 
-        $user   = Database::one("SELECT id, email, phone FROM users WHERE email = :e AND user_type = 'staff' AND status = 'active' LIMIT 1", [':e' => $email]);
+        $user   = Database::one(
+            "SELECT u.id, u.email, u.phone
+               FROM users u
+              WHERE u.email = :e AND u.status = 'active'
+                AND (u.user_type = 'staff' OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id))",
+            [':e' => $email]
+        );
         $policy = Password::policyError($new, $email, (string) ($user['phone'] ?? ''));
         if ($policy !== null) {
             auth_respond(false, $policy, 422, 'weak_password', $back);

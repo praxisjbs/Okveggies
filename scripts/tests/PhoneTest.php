@@ -21,12 +21,19 @@ okv_test_eq($e164, Phone::normalize('002348012345678'),  '00 international prefi
 okv_test_eq('+2347012345678', Phone::normalize('07012345678'), 'a 070 number');
 okv_test_eq('+2349012345678', Phone::normalize('09012345678'), 'a 090 number');
 okv_test_eq('+2348030000000', Phone::normalize('0803 000 0000'), 'the example number');
+okv_test_eq($e164, Phone::normalize('23408012345678'),  'country code plus a leading zero');
+okv_test_eq($e164, Phone::normalize('00 234 801 234 5678'), 'the 00 prefix with spaces');
+okv_test_eq($e164, Phone::normalize('(0801) 234 5678'), 'parentheses are ignored');
 
 okv_test_eq(null, Phone::normalize(''),            'empty is not a number');
 okv_test_eq(null, Phone::normalize('12345'),       'too short is not a number');
 okv_test_eq(null, Phone::normalize('not a phone'), 'letters are not a number');
 okv_test_eq(null, Phone::normalize('0601234567'),  'a 06 number is not a Nigerian mobile');
 okv_test_eq(null, Phone::normalize('080123456789'),'too long is not a number');
+okv_test_eq(null, Phone::normalize('01234567890'), 'a landline shaped number is not a mobile');
+okv_test_eq(null, Phone::normalize('+441234567890'), 'a non-Nigerian number is outside the policy');
+okv_test_eq(null, Phone::normalize('00'),   'a bare 00 prefix is not a number');
+okv_test_eq(null, Phone::normalize('0000'), 'a run of zeros is not a number');
 
 okv_test_ok(Phone::isValid('0803 000 0000'),  'isValid true for a real number');
 okv_test_ok(!Phone::isValid('hello'),         'isValid false for nonsense');

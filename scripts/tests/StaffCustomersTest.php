@@ -77,6 +77,12 @@ okv_test_eq('+2348031234567', $clean['phone'], 'the phone lands on the one canon
 okv_test_eq('adaeze@example.com', $clean['email'], 'a real address is kept as given');
 okv_test_eq('household', $clean['customer_type'], 'the account type is kept');
 
+$mixedCase = StaffCustomers::validateNew([
+    'first_name' => 'Adaeze', 'last_name' => 'Okafor', 'phone' => '08031234567',
+    'email' => 'Adaeze.O@Example.COM', 'customer_type' => 'household',
+]);
+okv_test_eq('adaeze.o@example.com', $mixedCase['email'], 'a mixed case address is lower cased, the same as every other identity path');
+
 $noEmail = StaffCustomers::validateNew([
     'first_name' => 'Chidi', 'last_name' => 'Eze', 'phone' => '0803 123 4568', 'email' => '',
 ]);
@@ -110,7 +116,7 @@ okv_test_eq('', StaffCustomers::validateNew($base + ['customer_type' => 'busines
 // 4. Every refusal has words a colleague can act on.
 // ---------------------------------------------------------------------------
 
-foreach (['name_required', 'bad_customer_type', 'bad_phone', 'bad_email', 'customer_exists'] as $code) {
+foreach (['name_required', 'bad_customer_type', 'bad_phone', 'bad_email', 'email_taken', 'phone_taken', 'customer_exists'] as $code) {
     $message = StaffCustomers::message($code);
     okv_test_ok($message !== StaffCustomers::message('unknown_code'), 'the refusal ' . $code . ' has words of its own');
     okv_test_ok(!str_contains($message, '_'), 'the refusal ' . $code . ' reads as a sentence, not as a code');
