@@ -39,6 +39,21 @@ final class Notifications
     public const STATUS_FAILED = 'failed';
 
     /**
+     * Some channels landed and some did not. The usual shape is the in-app
+     * copy sent while the email failed, and the parent row must say so rather
+     * than claim a success the customer never saw. The per-delivery rows stay
+     * the source of truth; this is the honest summary on the notification.
+     */
+    public const STATUS_PARTIAL = 'partial';
+
+    /**
+     * The safe diagnostic recorded when a stage email has nowhere to go. The
+     * order carries no usable address, so the delivery is failed rather than
+     * skipped silently, and staff can correct the address and send it again.
+     */
+    public const FAIL_NO_ADDRESS = 'This order has no usable email address. Add one on the order and send it again.';
+
+    /**
      * A notification written now and sent later.
      *
      *   held    Rendered and waiting on an event, not a clock. The pay in full
@@ -76,6 +91,7 @@ final class Notifications
         'refund_failed'     => ['template' => 'refund_failed',     'label' => 'Refund failed',           'audience' => 'staff'],
         'admin_new_order'   => ['template' => 'admin_new_order',   'label' => 'New order, for staff',    'audience' => 'staff'],
         'admin_order_cancelled' => ['template' => 'admin_order_cancelled', 'label' => 'Order cancelled, for staff', 'audience' => 'staff'],
+        'admin_stage_email_failed' => ['template' => 'admin_stage_email_failed', 'label' => 'Stage email failed, for staff', 'audience' => 'staff'],
         'admin_manual_payment_proof' => ['template' => 'admin_manual_payment_proof', 'label' => 'Payment proof to review, for staff', 'audience' => 'staff'],
         'admin_new_contact' => ['template' => 'admin_new_contact', 'label' => 'New contact message, for staff', 'audience' => 'staff'],
         'contact_acknowledgement' => ['template' => 'contact_acknowledgement', 'label' => 'We have your message',  'audience' => 'customer'],
@@ -118,6 +134,7 @@ final class Notifications
         // with its figure attached. This one says what happened and what state
         // the money is in.
         'admin_order_cancelled' => ['customer_name', 'order_number', 'cancellation_source', 'cancellation_reason', 'delivery_day', 'refund_state', 'admin_url'],
+        'admin_stage_email_failed' => ['customer_name', 'order_number', 'stage_label', 'delivery_day', 'failure_reason', 'admin_url'],
         'admin_manual_payment_proof' => ['order_number', 'amount', 'recorded_by', 'admin_url'],
         'admin_new_contact' => ['contact_name', 'contact_method', 'source_label', 'subject', 'message_preview', 'admin_url'],
         'contact_acknowledgement' => ['customer_name', 'received_at', 'whatsapp_url'],
@@ -363,11 +380,12 @@ final class Notifications
             [':id' => $notificationId, ':status' => 'queued']
         );
 
-        $anySent = false;
+        $sentAny = false;
+        $failedAny = false;
         foreach ($deliveries as $delivery) {
             if ((string) $delivery['channel'] !== self::CHANNEL_EMAIL) {
                 self::recordAttempt((int) $delivery['id'], 1 + (int) $delivery['attempt_count'], true, '');
-                $anySent = true;
+                $sentAny = true;
                 continue;
             }
             $sent = false;
@@ -384,14 +402,15 @@ final class Notifications
                 $error = Mail::classifyFailure($e->getMessage());
             }
             self::recordAttempt((int) $delivery['id'], 1 + (int) $delivery['attempt_count'], $sent, $error !== '' ? $error : Mail::lastError());
-            $anySent = $anySent || $sent;
+            $sentAny = $sentAny || $sent;
+            $failedAny = $failedAny || !$sent;
         }
 
         Database::run(
             'UPDATE notifications SET status = :status, scheduled_at = COALESCE(scheduled_at, :now) WHERE id = :id',
-            [':status' => $anySent ? self::STATUS_SENT : self::STATUS_FAILED, ':now' => date('Y-m-d H:i:s'), ':id' => $notificationId]
+            [':status' => self::summariseDelivery($sentAny, $failedAny), ':now' => date('Y-m-d H:i:s'), ':id' => $notificationId]
         );
-        return $anySent;
+        return $sentAny;
     }
 
     /** Everything sent about one order, newest first, for the Order 360 screen. */
@@ -485,7 +504,8 @@ final class Notifications
     {
         $delivery = Database::one(
             'SELECT d.id, d.channel, d.recipient_address, d.attempt_count, d.status,
-                    n.title, n.body, n.cta_url, n.cta_label, n.event_type, n.status AS notification_status
+                    n.id AS notification_id, n.title, n.body, n.cta_url, n.cta_label,
+                    n.event_type, n.status AS notification_status, n.related_type, n.related_id
                FROM notification_deliveries d
                JOIN notifications n ON n.id = d.notification_id
               WHERE d.id = :id',
@@ -515,11 +535,35 @@ final class Notifications
             ? null
             : ['label' => (string) ($delivery['cta_label'] ?? 'Open this in your browser'), 'url' => (string) $delivery['cta_url']];
 
+        // A failed delivery written when the order had no usable address is
+        // resendable once the address is corrected: read the order again and
+        // send to what it says now, keeping the corrected address on the row.
+        // Anything else keeps the address it was first sent to, so a resend
+        // never quietly says something different from the first attempt.
+        $address = trim((string) $delivery['recipient_address']);
+        if (($address === '' || !filter_var($address, FILTER_VALIDATE_EMAIL))
+            && (string) $delivery['related_type'] === 'order'
+            && (int) $delivery['related_id'] > 0
+        ) {
+            $fresh = self::orderEmailAddress((int) $delivery['related_id']);
+            if ($fresh !== null && $fresh !== $address) {
+                Database::run(
+                    'UPDATE notification_deliveries SET recipient_address = :address WHERE id = :id',
+                    [':address' => $fresh, ':id' => (int) $delivery['id']]
+                );
+                $address = $fresh;
+            }
+        }
+        if ($address === '' || !filter_var($address, FILTER_VALIDATE_EMAIL)) {
+            self::recordAttempt((int) $delivery['id'], (int) $delivery['attempt_count'] + 1, false, self::FAIL_NO_ADDRESS);
+            return ['ok' => false, 'code' => 'no_address', 'message' => 'This order still has no usable email address. Add one on the order first.'];
+        }
+
         $sent = false;
         $error = '';
         try {
             $sent = Mail::send(
-                (string) $delivery['recipient_address'],
+                $address,
                 (string) $delivery['title'],
                 Mail::brandedHtml((string) $delivery['title'], (string) $delivery['body'], $cta),
                 Mail::plainText((string) $delivery['title'], (string) $delivery['body'], $cta)
@@ -529,6 +573,7 @@ final class Notifications
             $error = Mail::classifyFailure($e->getMessage());
         }
         self::recordAttempt((int) $delivery['id'], (int) $delivery['attempt_count'] + 1, $sent, $error ?: Mail::lastError());
+        self::refreshNotificationStatus((int) $delivery['notification_id']);
 
         return $sent
             ? ['ok' => true, 'code' => 'sent', 'message' => 'The email has been sent again.']
@@ -1429,18 +1474,170 @@ final class Notifications
         self::send('credit_charge_posted', $context['vars'], $context['recipients'], 'order', $orderId, $actorId);
     }
 
-    /** A lifecycle stage the customer should hear about. */
+    /**
+     * A lifecycle stage the customer should hear about.
+     *
+     * Called after the transition has committed, so a bounced email never
+     * un-confirms, un-packs, un-dispatches or un-delivers an order. Safe to
+     * call twice: the first announcement wins, and a repeated request, a page
+     * refresh or a concurrent call writes nothing new.
+     *
+     * The trail link is a freshly minted share token, because a stage email is
+     * rendered after the fact when the original token is long gone, and the
+     * order-id fallback the context would otherwise send 404s for a guest on
+     * any other device. When the order has no usable address the stage is
+     * still recorded, as a failed delivery with a reason on it, rather than
+     * skipped silently. A customer who hears nothing while the team knows
+     * nothing is the failure this path exists to end.
+     */
     public static function announceStage(int $orderId, string $status, ?int $actorId = null): void
     {
         $event = self::STAGE_EVENTS[$status] ?? null;
-        if ($event === null) {
+        if ($event === null || $orderId < 1) {
             return;
         }
-        $context = self::orderContext($orderId);
+        if (self::alreadyAnnounced($event, 'order', $orderId)) {
+            return;
+        }
+        $token = OrderTrail::issueForOrder($orderId, $actorId);
+        $context = self::orderContext($orderId, $token);
         if ($context === null) {
             return;
         }
-        self::send($event, $context['vars'], $context['recipients'], 'order', $orderId, $actorId);
+        if (self::stageEmailOf($context) === null) {
+            self::recordStageWithoutEmail($event, $status, $context, $orderId, $actorId);
+            return;
+        }
+        $id = self::send($event, $context['vars'], $context['recipients'], 'order', $orderId, $actorId);
+        if ($id < 1) {
+            return;
+        }
+        $failed = Database::one(
+            'SELECT last_error FROM notification_deliveries
+              WHERE notification_id = :id AND channel = :channel AND status = :failed
+              ORDER BY id LIMIT 1',
+            [':id' => $id, ':channel' => self::CHANNEL_EMAIL, ':failed' => self::STATUS_FAILED]
+        );
+        if ($failed !== null) {
+            self::alertStageEmailFailed(
+                $orderId,
+                $status,
+                $context,
+                trim((string) ($failed['last_error'] ?? '')) !== '' ? trim((string) $failed['last_error']) : Mail::lastError(),
+                $actorId
+            );
+        }
+    }
+
+    /** The staff-facing name of a lifecycle stage, for the failure alert. */
+    public static function stageLabel(string $status): string
+    {
+        return [
+            'confirmed'  => 'Confirmed',
+            'packed'     => 'Packed',
+            'dispatched' => 'Dispatched',
+            'delivered'  => 'Delivered',
+        ][$status] ?? 'Order update';
+    }
+
+    /** The usable email address on a stage announcement, or null when there is none. */
+    private static function stageEmailOf(array $context): ?string
+    {
+        $email = trim((string) ($context['recipients'][0]['email'] ?? ''));
+        return $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
+    }
+
+    /**
+     * A stage the customer cannot be emailed about, recorded rather than
+     * skipped. The in-app copy still lands for an account holder, and the
+     * email is a failed delivery with the reason on it, so Order 360 shows the
+     * gap with the resend button beside it. The team is told as well, because
+     * an address nobody corrects is an email that never goes.
+     */
+    private static function recordStageWithoutEmail(string $event, string $status, array $context, int $orderId, ?int $actorId): void
+    {
+        $definition = self::EVENTS[$event] ?? null;
+        if ($definition === null) {
+            return;
+        }
+        $template = Database::one(
+            'SELECT id, subject_template, body_template FROM notification_templates
+              WHERE template_key = :key AND is_active = 1',
+            [':key' => $definition['template']]
+        );
+        if (!$template) {
+            error_log('Notifications: template missing or switched off: ' . $definition['template']);
+            return;
+        }
+        [$subject, $body] = self::render($template, $context['vars']);
+        $cta = Mail::ctaFromVars($context['vars']);
+        $userId = isset($context['recipients'][0]['user_id']) && (int) $context['recipients'][0]['user_id'] > 0
+            ? (int) $context['recipients'][0]['user_id']
+            : null;
+        $notificationId = self::writeNotification(
+            $event,
+            $subject,
+            $body,
+            (int) $template['id'],
+            'order',
+            $orderId,
+            $actorId,
+            'queued',
+            null,
+            $cta
+        );
+        if ($notificationId < 1) {
+            return;
+        }
+        // The address as typed, kept on the row so staff can see the typo they
+        // are correcting. Never the reason: the reason is the fixed sentence.
+        $raw = trim((string) ($context['recipients'][0]['email'] ?? ''));
+        if ($userId !== null) {
+            self::writeDelivery($notificationId, $userId, self::CHANNEL_IN_APP, 'in-app', self::STATUS_SENT, 1, null);
+        }
+        self::writeDelivery(
+            $notificationId,
+            $userId,
+            self::CHANNEL_EMAIL,
+            mb_substr($raw, 0, 255),
+            self::STATUS_FAILED,
+            1,
+            self::FAIL_NO_ADDRESS
+        );
+        Database::run(
+            'UPDATE notifications SET status = :status WHERE id = :id',
+            [':status' => $userId !== null ? self::STATUS_PARTIAL : self::STATUS_FAILED, ':id' => $notificationId]
+        );
+        self::alertStageEmailFailed($orderId, $status, $context, self::FAIL_NO_ADDRESS, $actorId);
+    }
+
+    /**
+     * A stage email that did not go out, told to whoever may open the order it
+     * is about. The bell is the point: a failed delivery row on Order 360 only
+     * helps the colleague who opens that exact order, while a dead mail host
+     * or a missing address is fulfilment work going quiet across the day.
+     *
+     * Built token by token rather than handed the customer context, the way
+     * the cancellation alert is: the next step here is the admin order, so the
+     * customer trail address never reaches this message at all.
+     */
+    private static function alertStageEmailFailed(int $orderId, string $status, array $context, string $reason, ?int $actorId): void
+    {
+        self::send(
+            'admin_stage_email_failed',
+            [
+                'customer_name'  => (string) ($context['vars']['customer_name'] ?? ''),
+                'order_number'   => (string) ($context['vars']['order_number'] ?? ''),
+                'stage_label'    => self::stageLabel($status),
+                'delivery_day'   => (string) ($context['vars']['delivery_day'] ?? ''),
+                'failure_reason' => $reason !== '' ? $reason : Mail::lastError(),
+                'admin_url'      => (string) ($context['vars']['admin_url'] ?? ''),
+            ],
+            self::staffRecipients('orders.view'),
+            'order',
+            $orderId,
+            $actorId
+        );
     }
 
     /**
@@ -1853,11 +2050,12 @@ final class Notifications
             return $notificationId;
         }
 
-        $anySent = false;
+        $sentAny = false;
+        $failedAny = false;
         foreach ($recipients as $recipient) {
             if (!empty($recipient['user_id'])) {
                 self::writeDelivery($notificationId, (int) $recipient['user_id'], self::CHANNEL_IN_APP, 'in-app', self::STATUS_SENT, 1, null);
-                $anySent = true;
+                $sentAny = true;
             }
             if (empty($recipient['email'])) {
                 continue;
@@ -1887,12 +2085,13 @@ final class Notifications
             // The reason the ledger carries is Mail's sanitised category, never
             // the driver's own text: this column is printed on Order 360.
             self::recordAttempt($deliveryId, 1, $sent, $error !== '' ? $error : Mail::lastError());
-            $anySent = $anySent || $sent;
+            $sentAny = $sentAny || $sent;
+            $failedAny = $failedAny || !$sent;
         }
 
         Database::run(
             'UPDATE notifications SET status = :status WHERE id = :id',
-            [':status' => $anySent ? self::STATUS_SENT : self::STATUS_FAILED, ':id' => $notificationId]
+            [':status' => self::summariseDelivery($sentAny, $failedAny), ':id' => $notificationId]
         );
         return $notificationId;
     }
@@ -1973,6 +2172,72 @@ final class Notifications
             ]
         );
         return (int) Database::getInstance()->getConnection()->lastInsertId();
+    }
+
+    /**
+     * The honest summary of a set of delivery attempts. Pure, so the rule is
+     * unit tested rather than discovered on Order 360: one channel landing
+     * never marks the whole message sent when another channel failed.
+     */
+    public static function summariseDelivery(bool $sentAny, bool $failedAny): string
+    {
+        if ($failedAny) {
+            return $sentAny ? self::STATUS_PARTIAL : self::STATUS_FAILED;
+        }
+        return $sentAny ? self::STATUS_SENT : self::STATUS_FAILED;
+    }
+
+    /**
+     * Recompute a notification's summary from its deliveries, after a resend
+     * changed one of them. Held, queued and cancelled notifications are left
+     * alone: they describe work that has not happened yet, not work that did.
+     */
+    private static function refreshNotificationStatus(int $notificationId): void
+    {
+        $rows = Database::all(
+            'SELECT status FROM notification_deliveries WHERE notification_id = :id',
+            [':id' => $notificationId]
+        );
+        if (!$rows) {
+            return;
+        }
+        $sentAny = false;
+        $failedAny = false;
+        foreach ($rows as $row) {
+            $status = (string) $row['status'];
+            if ($status === self::STATUS_SENT) {
+                $sentAny = true;
+            } elseif ($status === self::STATUS_FAILED || $status === 'queued') {
+                $failedAny = true;
+            }
+        }
+        Database::run(
+            'UPDATE notifications SET status = :status
+              WHERE id = :id AND status NOT IN (:held, :queued, :cancelled)',
+            [
+                ':status'    => self::summariseDelivery($sentAny, $failedAny),
+                ':id'        => $notificationId,
+                ':held'      => self::STATUS_HELD,
+                ':queued'    => self::STATUS_QUEUED,
+                ':cancelled' => self::STATUS_CANCELLED,
+            ]
+        );
+    }
+
+    /** The current usable email address on an order, or null when there is none. */
+    private static function orderEmailAddress(int $orderId): ?string
+    {
+        $order = Database::one(
+            'SELECT o.contact_email, u.email AS user_email
+               FROM orders o LEFT JOIN users u ON u.id = o.user_id
+              WHERE o.id = :id',
+            [':id' => $orderId]
+        );
+        if ($order === null) {
+            return null;
+        }
+        $email = trim((string) ($order['user_email'] ?? '')) ?: trim((string) ($order['contact_email'] ?? ''));
+        return $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
     }
 
     private static function recordAttempt(int $deliveryId, int $attempts, bool $sent, string $error): void

@@ -108,6 +108,60 @@ final class OrderTrail
         throw new RuntimeException('trail_token_collision');
     }
 
+    /**
+     * Issue a share token for one order from inside the platform, so a stage
+     * email rendered after the fact can still carry a working no-login trail
+     * link. The plain token exists for one request and is stored only as a
+     * hash, which is exactly what makes the emailed link safe to forward.
+     *
+     * Unlike issueForCustomer there is no ownership check here: the caller is
+     * staff or the platform itself, never the customer, and the order id comes
+     * from a committed transition rather than from a request. The actor is the
+     * staff member who moved the order, recorded as created_by.
+     *
+     * Never throws and never breaks the announcement: null means the caller
+     * falls back to the order link it has always sent.
+     */
+    public static function issueForOrder(int $orderId, ?int $actorId): ?string
+    {
+        if ($orderId < 1 || $actorId === null || $actorId < 1) {
+            return null;
+        }
+        try {
+            $order = Database::one('SELECT id FROM orders WHERE id = :id', [':id' => $orderId]);
+            if ($order === null) {
+                return null;
+            }
+            $actor = Database::one('SELECT id FROM users WHERE id = :id', [':id' => $actorId]);
+            if ($actor === null) {
+                return null;
+            }
+            for ($attempt = 0; $attempt < 5; $attempt++) {
+                $token = self::newToken();
+                $hash = self::hashToken($token);
+                $exists = Database::one(
+                    'SELECT id FROM orders WHERE order_trail_token_hash = :order_hash
+                     UNION ALL
+                     SELECT id FROM order_trail_share_links WHERE token_hash = :share_hash
+                     LIMIT 1',
+                    [':order_hash' => $hash, ':share_hash' => $hash]
+                );
+                if ($exists !== null) {
+                    continue;
+                }
+                Database::run(
+                    'INSERT INTO order_trail_share_links (order_id, token_hash, created_by)
+                     VALUES (:order_id, :token_hash, :created_by)',
+                    [':order_id' => $orderId, ':token_hash' => $hash, ':created_by' => $actorId]
+                );
+                return $token;
+            }
+        } catch (Throwable $e) {
+            error_log('order trail share issue failed: ' . $e->getMessage());
+        }
+        return null;
+    }
+
     /** The order for its signed-in owner, or null when it is not theirs. */
     public static function findForCustomer(int $orderId, int $userId): ?array
     {

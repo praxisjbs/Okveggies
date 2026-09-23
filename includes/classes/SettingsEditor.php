@@ -398,6 +398,11 @@ final class SettingsEditor
             'cancellation_source' => Notifications::cancellationSourceLine('customer', ''),
             'cancellation_reason' => Notifications::cancellationReasonLine('customer', 'delivery_date', ''),
             'refund_state'        => Notifications::staffRefundStateLine(Refunds::STATUS_PENDING, true),
+            // The staff alert for a stage email that did not go out. The stage
+            // sample comes from the same helper that builds the real message,
+            // and the reason is one of the fixed sentences Mail records.
+            'stage_label'         => Notifications::stageLabel('dispatched'),
+            'failure_reason'      => Mail::FAIL_UNREACHABLE,
             'reason'          => 'The customer bank account could not be reached.',
             'declined_reason' => 'We need a longer trading history before we can set this limit.',
             'credit_limit'    => Money::format(50000000),
