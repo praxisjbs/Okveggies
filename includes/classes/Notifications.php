@@ -605,14 +605,17 @@ final class Notifications
         }
 
         if ($permission === null) {
+            // Staff is anyone who holds a role, whatever their account type:
+            // one person is one identity, and a team member who is also a
+            // customer still hears about the work.
             return Database::all(
                 'SELECT DISTINCT u.id, u.email, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
                    FROM users u
                    JOIN user_roles ur ON ur.user_id = u.id
                    JOIN roles r ON r.id = ur.role_id
-                  WHERE u.status = :status AND u.user_type = :type AND u.email IS NOT NULL AND r.name IN (:owner, :manager)
+                  WHERE u.status = :status AND u.email IS NOT NULL AND r.name IN (:owner, :manager)
                ORDER BY u.id',
-                [':status' => 'active', ':type' => 'staff', ':owner' => 'owner', ':manager' => 'manager']
+                [':status' => 'active', ':owner' => 'owner', ':manager' => 'manager']
             );
         }
 
@@ -622,7 +625,7 @@ final class Notifications
         return Database::all(
             'SELECT DISTINCT u.id, u.email, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS name
                FROM users u
-              WHERE u.status = :status AND u.user_type = :type AND u.email IS NOT NULL
+              WHERE u.status = :status AND u.email IS NOT NULL
                 AND EXISTS (
                     SELECT 1
                       FROM user_roles ur
@@ -635,7 +638,6 @@ final class Notifications
            ORDER BY u.id',
             [
                 ':status' => 'active',
-                ':type' => 'staff',
                 ':owner' => 'owner',
                 ':permission' => $permission,
                 ':module_permission' => $modulePermission,

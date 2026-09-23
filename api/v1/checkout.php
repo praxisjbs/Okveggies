@@ -44,25 +44,37 @@ const CHECKOUT_NEXT_STEP = ['customer' => 3, 'delivery' => 4, 'payment' => 4];
  */
 function checkout_create_guest_account(array $customer): void
 {
-    $email = strtolower(trim((string) ($customer['email'] ?? '')));
+    // The one canonicalisation and the one duplicate check every identity path
+    // shares, so a checkout account signs in by phone or email in any shape.
+    $email = Auth::canonicalEmail((string) ($customer['email'] ?? ''));
     $phone = Phone::normalize((string) ($customer['recipient_phone'] ?? ''));
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $phone === null) {
+    if ($email === null || $phone === null) {
         throw new DomainException('bad_customer');
     }
-    if (Database::one('SELECT id FROM users WHERE email = :email OR phone = :phone', [':email' => $email, ':phone' => $phone])) {
-        throw new DomainException('account_exists');
+    $conflict = Auth::findIdentityConflict($email, $phone);
+    if ($conflict !== null) {
+        $field = (string) $conflict['field'];
+        throw new DomainException($field === 'both' ? 'account_exists' : $field . '_taken');
     }
 
-    Database::run(
-        'INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status)
-         VALUES (:first, \'\', :email, :phone, :password, \'household\', \'active\')',
-        [
-            ':first'    => trim((string) ($customer['recipient_name'] ?? '')),
-            ':email'    => $email,
-            ':phone'    => $phone,
-            ':password' => Password::hash(bin2hex(random_bytes(24))),
-        ]
-    );
+    try {
+        Database::run(
+            'INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status)
+             VALUES (:first, \'\', :email, :phone, :password, \'household\', \'active\')',
+            [
+                ':first'    => trim((string) ($customer['recipient_name'] ?? '')),
+                ':email'    => $email,
+                ':phone'    => $phone,
+                ':password' => Password::hash(bin2hex(random_bytes(24))),
+            ]
+        );
+    } catch (Throwable $e) {
+        // The unique index caught a racing duplicate of the same identity.
+        if ($e instanceof PDOException && str_starts_with((string) ($e->getCode() ?: ''), '23')) {
+            throw new DomainException('account_exists');
+        }
+        throw $e;
+    }
     $user = Database::one(
         'SELECT id, user_type, email_verified_at, first_name FROM users WHERE id = :id',
         [':id' => (int) Database::getInstance()->getConnection()->lastInsertId()]
@@ -194,6 +206,8 @@ try {
         'cart_converted'      => ['This basket has already been placed as an order.', 'cart_converted'],
         'bad_step'            => ['That checkout step is not available.', 'bad_step'],
         'bad_customer'        => ['Check your contact and delivery details.', 'bad_customer'],
+        'email_taken'         => ['An account already uses that email address. Sign in to continue.', 'email_taken'],
+        'phone_taken'         => ['An account already uses that phone number. Sign in to continue.', 'phone_taken'],
         'account_exists'      => ['An account already uses that email address or phone number. Sign in to continue.', 'account_exists'],
     ];
     $reason = $e->getMessage();

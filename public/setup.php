@@ -78,34 +78,45 @@ try {
         }
         $values['first_name'] = trim((string) okv_input('first_name', ''));
         $values['last_name']  = trim((string) okv_input('last_name', ''));
-        $values['email']      = trim((string) okv_input('email', ''));
-        $values['phone']      = trim((string) okv_input('phone', ''));
+        $emailInput           = (string) okv_input('email', '');
+        $phoneInput           = (string) okv_input('phone', '');
         $password             = (string) okv_input('password', '');
         $confirm              = (string) okv_input('confirm_password', '');
+
+        // The same canonicalisation every identity path shares: email lower
+        // cased, phone in E.164. The Owner signs in by either, any shape.
+        $canonicalEmail = Auth::canonicalEmail($emailInput);
+        $canonicalPhone = Phone::normalize($phoneInput);
 
         if ($values['first_name'] === '' || $values['last_name'] === '') {
             $errors[] = 'Enter the first and last name.';
         }
-        if (!filter_var($values['email'], FILTER_VALIDATE_EMAIL)) {
+        if ($canonicalEmail === null) {
             $errors[] = 'Enter a valid email address.';
+        } else {
+            $values['email'] = $canonicalEmail;
         }
-        if ($values['phone'] === '' || strlen(preg_replace('/[^0-9]/', '', $values['phone'])) < 7) {
-            $errors[] = 'Enter a valid phone number.';
+        if ($canonicalPhone === null) {
+            $errors[] = 'Enter a valid phone number, for example 0803 000 0000.';
+        } else {
+            $values['phone'] = $canonicalPhone;
         }
         if ($password !== $confirm) {
             $errors[] = 'The two passwords do not match.';
         }
-        $policy = Password::policyError($password, $values['email'], $values['phone']);
+        $policy = Password::policyError($password, (string) ($canonicalEmail ?? $emailInput), (string) ($canonicalPhone ?? $phoneInput));
         if ($policy !== null) {
             $errors[] = $policy;
         }
         if (!$errors) {
-            $clash = Database::one(
-                'SELECT id FROM users WHERE email = :e OR phone = :p LIMIT 1',
-                [':e' => $values['email'], ':p' => $values['phone']]
-            );
-            if ($clash) {
-                $errors[] = 'That email or phone is already in use.';
+            $clash = Auth::findIdentityConflict((string) $values['email'], (string) $values['phone']);
+            if ($clash !== null) {
+                $clashMessages = [
+                    'email' => 'That email is already in use.',
+                    'phone' => 'That phone number is already in use.',
+                    'both'  => 'That email and that phone number are already in use.',
+                ];
+                $errors[] = $clashMessages[(string) $clash['field']] ?? $clashMessages['both'];
             }
         }
 
@@ -139,6 +150,17 @@ try {
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
+                }
+                // The unique index caught a racing duplicate of this identity.
+                if ($e instanceof PDOException && str_starts_with((string) ($e->getCode() ?: ''), '23')) {
+                    okv_setup_page(
+                        'Setup',
+                        '<h1 class="text-center font-display font-extrabold text-2xl text-ink mt-1">Those details are taken</h1>'
+                      . '<p class="text-ink-60 text-sm mt-3 text-center">That email or phone number already belongs to an account, '
+                      . 'so setup is closed. Sign in with the existing account instead.</p>'
+                      . '<a href="/admin/login.php" class="okv-btn w-full mt-6 text-center">Go to sign in</a>',
+                        409
+                    );
                 }
                 error_log('setup: owner create failed: ' . $e->getMessage());
                 okv_setup_page(

@@ -50,7 +50,7 @@ final class Phone
             } elseif (strlen($rest) === 11 && $rest[0] === '0') {
                 $national = substr($rest, 1);
             }
-        } elseif ($digits[0] === '0') {
+        } elseif ($digits !== '' && $digits[0] === '0') {
             $rest = substr($digits, 1);
             if (strlen($rest) === 10) {
                 $national = $rest;

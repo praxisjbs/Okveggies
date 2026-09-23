@@ -12,13 +12,16 @@ Rbac::requirePermission('users.view');
 $meId  = (int) Rbac::userId();
 $roles = Database::all('SELECT id, name, description FROM roles ORDER BY name');
 
+// Staff is anyone who holds a role. One person is one identity, so a customer
+// who joined the team appears here with their role, on the same row they shop
+// with. Rows created before that policy carry the staff account type instead.
 $staff = Database::all(
-    "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.status, u.last_login_at,
+    "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.status, u.last_login_at, u.user_type,
             GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR ',') AS roles
        FROM users u
        LEFT JOIN user_roles ur ON ur.user_id = u.id
        LEFT JOIN roles r ON r.id = ur.role_id
-      WHERE u.user_type = 'staff'
+      WHERE u.user_type = 'staff' OR ur.role_id IS NOT NULL
       GROUP BY u.id
       ORDER BY u.created_at ASC"
 );
@@ -50,7 +53,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <div><label for="email" class="okv-label">Email</label>
             <input id="email" name="email" type="email" required class="okv-input"></div>
           <div><label for="phone" class="okv-label">Phone number</label>
-            <input id="phone" name="phone" type="text" required class="okv-input"></div>
+            <input id="phone" name="phone" type="tel" inputmode="tel" required class="okv-input" placeholder="0803 000 0000"></div>
           <div><label for="role" class="okv-label">Role</label>
             <select id="role" name="role" required class="okv-input">
               <?php foreach ($roles as $r): ?>

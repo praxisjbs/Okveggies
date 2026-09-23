@@ -103,11 +103,17 @@ final class StaffCustomers
 
         // No email is a normal answer on a phone call, so it is allowed and
         // filled in. A typed address that is not an address is a mistake, and
-        // saying so beats silently replacing it with a placeholder.
+        // saying so beats silently replacing it with a placeholder. Whatever
+        // is kept goes through the same canonicalisation as every other
+        // identity path (lower cased), so sign-in by email always matches.
         if ($email === '') {
             $email = self::placeholderEmail($phone);
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new DomainException('bad_email');
+        } else {
+            $canonical = Auth::canonicalEmail($email);
+            if ($canonical === null) {
+                throw new DomainException('bad_email');
+            }
+            $email = $canonical;
         }
 
         return [
@@ -206,26 +212,37 @@ final class StaffCustomers
      */
     public static function create(array $clean, int $staffId): int
     {
-        $existing = Database::one(
-            'SELECT id, email, phone FROM users WHERE email = :email OR phone = :phone LIMIT 1',
-            [':email' => $clean['email'], ':phone' => $clean['phone']]
-        );
-        if ($existing) {
-            throw new DomainException('customer_exists');
+        // The shared identity check, so this screen refuses duplicates the same
+        // way registration, staff creation and checkout do, and names the field.
+        $conflict = Auth::findIdentityConflict($clean['email'], $clean['phone']);
+        if ($conflict !== null) {
+            $field = (string) $conflict['field'];
+            throw new DomainException($field === 'both' ? 'customer_exists' : $field . '_taken');
         }
 
-        Database::run(
-            'INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status)
-             VALUES (:first, :last, :email, :phone, :hash, :type, \'active\')',
-            [
-                ':first' => $clean['first_name'],
-                ':last'  => $clean['last_name'],
-                ':email' => $clean['email'],
-                ':phone' => $clean['phone'],
-                ':hash'  => Password::hash(bin2hex(random_bytes(32))),
-                ':type'  => $clean['customer_type'],
-            ]
-        );
+        try {
+            Database::run(
+                'INSERT INTO users (first_name, last_name, email, phone, password_hash, user_type, status)
+                 VALUES (:first, :last, :email, :phone, :hash, :type, \'active\')',
+                [
+                    ':first' => $clean['first_name'],
+                    ':last'  => $clean['last_name'],
+                    ':email' => $clean['email'],
+                    ':phone' => $clean['phone'],
+                    ':hash'  => Password::hash(bin2hex(random_bytes(32))),
+                    ':type'  => $clean['customer_type'],
+                ]
+            );
+        } catch (Throwable $e) {
+            // Two creations of the same person racing: the unique index caught
+            // the second one. Name the field that collided, as above.
+            if ($e instanceof PDOException && str_starts_with((string) ($e->getCode() ?: ''), '23')) {
+                $race = Auth::findIdentityConflict($clean['email'], $clean['phone']);
+                $field = $race !== null ? (string) $race['field'] : 'both';
+                throw new DomainException($field === 'both' ? 'customer_exists' : $field . '_taken');
+            }
+            throw $e;
+        }
         $userId = (int) Database::getInstance()->getConnection()->lastInsertId();
 
         if ($clean['customer_type'] === 'business') {
@@ -274,7 +291,9 @@ final class StaffCustomers
             'bad_customer_type' => 'Choose whether this is a household or a business.',
             'bad_phone'         => 'Enter a valid Nigerian phone number.',
             'bad_email'         => 'That email address does not look right. Leave it blank if they did not give one.',
-            'customer_exists'   => 'That phone number or email already belongs to a customer. Search for them instead.',
+            'email_taken'       => 'That email already belongs to a customer. Search for them instead.',
+            'phone_taken'       => 'That phone number already belongs to a customer. Search for them instead.',
+            'customer_exists'   => 'That phone number and email already belong to a customer. Search for them instead.',
         ];
         return $messages[$code] ?? 'We could not save that customer. Check the details and try again.';
     }

@@ -35,11 +35,19 @@ function users_guard_write(string $permission): void
     }
 }
 
-/** The staff user matching an id, or null. Customers are never returned here. */
+/**
+ * The staff user matching an id, or null. Staff is anyone who holds a role:
+ * one person is one identity, so a customer who joined the team keeps their
+ * household or business account type and gains their role on the same row.
+ * Rows created before that policy carry the staff account type instead.
+ */
 function users_find_staff(int $id): ?array
 {
     return Database::one(
-        "SELECT id, first_name, last_name, email, phone, status, user_type FROM users WHERE id = :id AND user_type = 'staff'",
+        "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.status, u.user_type
+           FROM users u
+          WHERE u.id = :id
+            AND (u.user_type = 'staff' OR EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id))",
         [':id' => $id]
     );
 }
@@ -63,17 +71,98 @@ function users_is_last_active_owner(int $id): bool
     return $isOwner !== null && $activeOwners <= 1;
 }
 
+/** True when a write failed because a UNIQUE identity key already exists. */
+function users_is_duplicate_key(Throwable $e): bool
+{
+    return $e instanceof PDOException && str_starts_with((string) ($e->getCode() ?: ''), '23');
+}
+
+/**
+ * The typed identifier belongs to an identity that already exists. If the email
+ * and the phone point at two different rows, or the match is already on the
+ * team, refuse and say which field collided. Otherwise attach the staff role to
+ * the existing customer identity: one person, one row, many roles. Returns the
+ * id of the identity that is now staff.
+ */
+function users_create_resolve_conflict(array $conflict, string $pass, int $roleId): int
+{
+    $emailId = $conflict['email_user_id'] !== null ? (int) $conflict['email_user_id'] : null;
+    $phoneId = $conflict['phone_user_id'] !== null ? (int) $conflict['phone_user_id'] : null;
+
+    if ($emailId !== null && $phoneId !== null && $emailId !== $phoneId) {
+        okv_error('That email and that phone number belong to two different accounts. Check both, then try again.', 409, 'duplicate');
+    }
+    $matchId = $emailId ?? $phoneId;
+    $match   = Database::one('SELECT id, user_type, status FROM users WHERE id = :id', [':id' => $matchId]);
+    if ($match === null) {
+        okv_error('We could not add this person. Please try again.', 500, 'create_failed');
+    }
+    if (Auth::isStaffUser($match)) {
+        $field    = (string) $conflict['field'];
+        $messages = [
+            'email' => 'That email already belongs to a team member.',
+            'phone' => 'That phone number already belongs to a team member.',
+            'both'  => 'Those details already belong to a team member.',
+        ];
+        $codes = ['email' => 'email_taken', 'phone' => 'phone_taken', 'both' => 'duplicate'];
+        okv_error($messages[$field] ?? $messages['both'], 409, $codes[$field] ?? 'duplicate');
+    }
+    if ((string) $match['status'] !== 'active') {
+        okv_error('That customer account is switched off. Switch it on before making it staff.', 409, 'account_off');
+    }
+
+    $pdo = Database::getInstance()->getConnection();
+    try {
+        $pdo->beginTransaction();
+        $pdo->prepare('INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES (:u, :r, :by)')
+            ->execute([':u' => $matchId, ':r' => $roleId, ':by' => (int) Rbac::userId()]);
+        // The Owner chose the password this person signs in with. Moving the
+        // marker on signs any of their older sessions out everywhere at once.
+        $pdo->prepare('UPDATE users SET password_hash = :h, password_changed_at = NOW() WHERE id = :id')
+            ->execute([':h' => Password::hash($pass), ':id' => $matchId]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) { $pdo->rollBack(); }
+        // A racing attach already gave this person the role: they are staff.
+        if (users_is_duplicate_key($e)) {
+            okv_error('That person is already on the team.', 409, 'duplicate');
+        }
+        error_log('users.create attach failed: ' . $e->getMessage());
+        okv_error('We could not add this person. Please try again.', 500, 'create_failed');
+    }
+    return $matchId;
+}
+
+/** After the unique index catches a racing duplicate, name the field that collided. */
+function users_create_refuse_duplicate(Throwable $e, string $email, string $phone): void
+{
+    if (!users_is_duplicate_key($e)) {
+        return;
+    }
+    $conflict = Auth::findIdentityConflict($email, $phone);
+    if ($conflict === null) {
+        return;
+    }
+    $field    = (string) $conflict['field'];
+    $messages = [
+        'email' => 'That email is already in use.',
+        'phone' => 'That phone number is already in use.',
+        'both'  => 'That email and that phone number are already in use.',
+    ];
+    okv_error($messages[$field] ?? $messages['both'], 409, $field === 'both' ? 'duplicate' : $field . '_taken');
+}
+
 switch ($action) {
 
     case 'list': {
         Rbac::requirePermission('users.view');
         $rows = Database::all(
-            "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.status, u.last_login_at,
+            "SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.status, u.last_login_at, u.user_type,
                     GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR ',') AS roles
                FROM users u
                LEFT JOIN user_roles ur ON ur.user_id = u.id
                LEFT JOIN roles r ON r.id = ur.role_id
-              WHERE u.user_type = 'staff'
+              WHERE u.user_type = 'staff' OR ur.role_id IS NOT NULL
               GROUP BY u.id
               ORDER BY u.created_at ASC"
         );
@@ -86,6 +175,7 @@ switch ($action) {
                 'phone'         => $r['phone'],
                 'status'        => $r['status'],
                 'last_login_at' => $r['last_login_at'],
+                'user_type'     => (string) ($r['user_type'] ?? 'staff'),
                 'roles'         => $r['roles'] ? explode(',', $r['roles']) : [],
             ];
         }, $rows);
@@ -98,19 +188,21 @@ switch ($action) {
 
         $first = trim((string) okv_input('first_name', ''));
         $last  = trim((string) okv_input('last_name', ''));
-        $email = trim((string) okv_input('email', ''));
-        $phone = trim((string) okv_input('phone', ''));
         $pass  = (string) okv_input('password', '');
         $role  = trim((string) okv_input('role', ''));
 
         if ($first === '' || $last === '') {
             okv_error('Enter the first and last name.', 422, 'missing_name');
         }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        // The same canonicalisation every identity path shares, so the person
+        // added here signs in by phone or email however they type either one.
+        $email = Auth::canonicalEmail((string) okv_input('email', ''));
+        if ($email === null) {
             okv_error('Enter a valid email address.', 422, 'bad_email');
         }
-        if ($phone === '' || strlen(preg_replace('/[^0-9]/', '', $phone)) < 7) {
-            okv_error('Enter a valid phone number.', 422, 'bad_phone');
+        $phone = Phone::normalize((string) okv_input('phone', ''));
+        if ($phone === null) {
+            okv_error('Enter a valid phone number, for example 0803 000 0000.', 422, 'bad_phone');
         }
         $policy = Password::policyError($pass, $email, $phone);
         if ($policy !== null) {
@@ -124,8 +216,16 @@ switch ($action) {
         if (!Rbac::can('users.roles.edit')) {
             okv_error('You cannot assign roles.', 403, 'forbidden');
         }
-        if (Database::one('SELECT id FROM users WHERE email = :e OR phone = :p LIMIT 1', [':e' => $email, ':p' => $phone])) {
-            okv_error('That email or phone is already in use.', 409, 'duplicate');
+
+        $conflict = Auth::findIdentityConflict($email, $phone);
+        if ($conflict !== null) {
+            $newId = users_create_resolve_conflict($conflict, $pass, (int) $roleRow['id']);
+            okv_json([
+                'status'  => 'ok',
+                'message' => 'Staff member added. They already had a customer account, so the team role was added to it: one sign-in for both.',
+                'id'      => $newId,
+            ], 201);
+            break;
         }
 
         $pdo = Database::getInstance()->getConnection();
@@ -143,6 +243,9 @@ switch ($action) {
             $pdo->commit();
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) { $pdo->rollBack(); }
+            // Two creations of the same person racing: the unique index caught
+            // the second one. Re-run the shared check and name the field.
+            users_create_refuse_duplicate($e, $email, $phone);
             error_log('users.create failed: ' . $e->getMessage());
             okv_error('We could not add this person. Please try again.', 500, 'create_failed');
         }

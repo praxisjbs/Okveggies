@@ -241,14 +241,26 @@ switch ($action) {
         if ($phone === null) {
             okv_error('Enter a valid phone number, for example 0803 000 0000.', 422, 'bad_phone');
         }
-        if (Database::one('SELECT id FROM users WHERE phone = :p AND id <> :id LIMIT 1', [':p' => $phone, ':id' => $uid])) {
+        // The shared identity check (excluding this account), so a profile edit
+        // cannot move a phone onto somebody else's identity.
+        $conflict = Auth::findIdentityConflict('', $phone, $uid);
+        if ($conflict !== null) {
             okv_error('That phone number is already in use on another account.', 409, 'phone_taken');
         }
 
-        Database::run(
-            'UPDATE users SET first_name = :fn, last_name = :ln, phone = :ph WHERE id = :id',
-            [':fn' => $first, ':ln' => $last, ':ph' => $phone, ':id' => $uid]
-        );
+        try {
+            Database::run(
+                'UPDATE users SET first_name = :fn, last_name = :ln, phone = :ph WHERE id = :id',
+                [':fn' => $first, ':ln' => $last, ':ph' => $phone, ':id' => $uid]
+            );
+        } catch (Throwable $e) {
+            // The unique index caught a racing edit onto the same phone.
+            if ($e instanceof PDOException && str_starts_with((string) ($e->getCode() ?: ''), '23')) {
+                okv_error('That phone number is already in use on another account.', 409, 'phone_taken');
+            }
+            error_log('account.update_profile failed: ' . $e->getMessage());
+            okv_error('We could not save your details. Please try again.', 500, 'save_failed');
+        }
         $_SESSION['first_name'] = $first;
 
         okv_json(['status' => 'ok', 'message' => 'Your details are saved.', 'first_name' => $first]);
