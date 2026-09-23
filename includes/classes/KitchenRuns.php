@@ -185,10 +185,32 @@ final class KitchenRuns
     }
 
     /**
+     * Whether a posted line is an unused slot on a form that offers several,
+     * rather than a line the person started filling in. A completely blank
+     * line is dropped quietly; a line with anything on it is checked, because
+     * that is the one the person is looking at.
+     */
+    public static function rowIsBlank(array $item): bool
+    {
+        foreach (['product_id', 'item_name', 'quantity', 'unit_id', 'unit_price', 'unit_price_subunit', 'target_price', 'target_price_subunit', 'note'] as $key) {
+            if (trim((string) ($item[$key] ?? '')) !== '') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Whether a submission is well formed, without writing anything. The
      * storefront calls this to show a customer what is missing before it posts,
      * and submit() calls it again on the server, because the first check is a
      * courtesy and the second one is the rule.
+     *
+     * The lines arrive the way the form posts them: the slots the person left
+     * completely blank still ride along, so the line numbers below count every
+     * posted slot, blank ones included. That is what makes "line 3" mean the
+     * row labelled Item 3 on the screen, even when row 2 was left empty. The
+     * upper bound counts the lines that actually post, not the blank slots.
      *
      * @return array{ok: bool, error: string|null}
      */
@@ -200,20 +222,32 @@ final class KitchenRuns
         if (!in_array($pricing, self::PRICING_MODES, true)) {
             return self::invalid('bad_pricing_mode');
         }
-        if (!$items) {
+
+        $posted = 0;
+        foreach ($items as $item) {
+            if (is_array($item) && !self::rowIsBlank($item)) {
+                $posted++;
+            }
+        }
+        if ($posted === 0) {
             return self::invalid('no_items');
         }
-        if (count($items) > self::MAX_LINES) {
+        if ($posted > self::MAX_LINES) {
             return self::invalid('too_many_items');
         }
 
-        foreach ($items as $index => $item) {
-            // The line number a person sees on the form is one-based, so the
-            // refusal that comes back names the line they are looking at rather
-            // than saying "every line" and leaving them to count.
-            $line = $index + 1;
+        $line = 0;
+        foreach ($items as $item) {
+            // The line number a person sees on the form is one-based, and it
+            // counts the blank slots they left behind, so the refusal that
+            // comes back names the row they are looking at rather than saying
+            // "every line" and leaving them to count.
+            $line++;
             if (!is_array($item)) {
                 return self::invalid('invalid_line');
+            }
+            if (self::rowIsBlank($item)) {
+                continue;
             }
             $isCatalogue = self::positiveInt($item['product_id'] ?? null) !== null;
             if (!$isCatalogue && trim((string) ($item['item_name'] ?? '')) === '') {
@@ -425,7 +459,9 @@ final class KitchenRuns
     {
         // A line-scoped refusal carries the line a person is looking at, as
         // "line_name:3", so the sentence can name that line rather than say
-        // "every line" and leave them counting rows on a phone.
+        // "every line" and leave them counting rows on a phone. The template
+        // placeholders sit where the phrase "line 3" or "this line" belongs,
+        // so a code that loses its number still reads as English.
         $line = null;
         if (str_contains($code, ':')) {
             [$code, $suffix] = explode(':', $code, 2);
@@ -453,13 +489,14 @@ final class KitchenRuns
             'invalid_catalogue_item' => 'One of the shop items on your list is no longer available. Remove it and send again.',
             'quantity_unit_required' => 'Give a quantity and a unit for every item we should price.',
             'price_required'         => 'Give your target price for every item.',
-            // Line-scoped. The placeholder is filled with the line number below,
-            // so the customer is told exactly which line and what is missing.
-            'line_name'              => 'Give line :line an item name.',
-            'line_quantity'          => 'Give line :line a quantity.',
-            'line_unit'              => 'Give line :line a unit.',
-            'line_price'             => 'Give line :line a price.',
-            'unit_not_active'        => 'The unit on line :line is no longer available. Pick another one.',
+            // Line-scoped. The placeholder is filled with "line 3" below, or
+            // "this line" when the number is missing, so the customer is told
+            // exactly which line and what is missing.
+            'line_name'              => 'Give :line an item name.',
+            'line_quantity'          => 'Give :line a quantity.',
+            'line_unit'              => 'Give :line a unit.',
+            'line_price'             => 'Give :line a price.',
+            'unit_not_active'        => 'The unit on :line is no longer available. Pick another one.',
             'budget_not_open'        => 'A spend cap only applies to an open-budget run.',
             'note_too_long'          => 'Keep your note under ' . number_format(self::NOTE_MAX) . ' characters.',
             'budget_not_a_number'    => 'Write the spend cap as a plain amount, for example 150,000.',
@@ -488,7 +525,7 @@ final class KitchenRuns
         // Only the line-scoped sentences carry the placeholder. Replacing it in
         // the others is a no-op, so this runs for every code; a line-scoped code
         // that somehow arrived without its number still reads as English.
-        return str_replace(':line', $line !== null ? (string) $line : 'this', $text);
+        return str_replace(':line', $line !== null ? 'line ' . $line : 'this line', $text);
     }
 
     /** The HTTP status a refusal deserves. Kept beside the words on purpose. */

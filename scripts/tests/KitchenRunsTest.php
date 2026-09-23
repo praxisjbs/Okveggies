@@ -156,6 +156,37 @@ okv_test_eq('line_unit:3', KitchenRuns::validateSubmission('custom', 'by_us', [
     ['item_name' => 'Oil', 'quantity' => '1.000'],
 ])['error'], 'a fault on the third line names the third line, so the customer is not left counting rows');
 
+// A form that offers several rows posts the unused slots too, blank. The
+// numbers below have to match the labels on the screen, and the screen counts
+// every slot, blank ones included: a fault after a blank row names the row
+// the customer is looking at.
+okv_test_eq('line_name:3', KitchenRuns::validateSubmission('custom', 'by_us', [
+    ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1],
+    [],
+    ['quantity' => '1.000', 'unit_id' => 1],
+])['error'], 'a fault after a blank slot names the slot the screen shows, not the slot that posts');
+
+// What counts as a blank slot: every field empty, or only whitespace, is a
+// slot the person never touched; anything else is a line they started.
+okv_test_ok(KitchenRuns::rowIsBlank([]), 'an empty slot is blank');
+okv_test_ok(KitchenRuns::rowIsBlank(['item_name' => '', 'quantity' => '  ', 'unit_id' => '', 'note' => '']), 'whitespace in every field is still blank');
+okv_test_ok(!KitchenRuns::rowIsBlank(['note' => 'firm']), 'a note alone is a line the person started');
+okv_test_ok(!KitchenRuns::rowIsBlank(['product_id' => '7']), 'a picked product is a line, even with nothing else');
+
+// A list made only of blank slots is an empty list, not a full one.
+okv_test_eq('no_items', KitchenRuns::validateSubmission('custom', 'by_us', [[], ['item_name' => '', 'quantity' => '']])['error'], 'only blank slots is refused as an empty list, not stored');
+
+// The cap counts the lines that actually post, so leaving slots blank never
+// shrinks what a customer may send.
+$fullWithGaps = [];
+for ($i = 0; $i < KitchenRuns::MAX_LINES; $i++) {
+    $fullWithGaps[] = ['item_name' => 'Line ' . $i, 'quantity' => '1.000', 'unit_id' => 1];
+}
+$fullWithGaps[] = [];
+$fullWithGaps[] = ['item_name' => '', 'quantity' => ''];
+okv_test_eq(true, KitchenRuns::validateSubmission('custom', 'by_us', $fullWithGaps)['ok'], 'blank slots ride along without eating the line cap');
+okv_test_eq('too_many_items', KitchenRuns::validateSubmission('custom', 'by_us', array_merge($fullWithGaps, [['item_name' => 'One more', 'quantity' => '1.000', 'unit_id' => 1]]))['error'], 'one real line over the cap is still refused, gaps or no');
+
 $tooMany = array_fill(0, KitchenRuns::MAX_LINES + 1, ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => 1]);
 okv_test_eq('too_many_items', KitchenRuns::validateSubmission('custom', 'by_us', $tooMany)['error'], 'a list has an upper bound, so one request cannot become a denial of service');
 

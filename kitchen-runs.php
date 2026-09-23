@@ -256,6 +256,13 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 
         <!-- Pick from shop: a picker line per item, an Add a line under them, -->
         <!-- the live total, and the off-shop block for everything else. -->
+        <?php
+        // How many numbered slots the shop rows take. The off-shop rows below
+        // continue the numbering after them, so a mixed list posts one items[]
+        // where every row keeps its on-screen number. Zero when there is
+        // nothing to pick, so the off-shop rows start the list.
+        $shopRowCount = $products ? max(1, count($shopPrefill)) : 0;
+        ?>
         <div data-kr-section-shop <?php if ($chosen !== 'catalogue') { echo 'hidden'; } ?>>
           <?php if (!$products): ?>
             <p class="mt-4 rounded-xl border border-dashed border-ink-20 bg-white p-4 text-sm text-ink-60">
@@ -263,7 +270,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
             </p>
           <?php else: ?>
             <div class="mt-4 space-y-3" data-kr-shop-rows>
-              <?php $shopRowCount = max(1, count($shopPrefill)); for ($row = 0; $row < $shopRowCount; $row++): $prefillLine = $shopPrefill[$row] ?? []; ?>
+              <?php for ($row = 0; $row < $shopRowCount; $row++): $prefillLine = $shopPrefill[$row] ?? []; $rowDisabled = $chosen !== 'catalogue'; ?>
                 <?php require __DIR__ . '/includes/components/shop/kitchen_run_shop_row.php'; ?>
               <?php endfor; ?>
             </div>
@@ -290,8 +297,8 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
             <div class="border-t border-ink-10 p-4">
               <p class="text-xs text-ink-60">Pomo, meat, oil, anything else. These lines go to the team to price.</p>
               <div class="mt-3 space-y-3" data-kr-rows>
-                <?php $freeRowCount = max(1, count($freePrefill)); for ($row = 0; $row < $freeRowCount; $row++): ?>
-                  <?php $prefillLine = $freePrefill[$row] ?? []; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
+                <?php $freeRowCount = max(1, count($freePrefill)); for ($row = $shopRowCount; $row < $shopRowCount + $freeRowCount; $row++): ?>
+                  <?php $prefillLine = $freePrefill[$row - $shopRowCount] ?? []; $rowDisabled = $chosen !== 'catalogue'; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
                 <?php endfor; ?>
               </div>
               <button type="button" data-kr-add class="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink-20 bg-white text-sm text-ink-60 hover:bg-mist">
@@ -305,7 +312,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
         <div data-kr-section-text <?php if ($chosen === 'catalogue') { echo 'hidden'; } ?>>
           <div class="mt-4 space-y-3" data-kr-rows>
             <?php $textRowCount = max(1, count($freePrefill)); for ($row = 0; $row < $textRowCount; $row++): ?>
-              <?php $prefillLine = $freePrefill[$row] ?? []; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
+              <?php $prefillLine = $freePrefill[$row] ?? []; $rowDisabled = $chosen === 'catalogue'; require __DIR__ . '/includes/components/shop/kitchen_run_row.php'; ?>
             <?php endfor; ?>
           </div>
 
@@ -316,7 +323,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 
       <noscript>
         <p class="mt-3 text-sm text-ink-60">
-          Without JavaScript you get one line here, and you can send the rest as a second run. Lines are saved in the order they appear.
+          Without JavaScript only the lines you can see here are sent, and you can send the rest as a second run. Lines are saved in the order they appear.
         </p>
       </noscript>
 

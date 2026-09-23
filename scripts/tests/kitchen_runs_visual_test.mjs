@@ -146,11 +146,38 @@ try {
     ok(await page.locator('[data-kr-section-text]').isVisible(), `${viewport.name}: the typed-lines section is the live one`);
     ok(!(await page.locator('[data-kr-section-shop]').isVisible()), `${viewport.name}: the shop section is switched off for a typed list`);
 
-    // One empty line to start.
+    // One empty line to start, and it is the first line: the hidden half of
+    // the step used to take the first two numbers, so this row opened as
+    // items[2], "Item 3", and every server refusal after it missed the row.
     ok(await page.locator('[data-kr-section-text] [data-kr-rows] [data-kr-row]').count() === 1,
       `${viewport.name}: a typed list opens with one empty line`);
+    let openingSnap = await snapRows(page);
+    ok(openingSnap[0].nameField === 'items[0][item_name]',
+      `${viewport.name}: the first typed row posts as items[0], not the third slot`);
+    ok(openingSnap[0].label === 'Item 1', `${viewport.name}: the first typed row is labelled Item 1`);
 
+    // A round trip through the other mode: the numbers follow the half of the
+    // step that posts. In "Pick from shop" the shop row is first and the
+    // off-shop row continues the count; back in typed mode the row is first
+    // again, with its contents.
     await fillRow(page, 0, 'Pomo', '6');
+    await page.locator('[data-kr-back="1"]').click();
+    await page.locator('[data-kr-mode="catalogue"]').click();
+    await page.locator('[data-kr-next="1"]').click();
+    ok(await page.locator('[data-kr-section-shop]').isVisible(), `${viewport.name}: the shop section is the live one after the switch`);
+    const shopNameField = await page.evaluate(() => document.querySelector('[data-kr-shop-rows] [data-kr-row] [data-kr-product]')?.getAttribute('name'));
+    ok(shopNameField === 'items[0][product_id]', `${viewport.name}: the shop row takes the first number in its own mode`);
+    const offshopLabel = await page.evaluate(() => document.querySelector('[data-kr-section-shop] [data-kr-offshop] [data-kr-row] [data-kr-label]')?.textContent.trim());
+    ok(offshopLabel === 'Item 2', `${viewport.name}: the off-shop row continues the count after the shop row`);
+    const offshopField = await page.evaluate(() => document.querySelector('[data-kr-section-shop] [data-kr-offshop] [data-kr-row] [data-kr-name]')?.getAttribute('name'));
+    ok(offshopField === 'items[1][item_name]', `${viewport.name}: the off-shop row posts as items[1], beside the shop row`);
+    await page.locator('[data-kr-back="1"]').click();
+    await page.locator('[data-kr-mode="custom"]').click();
+    await page.locator('[data-kr-next="1"]').click();
+    openingSnap = await snapRows(page);
+    ok(openingSnap[0].nameField === 'items[0][item_name]', `${viewport.name}: back in typed mode, the row is first again`);
+    ok(openingSnap[0].label === 'Item 1', `${viewport.name}: back in typed mode, the row is labelled Item 1 again`);
+    ok(openingSnap[0].nameValue === 'Pomo', `${viewport.name}: the typed line kept its contents through the round trip`);
 
     // The regression: press "Add item". The button is a sibling of the rows, so
     // the old closest() walk found nothing and this press did nothing at all.
@@ -244,6 +271,30 @@ try {
       ok(noJs.url().includes('submitted=1'), `${viewport.name}: a typed list sends with no JavaScript at all`);
       ok((await noJs.content()).includes('List received. We will price it.'),
         `${viewport.name}: the no-JavaScript send is recorded and confirmed`);
+
+      // The mixed no-JavaScript list: the shop row and the off-shop row share
+      // one items[] list, the shop row first. This is the form a customer gets
+      // when they open "Pick from shop" with scripts off, and it used to post
+      // two rows both named items[0], one empty, overwriting the other.
+      await noJs.goto(BASE + '/kitchen-runs.php?start=catalogue', { waitUntil: 'domcontentloaded' });
+      await noJs.locator('details:has(#kr-addr1) > summary').click();
+      await noJs.fill('#kr-recipient', 'Kitchen Owner');
+      await noJs.fill('#kr-phone', '08031234567');
+      await noJs.fill('#kr-addr1', '5 Bourdillon Road');
+      await noJs.fill('#kr-city', 'Lagos');
+      await noJs.fill('#kr-state', 'Lagos');
+      const noJsShopRow = noJs.locator('[data-kr-shop-rows] [data-kr-row]').first();
+      await noJsShopRow.locator('[data-kr-product]').selectOption({ index: 1 });
+      await noJsShopRow.locator('[data-kr-qty]').fill('3');
+      const noJsOffRow = noJs.locator('[data-kr-section-shop] [data-kr-offshop] [data-kr-row]').first();
+      await noJsOffRow.locator('[data-kr-name]').fill('Stock fish');
+      await noJsOffRow.locator('[data-kr-qty]').fill('2');
+      await noJsOffRow.locator('[data-kr-unit]').selectOption({ index: 1 });
+      await noJs.locator('button[type="submit"]').click();
+      await noJs.waitForURL(/request=\d+&submitted=1/, { timeout: 20000 });
+      ok(noJs.url().includes('submitted=1'), `${viewport.name}: a mixed shop-and-typed list sends with no JavaScript at all`);
+      ok((await noJs.content()).includes('List received. We will price it.'),
+        `${viewport.name}: the mixed no-JavaScript send is recorded and confirmed`);
     } finally {
       await noJsContext.close();
     }

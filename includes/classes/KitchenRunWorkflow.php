@@ -81,9 +81,6 @@ final class KitchenRunWorkflow
             // both be true of one list.
             throw new DomainException('open_budget_pricing');
         }
-        if ($mode === 'upload' && $attachment === null) {
-            throw new DomainException('attachment_required');
-        }
 
         $items = is_array($input['items'] ?? null) ? $input['items'] : [];
         $lines = self::submissionLines($mode, $pricing, $items, $attachment !== null);
@@ -805,22 +802,38 @@ final class KitchenRunWorkflow
      */
     private static function submissionLines(string $mode, string $pricing, array $items, bool $hasAttachment): array
     {
-        if (!$items) {
-            if ($mode === 'upload' && $hasAttachment) {
-                // The list is in the attachment. Staff transcribe it into real
-                // lines when they price it, and this placeholder holds its place
-                // until then.
-                return [[
-                    'product_id'         => null,
-                    'item_name'          => 'List awaiting transcription',
-                    'quantity'           => null,
-                    'unit_id'            => null,
-                    'unit_label'         => null,
-                    'unit_price_subunit' => null,
-                    'line_total_subunit' => null,
-                    'price_source'       => 'admin',
-                    'note'               => null,
-                ]];
+        // The slots a person left completely blank are not lines, they are
+        // unused rows on a form that offers several. Validation has already
+        // numbered them on the way in, and storage does not want them.
+        $lines = [];
+        foreach ($items as $item) {
+            if (is_array($item) && !KitchenRuns::rowIsBlank($item)) {
+                $lines[] = $item;
+            }
+        }
+
+        if (!$lines) {
+            if ($mode === 'upload') {
+                if ($hasAttachment) {
+                    // The list is in the attachment. Staff transcribe it into
+                    // real lines when they price it, and this placeholder holds
+                    // its place until then.
+                    return [[
+                        'product_id'         => null,
+                        'item_name'          => 'List awaiting transcription',
+                        'quantity'           => null,
+                        'unit_id'            => null,
+                        'unit_label'         => null,
+                        'unit_price_subunit' => null,
+                        'line_total_subunit' => null,
+                        'price_source'       => 'admin',
+                        'note'               => null,
+                    ]];
+                }
+                // A customer can type lines into the upload form without a
+                // photograph of the list, so a file is only required when there
+                // is nothing to read from anywhere else.
+                throw new DomainException('attachment_required');
             }
             throw new DomainException('no_items');
         }
@@ -831,7 +844,7 @@ final class KitchenRunWorkflow
         }
 
         $out = [];
-        foreach ($items as $item) {
+        foreach ($lines as $item) {
             $productId = KitchenRuns::positiveInt($item['product_id'] ?? null);
             $quantity  = KitchenRuns::quantity($item['quantity'] ?? null);
             $unitId    = KitchenRuns::positiveInt($item['unit_id'] ?? null);

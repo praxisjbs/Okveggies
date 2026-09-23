@@ -332,6 +332,86 @@ try {
     krh_eq('line_name:2', (string) ($rowErr['code'] ?? ''), 'the error code names the line that is at fault');
     krh_eq('Give line 2 an item name.', (string) ($rowErr['message'] ?? ''), 'and the sentence the customer reads names that line');
 
+    // The form posts its unused slots too, blank. The number in the refusal
+    // has to match the label the customer sees, and the screen counts every
+    // slot: a fault after a blank slot names the third row, not the second.
+    [$code, $body] = krh_req($jars[1], $base . '/api/v1/kitchen_runs.php', [
+        'action' => 'submit', 'okv_csrf' => $nativeCsrf,
+        'input_mode' => 'custom', 'pricing_mode' => 'by_us',
+        'recipient_name' => 'Kitchen Owner', 'recipient_phone' => '08031234567',
+        'address_line_1' => '5 Bourdillon Road', 'city' => 'Lagos', 'state' => 'Lagos',
+        'preferred_delivery_date' => $date, 'delivery_zone_id' => $zoneId,
+        'items' => [
+            ['item_name' => 'Pomo', 'quantity' => '6.000', 'unit_id' => $unitId],
+            [],
+            ['quantity' => '4.000', 'unit_id' => $unitId],
+        ],
+    ]);
+    krh_eq(422, $code, 'a list with a blank slot in the middle is refused, not stored');
+    $gapErr = json_decode($body, true) ?: [];
+    krh_eq('line_name:3', (string) ($gapErr['code'] ?? ''), 'the blank slot counts in the numbering, so the refusal matches the label');
+    krh_eq('Give line 3 an item name.', (string) ($gapErr['message'] ?? ''), 'and the sentence names the row the customer is looking at');
+
+    // The no-JS catalogue form, exactly as the page renders it: the shop row
+    // and the off-shop row share one items[] list, the shop row first.
+    [$code] = krh_req($jars[1], $base . '/api/v1/kitchen_runs.php', [
+        'action' => 'submit', 'okv_csrf' => $nativeCsrf,
+        'input_mode' => 'catalogue', 'pricing_mode' => 'by_us',
+        'recipient_name' => 'Kitchen Owner', 'recipient_phone' => '08031234567',
+        'address_line_1' => '5 Bourdillon Road', 'city' => 'Lagos', 'state' => 'Lagos',
+        'preferred_delivery_date' => $date, 'delivery_zone_id' => $zoneId,
+        'items' => [
+            ['product_id' => $product['id'], 'quantity' => '2.000'],
+            ['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => $unitId],
+        ],
+    ], false);
+    krh_eq(303, $code, 'a plain form post of a mixed shop-and-typed list is answered with a redirect');
+    $mixedId = (int) Database::one('SELECT id FROM kitchen_run_requests WHERE user_id = :u ORDER BY id DESC LIMIT 1', [':u' => $users[1]])['id'];
+    $requestIds[] = $mixedId;
+    $mixedLines = KitchenRuns::lines($mixedId);
+    krh_eq(2, count($mixedLines), 'the shop line and the typed line both reach storage, neither overwrites the other');
+    krh_eq((int) $product['id'], (int) $mixedLines[0]['product_id'], 'the shop line kept its product');
+    krh_eq('2.000', (string) $mixedLines[0]['quantity'], 'the shop line kept the quantity the customer typed');
+    krh_eq('catalogue', (string) $mixedLines[0]['price_source'], 'the shop line was priced by the server, from the products table');
+    krh_eq('Pomo', (string) $mixedLines[1]['item_name'], 'the typed line posted on its own row, not merged into the shop row');
+    krh_eq(null, $mixedLines[1]['product_id'], 'the typed line is not handed a product it never had');
+
+    // The no-JS pure-shop form: one row, product and quantity, nothing else.
+    [$code] = krh_req($jars[1], $base . '/api/v1/kitchen_runs.php', [
+        'action' => 'submit', 'okv_csrf' => $nativeCsrf,
+        'input_mode' => 'catalogue', 'pricing_mode' => 'by_us',
+        'recipient_name' => 'Kitchen Owner', 'recipient_phone' => '08031234567',
+        'address_line_1' => '5 Bourdillon Road', 'city' => 'Lagos', 'state' => 'Lagos',
+        'preferred_delivery_date' => $date, 'delivery_zone_id' => $zoneId,
+        'items' => [['product_id' => $product['id'], 'quantity' => '5.000']],
+    ], false);
+    krh_eq(303, $code, 'a plain form post of a pure shop list is answered with a redirect');
+    $pureId = (int) Database::one('SELECT id FROM kitchen_run_requests WHERE user_id = :u ORDER BY id DESC LIMIT 1', [':u' => $users[1]])['id'];
+    $requestIds[] = $pureId;
+    $pureLines = KitchenRuns::lines($pureId);
+    krh_eq(1, count($pureLines), 'the pure shop list stores its one line');
+    krh_eq('5.000', (string) $pureLines[0]['quantity'], 'the pure shop line kept the quantity the customer typed');
+    krh_eq('quoted', (string) Database::one('SELECT status FROM kitchen_run_requests WHERE id = :id', [':id' => $pureId])['status'], 'the pure shop list is quoted the moment it is sent, with or without JavaScript');
+
+    // An upload that carries typed lines needs no file: the file is only
+    // required when there is nothing to read from anywhere else.
+    [$code, $body] = krh_req($jars[1], $base . '/api/v1/kitchen_runs.php', [
+        'action' => 'submit', 'okv_csrf' => $nativeCsrf,
+        'input_mode' => 'upload', 'pricing_mode' => 'by_us',
+        'recipient_name' => 'Kitchen Owner', 'recipient_phone' => '08031234567',
+        'address_line_1' => '5 Bourdillon Road', 'city' => 'Lagos', 'state' => 'Lagos',
+        'preferred_delivery_date' => $date, 'delivery_zone_id' => $zoneId,
+        'items' => [['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => $unitId]],
+    ]);
+    krh_eq(200, $code, 'an upload with typed lines and no file is accepted');
+    $typedUpload = json_decode($body, true) ?: [];
+    $typedUploadId = (int) ($typedUpload['id'] ?? 0);
+    krh_ok($typedUploadId > 0, 'the upload-with-lines answers with the request it made');
+    $requestIds[] = $typedUploadId;
+    $typedUploadLines = KitchenRuns::lines($typedUploadId);
+    krh_eq(1, count($typedUploadLines), 'the typed lines are what gets stored, not a placeholder');
+    krh_eq('Pomo', (string) $typedUploadLines[0]['item_name'], 'the line the customer typed is the line on record');
+
     // --- 3c. Staff approve for a customer who rang up (item 23), and the
     //     customer withdraws an approved run (item 26), both over the routes.
     $phoneVersion = (int) Database::one('SELECT state_version FROM kitchen_run_requests WHERE id = :id', [':id' => $phoneId])['state_version'];

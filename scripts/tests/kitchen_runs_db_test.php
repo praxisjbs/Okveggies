@@ -340,6 +340,40 @@ try {
     $requestIds[] = $escapedId;
     krdb_eq($nasty, (string) KitchenRuns::lines($escapedId)[0]['item_name'], 'a hostile item name is stored verbatim, so escaping at render is the only thing between it and the page');
 
+    // Upload mode: the file is only required when there is nothing to read
+    // from anywhere else. Typed lines stand on their own; a file with no lines
+    // becomes the placeholder the team transcribes.
+    $typedUpload = KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+        'input_mode' => 'upload', 'pricing_mode' => 'by_us',
+        'items' => [['item_name' => 'Pomo', 'quantity' => '1.000', 'unit_id' => $unitId]],
+    ]);
+    $typedUploadId = (int) $typedUpload['id'];
+    $requestIds[] = $typedUploadId;
+    $typedUploadLines = KitchenRuns::lines($typedUploadId);
+    krdb_eq(1, count($typedUploadLines), 'an upload with typed lines and no file stores the lines, not a placeholder');
+    krdb_eq('Pomo', (string) $typedUploadLines[0]['item_name'], 'the line the customer typed is the line on record');
+    krdb_eq(null, (string) Database::one('SELECT attachment_url FROM kitchen_run_requests WHERE id = :id', [':id' => $typedUploadId])['attachment_url'], 'no file was posted, so nothing is stored against the run');
+
+    krdb_refuses(
+        static fn() => KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+            'input_mode' => 'upload', 'pricing_mode' => 'by_us',
+            'items' => [],
+        ]),
+        'attachment_required',
+        'an upload with no lines and no file is refused, because there is nothing to read'
+    );
+
+    $fileOnly = KitchenRunWorkflow::submit($users[0], 'household', $address + $askFor + [
+        'input_mode' => 'upload', 'pricing_mode' => 'by_us',
+        'items' => [],
+    ], 'kitchen_runs/test-file-placeholder.jpg');
+    $fileOnlyId = (int) $fileOnly['id'];
+    $requestIds[] = $fileOnlyId;
+    $fileOnlyLines = KitchenRuns::lines($fileOnlyId);
+    krdb_eq(1, count($fileOnlyLines), 'an upload with a file and no lines stores the placeholder, so the run has something to show');
+    krdb_eq('List awaiting transcription', (string) $fileOnlyLines[0]['item_name'], 'the placeholder says what it is, so nobody mistakes it for a priced line');
+    krdb_eq(null, $fileOnlyLines[0]['unit_price_subunit'], 'the placeholder carries no price, so it cannot be quoted by arithmetic');
+
     // A line that names a unit we have retired is refused, and the refusal
     // names the line, because the server is the authority on which units exist.
     krdb_refuses(

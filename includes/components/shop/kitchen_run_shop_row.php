@@ -23,6 +23,12 @@
  *   $products    array  active products with a price, for the picker
  *   $productById array  the same products keyed by id, to prefill from a saved list
  *   $prefillLine array  a saved line to prefill from, or nothing
+ *   $rowDisabled bool   whether this row sits in a section the chosen mode
+ *                        does not show. A hidden section must never post, and
+ *                        JavaScript is the only thing that keeps a hidden
+ *                        section from posting when JavaScript is off, so the
+ *                        server disables the row's fields itself. Hidden
+ *                        equals disabled equals not posted.
  * -----------------------------------------------------------------------------
  */
 
@@ -30,6 +36,7 @@ $row         = $row ?? 0;
 $products    = $products ?? [];
 $productById = $productById ?? [];
 $prefillLine = $prefillLine ?? [];
+$disabledAttr = !empty($rowDisabled) ? ' disabled' : '';
 $selectedId  = (int) ($prefillLine['product_id'] ?? 0);
 $selected    = $selectedId > 0 ? ($productById[$selectedId] ?? null) : null;
 $qty         = ($prefillLine['quantity'] ?? null) === null ? '' : okv_quantity($prefillLine['quantity']);
@@ -45,7 +52,7 @@ if ($selected !== null && $qty !== '' && is_numeric($qty)) {
     <label class="text-xs font-medium text-ink-60" for="kr-product-<?= (int) $row ?>" data-kr-label>Item <?= (int) $row + 1 ?></label>
     <button type="button" data-kr-remove class="inline-flex min-h-[44px] items-center rounded-full px-2 text-xs text-ink-60 hover:bg-mist" aria-label="Remove this line">Remove</button>
   </div>
-  <select class="okv-input mt-2 min-h-[44px] rounded-xl" id="kr-product-<?= (int) $row ?>" name="items[<?= (int) $row ?>][product_id]" data-kr-product>
+  <select class="okv-input mt-2 min-h-[44px] rounded-xl" id="kr-product-<?= (int) $row ?>" name="items[<?= (int) $row ?>][product_id]" data-kr-product<?= $disabledAttr ?>>
     <option value="">Pick an item</option>
     <?php foreach ($products as $product): ?>
       <option value="<?= (int) $product['id'] ?>"
@@ -59,7 +66,7 @@ if ($selected !== null && $qty !== '' && is_numeric($qty)) {
   <div class="mt-2 grid grid-cols-2 gap-2">
     <div>
       <label class="sr-only" for="kr-shop-qty-<?= (int) $row ?>">How much</label>
-      <input class="okv-input min-h-[44px] rounded-xl" id="kr-shop-qty-<?= (int) $row ?>" name="items[<?= (int) $row ?>][quantity]" data-kr-qty inputmode="decimal" placeholder="How much" value="<?= okv_e($qty) ?>">
+      <input class="okv-input min-h-[44px] rounded-xl" id="kr-shop-qty-<?= (int) $row ?>" name="items[<?= (int) $row ?>][quantity]" data-kr-qty inputmode="decimal" placeholder="How much" value="<?= okv_e($qty) ?>"<?= $disabledAttr ?>>
     </div>
     <div class="flex min-h-[44px] items-center justify-end rounded-xl bg-mist/60 px-3">
       <span class="font-mono text-sm font-semibold text-ink" data-kr-line-total aria-label="Line total"><?= $lineTotal !== null ? okv_e(Money::format($lineTotal)) : '&#8358;0' ?></span>

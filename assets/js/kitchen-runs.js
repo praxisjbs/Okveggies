@@ -160,22 +160,38 @@
     });
 
     if (subLine) { subLine.textContent = SUBTITLES[mode] || SUBTITLES.custom; }
+
+    // The numbering follows the visible half of the step: a typed list starts
+    // at Item 1, and in "Pick from shop" the typed lines continue the count
+    // after the shop lines. Switching modes changes which rows post, so the
+    // numbers move with the rows.
+    renumber();
     updateTotals();
   }
 
   // --- Rows: add, remove, renumber ------------------------------------------
 
-  /** Every row of the form in the order the fields will be numbered: shop
-   *  lines first, then the typed lines. One shared index, because they all
-   *  post into the one items[] list. */
+  /** Every row that actually posts, in the order the fields are numbered: the
+   *  rows of the half of the step the chosen mode is using. A hidden half is
+   *  disabled, so its rows take no number at all: in "Type my list" the first
+   *  row is Item 1, and in "Pick from shop" the typed rows continue the count
+   *  after the shop rows. One shared index, because they all post into the
+   *  one items[] list. */
   function allRows() {
     var rows = [];
-    if (shopHost) {
-      shopHost.querySelectorAll('[data-kr-row]').forEach(function (row) { rows.push(row); });
-    }
-    form.querySelectorAll('[data-kr-rows]').forEach(function (host) {
+    function add(host) {
+      if (!host) { return; }
       host.querySelectorAll('[data-kr-row]').forEach(function (row) { rows.push(row); });
-    });
+    }
+    var shopVisible = shopSection ? !shopSection.hidden : true;
+    var textVisible = textSection ? !textSection.hidden : !shopVisible;
+    if (shopVisible) {
+      add(shopHost);
+      add(shopSection.querySelector('[data-kr-rows]'));
+    }
+    if (textVisible) {
+      add(textSection.querySelector('[data-kr-rows]'));
+    }
     return rows;
   }
 
