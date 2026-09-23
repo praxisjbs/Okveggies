@@ -2,6 +2,7 @@
 /** Pure contracts for the shared admin notification bell. */
 
 okv_test_eq('orders.view', AdminNotifications::permissionForEvent('admin_new_order'), 'new orders require Orders visibility');
+okv_test_eq('orders.view', AdminNotifications::permissionForEvent('admin_order_cancelled'), 'a cancelled order is told to whoever may open it');
 okv_test_eq('payments.view', AdminNotifications::permissionForEvent('admin_manual_payment_proof'), 'payment proofs require Payments visibility');
 okv_test_eq('messages.view', AdminNotifications::permissionForEvent('admin_new_contact'), 'contact alerts require Messages visibility');
 okv_test_eq('issues.view', AdminNotifications::permissionForEvent('admin_new_issue_report'), 'issue alerts require Make It Right visibility');

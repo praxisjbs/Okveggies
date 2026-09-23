@@ -392,6 +392,12 @@ final class SettingsEditor
             'source_line'     => okv_sourced_line(Settings::str('source_regions', 'Ogun State'), Settings::str('source_day', 'Tuesday')),
             'balance_line'    => 'There is still ' . Money::format(750000) . ' to settle on this order.',
             'money_line'      => 'We are sending ' . Money::format(500000) . ' back to you.',
+            // The staff cancellation alert. The samples come from the same
+            // helpers that build the real message, so a preview never shows an
+            // Owner wording that cannot occur in the thing it previews.
+            'cancellation_source' => Notifications::cancellationSourceLine('customer', ''),
+            'cancellation_reason' => Notifications::cancellationReasonLine('customer', 'delivery_date', ''),
+            'refund_state'        => Notifications::staffRefundStateLine(Refunds::STATUS_PENDING, true),
             'reason'          => 'The customer bank account could not be reached.',
             'declined_reason' => 'We need a longer trading history before we can set this limit.',
             'credit_limit'    => Money::format(50000000),

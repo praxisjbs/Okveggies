@@ -75,6 +75,7 @@ final class Notifications
         'refund_processed'  => ['template' => 'refund_processed',  'label' => 'Refund sent',             'audience' => 'customer'],
         'refund_failed'     => ['template' => 'refund_failed',     'label' => 'Refund failed',           'audience' => 'staff'],
         'admin_new_order'   => ['template' => 'admin_new_order',   'label' => 'New order, for staff',    'audience' => 'staff'],
+        'admin_order_cancelled' => ['template' => 'admin_order_cancelled', 'label' => 'Order cancelled, for staff', 'audience' => 'staff'],
         'admin_manual_payment_proof' => ['template' => 'admin_manual_payment_proof', 'label' => 'Payment proof to review, for staff', 'audience' => 'staff'],
         'admin_new_contact' => ['template' => 'admin_new_contact', 'label' => 'New contact message, for staff', 'audience' => 'staff'],
         'contact_acknowledgement' => ['template' => 'contact_acknowledgement', 'label' => 'We have your message',  'audience' => 'customer'],
@@ -111,6 +112,12 @@ final class Notifications
         'refund_processed'  => ['customer_name', 'order_number', 'amount', 'order_trail_url'],
         'refund_failed'     => ['order_number', 'amount', 'reason', 'admin_url'],
         'admin_new_order'   => ['customer_name', 'order_number', 'order_total', 'delivery_day', 'zone_name', 'payment_choice', 'admin_url'],
+        // The staff cancellation alert. Deliberately carries no naira figure:
+        // the amounts are on Order 360 behind the same orders.view gate, and a
+        // failed refund already reaches the payments team through refund_failed
+        // with its figure attached. This one says what happened and what state
+        // the money is in.
+        'admin_order_cancelled' => ['customer_name', 'order_number', 'cancellation_source', 'cancellation_reason', 'delivery_day', 'refund_state', 'admin_url'],
         'admin_manual_payment_proof' => ['order_number', 'amount', 'recorded_by', 'admin_url'],
         'admin_new_contact' => ['contact_name', 'contact_method', 'source_label', 'subject', 'message_preview', 'admin_url'],
         'contact_acknowledgement' => ['customer_name', 'received_at', 'whatsapp_url'],
@@ -364,6 +371,7 @@ final class Notifications
                 continue;
             }
             $sent = false;
+            $error = '';
             try {
                 $sent = Mail::send(
                     (string) $delivery['recipient_address'],
@@ -373,8 +381,9 @@ final class Notifications
                 );
             } catch (Throwable $e) {
                 error_log('Notifications::deliver threw for notification ' . $notificationId . ': ' . $e->getMessage());
+                $error = Mail::classifyFailure($e->getMessage());
             }
-            self::recordAttempt((int) $delivery['id'], 1 + (int) $delivery['attempt_count'], $sent, 'The mail server would not take the message.');
+            self::recordAttempt((int) $delivery['id'], 1 + (int) $delivery['attempt_count'], $sent, $error !== '' ? $error : Mail::lastError());
             $anySent = $anySent || $sent;
         }
 
@@ -517,9 +526,9 @@ final class Notifications
             );
         } catch (Throwable $e) {
             error_log('Notifications::resend failed: ' . $e->getMessage());
-            $error = 'The mail server refused the message.';
+            $error = Mail::classifyFailure($e->getMessage());
         }
-        self::recordAttempt((int) $delivery['id'], (int) $delivery['attempt_count'] + 1, $sent, $error ?: 'The mail server would not take the message.');
+        self::recordAttempt((int) $delivery['id'], (int) $delivery['attempt_count'] + 1, $sent, $error ?: Mail::lastError());
 
         return $sent
             ? ['ok' => true, 'code' => 'sent', 'message' => 'The email has been sent again.']
@@ -776,7 +785,11 @@ final class Notifications
     // after its transaction has committed, so an SMTP round trip never sits
     // inside a database transaction and a failed email never rolls back an
     // order. Every one of them is safe to call twice: the worst case is a
-    // second copy of an email, never a changed order.
+    // second copy of an email, never a changed order. The exception is a
+    // cancellation, which is safe to call twice in the stronger sense: it checks
+    // what it has already announced for the order and writes nothing the second
+    // time, because a duplicate "order cancelled" is a duplicate instruction to
+    // the same team about the same crate of produce.
     // -------------------------------------------------------------------------
 
     /**
@@ -1430,9 +1443,42 @@ final class Notifications
         self::send($event, $context['vars'], $context['recipients'], 'order', $orderId, $actorId);
     }
 
-    /** A cancellation, with the money outcome said plainly rather than implied. */
+    /**
+     * A cancellation, told to the customer with their money said plainly rather
+     * than implied, and told to the team so an order that stopped being work is
+     * not still work in somebody's head.
+     *
+     * Both halves read the committed `order_cancellations` row rather than
+     * trusting the caller, so the source, the reason and the refund position in
+     * the staff alert are the ones the transaction actually wrote. No row means
+     * nothing was committed and nothing is announced.
+     *
+     * Safe to call twice. The order itself is protected by the unique key on
+     * `order_cancellations.order_id`, and each half below checks whether this
+     * event has already been announced for this order, so a repeated request, a
+     * page refresh or a retried call writes no second event and sends no second
+     * email. A send that failed the first time is deliberately not repeated
+     * here: it is already a failed delivery row with a reason on it, and it
+     * belongs to the "Send it again" button behind notifications.resend, which
+     * is the one place a retry can be a decision rather than an accident.
+     */
     public static function announceCancellation(int $orderId, array $result, ?int $actorId = null): void
     {
+        if ($orderId < 1) {
+            return;
+        }
+        $cancellation = Database::one(
+            'SELECT c.id, c.cancelled_by, c.cancelled_by_type, c.reason_code, c.reason_text,
+                    c.refund_required, c.refund_status,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS actor_name
+               FROM order_cancellations c
+               LEFT JOIN users u ON u.id = c.cancelled_by
+              WHERE c.order_id = :order',
+            [':order' => $orderId]
+        );
+        if ($cancellation === null) {
+            return;
+        }
         $context = self::orderContext($orderId);
         if ($context === null) {
             return;
@@ -1442,8 +1488,145 @@ final class Notifications
         // now never be made.
         self::cancelPending('order', $orderId, ['order_payment_pending', 'payment_confirmed']);
 
-        $vars = $context['vars'] + ['money_line' => self::cancellationMoneyLine($result)];
-        self::send('order_cancelled', $vars, $context['recipients'], 'order', $orderId, $actorId);
+        if (!self::alreadyAnnounced('order_cancelled', 'order', $orderId)) {
+            $vars = $context['vars'] + ['money_line' => self::cancellationMoneyLine($result)];
+            self::send('order_cancelled', $vars, $context['recipients'], 'order', $orderId, $actorId);
+        }
+
+        if (self::alreadyAnnounced('admin_order_cancelled', 'order', $orderId)) {
+            return;
+        }
+        $actorType = (string) $cancellation['cancelled_by_type'];
+        // Built token by token rather than handed the whole customer context,
+        // for two reasons. The button: Mail::ctaFromVars() picks the first
+        // address it recognises, and a context carrying order_trail_url would
+        // put "Follow your order" on a message whose next step is the admin
+        // order. And the boundary: a staff alert that never receives the
+        // customer's trail address cannot forward it by accident, so what the
+        // team reads here is only what the template below names.
+        $staffVars = [
+            'order_number'        => (string) ($context['vars']['order_number'] ?? ''),
+            'customer_name'       => (string) ($context['vars']['customer_name'] ?? ''),
+            'delivery_day'        => (string) ($context['vars']['delivery_day'] ?? ''),
+            'admin_url'           => (string) ($context['vars']['admin_url'] ?? ''),
+            'cancellation_source' => self::cancellationSourceLine($actorType, (string) $cancellation['actor_name']),
+            'cancellation_reason' => self::cancellationReasonLine(
+                $actorType,
+                (string) ($cancellation['reason_code'] ?? ''),
+                (string) ($cancellation['reason_text'] ?? '')
+            ),
+            'refund_state'        => self::staffRefundStateLine(
+                (string) ($result['refund_status'] ?? $cancellation['refund_status'] ?? 'not_required'),
+                (int) ($cancellation['refund_required'] ?? 0) === 1
+            ),
+        ];
+        // The team alert goes to whoever may open the order it links to, read
+        // from active users and the RBAC permission rather than a list of names
+        // or addresses anywhere in this file. The configured support inbox is
+        // the fallback when nobody holds the permission yet.
+        self::send(
+            'admin_order_cancelled',
+            $staffVars,
+            self::staffRecipients('orders.view'),
+            'order',
+            $orderId,
+            $actorId
+        );
+    }
+
+    /**
+     * Whether this event has already been announced for this record. One event
+     * per record is the rule for anything that can only happen once, and a
+     * cancellation is the clearest case: the order row is unique, so a second
+     * notification row could only ever be a duplicate.
+     *
+     * A row that was written and then cancelled does not count, because
+     * cancelPending() is how this class says "that one no longer applies".
+     */
+    public static function alreadyAnnounced(string $event, string $relatedType, int $relatedId): bool
+    {
+        if ($relatedId < 1) {
+            return false;
+        }
+        return Database::one(
+            'SELECT id FROM notifications
+              WHERE event_type = :event AND related_type = :type AND related_id = :id
+                AND status <> :cancelled
+              LIMIT 1',
+            [
+                ':event'     => $event,
+                ':type'      => $relatedType,
+                ':id'        => $relatedId,
+                ':cancelled' => self::STATUS_CANCELLED,
+            ]
+        ) !== null;
+    }
+
+    /** Who pressed the button, said to the team in one sentence. */
+    public static function cancellationSourceLine(string $actorType, string $actorName): string
+    {
+        if ($actorType === 'staff') {
+            $who = trim($actorName);
+            return $who !== '' ? 'Cancelled by ' . $who . ' on our team.' : 'Cancelled by our team.';
+        }
+        if ($actorType === 'customer') {
+            return 'Cancelled by the customer.';
+        }
+        return 'Cancelled.';
+    }
+
+    /**
+     * The recorded reason, in the words the reason list already uses, with the
+     * free-text note behind it. A note is somebody's typing, so it is capped for
+     * a bell and an email subject line and never allowed to be the whole
+     * message on its own.
+     */
+    public static function cancellationReasonLine(string $actorType, string $reasonCode, string $reasonText): string
+    {
+        $reasons = $actorType === 'staff' ? OrderCancellation::STAFF_REASONS : OrderCancellation::CUSTOMER_REASONS;
+        $label = $reasons[$reasonCode] ?? '';
+        if ($label === '') {
+            // A row written before this reason existed, or one whose code was
+            // retired. Say that rather than sending the team a blank line.
+            $label = 'A reason was recorded and is not on the current list.';
+        }
+        $note = trim($reasonText);
+        if ($note === '') {
+            return $label;
+        }
+        $clipped = mb_substr($note, 0, 200);
+        return $label . '. Note: ' . $clipped . (mb_strlen($note) > 200 ? '...' : '');
+    }
+
+    /**
+     * Which of the money positions a cancelled order is in, for the team, with
+     * no figure in it. The amounts are on Order 360 behind the same orders.view
+     * gate that admits this alert, and a refund that failed already reaches the
+     * payments team through refund_failed with its amount attached, so the bell
+     * says what state the money is in and leaves the numbers to the order.
+     */
+    public static function staffRefundStateLine(string $refundStatus, bool $refundRequired = true): string
+    {
+        if (!$refundRequired || $refundStatus === 'not_required') {
+            return 'Nothing had been paid on this order, so there is no refund to make.';
+        }
+        switch ($refundStatus) {
+            case 'processed':
+                return 'The refund is confirmed. The money has gone back to the customer.';
+            case 'failed':
+                return 'The refund failed. Open the order and check it before anything is tried again.';
+            case 'failed_manual':
+                return 'The online refund failed, and money our team recorded still has to go back by hand. Open the order and check both.';
+            case 'manual_required':
+            case 'pending_manual':
+                return 'Money our team recorded still has to go back to the customer by hand.';
+            case Refunds::STATUS_REQUESTED:
+            case Refunds::STATUS_PENDING:
+            case Refunds::STATUS_PROCESSING:
+                return 'A refund has been raised and is not confirmed yet.';
+            default:
+                return 'The refund position is not settled yet. Open the order and check it.';
+        }
     }
 
     /** What a cancelled customer needs to know about their money, in one line. */
@@ -1689,6 +1872,7 @@ final class Notifications
                 null
             );
             $sent = false;
+            $error = '';
             try {
                 $sent = Mail::send(
                     (string) $recipient['email'],
@@ -1698,8 +1882,11 @@ final class Notifications
                 );
             } catch (Throwable $e) {
                 error_log('Notifications: send threw for ' . $event . ': ' . $e->getMessage());
+                $error = Mail::classifyFailure($e->getMessage());
             }
-            self::recordAttempt($deliveryId, 1, $sent, 'The mail server would not take the message.');
+            // The reason the ledger carries is Mail's sanitised category, never
+            // the driver's own text: this column is printed on Order 360.
+            self::recordAttempt($deliveryId, 1, $sent, $error !== '' ? $error : Mail::lastError());
             $anySent = $anySent || $sent;
         }
 
