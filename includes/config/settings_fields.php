@@ -140,6 +140,24 @@ $OKV_SETTINGS_GROUPS = [
                 'confirm'    => true,
             ],
 
+            'reschedule_customer_allowed' => [
+                'label'      => 'Customers may reschedule their own orders',
+                'help'       => 'On, a customer can move their delivery to another eligible day before the cutoff, up to the limit below. Off, only staff can reschedule.',
+                'type'       => 'bool',
+                'value_type' => 'bool',
+                'confirm'    => true,
+            ],
+
+            'reschedule_max_changes' => [
+                'label'      => 'How many times an order may be rescheduled',
+                'help'       => 'Maximum number of delivery date moves allowed per order. 2 is the default. Staff and customer moves both count.',
+                'type'       => 'days',
+                'value_type' => 'int',
+                'min'        => 1,
+                'cap'        => 10,
+                'confirm'    => true,
+            ],
+
             'pay_on_delivery_requires_activation' => [
                 'label'      => 'Pay on delivery needs an activated account',
                 'help'       => 'On, a customer must verify their email before they can choose pay on delivery. Off, anyone can.',

@@ -315,13 +315,14 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <?php else: ?>
             <div class="overflow-x-auto">
               <table class="okv-table min-w-[44rem]">
-                <thead><tr><th>Order</th><th>Status</th><th>Delivery</th><th>Total</th><th>Payment</th><th>Balance</th></tr></thead>
+                <thead><tr><th>Order</th><th>Status</th><th>Delivery</th><th>Rescheduled</th><th>Total</th><th>Payment</th><th>Balance</th></tr></thead>
                 <tbody>
                   <?php foreach ($orders as $order): ?>
                     <tr>
                       <td><a class="inline-flex min-h-[44px] items-center font-mono text-forest underline" href="/admin/orders.php?order=<?= (int) $order['id'] ?>"><?= okv_e((string) $order['order_number']) ?></a></td>
                       <td><?= okv_e(ucfirst((string) $order['order_status'])) ?></td>
                       <td><?= okv_e(date('j M Y', strtotime((string) $order['preferred_delivery_date']))) ?></td>
+                      <td><?= (int) ($order['reschedule_count'] ?? 0) > 0 ? (int) $order['reschedule_count'] . ' time' . ((int) $order['reschedule_count'] === 1 ? '' : 's') : '-' ?></td>
                       <td class="font-mono"><?= okv_e(Money::format((int) $order['order_total_subunit'])) ?></td>
                       <td><?= okv_e($paymentStates[(string) $order['payment_status']] ?? ucfirst((string) $order['payment_status'])) ?><?= (string) $order['payment_option'] === 'on_account' ? ', on account' : '' ?></td>
                       <td class="font-mono"><?= okv_e(Money::format((int) $order['balance_due_subunit'])) ?></td>
