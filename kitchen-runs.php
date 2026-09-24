@@ -50,6 +50,14 @@ foreach ($products as $product) {
 
 $units = Database::all('SELECT id, name FROM units_of_measurement WHERE is_active = 1 ORDER BY id');
 $zones = Delivery::zonesActive();
+// The area the picker opens on. What the customer had just chosen when a
+// plain (no JavaScript) send came back refused, then the area of their last
+// run. Only an active zone is ever prefilled, and never the first one on the
+// list by default: an area nobody chose is a van sent to the wrong place.
+$prefillZone = Delivery::preferredZoneId($zones, [
+    okv_input('zone', 0),
+    Delivery::lastRunZoneId($userId),
+]);
 
 $prefillDate = '';
 $lastDay = Database::one(
@@ -206,7 +214,6 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
       <input type="hidden" name="input_mode" value="<?= okv_e($chosen) ?>" data-kr-input-mode>
       <input type="hidden" name="pricing_mode" value="<?= okv_e($starts[$chosen]['pricing']) ?>" data-kr-pricing-mode>
       <input type="hidden" name="preferred_delivery_date" value="<?= okv_e($prefillDate) ?>" data-kr-date>
-      <input type="hidden" name="delivery_zone_id" value="<?= $zones ? (int)$zones[0]['id'] : '' ?>" data-kr-zone>
 
       <!-- STEP 1 -->
       <div data-kr-step="1" class="min-h-[70dvh] md:min-h-0">
@@ -376,12 +383,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
         </div>
 
         <div class="mt-5">
-          <p class="text-xs font-medium text-ink-60">Area</p>
-          <div class="mt-2 flex flex-wrap gap-2" data-kr-zone-chips role="group" aria-label="Delivery zones">
-            <?php foreach ($zones as $z): ?>
-              <button type="button" data-kr-zone-btn="<?= (int)$z['id'] ?>" class="inline-flex min-h-[44px] items-center rounded-full border border-ink-10 bg-white px-4 text-sm hover:border-forest"><?= okv_e($z['name']) ?></button>
-            <?php endforeach; ?>
-          </div>
+          <?php okv_zone_picker($zones, ['id' => 'kr-zone', 'label' => 'Area', 'selected' => $prefillZone]); ?>
         </div>
 
         <details class="mt-5 rounded-xl border border-ink-10">
@@ -464,6 +466,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 
 <?php okv_shop_footer(); ?>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
+<script src="<?= okv_e(okv_asset('/assets/js/zone-picker.min.js')) ?>" defer></script>
 <script src="<?= okv_e(okv_asset('/assets/js/kitchen-runs.min.js')) ?>" defer></script>
 </body>
 </html>

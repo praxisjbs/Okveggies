@@ -152,6 +152,31 @@
            focus:border-forest focus:ring-0;
   }
 
+  /* The delivery-area search (okv_zone_picker + assets/js/zone-picker.js).
+     The list opens under its field and scrolls inside itself. Every option is
+     at least 48px, so it clears the 44px touch target with a note under the
+     name. Focus never leaves the text box, so the highlighted option carries
+     the gold ring itself, and the chosen one carries a tick as well as a
+     colour, so colour is never the only signal. */
+  .okv-zone-popup {
+    @apply absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto overscroll-contain
+           rounded-md border border-mist bg-white shadow-okv-2;
+  }
+  .okv-zone-option {
+    @apply flex min-h-[48px] cursor-pointer items-center gap-3 px-4 py-2 text-left
+           hover:bg-forest-tint/60;
+  }
+  .okv-zone-option.is-active {
+    @apply bg-forest-tint;
+    outline: 2.5px solid theme('colors.gold.DEFAULT');
+    outline-offset: -2.5px;
+  }
+  .okv-zone-check {
+    @apply flex h-6 w-6 flex-none items-center justify-center rounded-full bg-forest text-white invisible;
+  }
+  .okv-zone-option[aria-selected="true"] .okv-zone-check { @apply visible; }
+  .okv-zone-option[aria-selected="true"] { @apply bg-forest-tint/40; }
+
   /* Product and content cards. */
   .okv-card {
     @apply bg-white rounded-lg shadow-okv-1 p-4

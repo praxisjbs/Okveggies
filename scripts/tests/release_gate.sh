@@ -300,6 +300,8 @@ fi
 run "lesser_text_test.mjs" node scripts/tests/lesser_text_test.mjs
 run "image_contract_test.mjs" node scripts/tests/image_contract_test.mjs
 run "motion_coverage_test.mjs" node scripts/tests/motion_coverage_test.mjs
+# The delivery-area search matcher, as pure functions: no server, no database.
+run "zone_picker_test.mjs" node scripts/tests/zone_picker_test.mjs
 
 # -----------------------------------------------------------------------------
 # Every suite on disk, by glob. A hand-maintained list is how two suites sat in
@@ -339,6 +341,8 @@ run "content_admin_visual_test.mjs" node scripts/tests/content_admin_visual_test
 run "public_content_visual_test.mjs" php scripts/tests/public_content_visual_fixture.php
 run "checkout_visual_test.mjs" node scripts/tests/checkout_visual_test.mjs
 run "kitchen_runs_visual_test.mjs" node scripts/tests/kitchen_runs_visual_test.mjs
+# Serves its own fixture page through the PHP CLI, so it needs no seeded site.
+run "zone_picker_visual_test.mjs" node scripts/tests/zone_picker_visual_test.mjs
 run "motion_visual_test.mjs" node scripts/tests/motion_visual_test.mjs
 run "role_journeys.mjs" node scripts/tests/role_journeys.mjs
 
@@ -347,7 +351,7 @@ run "role_journeys.mjs" node scripts/tests/role_journeys.mjs
 # A suite added to scripts/tests and forgotten by every runner is how a
 # milestone passes on nine tenths of its evidence.
 for mjs in scripts/tests/*_test.mjs; do
-  case " homepage_visual_test.mjs homepage_hero_visual_test.mjs content_admin_visual_test.mjs public_content_visual_test.mjs checkout_visual_test.mjs kitchen_runs_visual_test.mjs motion_visual_test.mjs lesser_text_test.mjs image_contract_test.mjs motion_coverage_test.mjs " in
+  case " homepage_visual_test.mjs homepage_hero_visual_test.mjs content_admin_visual_test.mjs public_content_visual_test.mjs checkout_visual_test.mjs kitchen_runs_visual_test.mjs zone_picker_visual_test.mjs motion_visual_test.mjs lesser_text_test.mjs image_contract_test.mjs motion_coverage_test.mjs zone_picker_test.mjs " in
     *" $(basename "$mjs") "*) ;;
     *)
       printf '  FAIL %-38s %s\n' "suite wiring" "$(basename "$mjs") is on disk and wired into no gate section"

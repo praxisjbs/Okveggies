@@ -56,6 +56,8 @@ if (!function_exists('okv_icon')) {
             'arrow-left'   => '<path d="M20 12H5"/><path d="m11 6-6 6 6 6"/>',
             // Check, for the finished step of the progress line.
             'check'        => '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+            // A downward chevron, for a list that opens below its field.
+            'chevron-down' => '<path d="m6 9.5 6 6 6-6"/>',
             // Round information mark, for the sheets that carry the detail.
             'info'         => '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
             // Map pin, for the delivery area.
