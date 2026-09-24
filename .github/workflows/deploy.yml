@@ -86,9 +86,21 @@ jobs:
       - name: Apply migrations on the server
         run: |
           echo "Calling the migration runner..."
-          curl -fsS --retry 2 --max-time 120 \
+          # No -f here: curl still retries on a 5xx (that is what --retry
+          # already does), but -f throws the response body away on any HTTP
+          # error, which is exactly the body migrate.php writes the failure
+          # reason into. Capture the status separately so a failure prints
+          # the real "MIGRATE FAILED: ..." message instead of a bare curl
+          # exit code.
+          status=$(curl -sS --retry 2 --max-time 120 \
             -H "X-Migrate-Token: ${{ secrets.MIGRATE_TOKEN }}" \
-            "${{ secrets.APP_BASE_URL }}/public/migrate.php" | tee /tmp/migrate.out
+            -o /tmp/migrate.out -w '%{http_code}' \
+            "${{ secrets.APP_BASE_URL }}/public/migrate.php")
+          cat /tmp/migrate.out
+          if [ "$status" != "200" ]; then
+            echo "Migration runner returned HTTP $status"
+            exit 1
+          fi
           grep -q "MIGRATE OK" /tmp/migrate.out || { echo "Migrations did not report success"; exit 1; }
 
       - name: Verify the deployed site

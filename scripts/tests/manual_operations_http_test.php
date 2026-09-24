@@ -221,6 +221,42 @@ try {
     moh_ok((int) ($newCustomer['id'] ?? 0) > 0, 'and gets the customer back to carry on with');
     moh_eq('', (string) ($newCustomer['email'] ?? 'x'), 'a placeholder address is never shown back as if it were a real one');
 
+    // A duplicate create over the real route answers 409, a conflict, not 422,
+    // a bad field. The two used to share one status; this pins them apart.
+    [$code, $body] = moh_req($jars[0], $base . '/api/v1/customers.php', [
+        'action' => 'create', 'okv_csrf' => $managerCsrf,
+        'first_name' => 'Same', 'last_name' => 'Phone' . $suffix,
+        'phone' => (string) $newCustomer['phone'], 'email' => '',
+    ]);
+    moh_eq(409, $code, 'making a customer on a phone number already in use answers 409, a conflict');
+    moh_eq('phone_taken', json_decode($body, true)['code'] ?? '', 'and names the field that collided');
+
+    // Correcting the customer just made, over the real route.
+    [$code, $body] = moh_req($jars[0], $base . '/api/v1/customers.php', [
+        'action' => 'update', 'okv_csrf' => $managerCsrf, 'customer_id' => $madeUsers[0],
+        'first_name' => 'Phone', 'last_name' => 'Corrected' . $suffix,
+        'phone' => (string) $newCustomer['phone'], 'email' => '',
+    ]);
+    moh_eq(200, $code, 'a manager corrects a customer over the real route');
+    moh_eq('Phone Corrected' . $suffix, (string) (json_decode($body, true)['customer']['name'] ?? ''), 'and the correction is reflected straight back');
+
+    // Moving that customer onto a phone another customer already holds is
+    // refused the same 409 way, not quietly allowed because it is an edit.
+    $otherPhone = (string) Database::one('SELECT phone FROM users WHERE id = :id', [':id' => $users[1]])['phone'];
+    [$code, $body] = moh_req($jars[0], $base . '/api/v1/customers.php', [
+        'action' => 'update', 'okv_csrf' => $managerCsrf, 'customer_id' => $madeUsers[0],
+        'first_name' => 'Phone', 'last_name' => 'Corrected' . $suffix, 'phone' => $otherPhone, 'email' => '',
+    ]);
+    moh_eq(409, $code, 'moving a customer onto a phone number another customer already holds is refused, even on an edit');
+    moh_eq('phone_taken', json_decode($body, true)['code'] ?? '', 'and the refusal names the phone again');
+
+    // A signed-in customer (not staff) cannot reach the edit action at all.
+    [$code] = moh_req($jars[1], $base . '/api/v1/customers.php', [
+        'action' => 'update', 'okv_csrf' => $customerCsrf, 'customer_id' => $madeUsers[0],
+        'first_name' => 'Should', 'last_name' => 'Refuse', 'phone' => (string) $newCustomer['phone'], 'email' => '',
+    ]);
+    moh_eq(403, $code, 'a customer cannot correct another customer\'s details, because customers.edit is a staff permission');
+
     // The order itself.
     [$code, $body] = moh_req($jars[0], $base . '/api/v1/orders.php', [
         'action' => 'create', 'okv_csrf' => $managerCsrf,

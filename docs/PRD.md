@@ -260,6 +260,23 @@ Anyone who forgets their password can set a new one with a one-time code sent to
 
 The flow is the same both ways: ask for the email, receive a 6 digit code (15 minute life, single use, stored hashed in `otp_verifications`), then enter the code and a new password. The "send a code" step gives the same answer whether or not the email is registered, so neither page confirms who has an account. Requests are rate limited by email (a resend cooldown, a window cap, and a verify cap), and the code is only spent after the new password passes the policy. A successful reset, an owner setting a colleague's password, or a signed-in change all move `users.password_changed_at` on, which signs every other open session for that account out (Section 20). Codes by SMS are Phase 2, as with activation.
 
+### 10.5 Duplicate identity guards
+
+Every path that creates or edits a `users` row (self-service registration, guest checkout, a staff-made customer, an Owner adding staff, a signed-in profile edit) runs the same shared check, `Auth::findIdentityConflict()`, before it writes, and the same unique index backstops it on a race. A collision is refused, never silently overwritten:
+
+- **Registration** answers 409 and opens a "you already have an account, sign in?" sheet, prefilled with the identifier that collided.
+- **A signed-in profile edit** (name and phone; see 10.6 for email) answers 409 inline: "That phone number is already in use on another account."
+- **A colleague creating or correcting a customer** (Section 17) answers the same way, worded for a colleague ("Search for them instead") rather than the customer's own copy.
+
+### 10.6 Changing email while signed in
+
+Email is fixed at registration and cannot be edited through the ordinary profile-edit sheet (10.1). A signed-in customer changes it through its own two-step control in account settings instead, decided 24 September 2026 over the simpler one-code version, because a hijacked session alone should not be able to move an account to an address its real owner does not control:
+
+1. **Authorize.** A 6 digit code (15 minute life, same `otp_verifications` mechanics as 10.4) goes to the account's *current* email. The new address is checked against `Auth::findIdentityConflict()` before this code is even sent, so nobody spends a code moving onto an address somebody else already holds.
+2. **Confirm.** Once that code is entered, a second code goes to the *new* address. Entering it saves `users.email` and marks it verified (the code just proved it) in one step.
+
+Losing the sheet mid-flow (closing it, a timeout) just means starting over from step 1; there is no third state to recover. Staff correcting a customer's email or phone from the admin panel (Section 17.4) skip this: it is a trusted colleague fixing a detail, not the account owner proving control of an inbox, and it happens silently, the same as any other admin edit.
+
 ---
 
 ## 11. Payments
@@ -343,6 +360,10 @@ A full permission catalogue is seeded (dot-notation keys, same engine as the ref
 ### 17.2 Modules
 
 Dashboard (today's orders, revenue, payments due, credit outstanding, plus simple charts: sales over time, top products, order-share by category using the fixed category colours), Orders, Products and Pricing (with CSV import/export), Combos (the builder), Kitchen Runs (the quote workflow), Customers (households and businesses, addresses, credit), Payments (Paystack transactions, manual proofs, refunds), Credit (applications, limits, outstanding), Delivery (day manifest, allowed days, zones, exceptions), Content and Messages (page copy, FAQ, contact messages), Make It Right (reports and resolutions), Settings (Order Settings including deposit percentage and cutoff, site settings, notification templates), Users and Roles (Owner only).
+
+### 17.3 Correcting a customer's details
+
+The Customers screen mostly reads (Section 17.2's modules each own their own writes). The one exception is a customer's own name, email or phone: an Edit control on the detail panel, behind `customers.edit` (Owner and Manager, decided 24 September 2026), lets a colleague fix a typo without touching account type or the business profile. It runs the same duplicate guard as making a customer (Section 10.5) and lands silently, the same as any other admin edit; it is a trusted colleague correcting a record, not the account owner changing how they sign in, so it carries none of the two-code proof Section 10.6 requires of the customer themselves.
 
 ---
 

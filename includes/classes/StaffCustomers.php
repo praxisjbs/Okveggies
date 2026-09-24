@@ -126,6 +126,45 @@ final class StaffCustomers
         ];
     }
 
+    /**
+     * Check what a colleague typed into the edit-contact form for a customer
+     * who already exists. Same rules as validateNew's name, phone and email
+     * (including the placeholder fallback if the email is cleared), minus the
+     * account type: type and the business profile are not edited here.
+     */
+    public static function validateContactUpdate(array $input): array
+    {
+        $first = trim((string) ($input['first_name'] ?? ''));
+        $last  = trim((string) ($input['last_name'] ?? ''));
+        $email = trim((string) ($input['email'] ?? ''));
+
+        if ($first === '' || $last === '') {
+            throw new DomainException('name_required');
+        }
+
+        $phone = Phone::normalize((string) ($input['phone'] ?? ''));
+        if ($phone === null) {
+            throw new DomainException('bad_phone');
+        }
+
+        if ($email === '') {
+            $email = self::placeholderEmail($phone);
+        } else {
+            $canonical = Auth::canonicalEmail($email);
+            if ($canonical === null) {
+                throw new DomainException('bad_email');
+            }
+            $email = $canonical;
+        }
+
+        return [
+            'first_name' => mb_substr($first, 0, 100),
+            'last_name'  => mb_substr($last, 0, 100),
+            'email'      => mb_substr($email, 0, 255),
+            'phone'      => $phone,
+        ];
+    }
+
     // -------------------------------------------------------------------------
     // Reads
     // -------------------------------------------------------------------------
@@ -283,6 +322,51 @@ final class StaffCustomers
         return $userId;
     }
 
+    /**
+     * Correct an existing customer's name, email or phone. Same identity guard
+     * as create(), excluding the customer's own row so it never collides with
+     * itself, and the same duplicate-key backstop on a race. Account type and
+     * the business profile are untouched here.
+     */
+    public static function update(int $customerId, array $clean, int $staffId): void
+    {
+        $before = Database::one(
+            "SELECT first_name, last_name, email, phone FROM users
+              WHERE id = :id AND status = 'active' AND user_type IN ('household', 'business')",
+            [':id' => $customerId]
+        );
+        if (!$before) {
+            throw new DomainException('not_found');
+        }
+
+        $conflict = Auth::findIdentityConflict($clean['email'], $clean['phone'], $customerId);
+        if ($conflict !== null) {
+            $field = (string) $conflict['field'];
+            throw new DomainException($field === 'both' ? 'customer_exists' : $field . '_taken');
+        }
+
+        try {
+            Database::run(
+                'UPDATE users SET first_name = :first, last_name = :last, email = :email, phone = :phone WHERE id = :id',
+                [
+                    ':first' => $clean['first_name'], ':last' => $clean['last_name'],
+                    ':email' => $clean['email'], ':phone' => $clean['phone'], ':id' => $customerId,
+                ]
+            );
+        } catch (Throwable $e) {
+            // Two edits of the same person racing: the unique index caught the
+            // second one. Name the field that collided, as create() does.
+            if ($e instanceof PDOException && str_starts_with((string) ($e->getCode() ?: ''), '23')) {
+                $race = Auth::findIdentityConflict($clean['email'], $clean['phone'], $customerId);
+                $field = $race !== null ? (string) $race['field'] : 'both';
+                throw new DomainException($field === 'both' ? 'customer_exists' : $field . '_taken');
+            }
+            throw $e;
+        }
+
+        Audit::record('customer.update', 'users', $customerId, $before, $clean, $staffId);
+    }
+
     /** Plain copy for each refusal code this class throws. */
     public static function message(string $code): string
     {
@@ -294,6 +378,7 @@ final class StaffCustomers
             'email_taken'       => 'That email already belongs to a customer. Search for them instead.',
             'phone_taken'       => 'That phone number already belongs to a customer. Search for them instead.',
             'customer_exists'   => 'That phone number and email already belong to a customer. Search for them instead.',
+            'not_found'         => 'That customer was not found.',
         ];
         return $messages[$code] ?? 'We could not save that customer. Check the details and try again.';
     }

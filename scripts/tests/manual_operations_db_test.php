@@ -20,6 +20,9 @@
  *   A customer made by staff. The account has to be real enough to own an order
  *   and useless enough that nobody can sign into it, and users.email is NOT NULL
  *   UNIQUE, so the caller with no email is the case that decides the design.
+ *   Correcting one afterwards runs the same identity guard, excluding the
+ *   customer's own row, so an edit can never collide with itself but still
+ *   refuses to move a customer onto an email or phone somebody else holds.
  *
  *   A kitchen list typed in for somebody. It has to be indistinguishable from
  *   one the customer sent, except in the trail, which has to say plainly that
@@ -176,6 +179,64 @@ try {
         'the search never offers a staff account, because an order belongs to a buyer'
     );
     mo_eq([], StaffCustomers::search(''), 'an empty search returns nothing rather than everybody');
+
+    // -----------------------------------------------------------------------
+    // 1b. Correcting a customer's own details.
+    // -----------------------------------------------------------------------
+    $bizBefore = Database::one('SELECT phone, email FROM users WHERE id = :id', [':id' => $businessId]);
+    $newPhone  = '0806' . random_int(1000000, 9999999);
+    StaffCustomers::update($businessId, StaffCustomers::validateContactUpdate([
+        'first_name' => 'Ngozi', 'last_name' => 'Corrected',
+        'phone' => $newPhone, 'email' => strtoupper((string) $bizBefore['email']),
+    ]), $staffId);
+    $bizAfter = Database::one('SELECT first_name, last_name, phone, email FROM users WHERE id = :id', [':id' => $businessId]);
+    mo_eq('Corrected', (string) $bizAfter['last_name'], 'a colleague can correct a typo in the name');
+    mo_eq(Phone::normalize($newPhone), (string) $bizAfter['phone'], 'and the phone, onto the one canonical form');
+    mo_eq(strtolower((string) $bizBefore['email']), (string) $bizAfter['email'], 'an unchanged address keeps its lower cased form, even retyped in a different case');
+    mo_ok(
+        Database::one('SELECT id FROM audit_logs WHERE action = \'customer.update\' AND entity_id = :id', [':id' => $businessId]) !== null,
+        'correcting a customer by hand is on the audit log too'
+    );
+
+    // Keeping a customer's own current details is not a collision with itself.
+    StaffCustomers::update($businessId, StaffCustomers::validateContactUpdate([
+        'first_name' => 'Ngozi', 'last_name' => 'Corrected', 'phone' => $newPhone, 'email' => (string) $bizAfter['email'],
+    ]), $staffId);
+    mo_ok(true, 'saving a customer with no real change does not refuse them for colliding with themselves');
+
+    $keptPhone = (string) $bizAfter['phone'];
+    mo_throws(
+        static fn() => StaffCustomers::update($noEmailId, StaffCustomers::validateContactUpdate([
+            'first_name' => 'Chidi', 'last_name' => 'NoEmail', 'phone' => $keptPhone, 'email' => '',
+        ]), $staffId),
+        'phone_taken',
+        'moving a customer onto a phone number another customer already holds is refused'
+    );
+    $ownerEmail = Database::one('SELECT email FROM users WHERE id = :id', [':id' => $householdId])['email'];
+    mo_throws(
+        static fn() => StaffCustomers::update($noEmailId, StaffCustomers::validateContactUpdate([
+            'first_name' => 'Chidi', 'last_name' => 'NoEmail', 'phone' => '0804' . random_int(1000000, 9999999), 'email' => (string) $ownerEmail,
+        ]), $staffId),
+        'email_taken',
+        'and moving one onto an email address another customer already holds is refused the same way'
+    );
+    mo_throws(
+        static fn() => StaffCustomers::update(0, StaffCustomers::validateContactUpdate([
+            'first_name' => 'Nobody', 'last_name' => 'Here', 'phone' => '0801' . random_int(1000000, 9999999),
+        ]), $staffId),
+        'not_found',
+        'correcting a customer who does not exist is refused rather than silently doing nothing'
+    );
+
+    // Clearing the email on an existing customer falls back to a placeholder,
+    // the same as a fresh account with none.
+    StaffCustomers::update($noEmailId, StaffCustomers::validateContactUpdate([
+        'first_name' => 'Chidi', 'last_name' => 'NoEmail', 'phone' => (string) Database::one('SELECT phone FROM users WHERE id = :id', [':id' => $noEmailId])['phone'], 'email' => '',
+    ]), $staffId);
+    mo_ok(
+        StaffCustomers::isPlaceholderEmail((string) Database::one('SELECT email FROM users WHERE id = :id', [':id' => $noEmailId])['email']),
+        'clearing a customer\'s email on an edit falls back to a placeholder too'
+    );
 
     // -----------------------------------------------------------------------
     // 2. The order a colleague builds on the phone.

@@ -137,6 +137,7 @@ $csrf = Csrf::token();
             <?php else: ?>
               <a href="/public/auth/activate.php" class="okv-badge okv-badge-out ml-1">Activate</a>
             <?php endif; ?>
+            <button type="button" class="okv-btn-text ml-1" data-okv-open="email-change-sheet">Change</button>
           </dd></div>
           <div><dt class="text-ink-40">Phone</dt><dd class="mt-0.5" data-field="phone"><?= okv_e(Phone::display($me['phone'] ?? '')) ?></dd></div>
           <div><dt class="text-ink-40">Account</dt><dd class="mt-0.5"><?= Customer::isBusiness() ? 'Business' : 'Household' ?></dd></div>
@@ -277,6 +278,47 @@ $csrf = Csrf::token();
         </div>
         <div><label class="okv-label" for="pf_phone">Phone number</label><input class="okv-input" id="pf_phone" name="phone" inputmode="tel" value="<?= okv_e(Phone::display($me['phone'] ?? '')) ?>" required></div>
         <button type="submit" class="okv-btn w-full">Save</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Change email sheet: two codes, current email then new email -->
+  <div class="okv-sheet-backdrop" id="email-change-sheet" hidden>
+    <div class="okv-sheet" role="dialog" aria-modal="true" aria-labelledby="email-change-sheet-h">
+      <div class="flex items-center justify-between">
+        <h2 id="email-change-sheet-h" class="font-editorial text-okv-h6 text-ink">Change your email</h2>
+        <button type="button" class="okv-btn-text" data-okv-close aria-label="Close">Close</button>
+      </div>
+
+      <form action="/api/v1/account.php" method="POST" class="mt-4 space-y-4" data-okv-ec-request>
+        <?= Csrf::field() ?>
+        <input type="hidden" name="action" value="request_email_change">
+        <div data-okv-error role="alert" aria-live="polite" class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" hidden></div>
+        <p class="text-sm text-ink-60">We will send a code to your current email, <?= okv_e($me['email'] ?? '') ?>, to authorize this, then a second code to the new address to confirm it.</p>
+        <div><label class="okv-label" for="ec_new_email">New email</label><input class="okv-input" id="ec_new_email" name="new_email" type="email" required></div>
+        <button type="submit" class="okv-btn w-full">Send code</button>
+      </form>
+
+      <form action="/api/v1/account.php" method="POST" class="mt-4 space-y-4" data-okv-ec-verify-old hidden>
+        <?= Csrf::field() ?>
+        <input type="hidden" name="action" value="verify_email_change_old">
+        <input type="hidden" name="new_email" value="">
+        <div data-okv-error role="alert" aria-live="polite" class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" hidden></div>
+        <p class="text-sm text-ink-60" data-okv-ec-old-notice>Enter the code we sent to your current email.</p>
+        <div><label class="okv-label" for="ec_old_code">Code</label><input class="okv-input" id="ec_old_code" name="code" inputmode="numeric" autocomplete="one-time-code" required></div>
+        <button type="submit" class="okv-btn w-full">Continue</button>
+        <button type="button" class="okv-btn-text w-full" data-okv-ec-restart>Start over</button>
+      </form>
+
+      <form action="/api/v1/account.php" method="POST" class="mt-4 space-y-4" data-okv-ec-verify-new hidden>
+        <?= Csrf::field() ?>
+        <input type="hidden" name="action" value="verify_email_change_new">
+        <input type="hidden" name="new_email" value="">
+        <div data-okv-error role="alert" aria-live="polite" class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" hidden></div>
+        <p class="text-sm text-ink-60" data-okv-ec-new-notice>Enter the code we sent to your new email.</p>
+        <div><label class="okv-label" for="ec_new_code">Code</label><input class="okv-input" id="ec_new_code" name="code" inputmode="numeric" autocomplete="one-time-code" required></div>
+        <button type="submit" class="okv-btn w-full">Confirm change</button>
+        <button type="button" class="okv-btn-text w-full" data-okv-ec-restart>Start over</button>
       </form>
     </div>
   </div>
