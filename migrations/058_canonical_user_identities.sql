@@ -44,6 +44,7 @@ DELETE FROM user_identity_conflicts;
 -- Left over from a run that failed before reaching its own cleanup.
 DROP PROCEDURE IF EXISTS okv_fail_on_identity_conflicts;
 DROP TEMPORARY TABLE IF EXISTS okv_phone_canonical;
+DROP TEMPORARY TABLE IF EXISTS okv_phone_canonical_dupes;
 
 START TRANSACTION;
 
@@ -84,17 +85,25 @@ SELECT id, stored_phone,
       ) AS d
   ) AS n;
 
+-- 2b. The canonical values more than one row landed on. A second temporary
+--     table, not a subquery on okv_phone_canonical repeated inside steps 3
+--     and 6: MySQL refuses to reopen the same TEMPORARY TABLE twice in one
+--     statement ("Can't reopen table"), which is a restriction on the table,
+--     not the connection, so a second, differently named one sidesteps it
+--     cleanly rather than working around it with session tricks.
+CREATE TEMPORARY TABLE okv_phone_canonical_dupes AS
+SELECT canonical
+  FROM okv_phone_canonical
+ WHERE canonical IS NOT NULL
+ GROUP BY canonical
+HAVING COUNT(*) > 1;
+
 -- 3. Report every row whose canonical phone collides with another row.
 INSERT INTO user_identity_conflicts (kind, canonical_value, user_id, stored_value, user_type, status)
 SELECT 'phone', c.canonical, u.id, u.phone, u.user_type, u.status
   FROM okv_phone_canonical c
   JOIN users u ON u.id = c.id
- WHERE c.canonical IN (
-        SELECT canonical
-          FROM okv_phone_canonical
-         WHERE canonical IS NOT NULL
-         GROUP BY canonical
-        HAVING COUNT(*) > 1)
+  JOIN okv_phone_canonical_dupes d ON d.canonical = c.canonical
 ON DUPLICATE KEY UPDATE
   stored_value = VALUES(stored_value),
   user_type    = VALUES(user_type),
@@ -132,18 +141,15 @@ ON DUPLICATE KEY UPDATE
   detected_at  = CURRENT_TIMESTAMP;
 
 -- 6. Canonicalise every phone that is safe to move. Rows in a conflict group
---    are excluded so this update can never hit the unique index.
+--    are excluded (the LEFT JOIN finding no dupe row is the exclusion, same
+--    reasoning as step 3's JOIN) so this update can never hit the unique index.
 UPDATE users u
   JOIN okv_phone_canonical c ON c.id = u.id
+  LEFT JOIN okv_phone_canonical_dupes d ON d.canonical = c.canonical
    SET u.phone = c.canonical
  WHERE c.canonical IS NOT NULL
    AND u.phone <> c.canonical
-   AND c.canonical NOT IN (
-        SELECT canonical
-          FROM okv_phone_canonical
-         WHERE canonical IS NOT NULL
-         GROUP BY canonical
-        HAVING COUNT(*) > 1);
+   AND d.canonical IS NULL;
 
 -- Commit the repairs and the report so both survive the failure check below.
 COMMIT;
@@ -169,6 +175,7 @@ CALL okv_fail_on_identity_conflicts();
 -- Cleanup, reached only when no conflict stopped the run.
 DROP PROCEDURE IF EXISTS okv_fail_on_identity_conflicts;
 DROP TEMPORARY TABLE IF EXISTS okv_phone_canonical;
+DROP TEMPORARY TABLE IF EXISTS okv_phone_canonical_dupes;
 
 -- Verification.
 SELECT COUNT(*) AS phone_conflicts      FROM user_identity_conflicts WHERE kind = 'phone';
