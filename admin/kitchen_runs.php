@@ -18,6 +18,7 @@
  */
 
 require_once __DIR__ . '/../includes/bootstrap.php';
+require_once __DIR__ . '/../includes/components/shop/delivery_picker.php';
 Rbac::requirePermission('kitchen_runs.view');
 
 $filter   = (string) okv_input('status', '');
@@ -207,4 +208,5 @@ require __DIR__ . '/../includes/components/admin/header.php';
 
 </div>
 <script src="<?= okv_e(okv_asset('/assets/js/admin-kitchen-runs.min.js')) ?>" defer></script>
+<script src="<?= okv_e(okv_asset('/assets/js/zone-picker.min.js')) ?>" defer></script>
 <?php require __DIR__ . '/../includes/components/admin/footer.php'; ?>

@@ -26,6 +26,7 @@
  */
 
 require_once __DIR__ . '/../includes/bootstrap.php';
+require_once __DIR__ . '/../includes/components/shop/delivery_picker.php';
 Rbac::requirePermission('kitchen_runs.create');
 
 $canAddCustomer = Rbac::can('customers.create');
@@ -297,13 +298,17 @@ require __DIR__ . '/../includes/components/admin/header.php';
         </div>
 
         <div>
-          <label class="okv-label" for="run-zone">Area</label>
-          <select class="okv-input" id="run-zone" name="delivery_zone_id" required>
-            <option value="">Choose the area</option>
-            <?php foreach ($zones as $zone): ?>
-              <option value="<?= (int) $zone['id'] ?>"><?= okv_e($zone['name']) ?></option>
-            <?php endforeach; ?>
-          </select>
+          <?php okv_zone_picker($zones, [
+              'id'          => 'run-zone',
+              'label'       => 'Area',
+              'placeholder' => 'Choose the area',
+              // What was just refused, then the customer's last run. Active only.
+              'selected'    => Delivery::preferredZoneId($zones, [
+                  okv_input('zone', 0),
+                  Delivery::lastRunZoneId((int) $customer['id']),
+              ]),
+              'empty_text'  => 'No area is active. Add one on the Delivery screen first.',
+          ]); ?>
         </div>
 
         <div>
@@ -396,5 +401,6 @@ require __DIR__ . '/../includes/components/admin/header.php';
 $okv_admin_script = [
     '/assets/js/admin-customer-picker.js',
     '/assets/js/admin-run-new.js',
+    '/assets/js/zone-picker.min.js',
 ];
 require __DIR__ . '/../includes/components/admin/footer.php';

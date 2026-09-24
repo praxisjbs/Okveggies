@@ -107,6 +107,32 @@ try {
         'payment_option'   => 'pay_in_full',
     ];
 
+    // --- An area switched off after the page loaded ---------------------------
+    // The picker only offered active zones when the page was drawn. If a
+    // colleague switches one off before the customer presses Pay, the server
+    // still refuses it, with the existing code, before any row is written.
+    Database::run(
+        'INSERT INTO delivery_zones (name, slug, area_note, is_active, sort_order) VALUES (:n, :s, NULL, 1, 999)',
+        [':n' => 'ZZ Stale Zone ' . $suffix, ':s' => 'zz-stale-zone-' . strtolower($suffix)]
+    );
+    $staleZoneId = (int) Database::getInstance()->getConnection()->lastInsertId();
+    Database::run('UPDATE delivery_zones SET is_active = 0 WHERE id = :id', [':id' => $staleZoneId]);
+    $staleRefusal = '';
+    try {
+        Checkout::place(['delivery_zone_id' => $staleZoneId] + $input);
+    } catch (DomainException $e) {
+        $staleRefusal = $e->getMessage();
+    }
+    t_eq('zone_unavailable', $staleRefusal, 'an area switched off after the page loaded is refused at checkout');
+    $nameRefusal = '';
+    try {
+        Checkout::place(['delivery_zone_id' => 'ZZ Stale Zone ' . $suffix] + $input);
+    } catch (DomainException $e) {
+        $nameRefusal = $e->getMessage();
+    }
+    t_eq('zone_unavailable', $nameRefusal, 'a zone name posted in place of the id is refused');
+    t_ok(Database::one('SELECT id FROM orders WHERE shopping_cart_id = :c', [':c' => $cartId]) === null, 'and no order was written for either');
+
     // --- Place the order -----------------------------------------------------
     $result = Checkout::place($input);
     $orderId = (int) $result['order_id'];
@@ -230,6 +256,9 @@ try {
         Database::run('DELETE FROM shopping_carts WHERE user_id = :u', [':u' => $userId]);
         Database::run('DELETE FROM customer_addresses WHERE user_id = :u', [':u' => $userId]);
         Database::run('DELETE FROM users WHERE id = :u', [':u' => $userId]);
+    }
+    if (isset($staleZoneId) && $staleZoneId > 0) {
+        Database::run('DELETE FROM delivery_zones WHERE id = :z', [':z' => $staleZoneId]);
     }
     if (isset($productId)) {
         Database::run('DELETE FROM products WHERE id = :p', [':p' => $productId]);

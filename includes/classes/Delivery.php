@@ -74,6 +74,88 @@ final class Delivery
         return !empty($zone['is_active']);
     }
 
+    /**
+     * The zone a picker should open on, or 0 for none. Pure: it takes the
+     * active zones already loaded for the page and the candidate ids in order
+     * of preference (what was just posted, what the session holds, the
+     * customer's last order), and returns the first candidate that is still
+     * active. A zone switched off since it was remembered is never prefilled,
+     * and nothing is ever picked by position in the list.
+     *
+     * @param array<int, array<string, mixed>> $activeZones rows from zonesActive()
+     * @param array<int, mixed>                $candidates  ids, most preferred first
+     */
+    public static function preferredZoneId(array $activeZones, array $candidates): int
+    {
+        $active = [];
+        foreach ($activeZones as $zone) {
+            $active[(int) ($zone['id'] ?? 0)] = true;
+        }
+        foreach ($candidates as $candidate) {
+            $id = self::zoneIdFrom($candidate);
+            if ($id > 0 && isset($active[$id])) {
+                return $id;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * A posted or remembered zone id as a positive integer, or 0. Only a plain
+     * run of digits counts, so "12abc", "1e3" or "-4" are never read as a zone.
+     */
+    public static function zoneIdFrom(mixed $value): int
+    {
+        if (is_int($value)) {
+            return $value > 0 ? $value : 0;
+        }
+        $value = trim((string) (is_scalar($value) ? $value : ''));
+        if ($value === '' || strlen($value) > 18 || !ctype_digit($value)) {
+            return 0;
+        }
+        return (int) $value;
+    }
+
+    /** A zone's name whatever its state, for the "no longer available" notice. */
+    public static function zoneNameById(int $zoneId): ?string
+    {
+        if ($zoneId < 1) {
+            return null;
+        }
+        $row = Database::one('SELECT name FROM delivery_zones WHERE id = :id', [':id' => $zoneId]);
+        return $row ? (string) $row['name'] : null;
+    }
+
+    /** The zone on this customer's most recent order, or 0. */
+    public static function lastOrderZoneId(int $userId): int
+    {
+        if ($userId < 1) {
+            return 0;
+        }
+        $row = Database::one(
+            'SELECT delivery_zone_id FROM orders
+              WHERE user_id = :user AND delivery_zone_id IS NOT NULL
+              ORDER BY id DESC LIMIT 1',
+            [':user' => $userId]
+        );
+        return (int) ($row['delivery_zone_id'] ?? 0);
+    }
+
+    /** The zone on this customer's most recent Kitchen Run, or 0. */
+    public static function lastRunZoneId(int $userId): int
+    {
+        if ($userId < 1) {
+            return 0;
+        }
+        $row = Database::one(
+            'SELECT delivery_zone_id FROM kitchen_run_requests
+              WHERE user_id = :user AND delivery_zone_id IS NOT NULL
+              ORDER BY id DESC LIMIT 1',
+            [':user' => $userId]
+        );
+        return (int) ($row['delivery_zone_id'] ?? 0);
+    }
+
     /** Longest zone name and note the columns hold. */
     public const ZONE_NAME_MAX = 120;
     public const ZONE_NOTE_MAX = 255;
