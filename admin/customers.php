@@ -6,10 +6,13 @@
  * profile that gathers what the other modules already hold: addresses, orders,
  * payments, Kitchen Runs and, for a business, its credit facility.
  *
- * This screen reads. Every action links to the module that owns it, so an
- * order is cancelled on the order screen, a payment is recorded on the payment
- * screen and credit is granted on the credit screen, each with its own audit
- * trail. See docs/PRD.md Section 17.
+ * This screen mostly reads. Every action beyond its own contact details links
+ * to the module that owns it, so an order is cancelled on the order screen, a
+ * payment is recorded on the payment screen and credit is granted on the
+ * credit screen, each with its own audit trail. Correcting a customer's own
+ * name, email or phone is the one write this screen keeps for itself, behind
+ * customers.edit, because there is no other module to hand identity fields
+ * to. See docs/PRD.md Section 17.
  *
  * Permissions are layered the way admin/orders.php layers them: customers.view
  * opens the screen, and each protected block asks for its own seeded key.
@@ -26,6 +29,7 @@ $canSeeRuns      = Rbac::can('kitchen_runs.view');
 $canSeeOrders    = Rbac::can('orders.view');
 $canGrantCredit  = Rbac::can('credit.grant');
 $canCreate       = Rbac::can('customers.create');
+$canEdit         = Rbac::can('customers.edit');
 
 $filters = Customers::normaliseFilters([
     'search' => okv_input('search', ''),
@@ -78,7 +82,8 @@ $urlFor = static function (array $changes = []) use ($baseQuery): string {
 
 $paymentStates = ['unpaid' => 'Unpaid', 'part_paid' => 'Part paid', 'paid' => 'Paid'];
 
-$okv_admin_title = 'Customers';
+$okv_admin_title  = 'Customers';
+$okv_admin_script = $canEdit ? '/assets/js/admin-customers.js' : [];
 $okv_admin_note  = 'Households and businesses, their addresses, their orders and their credit.';
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
@@ -211,7 +216,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
         </div>
         <div class="okv-panel-body grid gap-4 sm:grid-cols-2">
           <div>
-            <p class="okv-label">Account holder</p>
+            <div class="flex items-center justify-between gap-2">
+              <p class="okv-label">Account holder</p>
+              <?php if ($canEdit): ?>
+                <button type="button" class="okv-btn-text" data-sheet-open="customer-edit-sheet">Edit</button>
+              <?php endif; ?>
+            </div>
             <p class="text-ink"><?= okv_e(trim(((string) $customer['first_name']) . ' ' . ((string) $customer['last_name']))) ?></p>
             <p class="text-sm text-ink-60"><?= okv_e((string) $customer['email']) ?></p>
             <p class="text-sm text-ink-60"><?= okv_e((string) $customer['phone']) ?></p>
@@ -245,6 +255,30 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <?php endif; ?>
         </div>
       </section>
+
+      <?php if ($canEdit): ?>
+        <div class="okv-sheet-backdrop" id="customer-edit-sheet" hidden>
+          <div class="okv-sheet" role="dialog" aria-modal="true" aria-labelledby="customer-edit-sheet-h" tabindex="-1">
+            <div class="flex items-center justify-between">
+              <h2 id="customer-edit-sheet-h" class="font-editorial text-okv-h6 text-ink">Edit contact details</h2>
+              <button type="button" class="okv-btn-text" data-sheet-close aria-label="Close">Close</button>
+            </div>
+            <form method="POST" action="/api/v1/customers.php" class="mt-4 grid gap-3" data-okv-json>
+              <?= Csrf::field() ?>
+              <input type="hidden" name="action" value="update">
+              <input type="hidden" name="customer_id" value="<?= (int) $customer['id'] ?>">
+              <div data-okv-error role="alert" aria-live="polite" class="rounded-md bg-tomato-tint text-tomato text-sm px-4 py-3" hidden></div>
+              <div class="grid sm:grid-cols-2 gap-3">
+                <div><label class="okv-label" for="ce_first">First name</label><input class="okv-input" id="ce_first" name="first_name" required maxlength="100" value="<?= okv_e((string) $customer['first_name']) ?>"></div>
+                <div><label class="okv-label" for="ce_last">Last name</label><input class="okv-input" id="ce_last" name="last_name" required maxlength="100" value="<?= okv_e((string) $customer['last_name']) ?>"></div>
+              </div>
+              <div><label class="okv-label" for="ce_phone">Phone</label><input class="okv-input" id="ce_phone" name="phone" type="tel" required value="<?= okv_e((string) $customer['phone']) ?>"></div>
+              <div><label class="okv-label" for="ce_email">Email</label><input class="okv-input" id="ce_email" name="email" type="email" placeholder="Leave blank if they have not given one" value="<?= StaffCustomers::isPlaceholderEmail((string) $customer['email']) ? '' : okv_e((string) $customer['email']) ?>"></div>
+              <button type="submit" class="okv-btn w-full">Save</button>
+            </form>
+          </div>
+        </div>
+      <?php endif; ?>
 
       <?php if ($canSeeAddresses): ?>
         <section class="okv-panel" aria-labelledby="customer-addresses-heading">

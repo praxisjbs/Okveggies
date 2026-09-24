@@ -211,6 +211,105 @@
     });
   }
 
+  /* ---------------------------------------------------- email change -------- */
+  // Three forms, one sheet, shown one at a time. There is no server-side
+  // session state for "step 1 passed": the new_email value is carried forward
+  // by copying it into the next form's hidden field, and verifying the
+  // current-email code is itself what sends the new-email code (see
+  // api/v1/account.php). Losing the sheet mid-flow just means starting over.
+
+  function wireEmailChange() {
+    var sheet = document.getElementById('email-change-sheet');
+    if (!sheet) { return; }
+    var stepRequest = sheet.querySelector('[data-okv-ec-request]');
+    var stepOld     = sheet.querySelector('[data-okv-ec-verify-old]');
+    var stepNew     = sheet.querySelector('[data-okv-ec-verify-new]');
+    var oldNotice   = stepOld ? stepOld.querySelector('[data-okv-ec-old-notice]') : null;
+    var newNotice   = stepNew ? stepNew.querySelector('[data-okv-ec-new-notice]') : null;
+    var steps = [stepRequest, stepOld, stepNew];
+
+    function showStep(step) {
+      steps.forEach(function (f) { if (f) { f.hidden = (f !== step); } });
+    }
+
+    function restart() {
+      steps.forEach(function (f) { if (f) { f.reset(); clearError(f); busy(f, false); } });
+      showStep(stepRequest);
+    }
+
+    document.querySelectorAll('[data-okv-open="email-change-sheet"]').forEach(function (btn) {
+      btn.addEventListener('click', restart);
+    });
+    sheet.querySelectorAll('[data-okv-ec-restart]').forEach(function (btn) {
+      btn.addEventListener('click', restart);
+    });
+
+    if (stepRequest) {
+      stepRequest.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearError(stepRequest); busy(stepRequest, true);
+        var newEmail = (stepRequest.querySelector('[name="new_email"]') || {}).value || '';
+        post(stepRequest.getAttribute('action'), formBody(stepRequest)).then(function (r) {
+          busy(stepRequest, false);
+          if (r.ok && r.data.status === 'ok') {
+            if (stepOld) { stepOld.querySelector('[name="new_email"]').value = newEmail; }
+            if (stepNew) { stepNew.querySelector('[name="new_email"]').value = newEmail; }
+            if (oldNotice) { oldNotice.textContent = r.data.message || 'Enter the code we sent to your current email.'; }
+            showStep(stepOld);
+            var input = stepOld ? stepOld.querySelector('input[name="code"]') : null;
+            if (input) { input.focus(); }
+            return;
+          }
+          setError(stepRequest, r.data.message || 'Something went wrong. Please try again.');
+        }).catch(function () {
+          setError(stepRequest, 'We could not reach the server. Check your connection and try again.');
+          busy(stepRequest, false);
+        });
+      });
+    }
+
+    if (stepOld) {
+      stepOld.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearError(stepOld); busy(stepOld, true);
+        post(stepOld.getAttribute('action'), formBody(stepOld)).then(function (r) {
+          busy(stepOld, false);
+          if (r.ok && r.data.status === 'ok') {
+            if (newNotice) { newNotice.textContent = r.data.message || 'Enter the code we sent to your new email.'; }
+            showStep(stepNew);
+            var input = stepNew ? stepNew.querySelector('input[name="code"]') : null;
+            if (input) { input.focus(); }
+            return;
+          }
+          setError(stepOld, r.data.message || 'Something went wrong. Please try again.');
+        }).catch(function () {
+          setError(stepOld, 'We could not reach the server. Check your connection and try again.');
+          busy(stepOld, false);
+        });
+      });
+    }
+
+    if (stepNew) {
+      stepNew.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearError(stepNew); busy(stepNew, true);
+        post(stepNew.getAttribute('action'), formBody(stepNew)).then(function (r) {
+          if (r.ok && r.data.status === 'ok') {
+            closeSheet(sheet);
+            OKV.toast(r.data.message || 'Your email is changed.', 'ok');
+            setTimeout(function () { window.location.reload(); }, 400);
+            return;
+          }
+          busy(stepNew, false);
+          setError(stepNew, r.data.message || 'Something went wrong. Please try again.');
+        }).catch(function () {
+          setError(stepNew, 'We could not reach the server. Check your connection and try again.');
+          busy(stepNew, false);
+        });
+      });
+    }
+  }
+
   /* ------------------------------------------------------- addresses -------- */
 
   function wireAddresses() {
@@ -430,6 +529,7 @@
     wireBusinessToggle();
     wireSheets();
     wireAjaxForms();
+    wireEmailChange();
     wireAddresses();
     wireActivate();
     wireReset();

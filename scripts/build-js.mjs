@@ -33,6 +33,7 @@ const sources = [
   'assets/js/faq.js',
   'assets/js/notifications.js',
   'assets/js/admin-customer-picker.js',
+  'assets/js/admin-customers.js',
   'assets/js/admin-order-new.js',
   'assets/js/admin-run-new.js',
 ].filter(existsSync);

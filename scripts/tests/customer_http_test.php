@@ -10,6 +10,9 @@
  *   - a duplicate registration is refused without leaking anything
  *   - sign in by email and by phone in several shapes, and land in the right place
  *   - activate with a one-time code, and prove the same code cannot be reused
+ *   - change email with the two-code flow: authorize from the old address,
+ *     confirm on the new one, and refuse before either code is spent when the
+ *     new address is already somebody else's
  *   - reset a password by code, and prove the new password works and the old does not
  *
  *   php scripts/tests/customer_http_test.php
@@ -457,6 +460,45 @@ try {
     t_eq(200, $code, 're-posting after activation is idempotent, not an error');
     t_ok(($res['activated'] ?? false) === true, 'the account stays active on a repeat verify');
 
+    // ---- 6b. Email change, two codes over the real route -------------------
+    // jarHH is still signed in. As with activation above, each code is minted
+    // directly rather than read back from the email that carries it (Otp
+    // stores only a hash), which is also what lets this test skip the mail
+    // step for the request and old-code actions: minting the code again
+    // immediately after replaces whatever the controller just sent, the same
+    // way a resend would, so the test always knows the current plaintext.
+    $hhNewEmail = 'httptest-hh-new@okveggies.com.ng';
+
+    [$code, $res] = http('POST', '/api/v1/account.php', ['action' => 'request_email_change', 'okv_csrf' => token($jarHH), 'new_email' => $hhNewEmail], $jarHH);
+    t_eq(200, $code, 'step 1: a code is sent to the current email to authorize the change');
+    t_eq('verify_old', $res['step'] ?? '', 'the response names the next step');
+
+    [$code, $res] = http('POST', '/api/v1/account.php', ['action' => 'request_email_change', 'okv_csrf' => token($jarHH), 'new_email' => $bizEmail], $jarHH);
+    t_eq(409, $code, 'asking to move onto an email another account already holds is refused before any code is sent');
+    t_eq('email_taken', $res['code'] ?? '', 'and the refusal names the field');
+
+    $oldStepCode = Otp::issue($hhEmail, 'email', 'email_change_authorize', (int) $hh['id']);
+    [$code, $res] = http('POST', '/api/v1/account.php', ['action' => 'verify_email_change_old', 'okv_csrf' => token($jarHH), 'new_email' => $hhNewEmail, 'code' => '000000'], $jarHH);
+    t_eq(422, $code, 'the wrong code at step 1 is refused');
+    t_eq('bad_code', $res['code'] ?? '', 'with a code the settings sheet can act on');
+
+    [$code, $res] = http('POST', '/api/v1/account.php', ['action' => 'verify_email_change_old', 'okv_csrf' => token($jarHH), 'new_email' => $hhNewEmail, 'code' => $oldStepCode], $jarHH);
+    t_eq(200, $code, 'step 2: the current-email code is accepted and a second code goes to the new address');
+    t_eq('verify_new', $res['step'] ?? '', 'the response names the final step');
+
+    $newStepCode = Otp::issue($hhNewEmail, 'email', 'email_change_confirm', (int) $hh['id']);
+    [$code, $res] = http('POST', '/api/v1/account.php', ['action' => 'verify_email_change_new', 'okv_csrf' => token($jarHH), 'new_email' => $hhNewEmail, 'code' => $newStepCode], $jarHH);
+    t_eq(200, $code, 'step 3: the new-email code finishes the change');
+    t_eq($hhNewEmail, $res['email'] ?? '', 'the response carries the email now on the account');
+
+    $afterEmailChange = Database::one('SELECT email, email_verified_at FROM users WHERE id = :id', [':id' => (int) $hh['id']]);
+    t_eq($hhNewEmail, (string) $afterEmailChange['email'], 'the new address is saved');
+    t_ok($afterEmailChange['email_verified_at'] !== null, 'and counts as verified: the code they entered just proved it');
+
+    // Put the address back the way section 7 below expects it. This is test
+    // state only: the real flow has no reason to ever revert a change.
+    Database::run('UPDATE users SET email = :e WHERE id = :id', [':e' => $hhEmail, ':id' => (int) $hh['id']]);
+
     // ---- 7. Password reset by code ----------------------------------------
     $jarReset = tempnam($jarDir, 'okvrs');
     [$code, $res] = http('POST', '/api/v1/auth.php', ['action' => 'forgot_password', 'okv_csrf' => token($jarReset), 'email' => $hhEmail], $jarReset);
@@ -475,7 +517,7 @@ try {
     t_eq(401, $code, 'the old password no longer works');
 
 } finally {
-    $cleanup($pdo, [$hhEmail, $bizEmail]);
+    $cleanup($pdo, [$hhEmail, $bizEmail, $hhNewEmail ?? 'httptest-hh-new@okveggies.com.ng']);
     proc_terminate($server);
 }
 

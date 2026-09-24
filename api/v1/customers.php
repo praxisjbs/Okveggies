@@ -15,6 +15,9 @@
  *   create  The light account a first-time caller needs. Somebody is on the
  *           phone, they have never bought from us, and their order has to
  *           belong to somebody.
+ *   update  Correct an existing customer's name, email or phone. Gated on
+ *           customers.edit, separate from customers.create, so a colleague can
+ *           be trusted to fix a typo without being trusted to open new accounts.
  *
  * Orders, payments, Kitchen Runs and credit are still written by the modules
  * that own them, each with its own permission and audit trail. The rest of the
@@ -149,11 +152,19 @@ if ($action === 'create') {
         ]);
         $userId = StaffCustomers::create($clean, $staffId);
     } catch (DomainException $e) {
+        $code = $e->getMessage();
         if (!customers_is_fetch()) {
             $back = customers_return_to('/admin/order_new.php');
-            okv_redirect($back . (str_contains($back, '?') ? '&' : '?') . 'error=' . rawurlencode($e->getMessage()), 303);
+            okv_redirect($back . (str_contains($back, '?') ? '&' : '?') . 'error=' . rawurlencode($code), 303);
         }
-        okv_error(StaffCustomers::message($e->getMessage()), 422, $e->getMessage());
+        // A conflict (somebody already holds this email or phone) is a 409;
+        // a bad or missing field is a 422. The two were both answering 422
+        // before, which is what every other identity-guarded path in the app
+        // does not do (registration and the profile edit both use 409 for a
+        // conflict), so a fetch caller could not tell "fix your typing" apart
+        // from "search for them instead" without reading the message.
+        $status = in_array($code, ['email_taken', 'phone_taken', 'customer_exists'], true) ? 409 : 422;
+        okv_error(StaffCustomers::message($code), $status, $code);
     } catch (Throwable $e) {
         error_log('customers.create failed: ' . $e->getMessage());
         if (!customers_is_fetch()) {
@@ -184,6 +195,49 @@ if ($action === 'create') {
             'orders'        => 0,
         ],
     ], 201);
+}
+
+// -----------------------------------------------------------------------------
+// Correct an existing customer's contact details. Fetch only: this screen has
+// no plain-form fallback for it, the same as every other write on this page
+// except create.
+// -----------------------------------------------------------------------------
+if ($action === 'update') {
+    Rbac::requirePermission('customers.edit');
+
+    $staffId    = (int) Rbac::userId();
+    $customerId = (int) okv_input('customer_id', 0);
+
+    try {
+        $clean = StaffCustomers::validateContactUpdate([
+            'first_name' => okv_input('first_name', ''),
+            'last_name'  => okv_input('last_name', ''),
+            'email'      => okv_input('email', ''),
+            'phone'      => okv_input('phone', ''),
+        ]);
+        StaffCustomers::update($customerId, $clean, $staffId);
+    } catch (DomainException $e) {
+        $code = $e->getMessage();
+        $status = in_array($code, ['email_taken', 'phone_taken', 'customer_exists'], true)
+            ? 409
+            : ($code === 'not_found' ? 404 : 422);
+        okv_error(StaffCustomers::message($code), $status, $code);
+    } catch (Throwable $e) {
+        error_log('customers.update failed: ' . $e->getMessage());
+        okv_error('We could not save these details. Please try again.', 500, 'failed');
+    }
+
+    okv_json([
+        'status'   => 'ok',
+        'message'  => 'Customer details saved.',
+        'customer' => [
+            'id'            => $customerId,
+            'name'          => trim($clean['first_name'] . ' ' . $clean['last_name']),
+            'phone'         => $clean['phone'],
+            'phone_display' => Phone::display($clean['phone']),
+            'email'         => StaffCustomers::isPlaceholderEmail($clean['email']) ? '' : $clean['email'],
+        ],
+    ]);
 }
 
 okv_error('That action is not available.', 400, 'unknown_action');

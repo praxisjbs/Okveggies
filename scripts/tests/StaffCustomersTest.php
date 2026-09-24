@@ -129,3 +129,42 @@ okv_test_ok(
     !str_contains(StaffCustomers::message('customer_exists'), 'Sign in'),
     'a back office refusal never tells a signed-in colleague to sign in'
 );
+
+// ---------------------------------------------------------------------------
+// 5. What the edit-contact form has to carry. Same rules as validateNew's
+//    name, phone and email; no customer_type, because that is not edited here.
+// ---------------------------------------------------------------------------
+
+$editClean = StaffCustomers::validateContactUpdate([
+    'first_name' => '  Adaeze ',
+    'last_name'  => 'Okafor',
+    'phone'      => '08031234567',
+    'email'      => 'Adaeze.O@Example.COM',
+]);
+okv_test_eq('Adaeze', $editClean['first_name'], 'edit: the name is trimmed');
+okv_test_eq('+2348031234567', $editClean['phone'], 'edit: the phone lands on the same canonical form');
+okv_test_eq('adaeze.o@example.com', $editClean['email'], 'edit: a mixed case address is lower cased, same as everywhere else');
+okv_test_ok(!array_key_exists('customer_type', $editClean), 'edit: account type is not part of this form, so it cannot be changed by it');
+
+$editNoEmail = StaffCustomers::validateContactUpdate([
+    'first_name' => 'Chidi', 'last_name' => 'Eze', 'phone' => '0803 123 4568', 'email' => '',
+]);
+okv_test_ok(
+    StaffCustomers::isPlaceholderEmail($editNoEmail['email']),
+    'edit: clearing the email falls back to a placeholder, the same as a fresh account with none'
+);
+
+$refusesEdit = static function (array $input, string $code, string $label): void {
+    try {
+        StaffCustomers::validateContactUpdate($input);
+        okv_test_ok(false, $label . ' (nothing was refused)');
+    } catch (DomainException $e) {
+        okv_test_eq($code, $e->getMessage(), $label);
+    }
+};
+$refusesEdit(['last_name' => 'Eze', 'phone' => '08031234567'], 'name_required', 'edit: a customer with no first name is refused');
+$refusesEdit(['first_name' => 'Chidi', 'phone' => '08031234567'], 'name_required', 'edit: a customer with no last name is refused');
+$refusesEdit(['first_name' => 'Chidi', 'last_name' => 'Eze', 'phone' => 'not a number'], 'bad_phone', 'edit: a phone number that is not one is refused');
+$refusesEdit(['first_name' => 'Chidi', 'last_name' => 'Eze', 'phone' => '08031234567', 'email' => 'not-an-address'], 'bad_email', 'edit: a typed address that is not an address is refused rather than quietly replaced');
+
+okv_test_ok(!str_contains(StaffCustomers::message('not_found'), '_'), 'the not_found refusal reads as a sentence too');
