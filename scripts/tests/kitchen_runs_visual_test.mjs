@@ -231,7 +231,12 @@ try {
     await page.fill('#kr-city', 'Lagos');
     await page.fill('#kr-state', 'Lagos');
     if (await page.locator('[data-kr-day]').count() > 0) { await page.locator('[data-kr-day]').first().click(); }
-    if (await page.locator('[data-kr-zone-btn]').count() > 0) { await page.locator('[data-kr-zone-btn]').first().click(); }
+    // The area is the shared searchable picker, with no default: open it and
+    // pick the first area the database lists, by keyboard.
+    await page.locator('#kr-zone-search').click();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    ok(await page.$eval('#kr-zone', (el) => el.value !== ''), `${viewport.name}: an area is chosen from the searchable picker`);
 
     await page.locator('button[type="submit"]').click();
     await page.waitForURL(/request=\d+&submitted=1/, { timeout: 20000 });
@@ -266,6 +271,9 @@ try {
       await noJsRow.locator('[data-kr-name]').fill('Stock fish');
       await noJsRow.locator('[data-kr-qty]').fill('2');
       await noJsRow.locator('[data-kr-unit]').selectOption({ index: 1 });
+      // With JavaScript off the area is the plain select, which never
+      // defaults: pick one the way a person would.
+      await noJs.selectOption('#kr-zone', { index: 1 });
       await noJs.locator('button[type="submit"]').click();
       await noJs.waitForURL(/request=\d+&submitted=1/, { timeout: 20000 });
       ok(noJs.url().includes('submitted=1'), `${viewport.name}: a typed list sends with no JavaScript at all`);
@@ -290,6 +298,7 @@ try {
       await noJsOffRow.locator('[data-kr-name]').fill('Stock fish');
       await noJsOffRow.locator('[data-kr-qty]').fill('2');
       await noJsOffRow.locator('[data-kr-unit]').selectOption({ index: 1 });
+      await noJs.selectOption('#kr-zone', { index: 1 });
       await noJs.locator('button[type="submit"]').click();
       await noJs.waitForURL(/request=\d+&submitted=1/, { timeout: 20000 });
       ok(noJs.url().includes('submitted=1'), `${viewport.name}: a mixed shop-and-typed list sends with no JavaScript at all`);

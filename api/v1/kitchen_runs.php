@@ -118,6 +118,19 @@ $adminUrl    = '/admin/kitchen_runs.php' . ($requestId > 0 ? '?request=' . $requ
 // staff_submit has no request yet, so a refusal goes back to the form that was
 // being filled in rather than to a request page that does not exist.
 $newRunUrl   = '/admin/kitchen_run_new.php' . ((int) okv_input('user_id', 0) > 0 ? '?user_id=' . (int) okv_input('user_id', 0) : '');
+// A plain form post that is refused goes back with the area that was chosen,
+// as a bare integer and nothing else, so the picker reopens on it. The page
+// only prefills it while the zone is still active; the id is never trusted
+// beyond that, and the write path checks it again.
+$postedZone = in_array($action, ['submit', 'staff_submit', 'quote'], true)
+    ? Delivery::zoneIdFrom(okv_input('delivery_zone_id', ''))
+    : 0;
+if ($postedZone > 0) {
+    $zoneParam   = 'zone=' . $postedZone;
+    $customerUrl .= (str_contains($customerUrl, '?') ? '&' : '?') . $zoneParam;
+    $adminUrl    .= (str_contains($adminUrl, '?') ? '&' : '?') . $zoneParam;
+    $newRunUrl   .= (str_contains($newRunUrl, '?') ? '&' : '?') . $zoneParam;
+}
 $backTo      = $action === 'staff_submit'
     ? $newRunUrl
     : (in_array($action, ['quote', 'decline', 'convert', 'staff_approve', 'save_note'], true) ? $adminUrl : $customerUrl);

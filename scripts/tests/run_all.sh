@@ -95,10 +95,12 @@ if [ ! -d node_modules/playwright ]; then
   skip "axe_suite.mjs" "playwright not installed (npm install)"
   skip "kitchen_runs_visual_test.mjs" "playwright not installed (npm install)"
   skip "motion_visual_test.mjs" "playwright not installed (npm install)"
+  skip "zone_picker_visual_test.mjs" "playwright not installed (npm install)"
 elif ! curl -fsS -o /dev/null --max-time 5 "$BASE/index.php" 2>/dev/null; then
   skip "visual_pass.mjs" "nothing answering on $BASE"
   skip "axe_suite.mjs" "nothing answering on $BASE"
   skip "kitchen_runs_visual_test.mjs" "nothing answering on $BASE"
+  run "zone_picker_visual_test.mjs" node scripts/tests/zone_picker_visual_test.mjs
   run "motion_visual_test.mjs" node scripts/tests/motion_visual_test.mjs
 else
   run "visual_pass.mjs" node scripts/tests/visual_pass.mjs
@@ -108,6 +110,7 @@ else
   run "public_content_visual_test.mjs" php scripts/tests/public_content_visual_fixture.php
   run "role_journeys.mjs" node scripts/tests/role_journeys.mjs
   run "kitchen_runs_visual_test.mjs" node scripts/tests/kitchen_runs_visual_test.mjs
+  run "zone_picker_visual_test.mjs" node scripts/tests/zone_picker_visual_test.mjs
   run "motion_visual_test.mjs" node scripts/tests/motion_visual_test.mjs
 fi
 
@@ -117,6 +120,7 @@ run "brand-check.sh" bash scripts/brand-check.sh
 run "motion_coverage_test.mjs" node scripts/tests/motion_coverage_test.mjs
 run "lesser_text_test.mjs" node scripts/tests/lesser_text_test.mjs
 run "image_contract_test.mjs" node scripts/tests/image_contract_test.mjs
+run "zone_picker_test.mjs" node scripts/tests/zone_picker_test.mjs
 
 echo
 echo "-------------------------------------------------------------"

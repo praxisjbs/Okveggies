@@ -24,7 +24,6 @@
   var modeInput = form.querySelector('[data-kr-input-mode]');
   var pricingInput = form.querySelector('[data-kr-pricing-mode]');
   var dateInput = form.querySelector('[data-kr-date]');
-  var zoneInput = form.querySelector('[data-kr-zone]');
   var shopHost = form.querySelector('[data-kr-shop-rows]');
   var shopSection = form.querySelector('[data-kr-section-shop]');
   var addShopBtn = form.querySelector('[data-kr-shop-add]');
@@ -524,7 +523,7 @@
     });
   });
 
-  // --- Open budget, days, areas, help -----------------------------------------
+  // --- Open budget, days, help -----------------------------------------
 
   if (openBudget && capField) {
     var syncCap = function () {
@@ -547,18 +546,8 @@
       btn.classList.add('border-forest', 'bg-forest', 'text-white');
     });
   });
-  form.querySelectorAll('[data-kr-zone-btn]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var z = btn.getAttribute('data-kr-zone-btn');
-      if (zoneInput) zoneInput.value = z;
-      form.querySelectorAll('[data-kr-zone-btn]').forEach(function (b) {
-        b.classList.remove('border-forest', 'bg-forest', 'text-white');
-        b.classList.add('border-ink-10', 'bg-white');
-      });
-      btn.classList.remove('border-ink-10', 'bg-white');
-      btn.classList.add('border-forest', 'bg-forest', 'text-white');
-    });
-  });
+  // The area is the shared searchable picker (assets/js/zone-picker.js). It
+  // owns its own required check, which runs before the send below.
 
   form.querySelectorAll('[data-kr-help]').forEach(function (btn) {
     btn.addEventListener('click', function () { showHelp(btn.getAttribute('data-kr-help')); });

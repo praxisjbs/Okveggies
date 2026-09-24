@@ -51,6 +51,17 @@ $value = static function (string $key, string $fallback = '') use ($savedCustome
 };
 
 $zones   = Delivery::zonesActive();
+// The area the picker opens on: the one saved in this checkout, then the one
+// on the customer's last order. Only a zone that is still active is ever
+// prefilled; one switched off since is named in a notice instead.
+$savedZoneId  = Delivery::zoneIdFrom($savedDelivery['delivery_zone_id'] ?? 0);
+$chosenZoneId = Delivery::preferredZoneId($zones, [
+    $savedZoneId,
+    Customer::isLoggedIn() ? Delivery::lastOrderZoneId((int) Customer::id()) : 0,
+]);
+$staleZoneName = $savedZoneId > 0 && $chosenZoneId !== $savedZoneId
+    ? (string) (Delivery::zoneNameById($savedZoneId) ?? '')
+    : '';
 $payment = (string) ($bag['payment']['payment_option'] ?? 'pay_in_full');
 $deposit = Money::deposit((int) $basket['subtotal_subunit'], Settings::depositPercentage());
 $depositPercent = rtrim(rtrim(number_format(Settings::depositPercentage(), 2), '0'), '.');
@@ -240,16 +251,12 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
             <input type="hidden" name="step" value="delivery">
             <div><?php okv_delivery_picker($customerType, 'delivery_date', (string) ($savedDelivery['delivery_date'] ?? '')); ?></div>
             <div>
-              <label class="okv-label" for="delivery_zone_id">Delivery area</label>
-              <div class="relative">
-                <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-forest"><?php okv_icon('map-pin', 'h-5 w-5'); ?></span>
-                <select class="okv-input min-h-[56px] pl-12" id="delivery_zone_id" name="delivery_zone_id" required>
-                  <option value="">Choose your area</option>
-                  <?php foreach ($zones as $zone): ?>
-                    <option value="<?= (int) $zone['id'] ?>" <?= (int) ($savedDelivery['delivery_zone_id'] ?? 0) === (int) $zone['id'] ? 'selected' : '' ?>><?= okv_e($zone['name']) ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
+              <?php okv_zone_picker($zones, [
+                  'selected'   => $chosenZoneId,
+                  'stale_name' => $staleZoneName,
+                  'icon'       => 'map-pin',
+                  'large'      => true,
+              ]); ?>
             </div>
             <div class="flex items-start gap-3 rounded-xl bg-clay-tint p-4">
               <span class="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-white text-clay-ink"><?php okv_icon('info', 'h-4 w-4'); ?></span>
@@ -500,5 +507,6 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
 <?php okv_shop_footer(); ?>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
 <script src="<?= okv_e(okv_asset('/assets/js/checkout.min.js')) ?>" defer></script>
+<script src="<?= okv_e(okv_asset('/assets/js/zone-picker.min.js')) ?>" defer></script>
 </body>
 </html>

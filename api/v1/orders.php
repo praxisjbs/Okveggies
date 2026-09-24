@@ -244,7 +244,19 @@ if ($action === 'create') {
         if (orders_is_fetch()) {
             okv_error(ManualOrder::message($code), 422, $code);
         }
-        okv_redirect('/admin/order_new.php?error=' . rawurlencode($code), 303);
+        // Back to the same customer with the area that was chosen, both as
+        // bare integers, so a colleague on the phone does not start again.
+        // The page re-checks the zone is active before it prefills it.
+        $back = ['error' => $code];
+        $backUser = (int) okv_input('user_id', 0);
+        $backZone = Delivery::zoneIdFrom(okv_input('delivery_zone_id', ''));
+        if ($backUser > 0) {
+            $back['user_id'] = $backUser;
+        }
+        if ($backZone > 0) {
+            $back['zone'] = $backZone;
+        }
+        okv_redirect('/admin/order_new.php?' . http_build_query($back), 303);
     } catch (Throwable $e) {
         // Never the exception text. The colleague gets a sentence, the log gets
         // the detail.

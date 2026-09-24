@@ -257,14 +257,23 @@ $creditRefusal  = (string) $request['customer_type'] === 'business'
           <?php endif; ?>
         </div>
         <div>
-          <label class="okv-label" for="delivery_zone_id">Delivery area</label>
-          <select class="okv-input" id="delivery_zone_id" name="delivery_zone_id" required>
-            <?php foreach ($zones as $zone): ?>
-              <option value="<?= (int) $zone['id'] ?>" <?= (int) $request['delivery_zone_id'] === (int) $zone['id'] ? 'selected' : '' ?>>
-                <?= okv_e($zone['name']) ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
+          <?php
+          // The area the customer asked for, or the one a colleague had just
+          // chosen when a save came back refused. A zone switched off since
+          // is not quietly swapped for the first one on the list: the picker
+          // opens empty and says which area needs replacing.
+          $runZoneId     = (int) ($request['delivery_zone_id'] ?? 0);
+          $panelZoneId   = Delivery::preferredZoneId($zones, [okv_input('zone', 0), $runZoneId]);
+          $panelZoneGone = $runZoneId > 0 && $panelZoneId === 0
+              ? (string) ($request['zone_name'] ?? '')
+              : '';
+          okv_zone_picker($zones, [
+              'selected'    => $panelZoneId,
+              'stale_name'  => $panelZoneGone,
+              'placeholder' => 'Choose the area',
+              'empty_text'  => 'No area is active. Add one on the Delivery screen first.',
+          ]);
+          ?>
         </div>
       </div>
 
