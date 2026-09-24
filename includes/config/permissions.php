@@ -22,6 +22,8 @@ $OKV_PERMISSIONS = [
         'orders.update'                => 'Edit an order',
         'orders.status.update'         => 'Move an order through its stages',
         'orders.cancel'                => 'Cancel an order',
+        'orders.reschedule'            => 'Reschedule an order delivery date',
+        'orders.create'                => 'Create an order by hand',
     ],
     'products' => [
         'products.view'                => 'View products',

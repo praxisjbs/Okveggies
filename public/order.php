@@ -75,6 +75,9 @@ $publicTrail = $token !== '';
 $cancellation = ($publicTrail || Customer::id() === null)
     ? null
     : OrderCancellation::forCustomer((int) $order['id'], (int) Customer::id());
+$reschedule = ($publicTrail || Customer::id() === null)
+    ? null
+    : OrderReschedule::forCustomer((int) $order['id'], (int) Customer::id());
 $issueState = ($publicTrail || Customer::id() === null)
     ? null
     : IssueReports::stateForCustomer((int) $order['id'], (int) Customer::id());
@@ -130,6 +133,7 @@ $paymentNotices = [
 ];
 $paymentNotice = $paymentNotices[$paymentFlag] ?? null;
 $cancellationFlag = (string) okv_input('cancellation', '');
+$rescheduleFlag = (string) okv_input('reschedule', '');
 
 $pageTitle = 'Order ' . $order['order_number'] . '. OK Veggies';
 $publicStatus = [
@@ -178,6 +182,14 @@ $publicStatus = [
       <?= $cancellationFlag === 'already_cancelled'
           ? 'This order was already cancelled. No second cancellation was made.'
           : 'Your order has been cancelled.' ?>
+    </p>
+  <?php endif; ?>
+
+  <?php if ($rescheduleFlag !== ''): ?>
+    <p class="mt-4 rounded-xl border border-foliage bg-foliage-tint px-4 py-3 text-sm text-ink" role="status">
+      <?= $rescheduleFlag === 'already_rescheduled'
+          ? 'This order is already set for that delivery day. No change was made.'
+          : 'Your delivery day has been moved.' ?>
     </p>
   <?php endif; ?>
 
@@ -310,6 +322,71 @@ $publicStatus = [
           <p class="okv-note mt-3 bg-clay-tint"><?= okv_e($cancellation['terms_line']) ?></p>
         <?php endif; ?>
         <a href="https://wa.me/<?= okv_e($supportNumber) ?>?text=<?= okv_e($supportText) ?>" class="okv-btn-outline mt-4 min-h-[44px]" rel="noopener">Ask us on WhatsApp</a>
+      <?php endif; ?>
+    </section>
+  <?php endif; ?>
+
+  <?php if (!$publicTrail && $reschedule): ?>
+    <section class="okv-card mt-6" aria-labelledby="reschedule-heading">
+      <h2 id="reschedule-heading" class="font-display text-xl font-bold text-ink">Delivery date</h2>
+      <p class="mt-2 text-sm text-ink-60"><?= okv_e($reschedule['policy_line']) ?></p>
+
+      <?php if (!empty($reschedule['history'])): ?>
+        <div class="mt-4 space-y-2" aria-labelledby="reschedule-history-heading">
+          <h3 id="reschedule-history-heading" class="font-semibold text-ink">Past moves</h3>
+          <ul class="space-y-2">
+            <?php foreach ($reschedule['history'] as $row): ?>
+              <li class="rounded-md border border-mist bg-forest-tint px-3 py-2 text-sm">
+                <span class="font-semibold"><?= okv_e(date('j M Y', strtotime((string) $row['old_delivery_date']))) ?></span>
+                <span aria-hidden="true"> → </span>
+                <span class="font-semibold"><?= okv_e(date('j M Y', strtotime((string) $row['new_delivery_date']))) ?></span>
+                <span class="text-ink-60"> on <?= okv_e(date('j M Y, H:i', strtotime((string) $row['created_at']))) ?></span>
+                <?php if (!empty($row['reason'])): ?>
+                  <span class="block text-ink-60"><?= okv_e(mb_substr((string) $row['reason'], 0, 200)) ?></span>
+                <?php endif; ?>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+      <?php endif; ?>
+
+      <?php if ($reschedule['may_reschedule']): ?>
+        <details class="mt-4 rounded-md border border-mist p-4">
+          <summary class="flex min-h-[44px] cursor-pointer items-center font-semibold text-forest">Move delivery to another day</summary>
+          <form action="/api/v1/orders.php" method="POST" class="mt-4 space-y-4">
+            <?= Csrf::field() ?>
+            <input type="hidden" name="action" value="reschedule_customer">
+            <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+            <input type="hidden" name="expected_delivery_date" value="<?= okv_e((string) $order['preferred_delivery_date']) ?>">
+            <div>
+              <label for="customer-reschedule-date" class="okv-label">New delivery day</label>
+              <?php if (!empty($reschedule['eligible_dates'])): ?>
+                <select id="customer-reschedule-date" name="new_delivery_date" class="okv-input" required>
+                  <option value="">Choose a day</option>
+                  <?php foreach ($reschedule['eligible_dates'] as $d): ?>
+                    <option value="<?= okv_e($d['date']) ?>"><?= okv_e(date('l jS F', strtotime($d['date']))) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              <?php else: ?>
+                <p class="rounded-md border border-mist bg-white px-4 py-3 text-sm text-ink-60">No other delivery days are open right now. Please check back or message support.</p>
+                <input type="hidden" name="new_delivery_date" value="">
+              <?php endif; ?>
+            </div>
+            <div>
+              <label for="customer-reschedule-note" class="okv-label">Reason, optional</label>
+              <textarea id="customer-reschedule-note" name="reason_text" class="okv-input" rows="2" maxlength="500" placeholder="Why you need a new day"></textarea>
+            </div>
+            <label class="flex min-h-[44px] items-start gap-3 text-sm">
+              <input type="checkbox" name="confirmed" value="1" class="mt-1 h-5 w-5" required>
+              <span>I understand my delivery will move to the day I chose and my order total stays the same.</span>
+            </label>
+            <button type="submit" class="okv-btn min-h-[44px]">Move delivery</button>
+          </form>
+        </details>
+      <?php else: ?>
+        <?php if (!empty($reschedule['restriction'])): ?>
+          <p class="mt-3 text-sm text-ink-60"><?= okv_e($reschedule['restriction']) ?></p>
+        <?php endif; ?>
       <?php endif; ?>
     </section>
   <?php endif; ?>

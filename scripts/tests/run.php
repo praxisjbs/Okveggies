@@ -71,6 +71,7 @@ require_once $appRoot . '/includes/classes/IssueReports.php';
 require_once $appRoot . '/includes/classes/Refunds.php';
 require_once $appRoot . '/includes/classes/Cancellation.php';
 require_once $appRoot . '/includes/classes/OrderCancellation.php';
+require_once $appRoot . '/includes/classes/OrderReschedule.php';
 require_once $appRoot . '/includes/classes/OrderLifecycle.php';
 require_once $appRoot . '/includes/classes/DeliveryManifest.php';
 require_once $appRoot . '/includes/classes/Notifications.php';

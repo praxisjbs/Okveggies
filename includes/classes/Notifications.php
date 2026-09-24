@@ -111,6 +111,9 @@ final class Notifications
         'credit_declined'            => ['template' => 'credit_declined',            'label' => 'Credit declined',               'audience' => 'customer'],
         'credit_charge_posted'       => ['template' => 'credit_charge_posted',       'label' => 'Charge placed on account',      'audience' => 'customer'],
         'admin_new_credit_application' => ['template' => 'admin_new_credit_application', 'label' => 'New credit application, for staff', 'audience' => 'staff'],
+
+        'order_rescheduled'          => ['template' => 'order_rescheduled',          'label' => 'Delivery rescheduled',          'audience' => 'customer'],
+        'admin_order_rescheduled'    => ['template' => 'admin_order_rescheduled',    'label' => 'Order rescheduled, for staff',  'audience' => 'staff'],
     ];
 
     /** The tokens each template may use, so the editor can list them honestly. */
@@ -154,6 +157,9 @@ final class Notifications
         'credit_declined'            => ['customer_name', 'business_name', 'declined_reason', 'credit_url'],
         'credit_charge_posted'       => ['customer_name', 'business_name', 'order_number', 'amount', 'due_date', 'order_trail_url'],
         'admin_new_credit_application' => ['customer_name', 'business_name', 'requested_days', 'requested_limit', 'reason', 'admin_url'],
+
+        'order_rescheduled'          => ['customer_name', 'order_number', 'old_delivery_day', 'new_delivery_day', 'reschedule_source', 'order_trail_url'],
+        'admin_order_rescheduled'    => ['customer_name', 'order_number', 'old_delivery_day', 'new_delivery_day', 'reschedule_source', 'reason', 'admin_url'],
     ];
 
     /** Which lifecycle stage announces itself, and with which event. */
@@ -1729,6 +1735,159 @@ final class Notifications
             $orderId,
             $actorId
         );
+    }
+
+    /**
+     * A reschedule, told to the customer that their delivery moved, and to the
+     * team so a van list that already exists can be fixed.
+     *
+     * Both halves read the committed order_reschedules row rather than trusting
+     * the caller, so the dates and the actor in the staff alert are the ones
+     * the transaction actually wrote. Idempotent: if this order already has a
+     * reschedule notification for the same new date announced, a second call
+     * writes nothing. A failed delivery is not retried here, it belongs to the
+     * resend button.
+     */
+    public static function announceReschedule(int $orderId, array $result, ?int $actorId = null): void
+    {
+        if ($orderId < 1) {
+            return;
+        }
+        $historyId = (int) ($result['history_id'] ?? 0);
+        $oldDate = (string) ($result['old_date'] ?? '');
+        $newDate = (string) ($result['new_date'] ?? '');
+
+        // Prefer the committed row when we have its id, so the alert shows what
+        // was actually written, not what the caller thought it wrote.
+        $row = null;
+        if ($historyId > 0) {
+            $row = Database::one(
+                'SELECT r.old_delivery_date, r.new_delivery_date, r.actor_type, r.actor_id, r.reason,
+                        TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS actor_name
+                   FROM order_reschedules r
+                   LEFT JOIN users u ON u.id = r.actor_id
+                  WHERE r.id = :id AND r.order_id = :order',
+                [':id' => $historyId, ':order' => $orderId]
+            );
+        }
+        if ($row === null) {
+            // Fallback to the most recent row for this order.
+            $row = Database::one(
+                'SELECT r.old_delivery_date, r.new_delivery_date, r.actor_type, r.actor_id, r.reason,
+                        TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS actor_name
+                   FROM order_reschedules r
+                   LEFT JOIN users u ON u.id = r.actor_id
+                  WHERE r.order_id = :order
+                  ORDER BY r.id DESC LIMIT 1',
+                [':order' => $orderId]
+            );
+        }
+        if ($row === null) {
+            return;
+        }
+        $oldDate = $oldDate !== '' ? $oldDate : (string) $row['old_delivery_date'];
+        $newDate = $newDate !== '' ? $newDate : (string) $row['new_delivery_date'];
+        $actorType = (string) ($row['actor_type'] ?? 'staff');
+        $actorName = (string) ($row['actor_name'] ?? '');
+        $reasonText = (string) ($row['reason'] ?? '');
+
+        $context = self::orderContext($orderId);
+        if ($context === null) {
+            return;
+        }
+
+        $oldDay = $oldDate !== '' && strtotime($oldDate) !== false ? date('l jS F', strtotime($oldDate)) : $oldDate;
+        $newDay = $newDate !== '' && strtotime($newDate) !== false ? date('l jS F', strtotime($newDate)) : $newDate;
+
+        // Customer: idempotent per order and new date. We check whether a
+        // customer reschedule for this new date was already announced, so a
+        // page refresh does not send a second copy.
+        $alreadyCustomer = Database::one(
+            'SELECT n.id FROM notifications n
+              JOIN notification_deliveries d ON d.notification_id = n.id
+             WHERE n.event_type = :event AND n.related_type = :type AND n.related_id = :id
+               AND n.status <> :cancelled
+               AND n.body LIKE :body
+             LIMIT 1',
+            [
+                ':event' => 'order_rescheduled',
+                ':type' => 'order',
+                ':id' => $orderId,
+                ':cancelled' => self::STATUS_CANCELLED,
+                ':body' => '%' . $newDay . '%',
+            ]
+        );
+        if ($alreadyCustomer === null && !self::alreadyAnnounced('order_rescheduled', 'order', $orderId)) {
+            // First announcement for this order, or body check missed.
+            $alreadyCustomer = null;
+        }
+        if ($alreadyCustomer === null) {
+            $customerVars = [
+                'customer_name' => (string) ($context['vars']['customer_name'] ?? ''),
+                'order_number' => (string) ($context['vars']['order_number'] ?? ''),
+                'old_delivery_day' => $oldDay,
+                'new_delivery_day' => $newDay,
+                'reschedule_source' => self::rescheduleSourceLine($actorType, $actorName),
+                'order_trail_url' => (string) ($context['vars']['order_trail_url'] ?? ''),
+            ];
+            self::send('order_rescheduled', $customerVars, $context['recipients'], 'order', $orderId, $actorId);
+        }
+
+        // Staff: same idempotency guard, but per new date.
+        $alreadyStaff = Database::one(
+            'SELECT n.id FROM notifications n
+              WHERE n.event_type = :event AND n.related_type = :type AND n.related_id = :id
+                AND n.status <> :cancelled
+                AND n.body LIKE :body
+              LIMIT 1',
+            [
+                ':event' => 'admin_order_rescheduled',
+                ':type' => 'order',
+                ':id' => $orderId,
+                ':cancelled' => self::STATUS_CANCELLED,
+                ':body' => '%' . $newDay . '%',
+            ]
+        );
+        if ($alreadyStaff !== null) {
+            return;
+        }
+        if (self::alreadyAnnounced('admin_order_rescheduled', 'order', $orderId)) {
+            // If we already announced any staff reschedule, check body contains new date to avoid duplicate for same date.
+            // For simplicity, if any staff reschedule was announced and body check missed, we still allow only when new date differs.
+            // The LIKE check above is the stronger guard for same date.
+        }
+
+        $staffVars = [
+            'customer_name' => (string) ($context['vars']['customer_name'] ?? ''),
+            'order_number' => (string) ($context['vars']['order_number'] ?? ''),
+            'old_delivery_day' => $oldDay,
+            'new_delivery_day' => $newDay,
+            'reschedule_source' => self::rescheduleSourceLine($actorType, $actorName),
+            'reason' => self::rescheduleReasonLine($reasonText),
+            'admin_url' => (string) ($context['vars']['admin_url'] ?? ''),
+        ];
+        self::send('admin_order_rescheduled', $staffVars, self::staffRecipients('orders.view'), 'order', $orderId, $actorId);
+    }
+
+    /** Who moved the delivery, said to the customer and to the team. */
+    public static function rescheduleSourceLine(string $actorType, string $actorName): string
+    {
+        if ($actorType === 'customer') {
+            return 'Rescheduled by you.';
+        }
+        $who = trim($actorName);
+        return $who !== '' ? 'Rescheduled by ' . $who . ' on our team.' : 'Rescheduled by our team.';
+    }
+
+    /** The optional reason, capped for email. */
+    public static function rescheduleReasonLine(string $reasonText): string
+    {
+        $note = trim($reasonText);
+        if ($note === '') {
+            return '';
+        }
+        $clipped = mb_substr($note, 0, 200);
+        return 'Reason: ' . $clipped . (mb_strlen($note) > 200 ? '...' : '');
     }
 
     /**

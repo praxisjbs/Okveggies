@@ -73,7 +73,8 @@ $csrf = Csrf::token();
         'SELECT o.id, o.order_number, o.order_status, o.payment_status,
                 o.order_total_subunit, o.amount_paid_subunit, o.balance_due_subunit,
                 o.preferred_delivery_date, o.created_at,
-                (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
+                (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count,
+                (SELECT COUNT(*) FROM order_reschedules r WHERE r.order_id = o.id) AS reschedule_count
            FROM orders o
           WHERE o.user_id = :user
           ORDER BY o.id DESC
@@ -175,6 +176,9 @@ $csrf = Csrf::token();
                   <?= (int) $o['item_count'] ?> <?= (int) $o['item_count'] === 1 ? 'item' : 'items' ?>.
                   Delivery <?= okv_e(date('l jS F', strtotime((string) $o['preferred_delivery_date']))) ?>.
                   Status <?= okv_e(ucfirst((string) $o['order_status'])) ?>.
+                  <?php if ((int) ($o['reschedule_count'] ?? 0) > 0): ?>
+                    Rescheduled <?= (int) $o['reschedule_count'] ?> time<?= (int) $o['reschedule_count'] === 1 ? '' : 's' ?>.
+                  <?php endif; ?>
                 </p>
                 <?php if ((string) $o['order_status'] === 'cancelled'): ?>
                   <p class="mt-2"><span class="okv-badge okv-badge-neutral">Cancelled</span></p>
@@ -182,9 +186,17 @@ $csrf = Csrf::token();
                   <div class="mt-3 flex flex-wrap items-center gap-3">
                     <span class="okv-badge okv-badge-warn"><?= okv_e(Money::format($owed)) ?> still to pay</span>
                     <a class="okv-btn-sm inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>">Pay now</a>
+                    <?php if (in_array((string) $o['order_status'], ['pending','confirmed'], true)): ?>
+                      <a class="okv-btn-text inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>#reschedule-heading">Reschedule</a>
+                    <?php endif; ?>
                   </div>
                 <?php else: ?>
-                  <p class="mt-2"><span class="okv-badge okv-badge-available">Paid in full</span></p>
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <span class="okv-badge okv-badge-available">Paid in full</span>
+                    <?php if (in_array((string) $o['order_status'], ['pending','confirmed'], true)): ?>
+                      <a class="okv-btn-text inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>#reschedule-heading">Reschedule</a>
+                    <?php endif; ?>
+                  </div>
                 <?php endif; ?>
               </li>
             <?php endforeach; ?>

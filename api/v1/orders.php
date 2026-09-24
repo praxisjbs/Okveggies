@@ -210,6 +210,82 @@ if ($action === 'resend_notification') {
  * api/v1/payments.php record_manual, so it still lands in the proof queue and
  * still reverses the same way. One money path, not two.
  */
+if ($action === 'reschedule_customer') {
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Customer::requireLoginApi();
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    if (!okv_input('confirmed', '')) {
+        okv_error('Confirm that you want to reschedule this order.', 422, 'not_confirmed');
+    }
+
+    try {
+        $result = OrderReschedule::rescheduleForCustomer(
+            (int) okv_input('order_id', 0),
+            (int) Customer::id(),
+            (string) okv_input('new_delivery_date', ''),
+            (string) okv_input('expected_delivery_date', ''),
+            (string) okv_input('reason_text', '')
+        );
+    } catch (Throwable $e) {
+        error_log('orders.reschedule_customer failed: ' . $e->getMessage());
+        okv_error('We could not reschedule that order. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        $status = $result['code'] === 'not_found' ? 404 : ($result['code'] === 'stale' ? 409 : 422);
+        okv_error($result['message'], $status, $result['code']);
+    }
+    if ($result['code'] === 'rescheduled') {
+        Notifications::announceReschedule((int) $result['order_id'], $result, (int) Customer::id());
+    }
+    if (orders_is_fetch()) {
+        okv_json(['status' => 'ok'] + $result);
+    }
+    $flag = $result['code'] === 'already_rescheduled' ? 'already_rescheduled' : 'rescheduled';
+    okv_redirect('/public/order.php?order=' . (int) okv_input('order_id', 0) . '&reschedule=' . $flag, 303);
+}
+
+if ($action === 'reschedule_staff') {
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission('orders.reschedule');
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    if (!okv_input('confirmed', '')) {
+        okv_error('Confirm that you want to reschedule this order.', 422, 'not_confirmed');
+    }
+
+    try {
+        $result = OrderReschedule::rescheduleForStaff(
+            (int) okv_input('order_id', 0),
+            (int) Rbac::userId(),
+            (string) okv_input('new_delivery_date', ''),
+            (string) okv_input('expected_delivery_date', ''),
+            (string) okv_input('reason_text', '')
+        );
+    } catch (Throwable $e) {
+        error_log('orders.reschedule_staff failed: ' . $e->getMessage());
+        okv_error('The order was not changed. Please reload it and try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        $status = $result['code'] === 'not_found' ? 404 : ($result['code'] === 'stale' ? 409 : 422);
+        okv_error($result['message'], $status, $result['code']);
+    }
+    if ($result['code'] === 'rescheduled') {
+        Notifications::announceReschedule((int) $result['order_id'], $result, (int) Rbac::userId());
+    }
+    if (orders_is_fetch()) {
+        okv_json(['status' => 'ok'] + $result);
+    }
+    $flag = $result['code'] === 'already_rescheduled' ? 'already_rescheduled' : 'rescheduled';
+    okv_redirect('/admin/orders.php?order=' . (int) okv_input('order_id', 0) . '&reschedule=' . $flag, 303);
+}
+
 if ($action === 'create') {
     if (!okv_is_post()) {
         okv_error('Use POST for this action.', 405, 'method_not_allowed');

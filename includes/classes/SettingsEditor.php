@@ -385,6 +385,8 @@ final class SettingsEditor
             'business_name'   => 'Mama Chidi Kitchen',
             'order_number'    => 'OKV26014',
             'delivery_day'    => 'Thursday 24th September',
+            'old_delivery_day' => 'Tuesday 22nd September',
+            'new_delivery_day' => 'Thursday 24th September',
             'order_total'     => Money::format(1250000),
             'amount'          => Money::format(500000),
             'zone_name'       => 'Ikeja',
@@ -397,6 +399,7 @@ final class SettingsEditor
             // Owner wording that cannot occur in the thing it previews.
             'cancellation_source' => Notifications::cancellationSourceLine('customer', ''),
             'cancellation_reason' => Notifications::cancellationReasonLine('customer', 'delivery_date', ''),
+            'reschedule_source'   => Notifications::rescheduleSourceLine('customer', ''),
             'refund_state'        => Notifications::staffRefundStateLine(Refunds::STATUS_PENDING, true),
             // The staff alert for a stage email that did not go out. The stage
             // sample comes from the same helper that builds the real message,
