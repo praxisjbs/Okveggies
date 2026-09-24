@@ -23,6 +23,8 @@
  *   preview_bulk   (POST, pricing.update)  what a category move would do
  *   apply_bulk     (POST, pricing.update)  do it, all or nothing
  *   export         (GET,  pricing.export)  download the price list as .xlsx
+ *   export_pdf     (GET,  pricing.export)  download the price list as a PDF
+ *   export_png     (GET,  pricing.export)  download the price list as PNG pages in a ZIP
  *   preview_import (POST, pricing.import)  read a sheet and report, writing nothing
  *   apply_import   (POST, pricing.import)  apply the sheet just previewed
  * -----------------------------------------------------------------------------
@@ -231,6 +233,29 @@ switch ($action) {
             okv_error('We could not build the price list. Please try again.', 500, 'failed');
         } finally {
             @unlink($path);
+        }
+        exit;
+    }
+
+    case 'export_pdf':
+    case 'export_png': {
+        Rbac::requirePermission('pricing.export');
+        $format = $action === 'export_pdf' ? PriceList::FORMAT_PDF : PriceList::FORMAT_PNG;
+        try {
+            // The whole file is built in memory before a single header is
+            // sent, so a failure never leaves a half download behind.
+            $view = PriceList::build();
+            $bytes = $format === PriceList::FORMAT_PDF
+                ? PriceListPdf::render($view)
+                : PriceListPng::renderZip($view);
+            foreach (PriceList::headers($format, (string) $view['filename'][$format]) as [$header, $value]) {
+                header($header . ': ' . $value);
+            }
+            header('Content-Length: ' . (string) strlen($bytes));
+            echo $bytes;
+        } catch (Throwable $e) {
+            error_log('pricing.' . $action . ' failed: ' . $e->getMessage());
+            okv_error('We could not build the price list. Please try again.', 500, 'failed');
         }
         exit;
     }

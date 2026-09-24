@@ -49,8 +49,15 @@ $canExport = Rbac::can('pricing.export');
 
 $okv_admin_title   = 'Pricing';
 $okv_admin_note    = 'Change a price by typing over it. Every change is recorded with who made it and when, so nothing is ever lost.';
+// The three download shapes carry the same list; the server re-checks
+// pricing.export on every one of them. The front-end gate is UX only.
 $okv_admin_actions = trim(
-    ($canExport ? '<a href="/api/v1/pricing.php?action=export" class="okv-btn-outline-sm">Download price list</a>' : '')
+    ($canExport
+        ? '<span class="text-sm text-ink-60 self-center">Download price list:</span>'
+            . '<a href="/api/v1/pricing.php?action=export" class="okv-btn-outline-sm" aria-label="Download the price list as an Excel spreadsheet">Excel</a>'
+            . '<a href="/api/v1/pricing.php?action=export_pdf" class="okv-btn-outline-sm" aria-label="Download the price list as a PDF document">PDF</a>'
+            . '<a href="/api/v1/pricing.php?action=export_png" class="okv-btn-outline-sm" aria-label="Download the price list as PNG page images in a ZIP">PNG</a>'
+        : '')
     . ($canEdit ? '<button type="button" class="okv-btn-outline-sm" data-bulk-open>Move a whole category</button>' : '')
     . ($canImport ? '<button type="button" class="okv-btn-sm" data-import-open>Import a price sheet</button>' : '')
 );
