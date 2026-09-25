@@ -10,7 +10,9 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 Rbac::requirePermission('users.view');
 
 $meId  = (int) Rbac::userId();
-$roles = Database::all('SELECT id, name, description FROM roles ORDER BY name');
+$roles = Database::all("SELECT id, name, slug, description, status FROM roles ORDER BY name");
+$activeRoles = array_values(array_filter($roles, static fn($r) => $r['status'] === 'active'));
+$permissionCatalogue = Database::all('SELECT `key`, module, description FROM permissions ORDER BY module, `key`');
 
 // Staff is anyone who holds a role. One person is one identity, so a customer
 // who joined the team appears here with their role, on the same row they shop
@@ -31,6 +33,27 @@ $okv_admin_note  = 'Add staff, set what each person can do, reset a password, or
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
   <div class="grid gap-6 lg:grid-cols-3">
+
+    <?php if (Rbac::canManageRoles()): ?>
+    <section class="lg:col-span-3 okv-panel okv-panel-body">
+      <h2 class="okv-panel-title">Create a staff role</h2>
+      <p class="text-sm text-ink-60 mt-1">Choose only permissions you already hold. Owner and Manager are protected system roles.</p>
+      <form action="/api/v1/rbac.php" method="POST" class="mt-4 space-y-4" data-okv-json>
+        <?= Csrf::field() ?><input type="hidden" name="action" value="create_role">
+        <div data-okv-error role="alert" class="okv-note-bad" hidden></div>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div><label class="okv-label" for="role_name">Role name</label><input id="role_name" name="name" required maxlength="80" class="okv-input" placeholder="Dispatch lead"></div>
+          <div><label class="okv-label" for="role_slug">Slug</label><input id="role_slug" name="slug" maxlength="80" class="okv-input" placeholder="dispatch-lead"></div>
+          <div><label class="okv-label" for="role_description">Description</label><input id="role_description" name="description" maxlength="255" class="okv-input"></div>
+        </div>
+        <p class="okv-label">Permissions</p><div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-2">
+        <?php $lastModule = ''; foreach ($permissionCatalogue as $permission): if ($lastModule !== $permission['module']): if ($lastModule !== ''): ?></fieldset><?php endif; $lastModule = $permission['module']; ?><fieldset class="space-y-2"><legend class="font-semibold text-sm"><?= okv_e(ucwords(str_replace('_',' ',$lastModule))) ?></legend><?php endif; ?>
+          <label class="flex gap-2 items-start text-sm"><input type="checkbox" name="permissions[]" value="<?= okv_e($permission['key']) ?>" class="mt-1" <?= Rbac::hasPermission($permission['key']) ? '' : 'disabled' ?>><span><strong><?= okv_e($permission['key']) ?></strong><span class="block text-ink-60"><?= okv_e($permission['description']) ?></span></span></label>
+        <?php endforeach; if ($lastModule !== ''): ?></fieldset><?php endif; ?></div>
+        <button type="submit" class="okv-btn">Create role</button>
+      </form>
+    </section>
+    <?php endif; ?>
 
     <!-- Add a staff member -->
     <section class="lg:col-span-1">
@@ -56,7 +79,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
             <input id="phone" name="phone" type="tel" inputmode="tel" required class="okv-input" placeholder="0803 000 0000"></div>
           <div><label for="role" class="okv-label">Role</label>
             <select id="role" name="role" required class="okv-input">
-              <?php foreach ($roles as $r): ?>
+              <?php foreach ($activeRoles as $r): ?>
                 <option value="<?= okv_e($r['name']) ?>"><?= okv_e(okv_role_label($r['name'])) ?></option>
               <?php endforeach; ?>
             </select>
@@ -125,7 +148,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                     <input type="hidden" name="user_id" value="<?= $id ?>">
                     <label class="okv-label" for="role-<?= $id ?>">Role</label>
                     <select id="role-<?= $id ?>" name="role" class="okv-input-sm">
-                      <?php foreach ($roles as $r): $sel = ($r['name'] === $roleName) ? ' selected' : ''; ?>
+                      <?php foreach ($activeRoles as $r): $sel = ($r['name'] === $roleName) ? ' selected' : ''; ?>
                         <option value="<?= okv_e($r['name']) ?>"<?= $sel ?>><?= okv_e(okv_role_label($r['name'])) ?></option>
                       <?php endforeach; ?>
                     </select>
