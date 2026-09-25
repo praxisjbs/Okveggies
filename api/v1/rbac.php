@@ -40,7 +40,7 @@ case 'create_role':
     $permissions = rbac_allowed_permissions((array) ($_POST['permissions'] ?? []));
     $pdo = Database::getInstance()->getConnection();
     try { $pdo->beginTransaction();
-        $pdo->prepare('INSERT INTO roles (name,slug,description,status) VALUES (:n,:s,:d,\'active\')')->execute([':n'=>$name,':s'=>$slug,':d'=>trim((string) okv_input('description',''))]);
+        $pdo->prepare("INSERT INTO roles (name,slug,description,status) VALUES (:n,:s,:d,'active')")->execute([':n'=>$name,':s'=>$slug,':d'=>trim((string) okv_input('description',''))]);
         $id=(int)$pdo->lastInsertId();
         $q=$pdo->prepare('INSERT INTO role_permissions (role_id,permission_id) SELECT :r,id FROM permissions WHERE `key`=:p');
         foreach ($permissions as $p) $q->execute([':r'=>$id,':p'=>$p]);
