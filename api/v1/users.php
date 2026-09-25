@@ -208,7 +208,7 @@ switch ($action) {
         if ($policy !== null) {
             okv_error($policy, 422, 'weak_password');
         }
-        $roleRow = Database::one('SELECT id FROM roles WHERE name = :n', [':n' => $role]);
+        $roleRow = Database::one("SELECT id FROM roles WHERE name = :n AND status = 'active'", [':n' => $role]);
         if (!$roleRow) {
             okv_error('Choose a role for this person.', 422, 'bad_role');
         }
@@ -305,7 +305,7 @@ switch ($action) {
         if (!$target) {
             okv_error('That staff member was not found.', 404, 'not_found');
         }
-        $roleRow = Database::one('SELECT id FROM roles WHERE name = :n', [':n' => $role]);
+        $roleRow = Database::one("SELECT id FROM roles WHERE name = :n AND status = 'active'", [':n' => $role]);
         if (!$roleRow) {
             okv_error('Choose a valid role.', 422, 'bad_role');
         }

@@ -41,7 +41,7 @@ final class Rbac
     public static function loadFromDb(int $userId): void
     {
         $roles = Database::all(
-            'SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = :u',
+            'SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id JOIN users u ON u.id = ur.user_id WHERE ur.user_id = :u AND r.status = 'active' AND u.status = 'active'',
             [':u' => $userId]
         );
         $roleNames = array_map(static fn($r) => $r['name'], $roles);
@@ -118,6 +118,28 @@ final class Rbac
         return false;
     }
 
+    /** Owners and the launch Manager may administer roles. The server remains authoritative. */
+    public static function canManageRoles(): bool
+    {
+        return self::isLoggedIn() && (self::hasPermission('rbac.roles.edit') || in_array('manager', self::roles(), true));
+    }
+
+    /** Permissions this actor may delegate, expanded from the effective set. */
+    public static function delegablePermissions(): array
+    {
+        require_once __DIR__ . '/../config/permissions.php';
+        if (self::hasPermission('*')) {
+            $all = [];
+            foreach ((array) $OKV_PERMISSIONS as $group) { $all = array_merge($all, array_keys($group)); }
+            return $all;
+        }
+        $out = [];
+        foreach ((array) ($OKV_PERMISSIONS ?? []) as $group) {
+            foreach (array_keys($group) as $key) if (self::hasPermission($key)) $out[] = $key;
+        }
+        return $out;
+    }
+
     /** Require a logged-in staff user, or stop with a 401 (API) or a redirect. */
     public static function requireAuth(): void
     {
@@ -171,6 +193,9 @@ final class Rbac
             Auth::logout();
             self::deny(401);
         }
+        // Role and permission changes take effect on the next request. This
+        // prevents a session cache from retaining revoked access indefinitely.
+        self::loadFromDb($id);
     }
 
     private static function deny(int $code): void
