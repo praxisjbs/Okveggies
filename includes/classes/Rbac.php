@@ -41,7 +41,7 @@ final class Rbac
     public static function loadFromDb(int $userId): void
     {
         $roles = Database::all(
-            'SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id JOIN users u ON u.id = ur.user_id WHERE ur.user_id = :u AND r.status = 'active' AND u.status = 'active'',
+            "SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id JOIN users u ON u.id = ur.user_id WHERE ur.user_id = :u AND r.status = 'active' AND u.status = 'active'",
             [':u' => $userId]
         );
         $roleNames = array_map(static fn($r) => $r['name'], $roles);
