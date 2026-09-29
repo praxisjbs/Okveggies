@@ -44,17 +44,23 @@ $paid     = (int) $order['amount_paid_subunit'];
 $refunded = (int) $document['refunded_subunit'];
 
 if ($paid < 1) {
+    $money = OrderMoney::fromRow($order);
     okv_document_open(['title' => 'Receipt ' . (string) $order['order_number'], 'print' => false]);
     okv_document_letterhead([
         'kind'      => 'Receipt',
-        'title'     => 'Nothing has been paid on this order yet',
+        'title'     => $money['on_credit'] ? 'This order is on your credit line' : 'Nothing has been paid on this order yet',
         'reference' => okv_document_reference((string) $order['order_number']),
         'issued_on' => date('j M Y'),
     ]);
     ?>
     <div class="okv-doc-foot okv-doc-gap-lg">
-      <p>A receipt is raised once money has arrived. Nothing has been paid on this order so far.</p>
-      <p class="okv-doc-gap">The invoice shows what is owed.</p>
+      <?php if ($money['on_credit']): ?>
+        <p>No cash has changed hands, because this order is on your credit line. A receipt is raised when you repay it.</p>
+        <?php if ($money['credit_line'] !== ''): ?><p class="okv-doc-gap"><?= okv_e($money['credit_line']) ?></p><?php endif; ?>
+      <?php else: ?>
+        <p>A receipt is raised once money has arrived. Nothing has been paid on this order so far.</p>
+        <p class="okv-doc-gap">The invoice shows what is owed.</p>
+      <?php endif; ?>
     </div>
     <?php
     okv_document_close();

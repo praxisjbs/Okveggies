@@ -149,6 +149,15 @@ final class Checkout
             throw new DomainException('payment_not_allowed');
         }
 
+        // How the amount is paid: Paystack, or a direct bank transfer with a
+        // receipt (PRD 9.3a). Only a full payment or a deposit can be paid by
+        // transfer, and only while the Owner has switched it on with a complete
+        // account. Checked here, on the server, whatever the page showed.
+        $method = (string) ($input['payment_method'] ?? '') === '' ? 'paystack' : (string) $input['payment_method'];
+        if (!self::methodAllowed($method, $option)) {
+            throw new DomainException('payment_not_allowed');
+        }
+
         // On account is refused here, before a transaction is opened and before
         // any row is written. The authoritative check runs again under a lock
         // inside Credit::drawForOrder, because the limit can move between the
@@ -197,7 +206,7 @@ final class Checkout
                 throw new DomainException('empty_cart');
             }
 
-            $result = self::writeOrder($pdo, $userId, $type, $cartId, $option, $customer, (string) $input['delivery_date'], $zoneId, $basket['lines']);
+            $result = self::writeOrder($pdo, $userId, $type, $cartId, $option, $method, $customer, (string) $input['delivery_date'], $zoneId, $basket['lines']);
             $pdo->commit();
             return self::remember($bag, $cartId, $result);
         } catch (Throwable $e) {
@@ -275,7 +284,7 @@ final class Checkout
     }
 
     /** Write the order, its address, its lines, the first status event and the unpaid payment. */
-    private static function writeOrder(PDO $pdo, ?int $userId, string $type, int $cartId, string $option, array $customer, string $deliveryDate, int $zoneId, array $lines): array
+    private static function writeOrder(PDO $pdo, ?int $userId, string $type, int $cartId, string $option, string $method, array $customer, string $deliveryDate, int $zoneId, array $lines): array
     {
         $total      = self::total($lines);
         $percentage = Settings::depositPercentage();
@@ -333,7 +342,7 @@ final class Checkout
              VALUES (:order, :date, \'scheduled\', :user)',
             [':order' => $orderId, ':date' => $deliveryDate, ':user' => $userId]
         );
-        self::writePayments($orderId, $userId, $orderNumber, $option, $total, $due, $deliveryDate);
+        self::writePayments($orderId, $userId, $orderNumber, $option, $total, $due, $deliveryDate, $method);
 
         Database::run('UPDATE shopping_carts SET status = \'converted\' WHERE id = :id', [':id' => $cartId]);
 
@@ -490,11 +499,11 @@ final class Checkout
      * reason as writeAddress(): a Kitchen Run converts into an ordinary order
      * and its money rows have to be shaped exactly like every other order's.
      */
-    public static function writePayments(int $orderId, ?int $userId, string $orderNumber, string $option, int $total, int $due, string $deliveryDate): void
+    public static function writePayments(int $orderId, ?int $userId, string $orderNumber, string $option, int $total, int $due, string $deliveryDate, string $method = 'paystack'): void
     {
         $rows = [[
             'number'   => 'PAY-' . $orderNumber,
-            'provider' => self::providerFor($option),
+            'provider' => self::providerFor($option, $method),
             'type'     => $option,
             'amount'   => $due,
             'due_at'   => $option === 'pay_on_delivery' ? $deliveryDate . ' 00:00:00' : null,
@@ -532,8 +541,13 @@ final class Checkout
         }
     }
 
-    /** Which payment provider records the choice. No charge is made in M4. */
-    private static function providerFor(string $option): string
+    /**
+     * Which payment provider records the choice. No charge is made here. A
+     * direct bank transfer is recorded as 'manual', which is also what stops the
+     * order being sent to Paystack and what tells the order page to offer the
+     * receipt upload instead.
+     */
+    private static function providerFor(string $option, string $method = 'paystack'): string
     {
         if ($option === 'on_account') {
             return 'account';
@@ -541,7 +555,28 @@ final class Checkout
         if ($option === 'pay_on_delivery') {
             return 'manual';
         }
+        if ($method === 'bank_transfer' && in_array($option, ['pay_in_full', 'deposit'], true)) {
+            return 'manual';
+        }
         return 'paystack';
+    }
+
+    /**
+     * Whether a payment method is open for this choice. Paystack is open for
+     * everything that is paid online; a direct transfer only for a full payment
+     * or a deposit, and only while it is switched on.
+     */
+    public static function methodAllowed(string $method, string $option): bool
+    {
+        // The ordinary path never touches the transfer class, so a script that
+        // loads only the classes it needs still places an ordinary order.
+        if ($method === 'paystack') {
+            return true;
+        }
+        if ($method !== 'bank_transfer') {
+            return false;
+        }
+        return TransferProofs::optionAllowsTransfer($option) && TransferProofs::isEnabled();
     }
 
     /** A trail token whose hash is not already taken. Shared with KitchenRuns. */

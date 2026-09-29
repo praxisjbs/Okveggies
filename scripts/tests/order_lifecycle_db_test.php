@@ -1,5 +1,12 @@
 <?php
-/** M6 lifecycle integration against a migrated scratch database. */
+/**
+ * M6 lifecycle integration against a migrated scratch database.
+ *
+ * The order is a pay on delivery order whose 30% deposit has been paid, because
+ * the sourcing gate refuses to move a Placed order to Sourced until it is covered
+ * (see sourcing_gate_db_test.php for the gate itself). This suite is about the
+ * stage mechanics: history, snapshots, staleness and idempotence.
+ */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
 require_once __DIR__ . '/lib/scratch_guard.php';
@@ -21,8 +28,10 @@ try {
     Database::run(
         'INSERT INTO orders
             (order_number, user_id, customer_type, order_status, payment_option, payment_status,
-             subtotal_subunit, order_total_subunit, balance_due_subunit, preferred_delivery_date)
-         VALUES (:number, :user, \'household\', \'pending\', \'pay_on_delivery\', \'unpaid\', 500000, 500000, 500000, :date)',
+             subtotal_subunit, order_total_subunit, deposit_required_subunit, amount_paid_subunit,
+             balance_due_subunit, preferred_delivery_date)
+         VALUES (:number, :user, \'household\', \'pending\', \'pay_on_delivery\', \'part_paid\',
+                 500000, 500000, 150000, 150000, 350000, :date)',
         [':number' => "ZZ-LIFE-$suffix", ':user' => $userId, ':date' => date('Y-m-d', strtotime('+7 days'))]
     );
     $orderId = (int) Database::getInstance()->getConnection()->lastInsertId();

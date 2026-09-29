@@ -135,6 +135,36 @@ $canRefund = Rbac::can('payments.refund');
 $canTransition = Rbac::can('orders.status.update');
 $canReschedule = Rbac::can('orders.reschedule');
 $targets = $selected ? OrderLifecycle::staffTargets((string) $selected['order_status']) : [];
+
+// How the money reads (the same helper the customer sees), and the payment gate
+// on Placed to Sourced. The gate is enforced again on the server inside the stage
+// change itself; this only decides what the screen offers.
+$orderMoney = $selected ? OrderMoney::forOrder($selectedId) : null;
+$gate = null;
+$creditShortcut = false;
+$gateFacility = null;
+if ($selected && (string) $selected['order_status'] === 'pending') {
+    $gate = SourcingGate::forOrder($selectedId);
+    $gateOrder = Database::one(
+        'SELECT user_id, payment_option, order_total_subunit, amount_paid_subunit FROM orders WHERE id = :id',
+        [':id' => $selectedId]
+    );
+    if ($gate !== null && !$gate['allowed'] && $gateOrder !== null && $gateOrder['user_id'] !== null) {
+        $gateFacility = Credit::facilityForUser((int) $gateOrder['user_id']);
+        $creditShortcut = SourcingGate::creditShortcutOffered($gateOrder, $gateFacility)
+            && !Payments::hasAttemptInFlight($selectedId);
+    }
+}
+$gateBlocked = $gate !== null && !$gate['allowed'];
+$canOverride = Rbac::can('orders.source.override');
+$stageError = (string) okv_input('stage_error', '');
+$stageErrorMessages = [
+    'stale'                   => 'This order changed after the page loaded. Reload it before choosing the next stage.',
+    'invalid_transition'      => 'That order cannot move to the chosen stage.',
+    'note_too_long'           => 'Keep the internal note to 500 characters.',
+    'override_reason_invalid' => 'Give the reason for sourcing this order anyway, using 10 to 200 characters.',
+    'not_found'               => 'That order could not be found.',
+];
 $flag = (string) okv_input('cancellation', '');
 $rescheduleFlag = (string) okv_input('reschedule', '');
 $statusFlag = (string) okv_input('status', '');
@@ -166,6 +196,17 @@ require __DIR__ . '/../includes/components/admin/header.php';
 <?php endif; ?>
 <?php if ($rescheduleFlag !== ''): ?>
   <p class="okv-note-ok mb-5" role="status"><?= $rescheduleFlag === 'already_rescheduled' ? 'That delivery day was already set. No change was made.' : 'The delivery day has been moved. Customer and team have been told.' ?></p>
+<?php endif; ?>
+<?php if ($stageError !== ''): ?>
+  <p class="okv-note-bad mb-5" role="alert"><?=
+    okv_e(
+        in_array($stageError, ['payment_required', 'deposit_required', 'credit_missing'], true)
+            ? ($gateBlocked ? $gate['message'] : 'This order can be sourced now. Try again.')
+            : ($stageErrorMessages[$stageError]
+                ?? (in_array($stageError, ['not_convertible', 'payment_in_progress', 'credit_not_approved', 'credit_limit_exceeded', 'invalid_charge'], true)
+                    ? Credit::message($stageError)
+                    : 'The order was not changed. Please reload it and try again.'))
+    ) ?></p>
 <?php endif; ?>
 <?php if ($statusFlag !== ''): ?>
   <p class="okv-note-ok mb-5" role="status"><?=
@@ -277,12 +318,18 @@ require __DIR__ . '/../includes/components/admin/header.php';
              outstanding is what is still owed. -->
         <div>
           <h3 class="text-sm font-semibold text-ink">Money</h3>
+          <?php if ($orderMoney): ?>
+            <p class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              <?php okv_money_badge($orderMoney); ?>
+              <?php if ($orderMoney['credit_line'] !== ''): ?><span class="text-ink-60"><?= okv_e($orderMoney['credit_line']) ?></span><?php endif; ?>
+            </p>
+          <?php endif; ?>
           <dl class="mt-2 grid gap-4 text-sm sm:grid-cols-3 lg:grid-cols-5">
             <div><dt class="text-ink-60">Expected</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format($expectedSubunit)) ?></dd></div>
             <div><dt class="text-ink-60">Paid</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format($paidSubunit)) ?></dd></div>
             <div><dt class="text-ink-60">Refunded</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format($refundedSubunit)) ?></dd></div>
             <div><dt class="text-ink-60">Net</dt><dd class="mt-1 font-mono"><?= okv_e(Money::format($netSubunit)) ?></dd></div>
-            <div><dt class="text-ink-60">Outstanding</dt><dd class="mt-1 font-mono <?= $outstandingSubunit > 0 ? 'text-clay' : '' ?>"><?= okv_e(Money::format($outstandingSubunit)) ?></dd></div>
+            <div><dt class="text-ink-60"><?= $orderMoney && $orderMoney['on_credit'] ? 'Owed on credit' : 'Outstanding' ?></dt><dd class="mt-1 font-mono <?= $outstandingSubunit > 0 && !($orderMoney && $orderMoney['on_credit']) ? 'text-clay' : '' ?>"><?= okv_e(Money::format($outstandingSubunit)) ?></dd></div>
           </dl>
           <div class="mt-3 flex flex-wrap gap-2">
             <a class="okv-btn-outline min-h-[44px] px-3" href="/public/order.php?order=<?= (int) $selected['id'] ?>" target="_blank" rel="noopener">
@@ -461,7 +508,48 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <?php endif; ?>
         </div>
 
-        <?php if ($canTransition && $targets): ?>
+        <?php if ($canTransition && $targets && $gateBlocked): ?>
+          <!-- Payment gate. Sourcing spends our money on produce, so the order has
+               to be covered first. Short text, the way forward as buttons. -->
+          <div class="rounded-md border border-clay bg-clay-tint p-4" id="sourcing-gate">
+            <h3 class="font-semibold text-ink">Payment needed before sourcing</h3>
+            <p class="mt-1 text-sm text-ink"><?= okv_e($gate['message']) ?></p>
+            <div class="mt-4 flex flex-wrap items-center gap-3">
+              <?php if ($creditShortcut): ?>
+                <form action="/api/v1/orders.php" method="post" data-once>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="transition">
+                  <input type="hidden" name="order_id" value="<?= (int) $selected['id'] ?>">
+                  <input type="hidden" name="expected_status" value="<?= okv_e($selected['order_status']) ?>">
+                  <input type="hidden" name="target_status" value="confirmed">
+                  <input type="hidden" name="source_on_credit" value="1">
+                  <button class="okv-btn min-h-[44px] px-4">Source on credit line</button>
+                </form>
+                <span class="text-sm text-ink-60"><?= okv_e(Money::format((int) ($gateFacility['available_subunit'] ?? 0))) ?> available</span>
+              <?php endif; ?>
+              <?php if (Rbac::can('payments.record')): ?>
+                <a class="okv-btn-outline min-h-[44px] px-4" href="/admin/payments.php?order_id=<?= (int) $selected['id'] ?>">Record a payment</a>
+              <?php endif; ?>
+            </div>
+            <?php if ($canOverride): ?>
+              <details class="mt-4 rounded-md border border-mist bg-white p-3">
+                <summary class="flex min-h-[44px] cursor-pointer items-center text-sm font-semibold text-tomato">Source anyway (Owner)</summary>
+                <form action="/api/v1/orders.php" method="post" class="mt-3 grid gap-3" data-once>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="transition">
+                  <input type="hidden" name="order_id" value="<?= (int) $selected['id'] ?>">
+                  <input type="hidden" name="expected_status" value="<?= okv_e($selected['order_status']) ?>">
+                  <input type="hidden" name="target_status" value="confirmed">
+                  <div>
+                    <label class="okv-label" for="override-reason">Reason (kept on the order and the audit log)</label>
+                    <input class="okv-input mt-1" id="override-reason" name="override_reason" minlength="10" maxlength="200" required>
+                  </div>
+                  <button class="okv-btn-outline min-h-[44px] justify-center border-tomato px-4 text-tomato sm:w-fit">Source with this reason</button>
+                </form>
+              </details>
+            <?php endif; ?>
+          </div>
+        <?php elseif ($canTransition && $targets): ?>
           <div class="rounded-md border border-foliage bg-foliage-tint p-4">
             <h3 class="font-semibold text-ink">Move this order forward</h3>
             <p class="mt-1 text-sm text-ink-60">The current stage is rechecked when you submit. The note stays internal.</p>

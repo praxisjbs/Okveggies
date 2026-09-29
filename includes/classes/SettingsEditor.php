@@ -137,6 +137,19 @@ final class SettingsEditor
             }
         }
 
+        // Direct bank transfer cannot be switched on with a half-filled account:
+        // a customer would be shown a number with a digit missing. Judged on the
+        // values this post carries; TransferProofs::isEnabled() holds the same
+        // line again at checkout, so a partial post cannot get round it.
+        if ($groupKey === 'payment' && !empty($clean['bank_transfer_enabled']) && !isset($errors['bank_transfer_enabled'])) {
+            foreach (['bank_transfer_bank_name', 'bank_transfer_account_name', 'bank_transfer_account_number'] as $needed) {
+                if (array_key_exists($needed, $clean) && $clean[$needed] === '') {
+                    $errors['bank_transfer_enabled'] = 'Fill in the bank, the account name and the account number before switching direct bank transfer on.';
+                    break;
+                }
+            }
+        }
+
         return ['clean' => $clean, 'errors' => $errors];
     }
 
@@ -212,6 +225,20 @@ final class SettingsEditor
                 }
                 if (strlen($digits) < 10 || strlen($digits) > 15) {
                     return self::bad($label . ' has to be 10 to 15 digits in international form, for example 2348000000000.');
+                }
+                return self::good($digits);
+
+            case 'account_number':
+                // Spaces and dashes are how people copy a number from a banking
+                // app; strip them, then hold the line at exactly ten digits.
+                $digits = preg_replace('/[\s\-]+/', '', $value);
+                if ($digits === '') {
+                    return empty($field['required'])
+                        ? self::good('')
+                        : self::bad($label . ' cannot be empty.');
+                }
+                if (!preg_match('/^\d{10}$/', $digits)) {
+                    return self::bad($label . ' has to be your 10 digit bank account number, for example 0123456789.');
                 }
                 return self::good($digits);
 

@@ -13,13 +13,6 @@ require_once __DIR__ . '/../../includes/bootstrap.php';
 
 $action = okv_action();
 
-if (!okv_is_post()) {
-    okv_error('Use POST for this action.', 405, 'method_not_allowed');
-}
-if (!Csrf::validate()) {
-    okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
-}
-
 /** True when the caller wants JSON rather than a redirect. */
 function checkout_is_fetch(): bool
 {
@@ -27,11 +20,36 @@ function checkout_is_fetch(): bool
         || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
 }
 
+/**
+ * Turn a receipt back. A fetch gets the JSON error; a plain form post is sent
+ * to the payment step with the reason, because raw JSON on a white page is no
+ * way to tell someone their photo was the wrong kind of file.
+ */
+function checkout_receipt_refused(string $code, int $status = 422): void
+{
+    if (checkout_is_fetch()) {
+        okv_error(TransferProofs::receiptProblemMessage($code), $status, 'receipt_' . $code);
+    }
+    okv_redirect('/checkout.php?step=4&receipt_error=' . rawurlencode($code), 303);
+}
+
+if (!okv_is_post()) {
+    okv_error('Use POST for this action.', 405, 'method_not_allowed');
+}
+// A receipt bigger than the server's post limit arrives as an empty post, which
+// would otherwise read as an expired session. Say what actually happened.
+if (TransferProofs::postWasTooLarge()) {
+    checkout_receipt_refused('too_large', 413);
+}
+if (!Csrf::validate()) {
+    okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+}
+
 /** Fields kept for each checkout step. Anything else in the post is ignored. */
 const CHECKOUT_STEP_FIELDS = [
     'customer' => ['recipient_name', 'recipient_phone', 'email', 'address_line_1', 'address_line_2', 'city', 'state', 'landmark', 'customer_type', 'create_account'],
     'delivery' => ['delivery_date', 'delivery_zone_id'],
-    'payment'  => ['payment_option'],
+    'payment'  => ['payment_option', 'payment_method'],
 ];
 
 const CHECKOUT_NEXT_STEP = ['customer' => 3, 'delivery' => 4, 'payment' => 4];
@@ -108,7 +126,12 @@ try {
     // A payment choice posted with the final submit is saved before placing.
     $postedPayment = (string) okv_input('payment_option', '');
     if ($postedPayment !== '') {
-        Checkout::saveStep('payment', ['payment_option' => $postedPayment]);
+        // The method only means something for a full payment or a deposit. Any
+        // other choice is placed the ordinary way, whatever a stale form sent.
+        $postedMethod = TransferProofs::optionAllowsTransfer($postedPayment)
+            ? (string) okv_input('payment_method', '')
+            : '';
+        Checkout::saveStep('payment', ['payment_option' => $postedPayment, 'payment_method' => $postedMethod]);
     }
 
     $bag      = Checkout::bag();
@@ -131,17 +154,63 @@ try {
         'delivery_date'    => $delivery['delivery_date'] ?? '',
         'delivery_zone_id' => (int) ($delivery['delivery_zone_id'] ?? 0),
         'payment_option'   => $payment['payment_option'] ?? '',
+        'payment_method'   => $payment['payment_method'] ?? '',
     ]);
+
+    // A direct transfer is only placed with its receipt. The file is judged
+    // before the order is written, so a refused file never leaves an order
+    // behind, and the order is written before the file is stored, so a storage
+    // fault never loses an order: it lands on the page that asks for the
+    // receipt again.
+    $viaTransfer = ($input['payment_method'] ?? '') === TransferProofs::METHOD_TRANSFER
+        && TransferProofs::optionAllowsTransfer((string) ($input['payment_option'] ?? ''));
+    $cartState     = Basket::state();
+    $cartId        = ($cartState['cart_id'] ?? null) === null ? null : (int) $cartState['cart_id'];
+    $alreadyPlaced = Checkout::placedMatchesBasket(Checkout::bag(), $cartId);
+    if ($viaTransfer && !$alreadyPlaced) {
+        $check = TransferProofs::validateReceiptUpload($_FILES['receipt'] ?? []);
+        if (!$check['ok']) {
+            checkout_receipt_refused($check['code']);
+        }
+    }
 
     $result = Checkout::place($input);
     if ($guest) {
         OrderTrail::remember((int) $result['order_id'], (string) ($result['trail_token'] ?? ''));
     }
-    // The order is committed. Send the customer their copy with the trail link
-    // in it, and raise the staff alert. PRD 14.2 makes that link the way a
-    // customer follows their order, so it has to leave the building here.
+    // The order is committed. If it is a direct transfer, store the receipt and
+    // hand it to the team. Nothing is credited: it waits for verification.
+    $receiptSent = false;
+    if ($viaTransfer && !$alreadyPlaced) {
+        try {
+            $next = TransferProofs::nextTransferPayment((int) $result['order_id']);
+            if ($next !== null) {
+                $stored = TransferProofs::storeReceipt($_FILES['receipt']);
+                $submitted = TransferProofs::submit((int) $next['id'], [
+                    'proof_url'      => $stored,
+                    'bank_reference' => (string) okv_input('bank_reference', ''),
+                    'payer_name'     => (string) okv_input('payer_name', ''),
+                ]);
+                $receiptSent = !empty($submitted['ok']);
+                if (!$receiptSent) {
+                    Uploads::removeStoredFile($stored, TransferProofs::SUBDIR);
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('checkout: could not store the transfer receipt for order ' . (int) $result['order_id'] . ': ' . $e->getMessage());
+        }
+    }
+
+    // Send the customer their copy with the trail link in it, and raise the
+    // staff alert. PRD 14.2 makes that link the way a customer follows their
+    // order, so it has to leave the building here. A receipt that was just
+    // handed in is acknowledged by its own email, which carries the same link,
+    // so the customer is not sent two at once.
     try {
-        Notifications::announceOrderPlaced((int) $result['order_id'], (string) ($result['trail_token'] ?? ''));
+        Notifications::announceOrderPlaced((int) $result['order_id'], (string) ($result['trail_token'] ?? ''), $receiptSent);
+        if ($receiptSent) {
+            Notifications::announceTransferSubmitted($submitted, (string) ($result['trail_token'] ?? ''));
+        }
     } catch (Throwable $e) {
         error_log('checkout announce order placed failed: ' . $e->getMessage());
     }
@@ -192,6 +261,11 @@ try {
     }
     if ($payNow !== null) {
         okv_redirect($payNow, 303);
+    }
+    if ($viaTransfer) {
+        // Nothing to pay online. Land on the order, which says the receipt is
+        // pending verification, or asks for it again if it could not be kept.
+        okv_redirect($fallback . '&payment=' . ($receiptSent || $alreadyPlaced ? 'awaiting' : 'receipt_needed'), 303);
     }
     okv_redirect($fallback . ($pending !== null ? '&payment=unavailable' : ''), 303);
 } catch (DomainException $e) {

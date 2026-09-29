@@ -9,7 +9,8 @@
  * the tests point PAYSTACK_BASE_URL at this file and drive the whole path:
  * Refunds::request calls POST /refund and gets a Paystack-shaped answer back.
  *
- * It answers only what the client actually asks for, in the shape the client
+ * It answers only what the client actually asks for (starting a payment, a
+ * refund, and verification), in the shape the client
  * actually parses, and it can be told to refuse so the failure branch is
  * exercised as well as the happy one. It is never reachable in production:
  * Paystack::base() ignores the override unless the secret key is a test key,
@@ -36,6 +37,34 @@ file_put_contents(
     json_encode(['method' => $method, 'path' => $path, 'body' => $body]) . "\n",
     FILE_APPEND
 );
+
+if ($method === 'POST' && $path === '/transaction/initialize') {
+    // Starting a payment: the shape Payments::beginCharge parses. The customer
+    // is sent to /pay/<reference> below, a page that stands in for Paystack's own.
+    if ($refuse) {
+        http_response_code(400);
+        echo json_encode(['status' => false, 'message' => 'Invalid Amount Sent']);
+        exit;
+    }
+    $reference = (string) ($body['reference'] ?? bin2hex(random_bytes(6)));
+    echo json_encode([
+        'status'  => true,
+        'message' => 'Authorization URL created',
+        'data'    => [
+            'authorization_url' => 'http://127.0.0.1:8124/pay/' . rawurlencode($reference),
+            'access_code'       => 'ac_' . substr(md5($reference), 0, 12),
+            'reference'         => $reference,
+        ],
+    ]);
+    exit;
+}
+
+if ($method === 'GET' && str_starts_with($path, '/pay/')) {
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><title>Paystack stand-in</title><h1>Paystack test checkout</h1><p>Reference '
+        . htmlspecialchars(rawurldecode(substr($path, 5)), ENT_QUOTES, 'UTF-8') . '</p>';
+    exit;
+}
 
 if ($method === 'POST' && $path === '/refund') {
     if ($refuse) {

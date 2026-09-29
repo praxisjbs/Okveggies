@@ -29,6 +29,47 @@ function payments_is_fetch(): bool
         || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
 }
 
+/**
+ * Start a Paystack charge for a payment the caller has already been proved to
+ * own, then answer: JSON for a fetch, otherwise a 303 to Paystack. One tail for
+ * every way of starting a payment, so the errors and the response cannot differ.
+ */
+function payments_start_charge(int $paymentId): void
+{
+    try {
+        $callback = rtrim((string) APP_URL, '/') . '/public/payment/callback.php';
+        $result   = Payments::beginCharge($paymentId, $callback);
+    } catch (Throwable $e) {
+        error_log('payments.initialise failed: ' . $e->getMessage());
+        okv_error('We could not start that payment. Please try again.', 500, 'failed');
+    }
+
+    if (!$result['ok']) {
+        $status = $result['code'] === 'gateway_unreachable' ? 503 : 422;
+        // A person tapped Pay and the gateway did not answer. Send them back to
+        // their order, where the page already says so in plain words and the
+        // button is still there, rather than leaving them on a page of JSON.
+        if (!payments_is_fetch() && in_array($result['code'], ['gateway_unreachable', 'gateway_refused'], true)) {
+            $row = Database::one('SELECT order_id FROM payments WHERE id = :id', [':id' => $paymentId]);
+            if ($row) {
+                okv_redirect('/public/order.php?order=' . (int) $row['order_id'] . '&payment=unavailable', 303);
+            }
+        }
+        okv_error($result['message'], $status, $result['code']);
+    }
+
+    if (payments_is_fetch()) {
+        okv_json([
+            'status'            => 'ok',
+            'authorization_url' => $result['authorization_url'],
+            'reference'         => $result['reference'],
+            'amount_subunit'    => $result['amount_subunit'],
+            'amount'            => Money::format($result['amount_subunit']),
+        ]);
+    }
+    okv_redirect($result['authorization_url'], 303);
+}
+
 if ($action === 'initialise' || $action === 'initialize') {
     if (!okv_is_post()) {
         okv_error('Use POST for this action.', 405, 'method_not_allowed');
@@ -86,29 +127,150 @@ if ($action === 'initialise' || $action === 'initialize') {
         OrderTrail::remember((int) ($orderRow['order_id'] ?? 0), $token);
     }
 
+    payments_start_charge($paymentId);
+}
+
+if ($action === 'start_deposit') {
+    // A pay on delivery order needs its deposit before it can be sourced. The
+    // deposit row is opened here (idempotently), then charged exactly like any
+    // other Paystack payment. Ownership is proved the same two ways as above.
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    $token = trim((string) okv_input('token', ''));
+    if ($token === '') {
+        Customer::requireLoginApi();
+    }
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    $userId  = Customer::id() === null ? null : (int) Customer::id();
+    $orderId = (int) okv_input('order_id', 0);
+    if ($orderId < 1) {
+        okv_error('That order could not be found.', 422, 'bad_order');
+    }
+    $limitKey = $userId !== null ? 'payment_init:' . $userId : 'payment_init:guest:o' . $orderId;
+    if (!RateLimiter::hit($limitKey, 10, 300)) {
+        okv_error('Too many payment attempts. Wait a few minutes and try again.', 429, 'rate_limited');
+    }
+    $owned = $token !== '' && OrderTrail::isValidToken($token)
+        ? Database::one(
+            'SELECT id FROM orders WHERE id = :id AND user_id IS NULL AND order_trail_token_hash = :token',
+            [':id' => $orderId, ':token' => OrderTrail::hashToken($token)]
+        )
+        : ($userId === null ? null : Database::one(
+            'SELECT id FROM orders WHERE id = :id AND user_id = :user',
+            [':id' => $orderId, ':user' => $userId]
+        ));
+    if (!$owned) {
+        okv_error('That order could not be found.', 404, 'not_found');
+    }
+    if ($token !== '') {
+        OrderTrail::remember($orderId, $token);
+    }
     try {
-        $callback = rtrim((string) APP_URL, '/') . '/public/payment/callback.php';
-        $result   = Payments::beginCharge($paymentId, $callback);
+        $opened = Payments::openDepositPayment($orderId, null, $userId);
     } catch (Throwable $e) {
-        error_log('payments.initialise failed: ' . $e->getMessage());
+        error_log('payments.start_deposit failed: ' . $e->getMessage());
         okv_error('We could not start that payment. Please try again.', 500, 'failed');
     }
-
-    if (!$result['ok']) {
-        $status = $result['code'] === 'gateway_unreachable' ? 503 : 422;
-        okv_error($result['message'], $status, $result['code']);
+    if (!$opened['ok']) {
+        okv_error($opened['message'], $opened['code'] === 'not_found' ? 404 : 422, $opened['code']);
     }
+    payments_start_charge((int) $opened['payment_id']);
+}
+
+/**
+ * Send a customer back to their order after a receipt, with what happened. A
+ * guest comes back by the trail token they hold, a signed-in customer by their
+ * account.
+ */
+function payments_receipt_back(int $orderId, string $token, string $flag, string $code = ''): void
+{
+    $target = $token !== '' && OrderTrail::isValidToken($token)
+        ? '/public/order.php?token=' . rawurlencode($token)
+        : '/public/order.php?order=' . $orderId;
+    okv_redirect($target . '&payment=' . rawurlencode($flag) . ($code !== '' ? '&receipt_error=' . rawurlencode($code) : ''), 303);
+}
+
+/** Refuse a receipt: JSON for a fetch, back to the order with the reason otherwise. */
+function payments_receipt_refused(int $orderId, string $token, string $code, int $status = 422): void
+{
+    if (payments_is_fetch()) {
+        okv_error(TransferProofs::receiptProblemMessage($code), $status, 'receipt_' . $code);
+    }
+    payments_receipt_back($orderId, $token, 'receipt_refused', $code);
+}
+
+// -----------------------------------------------------------------------------
+// A customer hands in a bank transfer receipt (PRD 9.3a). Nothing is credited:
+// it waits for a member of staff to verify it against the bank.
+// -----------------------------------------------------------------------------
+if ($action === 'submit_transfer') {
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    $orderId = (int) okv_input('order_id', 0);
+    $token   = trim((string) okv_input('token', ''));
+    if (TransferProofs::postWasTooLarge()) {
+        payments_receipt_refused($orderId, $token, 'too_large', 413);
+    }
+    // The same two credentials as starting a Paystack charge, and never a third:
+    // the signed-in owner, or the trail token of a guest order.
+    if ($token === '') {
+        Customer::requireLoginApi();
+    }
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+
+    $userId = Customer::id() === null ? null : (int) Customer::id();
+    if (!RateLimiter::hit('transfer_receipt:' . ($userId ?? 'guest:' . $orderId), 8, 3600)) {
+        okv_error('Too many receipts sent. Wait a little and try again, or message us on WhatsApp.', 429, 'rate_limited');
+    }
+    if (!TransferProofs::customerMayActOn($orderId, $userId, $token)) {
+        okv_error('That order could not be found.', 404, 'not_found');
+    }
+    if ($token !== '') {
+        // Keep it for the trip back, which carries no token of its own.
+        OrderTrail::remember($orderId, $token);
+    }
+
+    $next = TransferProofs::nextTransferPayment($orderId);
+    if ($next === null) {
+        okv_error('There is nothing to send a receipt for on this order, or a receipt is already with our team.', 422, 'nothing_to_submit');
+    }
+
+    $check = TransferProofs::validateReceiptUpload($_FILES['receipt'] ?? []);
+    if (!$check['ok']) {
+        payments_receipt_refused($orderId, $token, $check['code']);
+    }
+
+    $stored = '';
+    try {
+        $stored = TransferProofs::storeReceipt($_FILES['receipt']);
+        $result = TransferProofs::submit((int) $next['id'], [
+            'proof_url'      => $stored,
+            'bank_reference' => (string) okv_input('bank_reference', ''),
+            'payer_name'     => (string) okv_input('payer_name', ''),
+        ]);
+    } catch (Throwable $e) {
+        error_log('payments.submit_transfer failed: ' . $e->getMessage());
+        if ($stored !== '') {
+            Uploads::removeStoredFile($stored, TransferProofs::SUBDIR);
+        }
+        okv_error('We could not keep that receipt. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        Uploads::removeStoredFile($stored, TransferProofs::SUBDIR);
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    Notifications::announceTransferSubmitted($result);
 
     if (payments_is_fetch()) {
-        okv_json([
-            'status'            => 'ok',
-            'authorization_url' => $result['authorization_url'],
-            'reference'         => $result['reference'],
-            'amount_subunit'    => $result['amount_subunit'],
-            'amount'            => Money::format($result['amount_subunit']),
-        ]);
+        okv_json(['status' => 'ok', 'code' => 'submitted', 'message' => $result['message']]);
     }
-    okv_redirect($result['authorization_url'], 303);
+    payments_receipt_back($orderId, $token, 'awaiting');
 }
 
 // -----------------------------------------------------------------------------
@@ -179,6 +341,50 @@ if ($action === 'record_manual') {
     Notifications::announceManualPayment($result, $staffId);
     Notifications::announceManualPaymentProof($result, $staffId);
     payments_staff_done($result, 'recorded');
+}
+
+if ($action === 'verify_transfer') {
+    // Verifying credits the order, so it carries the same gate and the same
+    // server side confirmation as recording money by hand.
+    $staffId = payments_staff_guard('payments.record');
+    if (!okv_input('confirmed', '')) {
+        okv_error('Tick the confirmation before verifying a payment.', 422, 'not_confirmed');
+    }
+    try {
+        $result = TransferProofs::verify(
+            (int) okv_input('proof_id', 0),
+            Money::toSubunit((string) okv_input('amount', '')),
+            (string) okv_input('note', ''),
+            $staffId
+        );
+    } catch (Throwable $e) {
+        error_log('payments.verify_transfer failed: ' . $e->getMessage());
+        okv_error('We could not verify that payment. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    Notifications::announceTransferVerified($result, $staffId);
+    payments_staff_done($result, 'verified');
+}
+
+if ($action === 'decline_transfer') {
+    $staffId = payments_staff_guard('payments.record');
+    try {
+        $result = TransferProofs::decline(
+            (int) okv_input('proof_id', 0),
+            (string) okv_input('reason', ''),
+            $staffId
+        );
+    } catch (Throwable $e) {
+        error_log('payments.decline_transfer failed: ' . $e->getMessage());
+        okv_error('We could not decline that receipt. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    Notifications::announceTransferDeclined($result, $staffId);
+    payments_staff_done($result, 'declined');
 }
 
 if ($action === 'review_proof') {

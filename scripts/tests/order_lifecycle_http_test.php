@@ -1,4 +1,7 @@
 <?php
+// The order is a pay on delivery order whose deposit has been paid: the sourcing gate
+// refuses to move an uncovered order to Sourced (see sourcing_gate_db_test.php), and
+// this suite is about the HTTP contract of the stage change.
 /** Lifecycle POST, CSRF, RBAC, stale and repeat behavior over local HTTP. */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
@@ -20,7 +23,7 @@ try {
     }
     Database::run('INSERT INTO user_roles (user_id, role_id) SELECT :user, id FROM roles WHERE name = \'manager\'', [':user' => $users[0]]);
     Database::run('DELETE FROM rate_limits');
-    Database::run('INSERT INTO orders (order_number, user_id, customer_type, order_status, payment_option, payment_status, subtotal_subunit, order_total_subunit, balance_due_subunit, preferred_delivery_date) VALUES (:number, :user, \'household\', \'pending\', \'pay_on_delivery\', \'unpaid\', 100000, 100000, 100000, :date)', [':number' => "ZZ-LH-$suffix", ':user' => $users[1], ':date' => date('Y-m-d', strtotime('+6 days'))]);
+    Database::run('INSERT INTO orders (order_number, user_id, customer_type, order_status, payment_option, payment_status, subtotal_subunit, order_total_subunit, deposit_required_subunit, amount_paid_subunit, balance_due_subunit, preferred_delivery_date) VALUES (:number, :user, \'household\', \'pending\', \'pay_on_delivery\', \'part_paid\', 100000, 100000, 30000, 30000, 70000, :date)', [':number' => "ZZ-LH-$suffix", ':user' => $users[1], ':date' => date('Y-m-d', strtotime('+6 days'))]);
     $orderId = (int) Database::getInstance()->getConnection()->lastInsertId();
     Database::run('INSERT INTO order_status_history (order_id, new_status, source, changed_by) VALUES (:order, \'pending\', \'customer\', :user)', [':order' => $orderId, ':user' => $users[1]]);
     Database::run('INSERT INTO delivery_schedules (order_id, delivery_date, status) SELECT id, preferred_delivery_date, \'scheduled\' FROM orders WHERE id = :id', [':id' => $orderId]);
@@ -74,7 +77,7 @@ try {
     lh_eq(200, $code, 'a quote in the customer search is data, not SQL');
     lh_ok(!str_contains($page, "ZZ-LH-$suffix"), 'a quote in the customer search matches nothing');
 } finally {
-    if ($orderId) { Database::run('DELETE FROM order_status_history WHERE order_id = :id', [':id' => $orderId]); Database::run('DELETE FROM delivery_schedules WHERE order_id = :id', [':id' => $orderId]); Database::run('DELETE FROM orders WHERE id = :id', [':id' => $orderId]); }
+    if ($orderId) { Database::run('DELETE FROM order_trail_share_links WHERE order_id = :id', [':id' => $orderId]); Database::run('DELETE FROM order_status_history WHERE order_id = :id', [':id' => $orderId]); Database::run('DELETE FROM delivery_schedules WHERE order_id = :id', [':id' => $orderId]); Database::run('DELETE FROM orders WHERE id = :id', [':id' => $orderId]); }
     foreach ($users as $id) { Database::run('DELETE FROM user_roles WHERE user_id = :id', [':id' => $id]); Database::run('DELETE FROM users WHERE id = :id', [':id' => $id]); }
     foreach ($jars as $jar) { if (is_string($jar) && is_file($jar)) { unlink($jar); } }
 }

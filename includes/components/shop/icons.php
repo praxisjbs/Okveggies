@@ -74,6 +74,10 @@ if (!function_exists('okv_icon')) {
             'list'         => '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
             // The van that brings the basket.
             'truck'        => '<path d="M3 7h11v10H3z"/><path d="M14 11h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>',
+            // A clock, for a payment that is waiting to be checked.
+            'clock'        => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+            // An arrow into a tray, for handing in a receipt.
+            'upload'       => '<path d="M12 16V5"/><path d="m7.5 9.5 4.5-4.5 4.5 4.5"/><path d="M5 19h14"/>',
         ];
         return $paths;
     }

@@ -27,6 +27,7 @@ final class AdminNotifications
         'admin_manual_payment_proof' => ['permission' => 'payments.view', 'related_type' => 'payment_proof'],
         'refund_failed' => ['permission' => 'payments.view', 'related_type' => 'order'],
         'admin_new_contact' => ['permission' => 'messages.view', 'related_type' => 'contact_message'],
+        'admin_transfer_receipt' => ['permission' => 'payments.view', 'related_type' => 'payment_proof'],
         'admin_new_credit_application' => ['permission' => 'credit.view', 'related_type' => 'credit_application'],
         'admin_new_issue_report' => ['permission' => 'issues.view', 'related_type' => 'issue_report'],
     ];
@@ -166,6 +167,7 @@ final class AdminNotifications
         }
         if (Rbac::can('payments.view')) {
             self::addAttention($items, 'Payment proofs to review', self::countWhere('SELECT COUNT(*) AS n FROM manual_payment_proofs WHERE status = :value', ManualPayments::PROOF_PENDING), '/admin/payments.php#queue-heading');
+            self::addAttention($items, 'Transfer receipts to verify', self::countWhere('SELECT COUNT(*) AS n FROM manual_payment_proofs WHERE status = :value', TransferProofs::PROOF_SUBMITTED), '/admin/payments.php#queue-heading');
             self::addAttention($items, 'Failed refunds to check', self::countWhere('SELECT COUNT(*) AS n FROM refunds WHERE status = :value', Refunds::STATUS_FAILED), '/admin/payments.php#recent-heading');
         }
         if (Rbac::can('messages.view')) {

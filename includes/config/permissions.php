@@ -24,6 +24,7 @@ $OKV_PERMISSIONS = [
         'orders.cancel'                => 'Cancel an order',
         'orders.reschedule'            => 'Reschedule an order delivery date',
         'orders.create'                => 'Create an order by hand',
+        'orders.source.override'       => 'Source an order the payment gate would refuse, with a reason',
     ],
     'products' => [
         'products.view'                => 'View products',
@@ -111,6 +112,6 @@ $OKV_OWNER_ONLY = [
     'rbac.roles.view', 'rbac.roles.edit',
     'settings.edit', 'settings.order.edit', 'settings.notifications.edit',
     'products.delete', 'combos.delete',
-    'payments.refund',
+    'payments.refund', 'orders.source.override',
     'credit.apply.review', 'credit.grant', 'credit.limit.set',
 ];

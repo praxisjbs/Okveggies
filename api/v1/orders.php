@@ -43,13 +43,32 @@ function orders_done(array $result, string $redirect): void
 if ($action === 'transition') {
     orders_status_guard();
     $orderId = (int) okv_input('order_id', 0);
+
+    // Two optional ways past the payment gate, both decided on the server. The
+    // credit-line shortcut needs nothing beyond the stage permission, because
+    // the draw is refused unless the business really has the credit. Sourcing
+    // an order the gate would refuse is the Owner's alone.
+    $options = [];
+    if (okv_input('source_on_credit', '') === '1') {
+        $options['source_on_credit'] = true;
+    }
+    $overrideReason = trim((string) okv_input('override_reason', ''));
+    if ($overrideReason !== '') {
+        if (!Rbac::can('orders.source.override')) {
+            okv_error('Only the Owner can source an order that has not been paid.', 403, 'forbidden');
+        }
+        $options['override_reason'] = $overrideReason;
+    }
+
     try {
         $result = OrderLifecycle::transition(
             $orderId,
             (string) okv_input('expected_status', ''),
             (string) okv_input('target_status', ''),
             (int) Rbac::userId(),
-            trim((string) okv_input('note', ''))
+            trim((string) okv_input('note', '')),
+            'admin',
+            $options
         );
     } catch (Throwable $e) {
         error_log('orders.transition failed: ' . $e->getMessage());
@@ -57,17 +76,64 @@ if ($action === 'transition') {
     }
     if (!$result['ok']) {
         $status = $result['code'] === 'not_found' ? 404 : ($result['code'] === 'stale' ? 409 : 422);
+        if (!orders_is_fetch() && $orderId > 0) {
+            // A person clicked a button. Show them the refusal on the order, not
+            // a page of JSON.
+            okv_redirect('/admin/orders.php?order=' . $orderId . '&stage_error=' . rawurlencode((string) $result['code']), 303);
+        }
         okv_error($result['message'], $status, $result['code']);
     }
     if ($result['code'] === 'transitioned') {
         // Committed first, announced second. A bounced email never un-packs an
         // order, and the failure shows on the order screen instead.
+        if (!empty($result['credit_charged'])) {
+            Notifications::announceCreditChargePosted($orderId, (int) Rbac::userId());
+        }
         Notifications::announceStage($orderId, (string) $result['status'], (int) Rbac::userId());
     }
     if (orders_is_fetch()) {
         okv_json(['status' => 'ok'] + $result);
     }
     okv_redirect('/admin/orders.php?order=' . $orderId . '&status=' . rawurlencode($result['code']), 303);
+}
+
+if ($action === 'use_credit_line') {
+    // The customer's own button on the Pay sheet. Ownership is enforced inside
+    // Credit::convertOrderToCredit (a stranger's order reads as not found), and
+    // the same locked limit check as checkout decides whether the credit is
+    // there. A repeat or a double submit returns the original charge.
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Customer::requireLoginApi();
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    $orderId = (int) okv_input('order_id', 0);
+    $userId  = (int) Customer::id();
+    if (!RateLimiter::hit('credit_line:' . $userId, 10, 300)) {
+        okv_error('Too many attempts. Wait a few minutes and try again.', 429, 'rate_limited');
+    }
+    try {
+        $result = Credit::useCreditLine($orderId, $userId, $userId, 'customer');
+    } catch (Throwable $e) {
+        error_log('orders.use_credit_line failed: ' . $e->getMessage());
+        okv_error('We could not use your credit line. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        $status = $result['code'] === 'not_found' ? 404 : 422;
+        if (orders_is_fetch()) {
+            okv_error($result['message'], $status, $result['code']);
+        }
+        okv_redirect('/public/order.php?order=' . $orderId . '&credit_error=' . rawurlencode((string) $result['code']), 303);
+    }
+    if ($result['code'] === 'on_credit') {
+        Notifications::announceCreditChargePosted($orderId, $userId);
+    }
+    if (orders_is_fetch()) {
+        okv_json(['status' => 'ok'] + $result);
+    }
+    okv_redirect('/public/order.php?order=' . $orderId . '&credit=' . rawurlencode((string) $result['code']), 303);
 }
 
 if ($action === 'cancel_customer') {
