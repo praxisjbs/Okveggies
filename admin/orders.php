@@ -258,12 +258,21 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <?php if (!$selected): ?>
       <p class="p-5 text-sm text-ink-60">Choose an order to see its details.</p>
     <?php else: ?>
-      <div class="okv-panel-head flex-wrap gap-3">
+      <div class="okv-panel-head flex-wrap items-center gap-3">
         <div>
           <p class="okv-eyebrow">Order</p>
           <h2 id="order-detail-heading" class="okv-panel-title mt-1 font-mono"><?= okv_e($selected['order_number']) ?></h2>
         </div>
-        <span class="okv-badge <?= (string) $selected['order_status'] === 'cancelled' ? 'okv-badge-neutral' : 'okv-badge-available' ?>"><?= okv_e(ucfirst((string) $selected['order_status'])) ?></span>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="okv-badge <?= (string) $selected['order_status'] === 'cancelled' ? 'okv-badge-neutral' : 'okv-badge-available' ?>"><?= okv_e(ucfirst((string) $selected['order_status'])) ?></span>
+          <?php if ($selected['cancellation_id'] === null && $canCancel && $selected['may_cancel'] && !((int) $selected['amount_paid_subunit'] > 0 && !$canRefund)): ?>
+            <a class="okv-btn-danger px-4 text-sm"
+               href="#admin-cancel-order"
+               onclick="var s=document.getElementById('staff-cancel-reason');if(s)s.focus();">
+              Cancel order
+            </a>
+          <?php endif; ?>
+        </div>
       </div>
       <div class="space-y-6 p-4 md:p-5">
         <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -575,27 +584,25 @@ require __DIR__ . '/../includes/components/admin/header.php';
         <?php elseif ((int) $selected['amount_paid_subunit'] > 0 && !$canRefund): ?>
           <p class="okv-note bg-clay-tint">Money has been paid on this order. An Owner must cancel it because the cancellation also raises a refund.</p>
         <?php else: ?>
-          <div class="rounded-md border border-clay bg-clay-tint p-4">
+          <div id="admin-cancel-order" class="scroll-mt-6 rounded-md border border-tomato/20 bg-tomato-tint p-4">
             <h3 class="font-semibold text-ink">Cancel this order</h3>
-            <?php if (!empty($selected['is_dispatched'])): ?>
-              <!-- The produce is on a van. Different terms, said before the
-                   button rather than discovered in the refund figure. -->
-              <p class="mt-2 rounded-md border border-clay bg-white p-3 text-sm text-ink">
-                <strong>This order is already on the way.</strong>
-                <?= okv_e($selected['terms_line']) ?>
-              </p>
-            <?php endif; ?>
-            <p class="mt-2 text-sm text-ink-60"><?= okv_e(Cancellation::staffSummary($selected['money_outcome'])) ?></p>
-            <?php if ((int) $selected['money_outcome']['refund_subunit'] > 0): ?>
-              <p class="mt-1 text-sm text-ink-60">Paystack refunds are raised now but shown as pending until Paystack confirms them. Money recorded by staff is flagged for manual return.</p>
-            <?php endif; ?>
-            <form action="/api/v1/orders.php" method="POST" class="mt-4 grid gap-4">
+            <p class="mt-1 text-sm text-ink-60">
+              <?= okv_e(Cancellation::staffSummary($selected['money_outcome'])) ?>
+              <?php if (!empty($selected['is_dispatched'])): ?>
+                <strong class="text-ink">Order is already dispatched.</strong>
+              <?php endif; ?>
+            </p>
+            <form action="/api/v1/orders.php" method="POST" class="mt-4 grid gap-3 sm:grid-cols-[minmax(12rem,1fr)_minmax(14rem,2fr)_auto]">
               <?= Csrf::field() ?>
               <input type="hidden" name="action" value="cancel_staff">
               <input type="hidden" name="order_id" value="<?= (int) $selected['id'] ?>">
+              <input type="hidden" name="confirmed" value="1">
+              <?php if (!empty($selected['is_dispatched'])): ?>
+                <input type="hidden" name="dispatch_terms" value="1">
+              <?php endif; ?>
               <div>
                 <label for="staff-cancel-reason" class="okv-label">Reason</label>
-                <select id="staff-cancel-reason" name="reason_code" class="okv-input" required>
+                <select id="staff-cancel-reason" name="reason_code" class="okv-input mt-1" required>
                   <option value="">Choose a reason</option>
                   <?php foreach (OrderCancellation::STAFF_REASONS as $value => $label): ?>
                     <option value="<?= okv_e($value) ?>"><?= okv_e($label) ?></option>
@@ -604,19 +611,9 @@ require __DIR__ . '/../includes/components/admin/header.php';
               </div>
               <div>
                 <label for="staff-cancel-note" class="okv-label">Internal note (optional)</label>
-                <textarea id="staff-cancel-note" name="reason_text" class="okv-input" rows="3" maxlength="1000"></textarea>
+                <input id="staff-cancel-note" name="reason_text" class="okv-input mt-1" maxlength="1000">
               </div>
-              <label class="flex min-h-[44px] items-start gap-3 text-sm">
-                <input type="checkbox" name="confirmed" value="1" class="mt-1 h-5 w-5" required>
-                <span>I have checked the order, refund and deposit consequences above.</span>
-              </label>
-              <?php if (!empty($selected['is_dispatched'])): ?>
-                <label class="flex min-h-[44px] items-start gap-3 text-sm">
-                  <input type="checkbox" name="dispatch_terms" value="1" class="mt-1 h-5 w-5" required>
-                  <span>The order is on the way and I have told the customer what happens to their money. The server checks this too.</span>
-                </label>
-              <?php endif; ?>
-              <button type="submit" class="okv-btn-outline min-h-[44px] border-tomato text-tomato justify-center sm:w-fit">Confirm cancellation</button>
+              <button type="submit" class="okv-btn-danger min-h-[44px] self-end justify-center px-4">Cancel order</button>
             </form>
           </div>
         <?php endif; ?>

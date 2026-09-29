@@ -113,12 +113,19 @@
 }
 
 @layer components {
-  /* Buttons. Three variants, touch-safe height. Gold is never a fill. */
+  /* Buttons. Four variants, touch-safe height. Gold is never a fill. */
   .okv-btn {
     @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-6 rounded-md
            bg-forest text-white font-medium
            transition duration-botanical ease-botanical
            hover:bg-forest-hover active:bg-forest-active
+           disabled:bg-mist disabled:text-ink-40 disabled:cursor-not-allowed;
+  }
+  .okv-btn-danger {
+    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-6 rounded-md
+           bg-tomato text-white font-medium
+           transition duration-botanical ease-botanical
+           hover:bg-tomato-hover active:bg-tomato-active
            disabled:bg-mist disabled:text-ink-40 disabled:cursor-not-allowed;
   }
   .okv-btn-outline {

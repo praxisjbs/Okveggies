@@ -176,7 +176,7 @@ final class Refunds
         int $amountSubunit,
         string $customerNote,
         string $merchantNote,
-        int $staffId,
+        ?int $staffId = null,
         ?int $issueReportId = null
     ): array
     {

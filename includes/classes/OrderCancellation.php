@@ -73,6 +73,13 @@ final class OrderCancellation
         return $order ? self::decorate($order, false) : null;
     }
 
+    /** Current policy and recorded outcome for a guest order opened by its trail token. */
+    public static function forGuest(int $orderId, string $token): ?array
+    {
+        $order = self::guestOrder($orderId, $token);
+        return $order ? self::decorate($order, false) : null;
+    }
+
     /** Current policy and recorded outcome for staff. */
     public static function forStaff(int $orderId): ?array
     {
@@ -88,6 +95,19 @@ final class OrderCancellation
         string $reasonText
     ): array {
         return self::cancel($orderId, $userId, 'customer', $reasonCode, $reasonText, false);
+    }
+
+    /** Cancel a guest order authenticated by its Order Trail token. */
+    public static function cancelForGuest(
+        int $orderId,
+        string $token,
+        string $reasonCode,
+        string $reasonText
+    ): array {
+        if (!OrderTrail::isValidToken($token)) {
+            return ['ok' => false, 'code' => 'not_found', 'message' => 'That order could not be found.'];
+        }
+        return self::cancel($orderId, null, 'customer', $reasonCode, $reasonText, false, false, $token);
     }
 
     /**
@@ -107,12 +127,13 @@ final class OrderCancellation
 
     private static function cancel(
         int $orderId,
-        int $actorId,
+        ?int $actorId,
         string $actorType,
         string $reasonCode,
         string $reasonText,
         bool $mayRefund,
-        bool $dispatchAcknowledged = false
+        bool $dispatchAcknowledged = false,
+        ?string $guestToken = null
     ): array {
         $allowedReasons = $actorType === 'customer' ? self::CUSTOMER_REASONS : self::STAFF_REASONS;
         if (!isset($allowedReasons[$reasonCode])) {
@@ -129,8 +150,13 @@ final class OrderCancellation
             $params = [':id' => $orderId];
             $ownerClause = '';
             if ($actorType === 'customer') {
-                $ownerClause = ' AND o.user_id = :user';
-                $params[':user'] = $actorId;
+                if ($guestToken !== null) {
+                    $ownerClause = ' AND o.user_id IS NULL AND o.order_trail_token_hash = :token_hash';
+                    $params[':token_hash'] = OrderTrail::hashToken($guestToken);
+                } else {
+                    $ownerClause = ' AND o.user_id = :user';
+                    $params[':user'] = (int) $actorId;
+                }
             }
             $order = Database::one(
                 'SELECT o.*, c.id AS cancellation_id, c.refund_status AS cancellation_refund_status
@@ -447,6 +473,21 @@ final class OrderCancellation
         );
     }
 
+    private static function guestOrder(int $orderId, string $token): ?array
+    {
+        if (!OrderTrail::isValidToken($token)) {
+            return null;
+        }
+        return Database::one(
+            'SELECT o.*, c.id AS cancellation_id, c.cancelled_by_type, c.reason_code,
+                    c.reason_text, c.refund_required, c.refund_status, c.cancelled_at AS cancellation_at
+               FROM orders o
+               LEFT JOIN order_cancellations c ON c.order_id = o.id
+              WHERE o.id = :id AND o.user_id IS NULL AND o.order_trail_token_hash = :token_hash',
+            [':id' => $orderId, ':token_hash' => OrderTrail::hashToken($token)]
+        );
+    }
+
     /**
      * The most a late cancellation of this order may keep, capped at what the
      * customer actually paid. An order that took a deposit names its figure; an
@@ -532,13 +573,15 @@ final class OrderCancellation
             }
         }
 
+        $deadline = Cancellation::deadline((string) $order['preferred_delivery_date'], $cutoff);
         $order['within_cutoff'] = $within;
         $order['may_cancel'] = $mayCancel && $order['cancellation_id'] === null;
         $order['restriction'] = $restriction;
         $order['money_outcome'] = $outcome;
         $order['is_dispatched'] = Cancellation::isDispatched($stage);
         $order['terms_line'] = Cancellation::termsLine($stage, $cutoff, $forfeitAfterCutoff, $afterDispatchAllowed, $dispatchedForfeit, (string) ($order['preferred_delivery_date'] ?? ''));
-        $order['deadline'] = Cancellation::deadline((string) $order['preferred_delivery_date'], $cutoff);
+        $order['deadline'] = $deadline;
+        $order['customer_summary'] = Cancellation::customerSummary($outcome, $deadline);
         $order['refunds'] = Refunds::forOrder((int) $order['id']);
         return $order;
     }

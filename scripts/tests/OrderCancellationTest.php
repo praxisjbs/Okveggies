@@ -34,10 +34,17 @@ okv_test_eq(
 
 $controller = file_get_contents(dirname(__DIR__, 2) . '/api/v1/orders.php');
 $service = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/OrderCancellation.php');
+$clientPage = file_get_contents(dirname(__DIR__, 2) . '/public/order.php');
+$adminPage = file_get_contents(dirname(__DIR__, 2) . '/admin/orders.php');
 okv_test_ok(str_contains($controller, "Rbac::requirePermission('orders.cancel')"), 'staff cancellation is permission gated in the controller');
 okv_test_ok(str_contains($controller, 'Csrf::validate()'), 'the cancellation controller validates CSRF');
 okv_test_ok(str_contains($controller, 'okv_is_post()'), 'the cancellation controller enforces POST');
 okv_test_ok(str_contains($service, 'o.user_id = :user'), 'customer ownership is checked in the locked database query');
+okv_test_ok(str_contains($service, 'o.order_trail_token_hash = :token_hash'), 'guest token ownership is checked in the locked database query');
 okv_test_ok(str_contains($service, 'Refunds::request('), 'Paystack cancellation money goes through the M5 refund engine');
 okv_test_ok(str_contains($service, 'FOR UPDATE'), 'submission rechecks under a database row lock');
 okv_test_ok(str_contains($service, 'already_cancelled'), 'repeat submissions have an idempotent result');
+okv_test_ok(str_contains($clientPage, 'okv-btn-danger'), 'client order page renders a visible red cancel order button');
+okv_test_ok(str_contains($adminPage, 'okv-btn-danger'), 'admin orders page renders a visible red cancel order button');
+okv_test_ok(!str_contains($adminPage, 'I have checked the order, refund and deposit consequences above.'), 'admin cancellation form removes the confirmation checkbox');
+okv_test_ok(!str_contains($clientPage, 'I understand this cancels the whole order and cannot be undone.'), 'client cancellation form removes the confirmation checkbox');
