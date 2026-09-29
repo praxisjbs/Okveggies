@@ -556,7 +556,7 @@ $stepIcons = ['pending' => 'check', 'sourced' => 'leaf', 'packed' => 'basket', '
               <input type="checkbox" name="confirmed" value="1" class="mt-1 h-5 w-5" required>
               <span>I understand my delivery day will change and my order total will stay the same.</span>
             </label>
-            <button type="submit" class="okv-btn min-h-[44px]"><?php okv_icon('calendar', 'h-4 w-4'); ?>Save delivery day</button>
+            <button type="submit" class="okv-btn min-h-[44px]"><?php okv_icon('calendar', 'h-4 w-4'); ?>Move delivery</button>
           </form>
         </details>
       <?php else: ?>
@@ -698,4 +698,3 @@ $stepIcons = ['pending' => 'check', 'sourced' => 'leaf', 'packed' => 'basket', '
 <script src="<?= okv_e(okv_asset('/assets/js/bank-transfer.min.js')) ?>" defer></script>
 </body>
 </html>
-
