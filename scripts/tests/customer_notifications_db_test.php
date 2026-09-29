@@ -115,10 +115,20 @@ try {
     );
     $runId = (int) $pdo->lastInsertId();
 
-    $labels = array_column(CustomerNotifications::attention($owner), 'label');
+    $attention = CustomerNotifications::attention($owner);
+    $labels = array_column($attention, 'label');
+    $hrefByLabel = array_column($attention, 'href', 'label');
     cnb_ok(in_array('Payments to complete', $labels, true), 'an order with an online balance surfaces a payment to complete');
     cnb_ok(in_array('Kitchen Run quotes to review', $labels, true), 'a quoted Kitchen Run surfaces a quote to review');
+    cnb_eq('/kitchen-runs.php?request=' . $runId, $hrefByLabel['Kitchen Run quotes to review'] ?? '', 'a single quoted Kitchen Run links directly to that request');
     cnb_eq([], CustomerNotifications::attention($other), 'the attention queue is scoped to the customer, not shared');
+
+    Database::run(
+        'UPDATE kitchen_run_requests SET quoted_at = :expired WHERE id = :id',
+        [':expired' => date('Y-m-d H:i:s', strtotime('-30 days')), ':id' => $runId]
+    );
+    $expiredLabels = array_column(CustomerNotifications::attention($owner), 'label');
+    cnb_ok(!in_array('Kitchen Run quotes to review', $expiredLabels, true), 'an expired Kitchen Run quote is no longer surfaced as needing review');
 } finally {
     if ($runId > 0) { Database::run('DELETE FROM kitchen_run_requests WHERE id = :id', [':id' => $runId]); }
     if ($paymentId > 0) { Database::run('DELETE FROM payments WHERE id = :id', [':id' => $paymentId]); }

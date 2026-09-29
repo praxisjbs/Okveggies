@@ -164,15 +164,28 @@ final class CustomerNotifications
             ),
             '/account.php'
         );
+        $quotedRow = Database::one(
+            'SELECT COUNT(*) AS n, MAX(id) AS latest_id
+               FROM kitchen_run_requests
+              WHERE user_id = :user
+                AND status = :quoted
+                AND (quoted_at IS NULL OR quoted_at > :live_since)',
+            [
+                ':user' => $userId,
+                ':quoted' => 'quoted',
+                ':live_since' => KitchenRuns::expiredBefore(),
+            ]
+        );
+        $quotedCount = (int) ($quotedRow['n'] ?? 0);
+        $quotedId = (int) ($quotedRow['latest_id'] ?? 0);
+        $quotedHref = ($quotedCount === 1 && $quotedId > 0)
+            ? self::hrefFor('kitchen_run', $quotedId)
+            : '/kitchen-runs.php#runs-heading';
         self::addAttention(
             $items,
             'Kitchen Run quotes to review',
-            self::countWhere(
-                'SELECT COUNT(*) AS n FROM kitchen_run_requests
-                  WHERE user_id = :user AND status = :quoted',
-                [':user' => $userId, ':quoted' => 'quoted']
-            ),
-            '/kitchen-runs.php'
+            $quotedCount,
+            $quotedHref
         );
         return $items;
     }

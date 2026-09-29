@@ -39,7 +39,7 @@
   }
 
   function isShown(element) {
-    return Boolean(element && !element.hidden && !element.closest('[hidden]'));
+    return Boolean(element && !element.hidden && !element.closest('[hidden], .hidden'));
   }
 
   function activeOverlay() {

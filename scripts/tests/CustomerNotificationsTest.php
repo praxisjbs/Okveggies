@@ -30,6 +30,9 @@ $proHeader = (string) file_get_contents(dirname(__DIR__, 2) . '/includes/compone
 $component = (string) file_get_contents(dirname(__DIR__, 2) . '/includes/components/shop/notification_bell.php');
 $api = (string) file_get_contents(dirname(__DIR__, 2) . '/api/v1/notifications.php');
 $account = (string) file_get_contents(dirname(__DIR__, 2) . '/account.php');
+$kitchenRuns = (string) file_get_contents(dirname(__DIR__, 2) . '/kitchen-runs.php');
+$kitchenRunsJs = (string) file_get_contents(dirname(__DIR__, 2) . '/assets/js/kitchen-runs.js');
+$customerNotificationsPhp = (string) file_get_contents(dirname(__DIR__, 2) . '/includes/classes/CustomerNotifications.php');
 
 okv_test_ok(!str_contains($js, 'innerHTML'), 'notification data is never rendered through innerHTML');
 okv_test_ok(str_contains($js, 'textContent') && str_contains($js, 'document.createElement'), 'notification rows use safe DOM construction');
@@ -38,6 +41,13 @@ okv_test_ok(str_contains($js, "event.key === 'Escape'"), 'the customer dialog cl
 okv_test_ok(str_contains($js, "action: 'mark_read'") && str_contains($js, "action: 'mark_all_read'"), 'individual and bulk read controls use explicit actions');
 okv_test_ok(str_contains($js, "event.key !== 'Tab'") && str_contains($js, 'event.shiftKey'), 'the customer dialog traps focus in both directions');
 okv_test_ok(str_contains($js, "'/api/v1/notifications.php'"), 'the customer feed talks to the customer endpoint');
+okv_test_ok(str_contains($js, "closest('[hidden], .hidden')"), 'the dialog guard ignores dialogs hidden by either the HTML attribute or the hidden class');
+okv_test_ok((bool) preg_match('/id="kr-help-sheet"[^>]*\bhidden\b[^>]*role="dialog"|id="kr-help-sheet"[^>]*role="dialog"[^>]*\bhidden\b/', $kitchenRuns), 'the Kitchen Runs help sheet carries the hidden attribute so it does not block the notification bell');
+okv_test_ok(strpos($kitchenRuns, 'okv_activation_banner()') < strpos($kitchenRuns, "okv_shop_header('kitchen-runs')"), 'the activation banner renders above the sticky header on Kitchen Runs, matching Shop and Combos');
+okv_test_ok(str_contains($kitchenRunsJs, "e.key === 'Escape'") && str_contains($kitchenRunsJs, 'helpOpener.focus()'), 'the Kitchen Runs help sheet closes on Escape and returns focus to its opener');
+okv_test_ok(str_contains($customerNotificationsPhp, '/kitchen-runs.php#runs-heading') && str_contains($customerNotificationsPhp, "self::hrefFor('kitchen_run'"), 'the Kitchen Run attention item deep-links to a single quoted run or scrolls to Your runs when multiple');
+okv_test_ok(str_contains($customerNotificationsPhp, 'KitchenRuns::expiredBefore()'), 'the Kitchen Run attention count excludes expired quotes that the customer can no longer approve');
+okv_test_ok(str_contains($component, '/assets/js/notifications.min.js'), 'the customer notification bell loads the minified controller');
 okv_test_ok(str_contains($css, '.okv-notification-backdrop'), 'the bell reuses the shared mobile-sheet and desktop-panel styles');
 
 okv_test_ok(str_contains($component, 'Customer::isLoggedIn()') && str_contains($component, 'return;'), 'the bell renders only for a signed-in customer');

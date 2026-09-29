@@ -151,7 +151,7 @@
 
   function openPanel() {
     var other = Array.prototype.find.call(document.querySelectorAll('[role="dialog"][aria-modal="true"]'), function (dialog) {
-      return dialog !== panel && !dialog.closest('[hidden]');
+      return dialog !== panel && !dialog.closest('[hidden], .hidden');
     });
     if (other) { return; }
     opener = document.activeElement;

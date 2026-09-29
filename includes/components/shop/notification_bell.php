@@ -70,6 +70,6 @@ $okv_customer_badge = $okv_customer_unread > 99 ? '99+' : (string) $okv_customer
 <?php if (!defined('OKV_CUSTOMER_BELL_ASSETS')): ?>
   <?php define('OKV_CUSTOMER_BELL_ASSETS', true); ?>
   <script>window.OKV = window.OKV || {}; window.OKV.csrf = window.OKV.csrf || <?= json_encode(Csrf::token(), JSON_UNESCAPED_SLASHES) ?>;</script>
-  <script src="<?= okv_e(okv_asset('/assets/js/notifications.js')) ?>" defer></script>
+  <script src="<?= okv_e(okv_asset('/assets/js/notifications.min.js')) ?>" defer></script>
 <?php endif; ?>
 <?php unset($okv_customer_id, $okv_customer_unread, $okv_customer_badge); ?>

@@ -163,8 +163,8 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
   </noscript>
 </head>
 <body class="bg-canvas text-ink antialiased">
-<?php okv_shop_header('kitchen-runs'); ?>
 <?php okv_activation_banner(); ?>
+<?php okv_shop_header('kitchen-runs'); ?>
 
 <main id="okv-main" class="okv-container pb-24 md:pb-12">
   <nav aria-label="Breadcrumb" class="pt-3 text-xs text-ink-60">
@@ -451,9 +451,9 @@ $canonical = rtrim((string) APP_URL, '/') . '/kitchen-runs.php';
 </main>
 
 <!-- Backdrop + sheets -->
-<div id="kr-backdrop" class="kr-backdrop fixed inset-0 z-40 hidden" data-kr-close aria-hidden="true"></div>
+<div id="kr-backdrop" class="kr-backdrop fixed inset-0 z-40 hidden" hidden data-kr-close aria-hidden="true"></div>
 
-<div id="kr-help-sheet" class="kr-sheet fixed inset-x-0 bottom-0 z-50 hidden bg-white" role="dialog" aria-modal="true" aria-labelledby="kr-help-title">
+<div id="kr-help-sheet" class="kr-sheet fixed inset-x-0 bottom-0 z-50 hidden bg-white" hidden role="dialog" aria-modal="true" aria-labelledby="kr-help-title" tabindex="-1">
   <div class="p-6 text-center">
     <div class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-forest-tint" aria-hidden="true">
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0F5132" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a3 3 0 0 1 5 2c0 2-3 2-3 4"/><path d="M12 17v0"/></svg>
