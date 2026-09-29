@@ -98,6 +98,8 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  var helpOpener = null;
+
   function showBackdrop(show) {
     if (!backdrop) return;
     backdrop.hidden = !show;
@@ -105,17 +107,26 @@
     document.body.style.overflow = show ? 'hidden' : '';
   }
 
-  function showHelp(key) {
+  function showHelp(key, triggerEl) {
     if (!helpSheet || !helpText) return;
+    helpOpener = triggerEl || document.activeElement;
     helpText.textContent = HELP[key] || 'We source market. You approve price.';
     helpSheet.classList.remove('hidden');
     helpSheet.hidden = false;
     showBackdrop(true);
+    var closeBtn = helpSheet.querySelector('[data-kr-close]');
+    if (closeBtn && typeof closeBtn.focus === 'function') { closeBtn.focus(); }
+    else if (typeof helpSheet.focus === 'function') { helpSheet.focus(); }
   }
 
   function hideSheets() {
+    var wasOpen = Boolean(helpSheet && !helpSheet.hidden);
     if (helpSheet) { helpSheet.classList.add('hidden'); helpSheet.hidden = true; }
     showBackdrop(false);
+    if (wasOpen && helpOpener && typeof helpOpener.focus === 'function' && document.contains(helpOpener)) {
+      helpOpener.focus();
+    }
+    helpOpener = null;
   }
 
   // --- The two halves of the items step -------------------------------------
@@ -550,13 +561,28 @@
   // owns its own required check, which runs before the send below.
 
   form.querySelectorAll('[data-kr-help]').forEach(function (btn) {
-    btn.addEventListener('click', function () { showHelp(btn.getAttribute('data-kr-help')); });
+    btn.addEventListener('click', function () { showHelp(btn.getAttribute('data-kr-help'), btn); });
   });
   if (backdrop) {
     backdrop.addEventListener('click', hideSheets);
   }
   document.querySelectorAll('[data-kr-close]').forEach(function (btn) {
     btn.addEventListener('click', hideSheets);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!helpSheet || helpSheet.hidden) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      hideSheets();
+      return;
+    }
+    if (e.key === 'Tab') {
+      var closeBtn = helpSheet.querySelector('[data-kr-close]');
+      if (closeBtn) {
+        e.preventDefault();
+        closeBtn.focus();
+      }
+    }
   });
 
   // --- Send -------------------------------------------------------------------

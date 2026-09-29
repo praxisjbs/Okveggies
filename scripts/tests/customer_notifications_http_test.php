@@ -66,7 +66,7 @@ try {
     cnh_eq(200, $shopStatus, 'the storefront renders for the signed-in customer');
     cnh_ok(str_contains($shop, 'data-customer-notifications'), 'the storefront header carries the customer bell');
     cnh_ok(str_contains($shop, 'aria-label="Updates, 1 unread"'), 'the server-rendered badge counts only the customer update, not the staff alert');
-    cnh_ok(str_contains($shop, '/assets/js/notifications.js'), 'the storefront loads the customer notification controller');
+    cnh_ok(str_contains($shop, '/assets/js/notifications.min.js'), 'the storefront loads the customer notification controller');
     cnh_ok(str_contains($shop, 'role="dialog"') && str_contains($shop, 'aria-describedby="okv-customer-notification-description"'), 'the bell panel is a named and described dialog');
     cnh_ok(!str_contains($shop, 'Secret staff alert'), 'notification bodies are not leaked into the initial HTML');
 
