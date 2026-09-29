@@ -14,7 +14,7 @@
  *   label       what the person sees above the input
  *   help        one line under it saying what the value actually does
  *   type        the validation rule: percent, days, time, money, bool, text,
- *               email or phone
+ *               email, phone or account_number (a 10 digit bank account)
  *   value_type  what goes in site_settings.value_type, so Settings::coerce
  *               reads it back as the right PHP type
  *   confirm     true when a change needs the confirmation step before it saves.
@@ -23,6 +23,8 @@
  *   max         longest allowed string, for the text and email types
  *   min / cap   inclusive range for percent, days and money (money in kobo)
  *   placeholder optional example, never a default
+ *   section     optional heading (title, intro) drawn above this field, to
+ *               start a named group of fields inside one tab
  *
  * Two seeded keys are on purpose absent: currency and order_number_prefix. Both
  * are set once at launch. Changing the prefix would orphan every order number
@@ -171,7 +173,7 @@ $OKV_SETTINGS_GROUPS = [
     'payment' => [
         'label'      => 'Payments',
         'permission' => 'settings.edit',
-        'note'       => 'How the Paystack charge behaves. The keys themselves live in .env and are never editable from a screen.',
+        'note'       => 'How the Paystack charge behaves, and the bank account customers can transfer to directly. The Paystack keys themselves live in .env and are never editable from a screen.',
         'guide'      => [
             'title' => 'Two things are set on Paystack, not here',
             'intro' => 'OK Veggies cannot change these for you. They belong to your Paystack account, and the ledger is correct either way they are set.',
@@ -215,6 +217,47 @@ $OKV_SETTINGS_GROUPS = [
                 'value_type' => 'int',
                 'min'        => 5,
                 'cap'        => 1440,
+            ],
+
+            // Direct bank transfer (PRD 9.3a). Every one of these changes where a
+            // customer's money goes, so each carries the confirmation step.
+            'bank_transfer_enabled' => [
+                'section'    => [
+                    'title' => 'Direct bank transfer',
+                    'intro' => 'Let customers pay by sending money to your own bank account and uploading the receipt here. Your team checks each receipt against the bank, and only then does the payment count. The option shows at checkout once this is switched on and the three details below are filled in.',
+                ],
+                'label'      => 'Offer direct bank transfer at checkout',
+                'help'       => 'While this is off, customers only see Paystack. Switching it off never touches an order that is already waiting for its receipt to be checked.',
+                'type'       => 'bool',
+                'value_type' => 'bool',
+                'confirm'    => true,
+            ],
+            'bank_transfer_bank_name' => [
+                'label'       => 'Bank',
+                'help'        => 'The name of your bank as a customer knows it, for example GTBank.',
+                'type'        => 'text',
+                'value_type'  => 'string',
+                'max'         => 80,
+                'placeholder' => 'GTBank',
+                'confirm'     => true,
+            ],
+            'bank_transfer_account_name' => [
+                'label'       => 'Account name',
+                'help'        => 'Exactly as the bank shows it, so a customer sees the name they expect when they confirm the transfer.',
+                'type'        => 'text',
+                'value_type'  => 'string',
+                'max'         => 120,
+                'placeholder' => 'OK Veggies Limited',
+                'confirm'     => true,
+            ],
+            'bank_transfer_account_number' => [
+                'label'       => 'Account number',
+                'help'        => 'The 10 digit number. This is where customer money goes, so you are asked to confirm it before it saves.',
+                'type'        => 'account_number',
+                'value_type'  => 'string',
+                'max'         => 10,
+                'placeholder' => '0123456789',
+                'confirm'     => true,
             ],
         ],
     ],

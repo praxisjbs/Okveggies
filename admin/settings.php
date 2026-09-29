@@ -172,6 +172,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 $value  = $values[$key];
                 $helpId = 'help-' . $key;
               ?>
+                <?php if (!empty($field['section'])): ?>
+                  <div class="md:col-span-2 mt-2 border-t border-mist pt-5">
+                    <h3 class="font-display text-lg font-bold text-ink"><?= okv_e($field['section']['title']) ?></h3>
+                    <p class="mt-1 text-sm text-ink-60 max-w-2xl"><?= okv_e($field['section']['intro']) ?></p>
+                  </div>
+                <?php endif; ?>
                 <div<?= $field['type'] === 'bool' ? ' class="md:col-span-2"' : '' ?>>
 
                   <?php if ($field['type'] === 'bool'): ?>
@@ -225,7 +231,8 @@ require __DIR__ . '/../includes/components/admin/header.php';
                     <?php else: ?>
                       <input type="<?= $field['type'] === 'email' ? 'email' : 'text' ?>"
                              id="field-<?= okv_e($key) ?>" name="<?= okv_e($key) ?>"
-                             class="okv-input<?= $field['type'] === 'phone' ? ' font-mono tabular-nums' : '' ?>"
+                             class="okv-input<?= in_array($field['type'], ['phone', 'account_number'], true) ? ' font-mono tabular-nums' : '' ?>"
+                             <?php if ($field['type'] === 'account_number'): ?>inputmode="numeric" autocomplete="off"<?php endif; ?>
                              value="<?= okv_e($value) ?>"
                              <?php if (!empty($field['max'])): ?>maxlength="<?= (int) $field['max'] ?>"<?php endif; ?>
                              <?php if (!empty($field['placeholder'])): ?>placeholder="<?= okv_e($field['placeholder']) ?>"<?php endif; ?>

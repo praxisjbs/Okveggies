@@ -180,6 +180,99 @@ if ($action === 'start_deposit') {
     payments_start_charge((int) $opened['payment_id']);
 }
 
+/**
+ * Send a customer back to their order after a receipt, with what happened. A
+ * guest comes back by the trail token they hold, a signed-in customer by their
+ * account.
+ */
+function payments_receipt_back(int $orderId, string $token, string $flag, string $code = ''): void
+{
+    $target = $token !== '' && OrderTrail::isValidToken($token)
+        ? '/public/order.php?token=' . rawurlencode($token)
+        : '/public/order.php?order=' . $orderId;
+    okv_redirect($target . '&payment=' . rawurlencode($flag) . ($code !== '' ? '&receipt_error=' . rawurlencode($code) : ''), 303);
+}
+
+/** Refuse a receipt: JSON for a fetch, back to the order with the reason otherwise. */
+function payments_receipt_refused(int $orderId, string $token, string $code, int $status = 422): void
+{
+    if (payments_is_fetch()) {
+        okv_error(TransferProofs::receiptProblemMessage($code), $status, 'receipt_' . $code);
+    }
+    payments_receipt_back($orderId, $token, 'receipt_refused', $code);
+}
+
+// -----------------------------------------------------------------------------
+// A customer hands in a bank transfer receipt (PRD 9.3a). Nothing is credited:
+// it waits for a member of staff to verify it against the bank.
+// -----------------------------------------------------------------------------
+if ($action === 'submit_transfer') {
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    $orderId = (int) okv_input('order_id', 0);
+    $token   = trim((string) okv_input('token', ''));
+    if (TransferProofs::postWasTooLarge()) {
+        payments_receipt_refused($orderId, $token, 'too_large', 413);
+    }
+    // The same two credentials as starting a Paystack charge, and never a third:
+    // the signed-in owner, or the trail token of a guest order.
+    if ($token === '') {
+        Customer::requireLoginApi();
+    }
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+
+    $userId = Customer::id() === null ? null : (int) Customer::id();
+    if (!RateLimiter::hit('transfer_receipt:' . ($userId ?? 'guest:' . $orderId), 8, 3600)) {
+        okv_error('Too many receipts sent. Wait a little and try again, or message us on WhatsApp.', 429, 'rate_limited');
+    }
+    if (!TransferProofs::customerMayActOn($orderId, $userId, $token)) {
+        okv_error('That order could not be found.', 404, 'not_found');
+    }
+    if ($token !== '') {
+        // Keep it for the trip back, which carries no token of its own.
+        OrderTrail::remember($orderId, $token);
+    }
+
+    $next = TransferProofs::nextTransferPayment($orderId);
+    if ($next === null) {
+        okv_error('There is nothing to send a receipt for on this order, or a receipt is already with our team.', 422, 'nothing_to_submit');
+    }
+
+    $check = TransferProofs::validateReceiptUpload($_FILES['receipt'] ?? []);
+    if (!$check['ok']) {
+        payments_receipt_refused($orderId, $token, $check['code']);
+    }
+
+    $stored = '';
+    try {
+        $stored = TransferProofs::storeReceipt($_FILES['receipt']);
+        $result = TransferProofs::submit((int) $next['id'], [
+            'proof_url'      => $stored,
+            'bank_reference' => (string) okv_input('bank_reference', ''),
+            'payer_name'     => (string) okv_input('payer_name', ''),
+        ]);
+    } catch (Throwable $e) {
+        error_log('payments.submit_transfer failed: ' . $e->getMessage());
+        if ($stored !== '') {
+            Uploads::removeStoredFile($stored, TransferProofs::SUBDIR);
+        }
+        okv_error('We could not keep that receipt. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        Uploads::removeStoredFile($stored, TransferProofs::SUBDIR);
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    Notifications::announceTransferSubmitted($result);
+
+    if (payments_is_fetch()) {
+        okv_json(['status' => 'ok', 'code' => 'submitted', 'message' => $result['message']]);
+    }
+    payments_receipt_back($orderId, $token, 'awaiting');
+}
+
 // -----------------------------------------------------------------------------
 // Staff actions. Each one gates on its own permission.
 // -----------------------------------------------------------------------------
@@ -248,6 +341,50 @@ if ($action === 'record_manual') {
     Notifications::announceManualPayment($result, $staffId);
     Notifications::announceManualPaymentProof($result, $staffId);
     payments_staff_done($result, 'recorded');
+}
+
+if ($action === 'verify_transfer') {
+    // Verifying credits the order, so it carries the same gate and the same
+    // server side confirmation as recording money by hand.
+    $staffId = payments_staff_guard('payments.record');
+    if (!okv_input('confirmed', '')) {
+        okv_error('Tick the confirmation before verifying a payment.', 422, 'not_confirmed');
+    }
+    try {
+        $result = TransferProofs::verify(
+            (int) okv_input('proof_id', 0),
+            Money::toSubunit((string) okv_input('amount', '')),
+            (string) okv_input('note', ''),
+            $staffId
+        );
+    } catch (Throwable $e) {
+        error_log('payments.verify_transfer failed: ' . $e->getMessage());
+        okv_error('We could not verify that payment. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    Notifications::announceTransferVerified($result, $staffId);
+    payments_staff_done($result, 'verified');
+}
+
+if ($action === 'decline_transfer') {
+    $staffId = payments_staff_guard('payments.record');
+    try {
+        $result = TransferProofs::decline(
+            (int) okv_input('proof_id', 0),
+            (string) okv_input('reason', ''),
+            $staffId
+        );
+    } catch (Throwable $e) {
+        error_log('payments.decline_transfer failed: ' . $e->getMessage());
+        okv_error('We could not decline that receipt. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    Notifications::announceTransferDeclined($result, $staffId);
+    payments_staff_done($result, 'declined');
 }
 
 if ($action === 'review_proof') {

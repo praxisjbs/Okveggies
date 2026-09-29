@@ -26,6 +26,7 @@ require_once __DIR__ . '/includes/components/shop/support_widget.php';
 require_once __DIR__ . '/includes/components/shop/delivery_picker.php';
 require_once __DIR__ . '/includes/components/shop/icons.php';
 require_once __DIR__ . '/includes/components/shop/policy_links.php';
+require_once __DIR__ . '/includes/components/shop/bank_transfer.php';
 
 $step   = max(1, min(4, (int) okv_input('step', 1)));
 $basket = Basket::state();
@@ -63,7 +64,17 @@ $staleZoneName = $savedZoneId > 0 && $chosenZoneId !== $savedZoneId
     ? (string) (Delivery::zoneNameById($savedZoneId) ?? '')
     : '';
 $payment = (string) ($bag['payment']['payment_option'] ?? 'pay_in_full');
+$payMethod = (string) ($bag['payment']['payment_method'] ?? '');
 $deposit = Money::deposit((int) $basket['subtotal_subunit'], Settings::depositPercentage());
+
+// Direct bank transfer (PRD 9.3a): offered only while the Owner has it switched
+// on with a complete account. The server checks the same rule on placing.
+$transferOffered = TransferProofs::isEnabled();
+$bank            = TransferProofs::bankDetails();
+$payMethod       = $transferOffered && $payMethod === TransferProofs::METHOD_TRANSFER
+    ? TransferProofs::METHOD_TRANSFER
+    : TransferProofs::METHOD_PAYSTACK;
+$receiptError    = (string) okv_input('receipt_error', '');
 $depositPercent = rtrim(rtrim(number_format(Settings::depositPercentage(), 2), '0'), '.');
 $sourceRegions  = Settings::str('source_regions', 'Ogun State, Jos');
 $steps   = [1 => 'Basket', 2 => 'Details', 3 => 'Delivery', 4 => 'Payment'];
@@ -287,9 +298,12 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
             <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('card', 'h-5 w-5'); ?></span>
             Choose how to pay
           </h2>
-          <form id="checkout-payment-form" class="mt-6" method="post" action="/api/v1/checkout.php">
+          <form id="checkout-payment-form" class="mt-6" method="post" action="/api/v1/checkout.php" enctype="multipart/form-data">
             <?= Csrf::field() ?>
             <input type="hidden" name="action" value="place_order">
+            <?php if ($receiptError !== ''): ?>
+              <p class="okv-note-bad mb-4" role="alert"><?= okv_e(TransferProofs::receiptProblemMessage($receiptError)) ?></p>
+            <?php endif; ?>
             <fieldset>
               <legend class="sr-only">How would you like to pay?</legend>
               <div class="space-y-3" data-payment-options>
@@ -303,12 +317,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                       <span class="font-semibold text-ink">Pay in full now</span>
                       <span class="font-mono text-sm font-semibold text-forest"><?= okv_e(Money::format((int) $basket['subtotal_subunit'])) ?></span>
                     </span>
-                    <span class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-60">
-                      <span class="flex items-center gap-1"><?php okv_icon('card', 'h-4 w-4'); ?><span class="text-xs">Card</span></span>
-                      <span class="flex items-center gap-1"><?php okv_icon('banknote', 'h-4 w-4'); ?><span class="text-xs">Bank transfer</span></span>
-                      <span class="flex items-center gap-1"><?php okv_icon('phone', 'h-4 w-4'); ?><span class="text-xs">USSD</span></span>
-                    </span>
-                    <span class="mt-1 block text-xs text-ink-60">On Paystack, in one go.</span>
+                    <span class="mt-1 block text-xs text-ink-60">The whole basket, paid now. Nothing left to settle.</span>
                   </span>
                   <span class="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('card', 'h-5 w-5'); ?></span>
                 </label>
@@ -360,6 +369,68 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                 <?php endif; ?>
               </div>
             </fieldset>
+
+            <!-- How the amount is sent, for a full payment or a deposit. Amount
+                 and method are separate choices (PRD 9.3a), so a deposit can be
+                 paid either way. Without JavaScript both cards and the account
+                 details are simply on the page, and the server holds the rules. -->
+            <?php if ($transferOffered): ?>
+              <fieldset class="mt-6" data-method-group>
+                <legend class="font-display text-lg font-bold text-ink">How will you send it?</legend>
+                <div class="mt-3 space-y-3">
+                  <label class="okv-choice">
+                    <span class="flex flex-none items-center pt-1">
+                      <input type="radio" class="okv-radio peer" name="payment_method" value="paystack" <?= $payMethod === 'paystack' ? 'checked' : '' ?>>
+                      <span class="pointer-events-none -ml-5 h-3 w-3 scale-50 rounded-full bg-forest opacity-0 transition duration-bounce ease-bounce peer-checked:scale-100 peer-checked:opacity-100"></span>
+                    </span>
+                    <span class="min-w-0 flex-1">
+                      <span class="font-semibold text-ink">Paystack: card, transfer or USSD</span>
+                      <span class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-60">
+                        <span class="flex items-center gap-1"><?php okv_icon('card', 'h-4 w-4'); ?><span class="text-xs">Card</span></span>
+                        <span class="flex items-center gap-1"><?php okv_icon('banknote', 'h-4 w-4'); ?><span class="text-xs">Bank transfer</span></span>
+                        <span class="flex items-center gap-1"><?php okv_icon('phone', 'h-4 w-4'); ?><span class="text-xs">USSD</span></span>
+                      </span>
+                      <span class="mt-1 block text-xs text-ink-60">Secure, and confirmed at once.</span>
+                    </span>
+                    <span class="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('card', 'h-5 w-5'); ?></span>
+                  </label>
+
+                  <label class="okv-choice">
+                    <span class="flex flex-none items-center pt-1">
+                      <input type="radio" class="okv-radio peer" name="payment_method" value="bank_transfer" <?= $payMethod === 'bank_transfer' ? 'checked' : '' ?>>
+                      <span class="pointer-events-none -ml-5 h-3 w-3 scale-50 rounded-full bg-forest opacity-0 transition duration-bounce ease-bounce peer-checked:scale-100 peer-checked:opacity-100"></span>
+                    </span>
+                    <span class="min-w-0 flex-1">
+                      <span class="font-semibold text-ink">Direct bank transfer</span>
+                      <span class="mt-1 block text-xs text-ink-60">Send it to our account, then attach your receipt. Our team checks it before your order is confirmed.</span>
+                    </span>
+                    <span class="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-gold-tint text-gold-ink"><?php okv_icon('receipt', 'h-5 w-5'); ?></span>
+                  </label>
+                </div>
+
+                <!-- The account, the exact amount and the receipt box. Shown when
+                     Direct bank transfer is chosen. -->
+                <div class="mt-4 rounded-xl border border-forest/15 bg-forest-tint p-4 sm:p-5" data-transfer-panel>
+                  <h3 class="font-display text-lg font-bold text-ink">Send it, then attach your receipt</h3>
+                  <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-60">
+                    <li>Send the exact amount to the account below, from your banking app.</li>
+                    <li>Attach the receipt or screenshot from your bank.</li>
+                    <li>Place your order. We check the receipt and email you once it is confirmed.</li>
+                  </ol>
+                  <div class="mt-4 max-w-xl">
+                    <div data-transfer-amount="pay_in_full">
+                      <p class="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-ink-60">If you pay in full</p>
+                      <?php okv_bank_transfer_details($bank, (int) $basket['subtotal_subunit']); ?>
+                    </div>
+                    <div data-transfer-amount="deposit">
+                      <p class="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-ink-60">If you pay a <?= okv_e($depositPercent) ?>% deposit</p>
+                      <?php okv_bank_transfer_details($bank, $deposit); ?>
+                    </div>
+                    <?php okv_receipt_field('checkout-transfer', false); ?>
+                  </div>
+                </div>
+              </fieldset>
+            <?php endif; ?>
 
             <!-- A gold rule, never a gold fill, with the grocer's promise on it. -->
             <div class="my-6 flex items-center gap-3" aria-hidden="true">
@@ -518,6 +589,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
 <?php okv_shop_footer(); ?>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
 <script src="<?= okv_e(okv_asset('/assets/js/checkout.min.js')) ?>" defer></script>
+<script src="<?= okv_e(okv_asset('/assets/js/bank-transfer.min.js')) ?>" defer></script>
 <script src="<?= okv_e(okv_asset('/assets/js/zone-picker.min.js')) ?>" defer></script>
 </body>
 </html>

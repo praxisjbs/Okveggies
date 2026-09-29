@@ -25,11 +25,19 @@ require_once __DIR__ . '/../../includes/bootstrap.php';
 // Paystack appends both; trxref is the older name and they carry the same value.
 $reference = trim((string) (okv_input('reference', '') ?: okv_input('trxref', '')));
 
-/** Send the customer to their order, or to the shop when we cannot place them. */
+/**
+ * Send the customer where the outcome is best told. Money that has arrived
+ * lands on the green "Payment received" screen (PRD 9.3a); anything still being
+ * confirmed, or that did not go through, lands on the order, which says so and
+ * offers the payment again. The shop is the last resort when we cannot place them.
+ */
 function payment_callback_land(?int $orderId, string $outcome): void
 {
     if ($orderId === null) {
         okv_redirect('/shop.php?payment=' . rawurlencode($outcome), 303);
+    }
+    if ($outcome === 'paid') {
+        okv_redirect('/public/payment/receipt.php?order=' . $orderId, 303);
     }
     okv_redirect('/public/order.php?order=' . $orderId . '&payment=' . rawurlencode($outcome), 303);
 }
