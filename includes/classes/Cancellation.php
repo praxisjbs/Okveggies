@@ -87,10 +87,12 @@ final class Cancellation
     /**
      * Whether the customer may cancel this order themselves.
      *
-     * Unpaid and before the cutoff has cost the business nothing, so making
-     * someone wait on a human to undo something free is friction that loses the
-     * next order. Once money or produce is committed it stops being self
-     * service and becomes a staff decision.
+     * Placed (pending) and Sourced (confirmed) orders can be cancelled by the
+     * customer, whether unpaid, part paid or paid in full, and whether inside
+     * or past the free-cancellation cutoff. Money already paid follows
+     * moneyOutcome() automatically: refunded in full before the cutoff, and the
+     * deposit share kept after the cutoff when deposit forfeiting is enabled.
+     * Once an order is packed or dispatched it stops being self service.
      */
     public static function customerMayCancel(
         string $orderStatus,
@@ -108,10 +110,29 @@ final class Cancellation
         if (!in_array($orderStatus, self::SELF_SERVICE_STATUSES, true)) {
             return false;
         }
-        if ($paymentStatus !== Payments::STATUS_UNPAID) {
+        if ($paymentStatus === 'refunded') {
             return false;
         }
-        return $withinCutoff;
+        return true;
+    }
+
+    /** Short one-line summary for the customer cancellation card. */
+    public static function customerSummary(array $outcome, ?DateTimeImmutable $deadline = null): string
+    {
+        $when = $deadline instanceof DateTimeImmutable
+            ? ' until ' . $deadline->format('H:i \o\n l jS')
+            : ' before the cutoff';
+        if ((int) ($outcome['forfeit_subunit'] ?? 0) > 0) {
+            if ((int) ($outcome['refund_subunit'] ?? 0) > 0) {
+                return 'Cutoff passed: ' . Money::format((int) $outcome['forfeit_subunit'])
+                    . ' deposit is kept and ' . Money::format((int) $outcome['refund_subunit']) . ' is refunded.';
+            }
+            return 'Cutoff passed: the ' . Money::format((int) $outcome['forfeit_subunit']) . ' deposit is kept.';
+        }
+        if ((int) ($outcome['refund_subunit'] ?? 0) > 0) {
+            return 'Cancel free' . $when . ' for a full refund of ' . Money::format((int) $outcome['refund_subunit']) . '.';
+        }
+        return 'Cancel free' . $when . '. Nothing has been paid.';
     }
 
     /**

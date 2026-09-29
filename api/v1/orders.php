@@ -18,9 +18,6 @@ function orders_write_guard(): void
     if (!Csrf::validate()) {
         okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
     }
-    if (!okv_input('confirmed', '')) {
-        okv_error('Confirm that you want to cancel this order.', 422, 'not_confirmed');
-    }
 }
 
 function orders_status_guard(): void
@@ -77,16 +74,28 @@ if ($action === 'cancel_customer') {
     if (!okv_is_post()) {
         okv_error('Use POST for this action.', 405, 'method_not_allowed');
     }
-    Customer::requireLoginApi();
+    $token = trim((string) okv_input('token', ''));
+    if (Customer::id() === null && $token === '') {
+        Customer::requireLoginApi();
+    }
     orders_write_guard();
 
+    $orderId = (int) okv_input('order_id', 0);
+    $actorId = Customer::id() === null ? null : (int) Customer::id();
     try {
-        $result = OrderCancellation::cancelForCustomer(
-            (int) okv_input('order_id', 0),
-            (int) Customer::id(),
-            (string) okv_input('reason_code', ''),
-            (string) okv_input('reason_text', '')
-        );
+        $result = $actorId !== null
+            ? OrderCancellation::cancelForCustomer(
+                $orderId,
+                $actorId,
+                (string) okv_input('reason_code', ''),
+                (string) okv_input('reason_text', '')
+            )
+            : OrderCancellation::cancelForGuest(
+                $orderId,
+                $token,
+                (string) okv_input('reason_code', ''),
+                (string) okv_input('reason_text', '')
+            );
     } catch (Throwable $e) {
         error_log('orders.cancel_customer failed: ' . $e->getMessage());
         okv_error('We could not cancel that order. Please try again.', 500, 'failed');
@@ -97,12 +106,15 @@ if ($action === 'cancel_customer') {
     $refundEvents = is_array($result['refund_events'] ?? null) ? $result['refund_events'] : [];
     unset($result['refund_events']);
     if ($result['code'] === 'cancelled') {
-        Notifications::announceCancellation((int) okv_input('order_id', 0), $result, (int) Customer::id());
+        Notifications::announceCancellation($orderId, $result, $actorId);
         foreach ($refundEvents as $refundEvent) {
             Notifications::announceRefund($refundEvent);
         }
     }
-    orders_done($result, '/public/order.php?order=' . (int) okv_input('order_id', 0));
+    $redirect = $actorId === null && $token !== ''
+        ? '/public/order.php?token=' . rawurlencode($token)
+        : '/public/order.php?order=' . $orderId;
+    orders_done($result, $redirect);
 }
 
 if ($action === 'cancel_staff') {
@@ -119,7 +131,7 @@ if ($action === 'cancel_staff') {
             (string) okv_input('reason_code', ''),
             (string) okv_input('reason_text', ''),
             Rbac::can('payments.refund'),
-            (bool) okv_input('dispatch_terms', '')
+            (bool) okv_input('dispatch_terms', '1')
         );
     } catch (Throwable $e) {
         error_log('orders.cancel_staff failed: ' . $e->getMessage());
