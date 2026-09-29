@@ -148,13 +148,14 @@ final class Customers
     /** The newest orders on this account, each one opening the admin order detail. */
     public static function orders(int $userId, int $limit = self::RECENT_ORDERS): array
     {
-        return Database::all(
+        return OrderMoney::attach(Database::all(
             'SELECT o.id, o.order_number, o.order_status, o.payment_status, o.payment_option,
-                    o.order_total_subunit, o.balance_due_subunit, o.preferred_delivery_date, o.created_at,
+                    o.order_total_subunit, o.amount_paid_subunit, o.balance_due_subunit,
+                    o.preferred_delivery_date, o.created_at,
                     (SELECT COUNT(*) FROM order_reschedules r WHERE r.order_id = o.id) AS reschedule_count
                FROM orders o WHERE o.user_id = :id ORDER BY o.id DESC' . okv_limit_clause(1, max(1, $limit)),
             [':id' => $userId]
-        );
+        ));
     }
 
     /** The newest payments on this account. Behind payments.view. */

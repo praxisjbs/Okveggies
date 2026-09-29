@@ -164,6 +164,10 @@ final class ManualPayments
                 $pdo->rollBack();
                 return ['ok' => false, 'code' => 'not_found', 'message' => 'That payment could not be found.'];
             }
+            if ((string) $payment['status'] === Payments::STATUS_VOID) {
+                $pdo->rollBack();
+                return ['ok' => false, 'code' => 'payment_void', 'message' => 'That payment was replaced when the order moved to the credit line. Record the money on the order\'s current payment.'];
+            }
 
             $reference = self::reference((string) $payment['order_number'], $token);
 

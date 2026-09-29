@@ -215,6 +215,23 @@ if (!function_exists('okv_availability')) {
     }
 }
 
+if (!function_exists('okv_money_badge')) {
+    /**
+     * The badge for an OrderMoney description. One place, so an order's payment
+     * state wears the same tone on the account list, the order page, the Pro
+     * portal and the admin order.
+     */
+    function okv_money_badge(array $money, string $extraClass = ''): void
+    {
+        $tone = match ((string) $money['tone']) {
+            'good'    => 'okv-badge-available',
+            'neutral' => 'okv-badge-neutral',
+            default   => 'okv-badge-warn',
+        };
+        ?><span class="okv-badge <?= $tone . ($extraClass !== '' ? ' ' . okv_e($extraClass) : '') ?>"><?= okv_e((string) $money['badge']) ?></span><?php
+    }
+}
+
 if (!function_exists('okv_sourced_line')) {
     /**
      * The sourcing trust line, in one place. Bible 6.3 fixes the pattern:

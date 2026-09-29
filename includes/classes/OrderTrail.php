@@ -178,7 +178,7 @@ final class OrderTrail
 
         $order = Database::one(
             'SELECT o.id, o.order_number, o.order_status, o.payment_option, o.payment_status,
-                    o.user_id, o.order_total_subunit, o.deposit_required_subunit, o.balance_due_subunit,
+                    o.user_id, o.order_total_subunit, o.deposit_required_subunit, o.amount_paid_subunit, o.balance_due_subunit,
                     o.preferred_delivery_date, o.created_at, o.confirmed_at, o.source_regions_snapshot,
                     (SELECT p.expected_amount_subunit FROM payments p WHERE p.order_id = o.id ORDER BY p.id LIMIT 1) AS amount_due_subunit
                FROM orders o

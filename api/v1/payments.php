@@ -29,6 +29,47 @@ function payments_is_fetch(): bool
         || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
 }
 
+/**
+ * Start a Paystack charge for a payment the caller has already been proved to
+ * own, then answer: JSON for a fetch, otherwise a 303 to Paystack. One tail for
+ * every way of starting a payment, so the errors and the response cannot differ.
+ */
+function payments_start_charge(int $paymentId): void
+{
+    try {
+        $callback = rtrim((string) APP_URL, '/') . '/public/payment/callback.php';
+        $result   = Payments::beginCharge($paymentId, $callback);
+    } catch (Throwable $e) {
+        error_log('payments.initialise failed: ' . $e->getMessage());
+        okv_error('We could not start that payment. Please try again.', 500, 'failed');
+    }
+
+    if (!$result['ok']) {
+        $status = $result['code'] === 'gateway_unreachable' ? 503 : 422;
+        // A person tapped Pay and the gateway did not answer. Send them back to
+        // their order, where the page already says so in plain words and the
+        // button is still there, rather than leaving them on a page of JSON.
+        if (!payments_is_fetch() && in_array($result['code'], ['gateway_unreachable', 'gateway_refused'], true)) {
+            $row = Database::one('SELECT order_id FROM payments WHERE id = :id', [':id' => $paymentId]);
+            if ($row) {
+                okv_redirect('/public/order.php?order=' . (int) $row['order_id'] . '&payment=unavailable', 303);
+            }
+        }
+        okv_error($result['message'], $status, $result['code']);
+    }
+
+    if (payments_is_fetch()) {
+        okv_json([
+            'status'            => 'ok',
+            'authorization_url' => $result['authorization_url'],
+            'reference'         => $result['reference'],
+            'amount_subunit'    => $result['amount_subunit'],
+            'amount'            => Money::format($result['amount_subunit']),
+        ]);
+    }
+    okv_redirect($result['authorization_url'], 303);
+}
+
 if ($action === 'initialise' || $action === 'initialize') {
     if (!okv_is_post()) {
         okv_error('Use POST for this action.', 405, 'method_not_allowed');
@@ -86,29 +127,57 @@ if ($action === 'initialise' || $action === 'initialize') {
         OrderTrail::remember((int) ($orderRow['order_id'] ?? 0), $token);
     }
 
+    payments_start_charge($paymentId);
+}
+
+if ($action === 'start_deposit') {
+    // A pay on delivery order needs its deposit before it can be sourced. The
+    // deposit row is opened here (idempotently), then charged exactly like any
+    // other Paystack payment. Ownership is proved the same two ways as above.
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    $token = trim((string) okv_input('token', ''));
+    if ($token === '') {
+        Customer::requireLoginApi();
+    }
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    $userId  = Customer::id() === null ? null : (int) Customer::id();
+    $orderId = (int) okv_input('order_id', 0);
+    if ($orderId < 1) {
+        okv_error('That order could not be found.', 422, 'bad_order');
+    }
+    $limitKey = $userId !== null ? 'payment_init:' . $userId : 'payment_init:guest:o' . $orderId;
+    if (!RateLimiter::hit($limitKey, 10, 300)) {
+        okv_error('Too many payment attempts. Wait a few minutes and try again.', 429, 'rate_limited');
+    }
+    $owned = $token !== '' && OrderTrail::isValidToken($token)
+        ? Database::one(
+            'SELECT id FROM orders WHERE id = :id AND user_id IS NULL AND order_trail_token_hash = :token',
+            [':id' => $orderId, ':token' => OrderTrail::hashToken($token)]
+        )
+        : ($userId === null ? null : Database::one(
+            'SELECT id FROM orders WHERE id = :id AND user_id = :user',
+            [':id' => $orderId, ':user' => $userId]
+        ));
+    if (!$owned) {
+        okv_error('That order could not be found.', 404, 'not_found');
+    }
+    if ($token !== '') {
+        OrderTrail::remember($orderId, $token);
+    }
     try {
-        $callback = rtrim((string) APP_URL, '/') . '/public/payment/callback.php';
-        $result   = Payments::beginCharge($paymentId, $callback);
+        $opened = Payments::openDepositPayment($orderId, null, $userId);
     } catch (Throwable $e) {
-        error_log('payments.initialise failed: ' . $e->getMessage());
+        error_log('payments.start_deposit failed: ' . $e->getMessage());
         okv_error('We could not start that payment. Please try again.', 500, 'failed');
     }
-
-    if (!$result['ok']) {
-        $status = $result['code'] === 'gateway_unreachable' ? 503 : 422;
-        okv_error($result['message'], $status, $result['code']);
+    if (!$opened['ok']) {
+        okv_error($opened['message'], $opened['code'] === 'not_found' ? 404 : 422, $opened['code']);
     }
-
-    if (payments_is_fetch()) {
-        okv_json([
-            'status'            => 'ok',
-            'authorization_url' => $result['authorization_url'],
-            'reference'         => $result['reference'],
-            'amount_subunit'    => $result['amount_subunit'],
-            'amount'            => Money::format($result['amount_subunit']),
-        ]);
-    }
-    okv_redirect($result['authorization_url'], 303);
+    payments_start_charge((int) $opened['payment_id']);
 }
 
 // -----------------------------------------------------------------------------

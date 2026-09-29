@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_business_customer();
 require_once __DIR__ . '/../includes/components/pagination.php';
+require_once __DIR__ . '/../includes/components/shop/pay_sheet.php';
 
 $userId = (int) Customer::id();
 $filters = [
@@ -115,8 +116,10 @@ require __DIR__ . '/../includes/components/pro/header.php';
                   <span class="font-mono text-ink"><?= okv_e(Money::format((int) $order['order_total_subunit'])) ?></span>
                 </span>
                 <span class="mt-1 flex flex-wrap justify-between gap-2 text-xs text-ink-60">
-                  <span><?= okv_e($paymentLabels[(string) $order['payment_status']] ?? 'Payment update') ?></span>
-                  <span><?= okv_e(Money::format((int) $order['balance_due_subunit'])) ?> due</span>
+                  <span><?= okv_e((string) $order['money']['badge']) ?></span>
+                  <?php if ($order['money']['credit_open_subunit'] > 0): ?>
+                    <span>Repay <?= okv_e(Money::format((int) $order['money']['credit_open_subunit'])) ?></span>
+                  <?php endif; ?>
                 </span>
               </a>
             </li>
@@ -153,17 +156,25 @@ require __DIR__ . '/../includes/components/pro/header.php';
             </div>
             <div>
               <p class="text-sm text-ink-60">Payment</p>
-              <p class="mt-1"><?= okv_e($paymentLabels[(string) $order['payment_status']] ?? 'Payment update') ?></p>
+              <p class="mt-1"><?= okv_e($detail['money']['on_credit'] ? ($detail['money']['kind'] === OrderMoney::KIND_CREDIT_REPAID ? 'Paid with your credit line, repaid' : 'Paid with your credit line') : (string) $detail['money']['badge']) ?></p>
             </div>
             <div>
-              <p class="text-sm text-ink-60">Paid</p>
+              <p class="text-sm text-ink-60">Paid in cash</p>
               <p class="mt-1 font-mono"><?= okv_e(Money::format((int) $order['amount_paid_subunit'])) ?></p>
             </div>
             <div>
-              <p class="text-sm text-ink-60">Balance due</p>
-              <p class="mt-1 font-mono"><?= okv_e(Money::format((int) $order['balance_due_subunit'])) ?></p>
+              <?php if ($detail['money']['on_credit']): ?>
+                <p class="text-sm text-ink-60">Credit line</p>
+                <p class="mt-1"><?= okv_e($detail['money']['credit_line'] !== '' ? $detail['money']['credit_line'] : 'Nothing left to repay.') ?></p>
+              <?php else: ?>
+                <p class="text-sm text-ink-60">Balance due</p>
+                <p class="mt-1 font-mono"><?= okv_e(Money::format((int) $order['balance_due_subunit'])) ?></p>
+              <?php endif; ?>
             </div>
           </div>
+          <?php if ($detail['pay_methods'] !== []): ?>
+            <div><?php okv_pay_action($order, $detail['pay_methods']); ?></div>
+          <?php endif; ?>
 
           <div>
             <h3 class="font-semibold text-ink">Items</h3>
@@ -247,4 +258,5 @@ require __DIR__ . '/../includes/components/pro/header.php';
   </div>
 </div>
 
+<script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
 <?php require __DIR__ . '/../includes/components/pro/footer.php'; ?>

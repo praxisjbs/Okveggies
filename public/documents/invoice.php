@@ -50,11 +50,16 @@ $order   = $document['order'];
 $paid    = (int) $order['amount_paid_subunit'];
 $total   = (int) $order['order_total_subunit'];
 $balance = Money::balance($total, $paid);
+// An order on the credit line is covered by the credit line. The invoice says so
+// and says what is owed back and when, instead of "still to pay".
+$money = OrderMoney::fromRow($order);
 
 okv_document_open(['title' => 'Invoice ' . (string) $order['order_number'], 'print' => true]);
 okv_document_letterhead([
     'kind'      => 'Invoice',
-    'title'     => $balance > 0 ? 'Amount due for this order' : 'This order is fully paid',
+    'title'     => $money['on_credit']
+        ? ($money['credit_open_subunit'] > 0 ? 'This order is on your credit line' : 'This order is on your credit line and repaid')
+        : ($balance > 0 ? 'Amount due for this order' : 'This order is fully paid'),
     'reference' => okv_document_reference((string) $order['order_number']),
     'issued_on' => date('j M Y', strtotime((string) $order['created_at'])),
 ]);
@@ -73,7 +78,9 @@ okv_document_totals(okv_document_totals_rows(
 ));
 ?>
     <div class="okv-doc-foot okv-doc-gap-lg">
-      <?php if ($balance > 0): ?>
+      <?php if ($money['on_credit']): ?>
+        <p><?= okv_e($money['credit_open_subunit'] > 0 ? $money['credit_line'] : 'Nothing further is owed on this order. Thank you.') ?></p>
+      <?php elseif ($balance > 0): ?>
         <p><strong><?= okv_e(Money::format($balance)) ?></strong> is still to pay on this order.</p>
         <?php if ((string) $order['payment_option'] === 'deposit'): ?>
           <p class="okv-doc-gap">

@@ -61,6 +61,18 @@ final class OrderLifecycle
     /**
      * Change status and append history in one transaction. expectedStatus is
      * the optimistic-concurrency token carried by the form.
+     *
+     * Placed to Sourced runs the SourcingGate first, inside the same
+     * transaction that holds the order row, so nothing can be paid, cancelled
+     * or changed between the check and the change. $options:
+     *
+     *   source_on_credit  true to put an unpaid order on the business's credit
+     *                     line in this same transaction, then source it. A
+     *                     refused draw leaves the order untouched.
+     *   override_reason   the Owner's reason for sourcing an order the gate
+     *                     would refuse. The caller has already checked the
+     *                     permission; the reason and what the gate found are
+     *                     written to the audit log and the order history.
      */
     public static function transition(
         int $orderId,
@@ -68,7 +80,8 @@ final class OrderLifecycle
         string $targetStatus,
         int $actorId,
         string $note = '',
-        string $source = 'admin'
+        string $source = 'admin',
+        array $options = []
     ): array {
         if ($orderId < 1 || !isset(self::MAP[$expectedStatus]) || !isset(self::MAP[$targetStatus])) {
             return self::failure('invalid_transition', 'Choose a valid order stage.');
@@ -100,6 +113,43 @@ final class OrderLifecycle
                 $pdo->rollBack();
                 return self::failure('stale', 'This order changed after the page loaded. Reload it before choosing the next stage.');
             }
+
+            $creditCharged = false;
+            $overridden    = false;
+            if ($targetStatus === 'confirmed') {
+                if (!empty($options['source_on_credit'])) {
+                    try {
+                        $charge = Credit::convertOrderToCredit($orderId, null, $actorId, 'source_on_credit');
+                    } catch (DomainException $e) {
+                        $pdo->rollBack();
+                        return self::failure($e->getMessage(), Credit::message($e->getMessage()));
+                    }
+                    $creditCharged = empty($charge['already']);
+                }
+                $gate = SourcingGate::forOrder($orderId);
+                if ($gate !== null && !$gate['allowed']) {
+                    $reason = trim((string) ($options['override_reason'] ?? ''));
+                    if ($reason === '') {
+                        $pdo->rollBack();
+                        return self::failure($gate['code'], $gate['message']);
+                    }
+                    if (mb_strlen($reason) < 10 || mb_strlen($reason) > 200) {
+                        $pdo->rollBack();
+                        return self::failure('override_reason_invalid', 'Give the reason for sourcing this order anyway, using 10 to 200 characters.');
+                    }
+                    Audit::record(
+                        'orders.source_override',
+                        'order',
+                        $orderId,
+                        ['gate' => $gate['code'], 'required_subunit' => $gate['required_subunit'], 'paid_subunit' => $gate['paid_subunit']],
+                        ['order_status' => 'confirmed', 'reason' => $reason],
+                        $actorId
+                    );
+                    $note = trim($note . ' Sourcing gate overridden: ' . $reason);
+                    $overridden = true;
+                }
+            }
+
             $sets = ['order_status = :target'];
             $params = [':target' => $targetStatus, ':id' => $orderId];
             if ($targetStatus === 'confirmed') {
@@ -114,11 +164,14 @@ final class OrderLifecycle
                 'INSERT INTO order_status_history (order_id, old_status, new_status, source, note, changed_by)
                  VALUES (:order, :old, :new, :source, :note, :actor)',
                 [':order' => $orderId, ':old' => $current, ':new' => $targetStatus,
-                 ':source' => mb_substr($source, 0, 30), ':note' => trim($note) ?: null, ':actor' => $actorId]
+                 ':source' => mb_substr($source, 0, 30), ':note' => mb_substr(trim($note), 0, 500) ?: null, ':actor' => $actorId]
             );
             self::syncSchedule($orderId, (string) $order['preferred_delivery_date'], $targetStatus, $actorId);
             $pdo->commit();
-            return ['ok' => true, 'code' => 'transitioned', 'status' => $targetStatus];
+            return [
+                'ok' => true, 'code' => 'transitioned', 'status' => $targetStatus,
+                'credit_charged' => $creditCharged, 'gate_overridden' => $overridden,
+            ];
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
