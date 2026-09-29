@@ -86,10 +86,10 @@ function stg_order(?int $userId, ?string $contactEmail, string $suffix): int
     Database::run(
         'INSERT INTO orders
             (order_number, user_id, customer_type, order_status, payment_option, payment_status,
-             subtotal_subunit, order_total_subunit, balance_due_subunit,
-             preferred_delivery_date, contact_email)
-         VALUES (:number, :user, \'household\', \'pending\', \'pay_on_delivery\', \'unpaid\',
-                 500000, 500000, 500000, :date, :email)',
+             subtotal_subunit, order_total_subunit, deposit_required_subunit, amount_paid_subunit,
+             balance_due_subunit, preferred_delivery_date, contact_email)
+         VALUES (:number, :user, \'household\', \'pending\', \'pay_on_delivery\', \'part_paid\',
+                 500000, 500000, 150000, 150000, 350000, :date, :email)',
         [
             ':number' => 'ZZ-STG-' . $suffix . '-' . random_int(100, 999),
             ':user'   => $userId,

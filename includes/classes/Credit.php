@@ -874,6 +874,177 @@ final class Credit
     }
 
     /**
+     * Put an existing, untouched order on the business's credit line.
+     *
+     * This is the one door for both the customer's "Use my credit line" button
+     * and the staff "Source on credit line" action, so the rule cannot differ
+     * between them. It must run inside a transaction, and it locks in a fixed
+     * order (order, payment rows, then the business through drawForOrder) so
+     * two callers cannot deadlock each other.
+     *
+     * Only an order nothing has been paid on can move: no cash on any payment
+     * row, no card attempt in flight, still Placed, and one of the three online
+     * choices. The charge is the order's balance, drawn through the same locked
+     * limit check checkout uses. The unpaid payment rows are reshaped rather
+     * than deleted, because payment history is append only: the first row
+     * becomes the on-account row for the whole total and any other unpaid row is
+     * marked void with its expected amount zeroed, each with a history entry.
+     *
+     * A repeat is a no-op that returns the original charge.
+     *
+     * @throws DomainException not_found, not_convertible, payment_in_progress,
+     *                         credit_not_approved, credit_limit_exceeded, invalid_charge
+     * @return array{already:bool, id:int, due_date:?string, amount_subunit?:int}
+     */
+    public static function convertOrderToCredit(int $orderId, ?int $onlyForUserId = null, ?int $actorId = null, string $source = 'credit_line'): array
+    {
+        $pdo = Database::getInstance()->getConnection();
+        if (!$pdo->inTransaction()) {
+            throw new LogicException('credit conversion called outside a transaction');
+        }
+
+        $order = Database::one(
+            'SELECT id, user_id, order_status, payment_option, order_total_subunit,
+                    amount_paid_subunit, preferred_delivery_date
+               FROM orders WHERE id = :id FOR UPDATE',
+            [':id' => $orderId]
+        );
+        if ($order === null) {
+            throw new DomainException('not_found');
+        }
+        if ($order['user_id'] === null) {
+            throw new DomainException('credit_not_approved');
+        }
+        if ($onlyForUserId !== null && (int) $order['user_id'] !== $onlyForUserId) {
+            // Never reveal whose order it is.
+            throw new DomainException('not_found');
+        }
+
+        $option = (string) $order['payment_option'];
+        if ($option === 'on_account') {
+            $charge = Database::one(
+                'SELECT id, due_date FROM credit_transactions WHERE source_key = :key',
+                [':key' => 'order:' . $orderId . ':charge']
+            );
+            if ($charge === null) {
+                throw new DomainException('not_convertible');
+            }
+            return ['already' => true, 'id' => (int) $charge['id'], 'due_date' => $charge['due_date']];
+        }
+        if ((string) $order['order_status'] !== 'pending'
+            || (int) $order['amount_paid_subunit'] > 0
+            || !in_array($option, ['pay_in_full', 'deposit', 'pay_on_delivery'], true)
+        ) {
+            throw new DomainException('not_convertible');
+        }
+
+        $rows = Database::all(
+            'SELECT id, status, paid_amount_subunit FROM payments WHERE order_id = :id ORDER BY id FOR UPDATE',
+            [':id' => $orderId]
+        );
+        if ($rows === []) {
+            throw new DomainException('not_convertible');
+        }
+        foreach ($rows as $row) {
+            if ((int) $row['paid_amount_subunit'] > 0 || (string) $row['status'] === Payments::STATUS_VOID) {
+                throw new DomainException('not_convertible');
+            }
+        }
+        $moving = Database::one(
+            'SELECT t.id
+               FROM payment_transactions t
+               JOIN payments p ON p.id = t.payment_id
+              WHERE p.order_id = :order AND t.status IN (:initialized, :unknown)
+              LIMIT 1
+              FOR UPDATE',
+            [':order' => $orderId, ':initialized' => Payments::TXN_INITIALIZED, ':unknown' => Payments::TXN_UNKNOWN]
+        );
+        if ($moving !== null) {
+            throw new DomainException('payment_in_progress');
+        }
+
+        $total = (int) $order['order_total_subunit'];
+        Database::run(
+            'UPDATE orders
+                SET payment_option = :option, deposit_percentage = NULL,
+                    deposit_required_subunit = NULL, balance_due_subunit = :balance
+              WHERE id = :id',
+            [':option' => 'on_account', ':balance' => $total, ':id' => $orderId]
+        );
+
+        // The same locked limit check checkout runs. A refusal throws, and the
+        // caller's rollback puts the order back exactly as it was.
+        $charge = self::drawForOrder((int) $order['user_id'], $orderId, $total, (string) $order['preferred_delivery_date']);
+
+        foreach ($rows as $index => $row) {
+            $paymentId = (int) $row['id'];
+            if ($index === 0) {
+                Database::run(
+                    'UPDATE payments
+                        SET provider = :provider, payment_type = :type, expected_amount_subunit = :expected,
+                            status = :status, due_at = NULL
+                      WHERE id = :id',
+                    [':provider' => 'account', ':type' => 'on_account', ':expected' => $total,
+                     ':status' => Payments::STATUS_UNPAID, ':id' => $paymentId]
+                );
+                Payments::writeHistory($paymentId, null, (string) $row['status'], Payments::STATUS_UNPAID, 'credit_line', null, 'Moved to the credit line (' . $source . ').');
+                continue;
+            }
+            Database::run(
+                'UPDATE payments SET expected_amount_subunit = 0, status = :status WHERE id = :id',
+                [':status' => Payments::STATUS_VOID, ':id' => $paymentId]
+            );
+            Payments::writeHistory($paymentId, null, (string) $row['status'], Payments::STATUS_VOID, 'credit_line', null, 'Replaced when the order moved to the credit line (' . $source . ').');
+        }
+
+        Audit::record(
+            'orders.credit_line',
+            'order',
+            $orderId,
+            ['payment_option' => $option],
+            ['payment_option' => 'on_account', 'amount_subunit' => $total, 'source' => $source],
+            $actorId
+        );
+
+        return $charge;
+    }
+
+    /**
+     * convertOrderToCredit in its own transaction, answering with a result the
+     * screens can show instead of an exception. Refusals are plain codes with a
+     * customer-safe message; anything unexpected is logged by the caller.
+     *
+     * @return array{ok:bool, code:string, message:string, due_date?:?string, amount_subunit?:int}
+     */
+    public static function useCreditLine(int $orderId, ?int $onlyForUserId, ?int $actorId, string $source): array
+    {
+        $pdo = Database::getInstance()->getConnection();
+        $pdo->beginTransaction();
+        try {
+            $charge = self::convertOrderToCredit($orderId, $onlyForUserId, $actorId, $source);
+            $pdo->commit();
+        } catch (DomainException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $code = $e->getMessage();
+            return ['ok' => false, 'code' => $code, 'message' => self::message($code)];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+        return [
+            'ok'      => true,
+            'code'    => $charge['already'] ? 'already_on_credit' : 'on_credit',
+            'message' => 'This order is on your credit line.',
+            'due_date' => $charge['due_date'] ?? null,
+            'amount_subunit' => (int) ($charge['amount_subunit'] ?? 0),
+        ];
+    }
+
+    /**
      * The journal snapshot read under a shared lock, for use inside a draw. A
      * locking read always sees the latest committed rows, which a plain read in
      * the same transaction may not.
@@ -1034,6 +1205,8 @@ final class Credit
             'credit_not_approved' => 'This business does not have approved credit for this order.',
             'credit_limit_exceeded' => 'This order is above the credit available on this account.',
             'invalid_charge' => 'This order has no amount to place on account.',
+            'not_convertible' => 'This order can no longer be moved to your credit line.',
+            'payment_in_progress' => 'A card payment is still being checked. Try again in a few minutes.',
         ][$code] ?? 'We could not save that credit application. Please try again.';
     }
 
