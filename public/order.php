@@ -158,15 +158,15 @@ $receiptError = (string) okv_input('receipt_error', '');
 $paymentFlag    = (string) okv_input('payment', '');
 $paymentNotices = [
     'paid'        => ['Payment received. Thank you.', 'ok'],
-    'awaiting'    => ['Payment pending verification. We have your receipt and our team is checking it against the bank. You will get an email and a notification as soon as it is confirmed.', 'wait'],
-    'receipt_needed' => ['Your order is placed, but we could not keep your receipt. Send it again below so we can check your payment.', 'problem'],
+    'awaiting'    => ['We have your receipt. Our team is checking it.', 'wait'],
+    'receipt_needed' => ['Your order is placed. Please send your receipt again below.', 'problem'],
     'receipt_refused' => [TransferProofs::receiptProblemMessage($receiptError !== '' ? $receiptError : 'upload_failed'), 'problem'],
-    'pending'     => ['We are still confirming your payment with the bank. This page updates once it clears.', 'wait'],
-    'review'      => ['Payment received. The amount differs from what we expected, so we are checking it and will be in touch.', 'wait'],
-    'failed'      => ['That payment did not go through. Nothing has been taken. You can try again below.', 'problem'],
-    'abandoned'   => ['That payment was not completed. Nothing has been taken. You can try again below.', 'problem'],
-    'unavailable' => ['We could not reach the payment provider just now. Your order is saved. Try paying again below.', 'problem'],
-    'missing'     => ['We could not match that payment. If money left your account, send us a message and we will sort it out.', 'problem'],
+    'pending'     => ['We are checking your payment.', 'wait'],
+    'review'      => ['We are checking the payment amount.', 'wait'],
+    'failed'      => ['Payment did not go through. No money was taken. Try again below.', 'problem'],
+    'abandoned'   => ['Payment was not completed. Nothing was taken. Try again below.', 'problem'],
+    'unavailable' => ['Payment is unavailable now. Your order is saved. Try again below.', 'problem'],
+    'missing'     => ['We could not find that payment. If money left your account, message us.', 'problem'],
 ];
 $paymentNotice = $paymentNotices[$paymentFlag] ?? null;
 $cancellationFlag = (string) okv_input('cancellation', '');
@@ -177,6 +177,25 @@ $publicStatus = [
     'pending' => 'Placed', 'confirmed' => 'Sourced', 'packed' => 'Packed',
     'dispatched' => 'Dispatched', 'delivered' => 'Delivered', 'cancelled' => 'Cancelled',
 ][(string) $order['order_status']] ?? 'In progress';
+$statusCopy = [
+    'pending' => 'We have received your order.',
+    'confirmed' => 'We have sourced your items and are getting them ready.',
+    'packed' => 'Your order is packed and ready for delivery.',
+    'dispatched' => 'Your order is on the way.',
+    'delivered' => 'Your order was delivered.',
+    'cancelled' => 'This order was cancelled.',
+][(string) $order['order_status']] ?? 'We are preparing your order.';
+$statusTone = (string) $order['order_status'] === 'delivered'
+    ? 'okv-badge-available'
+    : ((string) $order['order_status'] === 'cancelled' ? 'okv-badge-out' : 'okv-badge-neutral');
+$statusIcon = (string) $order['order_status'] === 'delivered'
+    ? 'check'
+    : ((string) $order['order_status'] === 'dispatched' ? 'truck' : 'trail');
+$eventMap = [];
+foreach ($order['public_trail'] as $event) { $eventMap[$event['status']] = $event; }
+$cancelledEvent = $eventMap['cancelled'] ?? null;
+$steps = ['pending' => 'Placed', 'sourced' => 'Sourced', 'packed' => 'Packed', 'dispatched' => 'Dispatched', 'delivered' => 'Delivered'];
+$stepIcons = ['pending' => 'check', 'sourced' => 'leaf', 'packed' => 'basket', 'dispatched' => 'truck', 'delivered' => 'check'];
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -191,18 +210,13 @@ $publicStatus = [
 <?php okv_shop_header(); ?>
 
 <main id="okv-main" class="okv-container py-8 md:py-12">
-  <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Order <?= okv_e($order['order_number']) ?></p>
-  <h1 class="mt-2 font-display text-4xl font-extrabold text-ink"><?= $publicTrail ? 'Follow this order' : 'We have your order' ?></h1>
-  <p class="mt-3 text-ink-60">
-    Status: <?= okv_e($publicStatus) ?><?php
-      if (!$publicTrail && $money['kind'] !== OrderMoney::KIND_CANCELLED) {
-          echo okv_e('. ' . $money['headline']);
-          if ($paymentSummary['state'] === 'awaiting') {
-              echo okv_e(' A bank transfer receipt is pending verification by OK Veggies.');
-          }
-      }
-    ?>
-  </p>
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-gold-ink">Order <?= okv_e($order['order_number']) ?></p>
+      <h1 class="mt-2 font-display text-4xl font-extrabold text-ink"><?= $publicTrail ? 'Track your order' : 'Order details' ?></h1>
+    </div>
+    <span class="okv-badge <?= $statusTone ?> mt-1 text-sm"><?php okv_icon($statusIcon, 'h-4 w-4'); ?><?= okv_e($publicStatus) ?></span>
+  </div>
 
   <?php if ($paymentNotice !== null): ?>
     <p class="mt-4 rounded-xl border px-4 py-3 text-sm <?= $paymentNotice[1] === 'ok'
@@ -238,15 +252,67 @@ $publicStatus = [
     </p>
   <?php endif; ?>
 
-  <div class="mt-8 grid gap-6 lg:grid-cols-3">
-    <section class="okv-card lg:col-span-2">
-      <h2 class="font-display text-xl font-bold text-ink">Items</h2>
-      <ul class="mt-4 space-y-3">
+  <section class="okv-card mt-6" id="order-progress" aria-labelledby="order-progress-heading">
+    <div class="flex items-start gap-3">
+      <span class="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon($statusIcon, 'h-5 w-5'); ?></span>
+      <div class="min-w-0">
+        <h2 id="order-progress-heading" class="font-display text-xl font-bold text-ink">Order progress</h2>
+        <p class="mt-1 text-sm text-ink-60"><?= okv_e($statusCopy) ?></p>
+      </div>
+    </div>
+    <?php if ($order['source_line'] !== ''): ?>
+      <p class="okv-note mt-4 bg-foliage-tint"><?php okv_icon('leaf', 'mr-1 inline h-4 w-4'); ?><?= okv_e($order['source_line']) ?></p>
+    <?php endif; ?>
+    <ol class="mt-4 grid gap-3 sm:grid-cols-5" aria-label="Order progress steps">
+      <?php foreach ($steps as $status => $label): $event = $eventMap[$status] ?? null; ?>
+        <li class="rounded-md border p-3 <?= $event ? 'border-foliage bg-foliage-tint' : 'border-mist bg-white' ?>">
+          <span class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide <?= $event ? 'text-forest' : 'text-ink-40' ?>">
+            <?php okv_icon($stepIcons[$status] ?? 'trail', 'h-4 w-4'); ?><?= okv_e($label) ?>
+          </span>
+          <?php if ($event): ?><time class="mt-2 block text-xs text-ink-60" datetime="<?= okv_e($event['created_at']) ?>"><?= okv_e(date('j M, H:i', strtotime($event['created_at']))) ?></time><?php else: ?><span class="mt-2 block text-xs text-ink-40">Waiting</span><?php endif; ?>
+        </li>
+      <?php endforeach; ?>
+    </ol>
+    <?php if ($cancelledEvent): ?>
+      <p class="okv-note mt-4 bg-clay-tint"><strong>Cancelled</strong> on <?= okv_e(date('j M Y, H:i', strtotime($cancelledEvent['created_at']))) ?>.</p>
+    <?php endif; ?>
+    <?php if ($order['refund_lines']): ?>
+      <div class="mt-4 space-y-2" aria-label="Refund status">
+        <?php foreach ($order['refund_lines'] as $line): ?><p class="okv-note bg-clay-tint"><?= okv_e($line) ?></p><?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </section>
+
+  <?php if (!$publicTrail): ?>
+    <nav class="mt-4 flex flex-wrap gap-2" aria-label="Order actions">
+      <a class="okv-btn px-4" href="#reschedule-heading"><?php okv_icon('calendar', 'h-4 w-4'); ?>Manage delivery</a>
+      <a class="okv-btn-outline px-4" href="#order-progress"><?php okv_icon('trail', 'h-4 w-4'); ?>Track order</a>
+      <a class="okv-btn-outline px-4" href="#items-heading"><?php okv_icon('basket', 'h-4 w-4'); ?>View items</a>
+      <a class="okv-btn-outline px-4" href="#payment-details"><?php okv_icon('receipt', 'h-4 w-4'); ?>Payment details</a>
+      <a class="okv-btn-outline px-4" href="#make-it-right"><?php okv_icon('info', 'h-4 w-4'); ?>Report a problem</a>
+    </nav>
+  <?php else: ?>
+    <nav class="mt-4 flex flex-wrap gap-2" aria-label="Order actions">
+      <a class="okv-btn px-4" href="#order-progress"><?php okv_icon('trail', 'h-4 w-4'); ?>Track order</a>
+      <a class="okv-btn-outline px-4" href="#items-heading"><?php okv_icon('basket', 'h-4 w-4'); ?>View items</a>
+    </nav>
+  <?php endif; ?>
+
+  <div class="mt-6 grid gap-6 lg:grid-cols-3">
+    <section class="okv-card lg:col-span-2" aria-labelledby="items-heading">
+      <div class="flex items-center gap-3">
+        <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('basket', 'h-5 w-5'); ?></span>
+        <div>
+          <h2 id="items-heading" class="font-display text-xl font-bold text-ink">Your items</h2>
+          <p class="mt-1 text-sm text-ink-60"><?= count($order['items']) ?> <?= count($order['items']) === 1 ? 'item' : 'items' ?></p>
+        </div>
+      </div>
+      <ul class="mt-4 divide-y divide-mist">
         <?php foreach ($order['items'] as $item): ?>
-          <li class="flex justify-between gap-4">
+          <li class="flex justify-between gap-4 py-3 text-sm">
             <span><?= okv_e(okv_quantity($item['quantity'])) ?> <?= okv_e($item['unit_name']) ?> <?= okv_e($item['item_name']) ?></span>
             <?php if (!$publicTrail): ?>
-              <span class="font-mono"><?= okv_e(Money::format((int) $item['line_total_subunit'])) ?></span>
+              <span class="font-mono text-ink"><?= okv_e(Money::format((int) $item['line_total_subunit'])) ?></span>
             <?php endif; ?>
           </li>
         <?php endforeach; ?>
@@ -254,36 +320,39 @@ $publicStatus = [
     </section>
 
     <aside class="okv-card">
-      <h2 class="font-display text-xl font-bold text-ink">Order details</h2>
-      <dl class="mt-4 space-y-3">
-        <div>
+      <div class="flex items-center gap-3">
+        <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-gold-tint text-ink"><?php okv_icon('calendar', 'h-5 w-5'); ?></span>
+        <h2 class="font-display text-xl font-bold text-ink">Delivery and payment</h2>
+      </div>
+      <dl class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <div class="rounded-md border border-mist bg-white p-3">
           <dt class="text-sm text-ink-60">Delivery day</dt>
-          <dd><?= okv_e(date('l jS F', strtotime((string) $order['preferred_delivery_date']))) ?></dd>
+          <dd class="mt-1 font-medium"><?= okv_e(date('l jS F', strtotime((string) $order['preferred_delivery_date']))) ?></dd>
         </div>
-        <?php if (!$publicTrail): ?><div>
+        <?php if (!$publicTrail): ?><div class="rounded-md border border-mist bg-white p-3">
           <dt class="text-sm text-ink-60">Payment choice</dt>
-          <dd><?= okv_e(($labels[$order['payment_option']] ?? (string) $order['payment_option']) . (!empty($paymentSummary['via_transfer']) ? ', by bank transfer' : '')) ?></dd>
+          <dd class="mt-1 font-medium"><?= okv_e(($labels[$order['payment_option']] ?? (string) $order['payment_option']) . (!empty($paymentSummary['via_transfer']) ? ', bank transfer' : '')) ?></dd>
         </div><?php endif; ?>
         <?php if (!$publicTrail && $money['on_credit']): ?>
-          <div>
+          <div class="rounded-md border border-mist bg-white p-3">
             <dt class="text-sm text-ink-60">Payment</dt>
-            <dd><?= okv_e($money['kind'] === OrderMoney::KIND_CREDIT_REPAID ? 'Paid with your credit line, repaid' : 'Paid with your credit line') ?></dd>
+            <dd class="mt-1 font-medium"><?= okv_e($money['kind'] === OrderMoney::KIND_CREDIT_REPAID ? 'Credit line repaid' : 'On your credit line') ?></dd>
           </div>
           <?php if ($money['credit_line'] !== ''): ?>
-            <div>
+            <div class="rounded-md border border-mist bg-white p-3">
               <dt class="text-sm text-ink-60">Credit line</dt>
-              <dd><?= okv_e($money['credit_line']) ?></dd>
+              <dd class="mt-1 font-medium"><?= okv_e($money['credit_line']) ?></dd>
             </div>
           <?php endif; ?>
         <?php elseif (!$publicTrail && $pendingPayment !== null): ?>
-          <div>
+          <div class="rounded-md border border-mist bg-white p-3">
             <dt class="text-sm text-ink-60">Amount due now</dt>
-            <dd class="font-mono"><?= okv_e(Money::format(Money::balance((int) $pendingPayment['expected_amount_subunit'], (int) $pendingPayment['paid_amount_subunit']))) ?></dd>
+            <dd class="mt-1 font-mono font-medium"><?= okv_e(Money::format(Money::balance((int) $pendingPayment['expected_amount_subunit'], (int) $pendingPayment['paid_amount_subunit']))) ?></dd>
           </div>
         <?php elseif (!$publicTrail && $money['owed_subunit'] > 0): ?>
-          <div>
+          <div class="rounded-md border border-mist bg-white p-3">
             <dt class="text-sm text-ink-60">To pay on delivery</dt>
-            <dd class="font-mono"><?= okv_e(Money::format($money['owed_subunit'])) ?></dd>
+            <dd class="mt-1 font-mono font-medium"><?= okv_e(Money::format($money['owed_subunit'])) ?></dd>
           </div>
         <?php endif; ?>
       </dl>
@@ -293,9 +362,9 @@ $publicStatus = [
         </div>
       <?php endif; ?>
 
-      <p class="mt-5 text-sm text-ink-60">Delivery fee is arranged and settled separately after we confirm your area.</p>
+      <p class="mt-4 text-sm text-ink-60">We will confirm the delivery fee after checking your area.</p>
       <?php if ($shareUrl !== '' && !($guestOrder && $pendingPayment !== null)): ?>
-        <a class="okv-btn-outline mt-5 w-full justify-center" href="<?= okv_e($shareUrl) ?>" rel="noopener" target="_blank">Share on WhatsApp</a>
+        <a class="okv-btn-outline mt-4 w-full justify-center" href="<?= okv_e($shareUrl) ?>" rel="noopener" target="_blank"><?php okv_icon('trail', 'h-4 w-4'); ?>Share order</a>
       <?php endif; ?>
       <?php if ($cancellation && !empty($cancellation['may_cancel'])): ?>
         <a class="okv-btn-danger mt-3 w-full justify-center"
@@ -361,7 +430,9 @@ $publicStatus = [
   <?php endif; ?>
 
   <?php if (!$publicTrail && $paymentSummary !== null): ?>
-    <?php okv_payment_panel($paymentSummary, ['receipt_href' => '/public/payment/receipt.php?order=' . (int) $order['id']]); ?>
+    <div class="mt-6" id="payment-details">
+      <?php okv_payment_panel($paymentSummary, ['receipt_href' => '/public/payment/receipt.php?order=' . (int) $order['id']]); ?>
+    </div>
   <?php endif; ?>
 
   <?php if ($cancellation): ?>
@@ -430,7 +501,10 @@ $publicStatus = [
 
   <?php if (!$publicTrail && $reschedule): ?>
     <section class="okv-card mt-6" aria-labelledby="reschedule-heading">
-      <h2 id="reschedule-heading" class="font-display text-xl font-bold text-ink">Delivery date</h2>
+      <div class="flex items-center gap-3">
+        <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('calendar', 'h-5 w-5'); ?></span>
+        <h2 id="reschedule-heading" class="font-display text-xl font-bold text-ink">Manage delivery</h2>
+      </div>
       <p class="mt-2 text-sm text-ink-60"><?= okv_e($reschedule['policy_line']) ?></p>
 
       <?php if (!empty($reschedule['history'])): ?>
@@ -454,7 +528,7 @@ $publicStatus = [
 
       <?php if ($reschedule['may_reschedule']): ?>
         <details class="mt-4 rounded-md border border-mist p-4">
-          <summary class="flex min-h-[44px] cursor-pointer items-center font-semibold text-forest">Move delivery to another day</summary>
+          <summary class="flex min-h-[44px] cursor-pointer items-center font-semibold text-forest">Choose a new delivery day</summary>
           <form action="/api/v1/orders.php" method="POST" class="mt-4 space-y-4">
             <?= Csrf::field() ?>
             <input type="hidden" name="action" value="reschedule_customer">
@@ -480,9 +554,9 @@ $publicStatus = [
             </div>
             <label class="flex min-h-[44px] items-start gap-3 text-sm">
               <input type="checkbox" name="confirmed" value="1" class="mt-1 h-5 w-5" required>
-              <span>I understand my delivery will move to the day I chose and my order total stays the same.</span>
+              <span>I understand my delivery day will change and my order total will stay the same.</span>
             </label>
-            <button type="submit" class="okv-btn min-h-[44px]">Move delivery</button>
+            <button type="submit" class="okv-btn min-h-[44px]"><?php okv_icon('calendar', 'h-4 w-4'); ?>Move delivery</button>
           </form>
         </details>
       <?php else: ?>
@@ -504,7 +578,10 @@ $publicStatus = [
       $supportText = rawurlencode('Please help me with order ' . $order['order_number'] . '.');
     ?>
     <section class="okv-card mt-6" id="make-it-right" aria-labelledby="make-it-right-heading">
-      <h2 id="make-it-right-heading" class="font-display text-xl font-bold text-ink">Make It Right</h2>
+      <div class="flex items-center gap-3">
+        <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-tomato-tint text-tomato"><?php okv_icon('info', 'h-5 w-5'); ?></span>
+        <h2 id="make-it-right-heading" class="font-display text-xl font-bold text-ink">Report an order problem</h2>
+      </div>
 
       <?php if ($issueNotice === 'reported'): ?>
         <p class="okv-note mt-4 bg-foliage-tint" role="status">We received your report for order <?= okv_e($order['order_number']) ?>.</p>
@@ -562,10 +639,7 @@ $publicStatus = [
       <?php if (($issueState['code'] ?? '') === 'already_open'): ?>
         <p class="mt-4 text-sm text-ink-60">You can send another report after the current one is finished, if this order is still within its reporting window.</p>
       <?php elseif (!empty($issueState['ok'])): ?>
-        <p class="mt-3 text-sm text-ink-60">
-          If something in order <?= okv_e($order['order_number']) ?> is not right, tell us by
-          <?= okv_e($issueState['deadline']->format('l jS F')) ?>. We will check it and tell you what happens next.
-        </p>
+        <p class="mt-3 text-sm text-ink-60">Tell us if something is missing or not as expected. Report it by <?= okv_e($issueState['deadline']->format('l jS F')) ?>.</p>
         <details class="mt-4 rounded-md border border-mist p-4" <?= $issueError !== '' ? 'open' : '' ?>>
           <summary class="flex min-h-[44px] cursor-pointer items-center font-semibold text-forest">Something is not right</summary>
           <?php if ($issueError !== ''): ?>
@@ -579,7 +653,7 @@ $publicStatus = [
             <input type="hidden" name="action" value="report">
             <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
             <div>
-              <label class="okv-label" for="issue-category">What was not right?</label>
+              <label class="okv-label" for="issue-category">What went wrong?</label>
               <select class="okv-input" id="issue-category" name="category" required
                       <?= $issueField === 'category' ? 'aria-invalid="true" aria-describedby="issue-category-error"' : '' ?>>
                 <option value="">Choose one</option>
@@ -594,7 +668,7 @@ $publicStatus = [
               <textarea class="okv-input" id="issue-description" name="description" rows="5"
                         minlength="10" maxlength="1000" required
                         <?= $issueField === 'description' ? 'aria-invalid="true" aria-describedby="issue-description-help issue-description-error"' : 'aria-describedby="issue-description-help"' ?>><?= okv_e($oldDescription) ?></textarea>
-              <p id="issue-description-help" class="mt-1 text-sm text-ink-60">Use 10 to 1,000 characters. Please describe the produce and what you found.</p>
+              <p id="issue-description-help" class="mt-1 text-sm text-ink-60">Tell us what happened in at least 10 characters.</p>
               <?php if ($issueField === 'description'): ?><p id="issue-description-error" class="mt-1 text-sm text-tomato"><?= okv_e($issueError) ?></p><?php endif; ?>
             </div>
             <div>
@@ -617,34 +691,6 @@ $publicStatus = [
     </section>
   <?php endif; ?>
 
-  <section class="okv-card mt-6">
-    <h2 class="font-display text-xl font-bold text-ink">Order Trail</h2>
-    <?php if ($order['source_line'] !== ''): ?>
-      <p class="mt-2 text-sm font-semibold text-forest"><?= okv_e($order['source_line']) ?></p>
-    <?php endif; ?>
-    <?php
-      $eventMap = [];
-      foreach ($order['public_trail'] as $event) { $eventMap[$event['status']] = $event; }
-      $cancelledEvent = $eventMap['cancelled'] ?? null;
-      $steps = ['pending' => 'Placed', 'sourced' => 'Sourced', 'packed' => 'Packed', 'dispatched' => 'Dispatched', 'delivered' => 'Delivered'];
-    ?>
-    <ol class="mt-5 grid gap-3 sm:grid-cols-5" aria-label="Order progress">
-      <?php foreach ($steps as $status => $label): $event = $eventMap[$status] ?? null; ?>
-        <li class="rounded-md border p-3 <?= $event ? 'border-foliage bg-foliage-tint' : 'border-mist bg-white' ?>">
-          <span class="block text-xs font-bold uppercase tracking-wide <?= $event ? 'text-forest' : 'text-ink-40' ?>"><?= okv_e($label) ?></span>
-          <?php if ($event): ?><time class="mt-1 block text-xs text-ink-60" datetime="<?= okv_e($event['created_at']) ?>"><?= okv_e(date('j M, H:i', strtotime($event['created_at']))) ?></time><?php else: ?><span class="mt-1 block text-xs text-ink-40">Waiting</span><?php endif; ?>
-        </li>
-      <?php endforeach; ?>
-    </ol>
-    <?php if ($cancelledEvent): ?>
-      <p class="okv-note mt-4 bg-clay-tint"><strong>Cancelled</strong> on <?= okv_e(date('j M Y, H:i', strtotime($cancelledEvent['created_at']))) ?>.</p>
-    <?php endif; ?>
-    <?php if ($order['refund_lines']): ?>
-      <div class="mt-4 space-y-2" aria-label="Refund status">
-        <?php foreach ($order['refund_lines'] as $line): ?><p class="okv-note bg-clay-tint"><?= okv_e($line) ?></p><?php endforeach; ?>
-      </div>
-    <?php endif; ?>
-  </section>
 </main>
 
 <?php okv_shop_footer(); ?>

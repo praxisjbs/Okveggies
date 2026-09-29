@@ -15,6 +15,7 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 require_business_customer();
 require_once __DIR__ . '/../includes/components/pagination.php';
 require_once __DIR__ . '/../includes/components/shop/pay_sheet.php';
+require_once __DIR__ . '/../includes/components/shop/icons.php';
 
 $userId = (int) Customer::id();
 $filters = [
@@ -41,7 +42,7 @@ $urlFor = static function (array $changes = []) use ($baseQuery): string {
 
 $paymentLabels = ['unpaid' => 'Unpaid', 'part_paid' => 'Part paid', 'paid' => 'Paid'];
 $okv_pro_title = 'Orders and Invoices';
-$okv_pro_note = 'Every order on this business account, with its delivery, payment and document records.';
+$okv_pro_note = 'Check order progress, delivery, payments and documents.';
 $okv_pro_active = '/pro/orders.php';
 require __DIR__ . '/../includes/components/pro/header.php';
 ?>
@@ -133,110 +134,144 @@ require __DIR__ . '/../includes/components/pro/header.php';
       <section class="okv-panel min-w-0" aria-labelledby="order-detail-heading">
         <div class="okv-panel-head">
           <div>
-            <p class="okv-eyebrow">Order detail</p>
+            <p class="okv-eyebrow">Order details</p>
             <h2 id="order-detail-heading" class="okv-panel-title mt-1 font-mono">
               <?= okv_e((string) $order['order_number']) ?>
             </h2>
           </div>
-          <a class="okv-btn-text" href="<?= okv_e($urlFor(['order' => null])) ?>">Close detail</a>
+          <a class="okv-btn-text" href="<?= okv_e($urlFor(['order' => null])) ?>">Close</a>
         </div>
         <div class="okv-panel-body space-y-6">
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <p class="text-sm text-ink-60">Status</p>
-              <p class="mt-1 font-medium"><?= okv_e(OrderLifecycle::customerLabel((string) $order['order_status'])) ?></p>
-            </div>
-            <div>
-              <p class="text-sm text-ink-60">Delivery</p>
-              <p class="mt-1"><?= okv_e(date('l jS F', strtotime((string) $order['preferred_delivery_date']))) ?></p>
-            </div>
-            <div>
-              <p class="text-sm text-ink-60">Total</p>
-              <p class="mt-1 font-mono"><?= okv_e(Money::format((int) $order['order_total_subunit'])) ?></p>
-            </div>
-            <div>
-              <p class="text-sm text-ink-60">Payment</p>
-              <p class="mt-1"><?= okv_e($detail['money']['on_credit'] ? ($detail['money']['kind'] === OrderMoney::KIND_CREDIT_REPAID ? 'Paid with your credit line, repaid' : 'Paid with your credit line') : (string) $detail['money']['badge']) ?></p>
-            </div>
-            <div>
-              <p class="text-sm text-ink-60">Paid in cash</p>
-              <p class="mt-1 font-mono"><?= okv_e(Money::format((int) $order['amount_paid_subunit'])) ?></p>
-            </div>
-            <div>
+          <?php
+            $statusLabel = OrderLifecycle::customerLabel((string) $order['order_status']);
+            $statusTone = (string) $order['order_status'] === 'delivered'
+                ? 'okv-badge-available'
+                : ((string) $order['order_status'] === 'cancelled' ? 'okv-badge-out' : 'okv-badge-neutral');
+            $statusIcon = (string) $order['order_status'] === 'delivered'
+                ? 'check'
+                : ((string) $order['order_status'] === 'dispatched' ? 'truck' : 'trail');
+            $orderPageUrl = '/public/order.php?order=' . (int) $order['id'];
+          ?>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <article class="rounded-lg border border-mist bg-white p-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-foliage-tint text-forest"><?php okv_icon($statusIcon, 'h-5 w-5'); ?></span>
+              <p class="mt-3 text-sm text-ink-60">Status</p>
+              <p class="mt-1"><span class="okv-badge <?= $statusTone ?>"><?= okv_e($statusLabel) ?></span></p>
+            </article>
+            <article class="rounded-lg border border-mist bg-white p-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('calendar', 'h-5 w-5'); ?></span>
+              <p class="mt-3 text-sm text-ink-60">Delivery day</p>
+              <p class="mt-1 font-medium"><?= okv_e(date('l jS F', strtotime((string) $order['preferred_delivery_date']))) ?></p>
+            </article>
+            <article class="rounded-lg border border-mist bg-white p-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gold-tint text-ink"><?php okv_icon('basket', 'h-5 w-5'); ?></span>
+              <p class="mt-3 text-sm text-ink-60">Order total</p>
+              <p class="mt-1 font-mono font-medium"><?= okv_e(Money::format((int) $order['order_total_subunit'])) ?></p>
+            </article>
+            <article class="rounded-lg border border-mist bg-white p-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('card', 'h-5 w-5'); ?></span>
+              <p class="mt-3 text-sm text-ink-60">Payment</p>
+              <p class="mt-1 font-medium"><?= okv_e($detail['money']['on_credit'] ? ($detail['money']['kind'] === OrderMoney::KIND_CREDIT_REPAID ? 'Credit line repaid' : 'On your credit line') : (string) $detail['money']['badge']) ?></p>
+            </article>
+            <article class="rounded-lg border border-mist bg-white p-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-gold-tint text-ink"><?php okv_icon('receipt', 'h-5 w-5'); ?></span>
+              <p class="mt-3 text-sm text-ink-60">Paid so far</p>
+              <p class="mt-1 font-mono font-medium"><?= okv_e(Money::format((int) $order['amount_paid_subunit'])) ?></p>
+            </article>
+            <article class="rounded-lg border border-mist bg-white p-4">
+              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-tomato-tint text-tomato"><?php okv_icon($detail['money']['on_credit'] ? 'receipt' : 'card', 'h-5 w-5'); ?></span>
               <?php if ($detail['money']['on_credit']): ?>
-                <p class="text-sm text-ink-60">Credit line</p>
-                <p class="mt-1"><?= okv_e($detail['money']['credit_line'] !== '' ? $detail['money']['credit_line'] : 'Nothing left to repay.') ?></p>
+                <p class="mt-3 text-sm text-ink-60">Credit line</p>
+                <p class="mt-1 font-medium"><?= okv_e($detail['money']['credit_line'] !== '' ? $detail['money']['credit_line'] : 'Nothing left to repay.') ?></p>
               <?php else: ?>
-                <p class="text-sm text-ink-60">Balance due</p>
-                <p class="mt-1 font-mono"><?= okv_e(Money::format((int) $order['balance_due_subunit'])) ?></p>
+                <p class="mt-3 text-sm text-ink-60">Still to pay</p>
+                <p class="mt-1 font-mono font-medium"><?= okv_e(Money::format((int) $order['balance_due_subunit'])) ?></p>
               <?php endif; ?>
-            </div>
-          </div>
-          <?php if ($detail['pay_methods'] !== []): ?>
-            <div><?php okv_pay_action($order, $detail['pay_methods']); ?></div>
-          <?php endif; ?>
-
-          <div>
-            <h3 class="font-semibold text-ink">Items</h3>
-            <ul class="mt-2 divide-y divide-mist">
-              <?php foreach ($detail['items'] as $item): ?>
-                <li class="flex justify-between gap-4 py-2 text-sm">
-                  <span>
-                    <?= okv_e(okv_quantity($item['quantity'])) ?>
-                    <?= okv_e((string) $item['unit_name']) ?>
-                    <?= okv_e((string) $item['item_name']) ?>
-                  </span>
-                  <span class="font-mono"><?= okv_e(Money::format((int) $item['line_total_subunit'])) ?></span>
-                </li>
-              <?php endforeach; ?>
-            </ul>
+            </article>
           </div>
 
-          <div>
-            <h3 class="font-semibold text-ink">Delivery address</h3>
-            <p class="mt-2 whitespace-pre-line text-sm text-ink-60">
-              <?= okv_e(OrderDocument::addressBlock($detail['address'])) ?>
-            </p>
-          </div>
-
-          <div>
-            <h3 class="font-semibold text-ink">Order trail</h3>
-            <ol class="mt-2 space-y-2">
-              <?php foreach ($detail['trail'] as $event): ?>
-                <li class="flex flex-wrap justify-between gap-2 text-sm">
-                  <span class="font-medium"><?= okv_e((string) $event['label']) ?></span>
-                  <time class="text-ink-60" datetime="<?= okv_e((string) $event['created_at']) ?>">
-                    <?= okv_e(date('j M Y, H:i', strtotime((string) $event['created_at']))) ?>
-                  </time>
-                </li>
-              <?php endforeach; ?>
-            </ol>
-          </div>
-
-          <div class="flex flex-wrap gap-2 border-t border-mist pt-4">
-            <a class="okv-btn-outline px-4" href="/public/documents/invoice.php?order=<?= (int) $order['id'] ?>"
-               target="_blank" rel="noopener">Open invoice</a>
+          <nav class="flex flex-wrap gap-2" aria-label="Order actions">
+            <a class="okv-btn px-4" href="<?= okv_e($orderPageUrl) ?>#reschedule-heading"><?php okv_icon('calendar', 'h-4 w-4'); ?>Manage delivery</a>
+            <a class="okv-btn-outline px-4" href="<?= okv_e($orderPageUrl) ?>#order-progress"><?php okv_icon('trail', 'h-4 w-4'); ?>Track order</a>
+            <a class="okv-btn-outline px-4" href="<?= okv_e($orderPageUrl) ?>"><?php okv_icon('info', 'h-4 w-4'); ?>Full order details</a>
+            <a class="okv-btn-outline px-4" href="/public/documents/invoice.php?order=<?= (int) $order['id'] ?>" target="_blank" rel="noopener"><?php okv_icon('receipt', 'h-4 w-4'); ?>View invoice</a>
             <?php if ((int) $order['amount_paid_subunit'] > 0): ?>
-              <a class="okv-btn-outline px-4" href="/public/documents/receipt.php?order=<?= (int) $order['id'] ?>"
-                 target="_blank" rel="noopener">Open receipt</a>
+              <a class="okv-btn-outline px-4" href="/public/documents/receipt.php?order=<?= (int) $order['id'] ?>" target="_blank" rel="noopener"><?php okv_icon('receipt', 'h-4 w-4'); ?>View receipt</a>
             <?php endif; ?>
             <form action="/api/v1/pro_orders.php" method="post" target="_blank">
               <?= Csrf::field() ?>
               <input type="hidden" name="action" value="create_trail_link">
               <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
-              <button class="okv-btn px-4" type="submit">Open shareable Order Trail</button>
+              <button class="okv-btn-outline px-4" type="submit"><?php okv_icon('trail', 'h-4 w-4'); ?>Share order progress</button>
             </form>
-          </div>
+          </nav>
+          <?php if ($detail['pay_methods'] !== []): ?>
+            <section class="okv-card" aria-label="Payment action">
+              <div class="mb-3 flex items-center gap-3">
+                <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-gold-tint text-ink"><?php okv_icon('card', 'h-5 w-5'); ?></span>
+                <h3 class="font-semibold text-ink">Make a payment</h3>
+              </div>
+              <?php okv_pay_action($order, $detail['pay_methods']); ?>
+            </section>
+          <?php endif; ?>
+
+          <section class="okv-card" id="order-items" aria-labelledby="order-items-heading">
+            <div class="flex items-center gap-3">
+              <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('basket', 'h-5 w-5'); ?></span>
+              <h3 id="order-items-heading" class="font-display text-lg font-bold text-ink">Items</h3>
+            </div>
+            <ul class="mt-2 divide-y divide-mist">
+              <?php foreach ($detail['items'] as $item): ?>
+                <li class="flex justify-between gap-4 py-3 text-sm">
+                  <span>
+                    <?= okv_e(okv_quantity($item['quantity'])) ?>
+                    <?= okv_e((string) $item['unit_name']) ?>
+                    <?= okv_e((string) $item['item_name']) ?>
+                  </span>
+                  <span class="font-mono text-ink"><?= okv_e(Money::format((int) $item['line_total_subunit'])) ?></span>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          </section>
+
+          <section class="okv-card" aria-labelledby="delivery-address-heading">
+            <div class="flex items-center gap-3">
+              <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('map-pin', 'h-5 w-5'); ?></span>
+              <h3 id="delivery-address-heading" class="font-display text-lg font-bold text-ink">Delivery address</h3>
+            </div>
+            <p class="mt-3 whitespace-pre-line text-sm text-ink-60">
+              <?= okv_e(OrderDocument::addressBlock($detail['address'])) ?>
+            </p>
+          </section>
+
+          <section class="okv-card" aria-labelledby="progress-history-heading">
+            <div class="flex items-center gap-3">
+              <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-foliage-tint text-forest"><?php okv_icon('trail', 'h-5 w-5'); ?></span>
+              <h3 id="progress-history-heading" class="font-display text-lg font-bold text-ink">Progress history</h3>
+            </div>
+            <ol class="mt-4 grid gap-2 sm:grid-cols-2">
+              <?php foreach ($detail['trail'] as $event): ?>
+                <li class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-mist bg-white p-3 text-sm">
+                  <span class="font-medium"><?= okv_e((string) $event['label']) ?></span>
+                  <time class="text-xs text-ink-60" datetime="<?= okv_e((string) $event['created_at']) ?>">
+                    <?= okv_e(date('j M Y, H:i', strtotime((string) $event['created_at']))) ?>
+                  </time>
+                </li>
+              <?php endforeach; ?>
+            </ol>
+          </section>
 
           <?php if ($detail['kitchen_run'] || $detail['credit_charge']): ?>
-            <div class="flex flex-wrap gap-4 border-t border-mist pt-4 text-sm">
+            <div class="flex flex-wrap gap-2 border-t border-mist pt-4 text-sm">
               <?php if ($detail['kitchen_run']): ?>
-                <a class="okv-btn-text" href="/kitchen-runs.php?request=<?= (int) $detail['kitchen_run']['id'] ?>">
+                <a class="okv-btn-outline px-4" href="/kitchen-runs.php?request=<?= (int) $detail['kitchen_run']['id'] ?>">
+                  <?php okv_icon('list', 'h-4 w-4'); ?>
                   Kitchen Run <?= okv_e((string) $detail['kitchen_run']['request_number']) ?>
                 </a>
               <?php endif; ?>
               <?php if ($detail['credit_charge']): ?>
-                <a class="okv-btn-text" href="/pro/credit.php?transaction=<?= (int) $detail['credit_charge']['id'] ?>">
+                <a class="okv-btn-outline px-4" href="/pro/credit.php?transaction=<?= (int) $detail['credit_charge']['id'] ?>">
+                  <?php okv_icon('receipt', 'h-4 w-4'); ?>
                   Credit charge <?= okv_e(Money::format((int) $detail['credit_charge']['amount_subunit'])) ?>
                 </a>
               <?php endif; ?>
@@ -248,10 +283,7 @@ require __DIR__ . '/../includes/components/pro/header.php';
       <section class="okv-panel" aria-labelledby="choose-order-heading">
         <div class="okv-panel-body">
           <h2 id="choose-order-heading" class="okv-panel-title">Choose an order</h2>
-          <p class="mt-2 text-sm text-ink-60">
-            Open an order from the list to see its items, delivery, payment summary, documents
-            and customer-facing trail.
-          </p>
+          <p class="mt-2 text-sm text-ink-60">Choose an order to see its status, items, delivery, payments and documents.</p>
         </div>
       </section>
     <?php endif; ?>
@@ -260,3 +292,4 @@ require __DIR__ . '/../includes/components/pro/header.php';
 
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
 <?php require __DIR__ . '/../includes/components/pro/footer.php'; ?>
+
