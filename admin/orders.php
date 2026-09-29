@@ -332,7 +332,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
             <div><dt class="text-ink-60"><?= $orderMoney && $orderMoney['on_credit'] ? 'Owed on credit' : 'Outstanding' ?></dt><dd class="mt-1 font-mono <?= $outstandingSubunit > 0 && !($orderMoney && $orderMoney['on_credit']) ? 'text-clay' : '' ?>"><?= okv_e(Money::format($outstandingSubunit)) ?></dd></div>
           </dl>
           <div class="mt-3 flex flex-wrap gap-2">
-            <a class="okv-btn-outline min-h-[44px] px-3" href="/public/order.php?order=<?= (int) $selected['id'] ?>" target="_blank" rel="noopener">
+            <a class="okv-btn-outline min-h-[44px] px-3" href="/admin/order_trail.php?order=<?= (int) $selected['id'] ?>" target="_blank" rel="noopener">
               Open the customer trail<span class="sr-only">, opens in a new tab</span>
             </a>
             <?php if ($canDocument): ?>
