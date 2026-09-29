@@ -676,7 +676,7 @@ $stepIcons = ['pending' => 'check', 'sourced' => 'leaf', 'packed' => 'basket', '
               <input class="okv-input" id="issue-photos" name="photos[]" type="file"
                      accept="image/jpeg,image/png,image/webp" multiple
                      <?= $issueField === 'photos' ? 'aria-invalid="true" aria-describedby="issue-photos-help issue-photos-error"' : 'aria-describedby="issue-photos-help"' ?>>
-              <p id="issue-photos-help" class="mt-1 text-sm text-ink-60">Add up to 5 JPEG, PNG or WebP photos. Each can be up to <?= okv_e(IssueReports::photoLimitLabel()) ?>.</p>
+              <p id="issue-photos-help" class="mt-1 text-sm text-ink-60">Choose up to 5 JPEG, PNG or WebP photos. Each photo may be up to <?= okv_e(IssueReports::photoLimitLabel()) ?>.</p>
               <?php if ($issueField === 'photos'): ?><p id="issue-photos-error" class="mt-1 text-sm text-tomato"><?= okv_e($issueError) ?> Choose the photos again before sending.</p><?php endif; ?>
             </div>
             <button type="submit" class="okv-btn min-h-[44px] px-4">Send report for order <?= okv_e($order['order_number']) ?></button>
