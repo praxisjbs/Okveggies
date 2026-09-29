@@ -324,8 +324,8 @@ require __DIR__ . '/../includes/components/admin/header.php';
                       <td><?= okv_e(date('j M Y', strtotime((string) $order['preferred_delivery_date']))) ?></td>
                       <td><?= (int) ($order['reschedule_count'] ?? 0) > 0 ? (int) $order['reschedule_count'] . ' time' . ((int) $order['reschedule_count'] === 1 ? '' : 's') : '-' ?></td>
                       <td class="font-mono"><?= okv_e(Money::format((int) $order['order_total_subunit'])) ?></td>
-                      <td><?= okv_e($paymentStates[(string) $order['payment_status']] ?? ucfirst((string) $order['payment_status'])) ?><?= (string) $order['payment_option'] === 'on_account' ? ', on account' : '' ?></td>
-                      <td class="font-mono"><?= okv_e(Money::format((int) $order['balance_due_subunit'])) ?></td>
+                      <td><?php if ($order['money']['on_credit']): ?>On credit line<?= $order['money']['kind'] === OrderMoney::KIND_CREDIT_REPAID ? ', repaid' : '' ?><?php else: ?><?= okv_e($paymentStates[(string) $order['payment_status']] ?? ucfirst((string) $order['payment_status'])) ?><?php endif; ?></td>
+                      <td class="font-mono"><?= okv_e(Money::format($order['money']['on_credit'] ? (int) $order['money']['credit_open_subunit'] : (int) $order['balance_due_subunit'])) ?></td>
                     </tr>
                   <?php endforeach; ?>
                 </tbody>

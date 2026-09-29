@@ -162,6 +162,34 @@
 
   OKV.ready(function () { OKV.bindSheets(); });
 
+  // One tap, one post. A form marked data-once disables its buttons the moment
+  // it submits, so a double tap cannot post it twice. A page restored from the
+  // back button (Paystack, then Back) gets its buttons back.
+  function releaseOnce(form) {
+    form.removeAttribute('data-once-busy');
+    form.querySelectorAll('button[aria-busy="true"]').forEach(function (button) {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    });
+  }
+  document.addEventListener('submit', function (event) {
+    var form = event.target;
+    if (!form || !form.hasAttribute || !form.hasAttribute('data-once')) { return; }
+    if (form.getAttribute('data-once-busy') === '1') { event.preventDefault(); return; }
+    form.setAttribute('data-once-busy', '1');
+    // Disable after the browser has read the form, so the post still goes out.
+    setTimeout(function () {
+      form.querySelectorAll('button[type="submit"], button:not([type])').forEach(function (button) {
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+      });
+    }, 0);
+  });
+  window.addEventListener('pageshow', function (event) {
+    if (!event.persisted) { return; }
+    document.querySelectorAll('form[data-once]').forEach(releaseOnce);
+  });
+
   // Transient bottom banner. type: 'ok' | 'error'.
   OKV.toast = function (message, type) {
     var host = document.getElementById('okv-toast');

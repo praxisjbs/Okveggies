@@ -151,9 +151,16 @@ okv_test_ok(
 );
 
 // The button and its target must both exist, or the page renders a dead form.
-okv_test_ok(str_contains($orderPage, 'action="/api/v1/payments.php"'), 'the pay form posts to the payments endpoint');
-okv_test_ok(str_contains($orderPage, 'value="initialise"'),            'the pay form asks for the initialise action');
-okv_test_ok(str_contains($orderPage, 'Csrf::field()'),                 'the pay form carries a CSRF token');
+// The form itself lives in the shared Pay control (one place for the order page,
+// the account list and the Pro portal), so the guarantees are checked there: the
+// page draws the control, the methods point at the payments endpoint with the
+// initialise action, and every form the control renders carries a CSRF token.
+$payControl = (string) file_get_contents($appRoot . '/includes/components/shop/pay_sheet.php');
+$payMethods = (string) file_get_contents($appRoot . '/includes/classes/PayMethods.php');
+okv_test_ok(str_contains($orderPage, 'okv_pay_action('),                   'the order page draws the Pay control');
+okv_test_ok(str_contains($payMethods, "'endpoint'       => '/api/v1/payments.php'"), 'the pay form posts to the payments endpoint');
+okv_test_ok(str_contains($payMethods, "'action'         => 'initialise'"),  'the pay form asks for the initialise action');
+okv_test_ok(str_contains($payControl, 'Csrf::field()'),                    'the pay form carries a CSRF token');
 
 // -----------------------------------------------------------------------------
 // The health check must not report a rejected key as authenticated.

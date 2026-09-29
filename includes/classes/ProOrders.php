@@ -23,8 +23,9 @@ final class ProOrders
         $offset = ($page - 1) * self::PER_PAGE;
 
         $stmt = Database::getInstance()->getConnection()->prepare(
-            'SELECT o.id, o.order_number, o.order_status, o.payment_status, o.order_total_subunit,
-                    o.balance_due_subunit, o.preferred_delivery_date, o.created_at
+            'SELECT o.id, o.order_number, o.order_status, o.payment_status, o.payment_option,
+                    o.order_total_subunit, o.amount_paid_subunit, o.balance_due_subunit,
+                    o.preferred_delivery_date, o.created_at
                FROM orders o WHERE ' . $clause . '
               ORDER BY o.created_at DESC, o.id DESC LIMIT :limit OFFSET :offset'
         );
@@ -32,7 +33,7 @@ final class ProOrders
         $stmt->bindValue(':limit', self::PER_PAGE, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
-        $orders = $stmt->fetchAll();
+        $orders = OrderMoney::attach($stmt->fetchAll());
         foreach ($orders as &$order) { $order['status_label'] = OrderLifecycle::customerLabel((string) $order['order_status']); }
         unset($order);
         return compact('orders', 'count', 'page', 'lastPage', 'status', 'payment', 'delivery');
@@ -61,6 +62,12 @@ final class ProOrders
         $document['trail'] = OrderLifecycle::customerTrail($history);
         $document['kitchen_run'] = $kitchenRun;
         $document['credit_charge'] = $creditCharge;
+        // How the money reads and which ways of paying apply, the same as on the
+        // account page and the order page.
+        $document['money'] = OrderMoney::fromRow($document['order']);
+        $document['pay_methods'] = $document['money']['settled'] && $document['money']['kind'] !== OrderMoney::KIND_CREDIT
+            ? []
+            : PayMethods::forOrder($document['order'], Credit::facilityForUser($userId), true);
         return $document;
     }
 }

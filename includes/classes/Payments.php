@@ -43,6 +43,12 @@ final class Payments
     public const STATUS_PAID      = 'paid';
     public const STATUS_PART_PAID = 'part_paid';
     public const STATUS_UNPAID    = 'unpaid';
+    /**
+     * A row that was replaced, for example when an order moved to the credit
+     * line. Nothing is ever deleted, so the row stays with its history, expects
+     * nothing, and can take no payment.
+     */
+    public const STATUS_VOID      = 'void';
 
     /** Transaction lifecycle. 'unknown' means a call died without an answer. */
     public const TXN_INITIALIZED = 'initialized';
@@ -200,6 +206,190 @@ final class Payments
     }
 
     /**
+     * What a charge on this payment row may ask for, in subunits.
+     *
+     * The row's own balance, except on the credit line: a repayment is capped at
+     * what the ledger still shows open for the order. A refund or an adjustment
+     * written against the order can leave the row expecting more than is owed,
+     * and a customer must never be charged for the difference.
+     *
+     * @param array<string,mixed>       $payment provider, expected_amount_subunit, paid_amount_subunit
+     * @param ?array<string,mixed>      $credit  the order's ledger summary (open_subunit), or null
+     */
+    public static function dueFor(array $payment, ?array $credit): int
+    {
+        $due = Money::balance((int) $payment['expected_amount_subunit'], (int) $payment['paid_amount_subunit']);
+        if ((string) ($payment['provider'] ?? '') === 'account') {
+            $due = min($due, max(0, (int) ($credit['open_subunit'] ?? 0)));
+        }
+        return $due;
+    }
+
+    /** True while a card attempt on this order has not been resolved yet. */
+    public static function hasAttemptInFlight(int $orderId): bool
+    {
+        return Database::one(
+            'SELECT t.id
+               FROM payment_transactions t
+               JOIN payments p ON p.id = t.payment_id
+              WHERE p.order_id = :order AND t.status IN (:initialized, :unknown)
+              LIMIT 1',
+            [':order' => $orderId, ':initialized' => self::TXN_INITIALIZED, ':unknown' => self::TXN_UNKNOWN]
+        ) !== null;
+    }
+
+    /**
+     * The on-account payment row that a repayment can be made against, or null.
+     *
+     * An order on the credit line keeps one row (provider account) for the whole
+     * total. Money that arrives on it settles the credit through
+     * Credit::settleOrderFromPayments, so "Repay" is an ordinary Paystack charge
+     * against that row. Only offered while the ledger still shows something
+     * open, so a repaid order offers nothing.
+     */
+    public static function repayablePayment(int $orderId): ?array
+    {
+        $order = Database::one(
+            'SELECT payment_option, order_status FROM orders WHERE id = :id',
+            [':id' => $orderId]
+        );
+        if ($order === null || (string) $order['payment_option'] !== 'on_account' || (string) $order['order_status'] === 'cancelled') {
+            return null;
+        }
+        $credit = OrderMoney::creditFor([$orderId])[$orderId] ?? null;
+        if ($credit === null || (int) $credit['open_subunit'] < 1) {
+            return null;
+        }
+        $row = Database::one(
+            'SELECT id, provider, payment_type, expected_amount_subunit, paid_amount_subunit, status
+               FROM payments
+              WHERE order_id = :id AND provider = :provider AND status <> :paid AND status <> :void
+                AND expected_amount_subunit > paid_amount_subunit
+              ORDER BY id LIMIT 1',
+            [':id' => $orderId, ':provider' => 'account', ':paid' => self::STATUS_PAID, ':void' => self::STATUS_VOID]
+        );
+        return $row;
+    }
+
+    /**
+     * Open the deposit payment on a pay on delivery order, so the customer can
+     * pay it by card and the order can be sourced.
+     *
+     * The sourcing gate asks a pay on delivery order for its deposit, so the
+     * customer needs a way to pay just that. The single pay on delivery row is
+     * reshaped, never deleted: a new Paystack deposit row takes the deposit, and
+     * the pay on delivery row expects only the rest, both with history entries,
+     * so the rows still add up to the order total. Idempotent: a second call
+     * returns the row the first one opened. Refused for any other kind of order,
+     * once anything has been paid, or once the order has moved on.
+     *
+     * @return array{ok:bool, code:string, message:string, payment_id?:int}
+     */
+    public static function openDepositPayment(int $orderId, ?int $onlyForUserId = null, ?int $actorId = null): array
+    {
+        $refuse = static fn(string $code, string $message): array => ['ok' => false, 'code' => $code, 'message' => $message];
+
+        $pdo = Database::getInstance()->getConnection();
+        $pdo->beginTransaction();
+        try {
+            $order = Database::one(
+                'SELECT id, user_id, order_number, order_status, payment_option, order_total_subunit
+                   FROM orders WHERE id = :id FOR UPDATE',
+                [':id' => $orderId]
+            );
+            if ($order === null || ($onlyForUserId !== null && (int) $order['user_id'] !== $onlyForUserId)) {
+                $pdo->rollBack();
+                return $refuse('not_found', 'That order could not be found.');
+            }
+            if ((string) $order['order_status'] !== 'pending' || (string) $order['payment_option'] !== 'pay_on_delivery') {
+                $pdo->rollBack();
+                return $refuse('not_available', 'A deposit can only be paid on a pay on delivery order that has not been sourced yet.');
+            }
+
+            $rows = Database::all(
+                'SELECT id, provider, payment_type, expected_amount_subunit, paid_amount_subunit, status
+                   FROM payments WHERE order_id = :id ORDER BY id FOR UPDATE',
+                [':id' => $orderId]
+            );
+            foreach ($rows as $row) {
+                if ((string) $row['payment_type'] === 'deposit' && (string) $row['status'] !== self::STATUS_VOID) {
+                    $pdo->commit();
+                    return ['ok' => true, 'code' => 'already_open', 'message' => '', 'payment_id' => (int) $row['id']];
+                }
+            }
+            $delivery = null;
+            foreach ($rows as $row) {
+                if ((string) $row['payment_type'] === 'pay_on_delivery' && (string) $row['status'] !== self::STATUS_VOID) {
+                    $delivery = $row;
+                    break;
+                }
+            }
+            if ($delivery === null || (int) $delivery['paid_amount_subunit'] > 0) {
+                $pdo->rollBack();
+                return $refuse('not_available', 'A payment is already recorded on this order.');
+            }
+
+            $total      = (int) $order['order_total_subunit'];
+            $percentage = Settings::depositPercentage();
+            $deposit    = SourcingGate::requiredCashSubunit('pay_on_delivery', $total, 0, $percentage);
+            if ($deposit < 1) {
+                $pdo->rollBack();
+                return $refuse('not_available', 'This order has no deposit to pay.');
+            }
+            $remaining = $total - $deposit;
+
+            Database::run(
+                'INSERT INTO payments
+                    (payment_number, user_id, order_id, provider, payment_type, expected_amount_subunit, currency, status)
+                 VALUES (:number, :user, :order, \'paystack\', \'deposit\', :amount, :currency, \'unpaid\')',
+                [
+                    ':number'   => 'PAY-' . $order['order_number'] . '-D',
+                    ':user'     => $order['user_id'],
+                    ':order'    => $orderId,
+                    ':amount'   => $deposit,
+                    ':currency' => Money::CODE,
+                ]
+            );
+            $depositId = (int) $pdo->lastInsertId();
+            self::writeHistory($depositId, null, null, self::STATUS_UNPAID, 'deposit_request', null, 'Deposit opened on a pay on delivery order.');
+
+            if ($remaining > 0) {
+                Database::run(
+                    'UPDATE payments SET expected_amount_subunit = :amount WHERE id = :id',
+                    [':amount' => $remaining, ':id' => (int) $delivery['id']]
+                );
+                self::writeHistory((int) $delivery['id'], null, (string) $delivery['status'], (string) $delivery['status'], 'deposit_request', null, 'Expected amount reduced by the deposit.');
+            } else {
+                Database::run(
+                    'UPDATE payments SET expected_amount_subunit = 0, status = :status WHERE id = :id',
+                    [':status' => self::STATUS_VOID, ':id' => (int) $delivery['id']]
+                );
+                self::writeHistory((int) $delivery['id'], null, (string) $delivery['status'], self::STATUS_VOID, 'deposit_request', null, 'The deposit covers the whole order.');
+            }
+
+            Database::run(
+                'UPDATE orders SET deposit_percentage = :pct, deposit_required_subunit = :deposit WHERE id = :id',
+                [':pct' => $percentage, ':deposit' => $deposit, ':id' => $orderId]
+            );
+            Audit::record(
+                'orders.deposit_opened',
+                'order',
+                $orderId,
+                null,
+                ['deposit_subunit' => $deposit, 'payment_id' => $depositId],
+                $actorId
+            );
+            $pdo->commit();
+            return ['ok' => true, 'code' => 'opened', 'message' => '', 'payment_id' => $depositId];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /**
      * Open a Paystack transaction for a payment row and hand back the URL the
      * customer is sent to. The local row is written first and always survives,
      * so a call that dies without an answer leaves something for the sweep.
@@ -226,6 +416,9 @@ final class Payments
         if ($payment['status'] === self::STATUS_PAID) {
             return ['ok' => false, 'code' => 'already_paid', 'message' => 'This payment has already been settled.'];
         }
+        if ($payment['status'] === self::STATUS_VOID) {
+            return ['ok' => false, 'code' => 'payment_void', 'message' => 'This payment was replaced. Open the order to see how to pay it.'];
+        }
         $email = trim((string) ($payment['email'] ?? ''));
         if ($email === '') {
             return ['ok' => false, 'code' => 'no_email', 'message' => 'This order has no email address to send a receipt to.'];
@@ -233,7 +426,10 @@ final class Payments
 
         $expected = (int) $payment['expected_amount_subunit'];
         $paid     = (int) $payment['paid_amount_subunit'];
-        $due      = Money::balance($expected, $paid);
+        $credit   = (string) $payment['provider'] === 'account'
+            ? (OrderMoney::creditFor([(int) $payment['order_id']])[(int) $payment['order_id']] ?? null)
+            : null;
+        $due      = self::dueFor($payment, $credit);
         if ($due < 1) {
             return ['ok' => false, 'code' => 'nothing_due', 'message' => 'There is nothing left to pay on this order.'];
         }
@@ -350,6 +546,17 @@ final class Payments
             if (!$payment) {
                 $pdo->commit();
                 return ['ok' => false, 'code' => 'unmatched', 'message' => 'That transaction has no payment row.'];
+            }
+
+            if ((string) $payment['status'] === self::STATUS_VOID) {
+                // Money arrived for a row that was replaced (the order moved to
+                // the credit line). It is never credited to a row that expects
+                // nothing, and never dropped: the transaction is kept as a
+                // mismatch with the reason, so staff see it and decide.
+                self::recordTransactionOutcome((int) $txn['id'], self::TXN_MISMATCH, $data, 'payment_void');
+                self::writeHistory((int) $payment['id'], (int) $txn['id'], (string) $payment['status'], (string) $payment['status'], $source, $webhookEventId, 'A charge arrived for a replaced payment. Needs a refund decision.');
+                $pdo->commit();
+                return ['ok' => false, 'code' => 'payment_void', 'message' => 'A payment arrived for a replaced payment row.'];
             }
 
             $credited = self::creditableAmount($data);

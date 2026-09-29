@@ -15,6 +15,7 @@
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/components/shop/brand.php';
 require_once __DIR__ . '/includes/components/shop/support_widget.php';
+require_once __DIR__ . '/includes/components/shop/pay_sheet.php';
 
 $signedIn = Customer::isLoggedIn();
 $proReturn = okv_pro_safe_return_path((string) okv_input('return', '')) ?? '';
@@ -70,9 +71,9 @@ $csrf = Csrf::token();
     // The panel below was a hardcoded empty state left over from before orders
     // existed, so it told someone with three orders they had none.
     $orders = Database::all(
-        'SELECT o.id, o.order_number, o.order_status, o.payment_status,
+        'SELECT o.id, o.order_number, o.order_status, o.payment_status, o.payment_option,
                 o.order_total_subunit, o.amount_paid_subunit, o.balance_due_subunit,
-                o.preferred_delivery_date, o.created_at,
+                o.deposit_required_subunit, o.preferred_delivery_date, o.created_at,
                 (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count,
                 (SELECT COUNT(*) FROM order_reschedules r WHERE r.order_id = o.id) AS reschedule_count
            FROM orders o
@@ -81,6 +82,17 @@ $csrf = Csrf::token();
           LIMIT 20',
         [':user' => (int) Customer::id()]
     );
+    // How each order's money reads, and which ways of paying apply. One helper
+    // for every screen, so this list, the order page and the emails agree. The
+    // credit facility is read once for the whole list.
+    $orders = OrderMoney::attach($orders);
+    $facility = Customer::isBusiness() ? Credit::facilityForUser((int) Customer::id()) : null;
+    foreach ($orders as &$orderRow) {
+        $orderRow['pay_methods'] = $orderRow['money']['settled'] && $orderRow['money']['kind'] !== OrderMoney::KIND_CREDIT
+            ? []
+            : PayMethods::forOrder($orderRow, $facility, true);
+    }
+    unset($orderRow);
     // The in-app copy of every email this customer has been sent. The bell in
     // the header owns the read state now, per item or mark all as read, so this
     // list no longer marks everything read on view: that kept the unread badge
@@ -164,7 +176,7 @@ $csrf = Csrf::token();
         <?php else: ?>
           <ul class="mt-4 space-y-3">
             <?php foreach ($orders as $o): ?>
-              <?php $owed = (int) $o['balance_due_subunit']; ?>
+              <?php $money = $o['money']; ?>
               <li class="rounded-md border border-mist p-4">
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
                   <a class="font-semibold text-ink underline" href="/public/order.php?order=<?= (int) $o['id'] ?>">
@@ -180,23 +192,15 @@ $csrf = Csrf::token();
                     Rescheduled <?= (int) $o['reschedule_count'] ?> time<?= (int) $o['reschedule_count'] === 1 ? '' : 's' ?>.
                   <?php endif; ?>
                 </p>
-                <?php if ((string) $o['order_status'] === 'cancelled'): ?>
-                  <p class="mt-2"><span class="okv-badge okv-badge-neutral">Cancelled</span></p>
-                <?php elseif ($owed > 0): ?>
-                  <div class="mt-3 flex flex-wrap items-center gap-3">
-                    <span class="okv-badge okv-badge-warn"><?= okv_e(Money::format($owed)) ?> still to pay</span>
-                    <a class="okv-btn-sm inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>">Pay now</a>
-                    <?php if (in_array((string) $o['order_status'], ['pending','confirmed'], true)): ?>
-                      <a class="okv-btn-text inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>#reschedule-heading">Reschedule</a>
-                    <?php endif; ?>
-                  </div>
-                <?php else: ?>
-                  <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <span class="okv-badge okv-badge-available">Paid in full</span>
-                    <?php if (in_array((string) $o['order_status'], ['pending','confirmed'], true)): ?>
-                      <a class="okv-btn-text inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>#reschedule-heading">Reschedule</a>
-                    <?php endif; ?>
-                  </div>
+                <div class="mt-3 flex flex-wrap items-center gap-3">
+                  <?php okv_money_badge($money); ?>
+                  <?php okv_pay_action($o, $o['pay_methods']); ?>
+                  <?php if ((string) $o['order_status'] !== 'cancelled' && in_array((string) $o['order_status'], ['pending','confirmed'], true)): ?>
+                    <a class="okv-btn-text inline-flex min-h-[44px] items-center" href="/public/order.php?order=<?= (int) $o['id'] ?>#reschedule-heading">Reschedule</a>
+                  <?php endif; ?>
+                </div>
+                <?php if ($money['credit_line'] !== ''): ?>
+                  <p class="mt-2 text-sm text-ink-60"><?= okv_e($money['credit_line']) ?></p>
                 <?php endif; ?>
               </li>
             <?php endforeach; ?>

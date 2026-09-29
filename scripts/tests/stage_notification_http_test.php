@@ -68,10 +68,10 @@ function sh_order(?int $userId, ?string $contactEmail, string $number): int
     Database::run(
         'INSERT INTO orders
             (order_number, user_id, customer_type, order_status, payment_option, payment_status,
-             subtotal_subunit, order_total_subunit, balance_due_subunit,
-             preferred_delivery_date, contact_email)
-         VALUES (:number, :user, \'household\', \'pending\', \'pay_on_delivery\', \'unpaid\',
-                 500000, 500000, 500000, :delivery, :email)',
+             subtotal_subunit, order_total_subunit, deposit_required_subunit, amount_paid_subunit,
+             balance_due_subunit, preferred_delivery_date, contact_email)
+         VALUES (:number, :user, \'household\', \'pending\', \'pay_on_delivery\', \'part_paid\',
+                 500000, 500000, 150000, 150000, 350000, :delivery, :email)',
         [':number' => $number, ':user' => $userId, ':delivery' => date('Y-m-d', strtotime('+6 days')), ':email' => $contactEmail]
     );
     return (int) Database::getInstance()->getConnection()->lastInsertId();

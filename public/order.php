@@ -14,6 +14,7 @@ require_once __DIR__ . '/../includes/components/shop/header.php';
 require_once __DIR__ . '/../includes/components/shop/footer.php';
 require_once __DIR__ . '/../includes/components/shop/empty_state.php';
 require_once __DIR__ . '/../includes/components/shop/icons.php';
+require_once __DIR__ . '/../includes/components/shop/pay_sheet.php';
 require_once __DIR__ . '/../includes/components/shop/payment_summary.php';
 require_once __DIR__ . '/../includes/components/shop/bank_transfer.php';
 
@@ -124,6 +125,21 @@ $mayPay = (string) $order['order_status'] !== 'cancelled'
     && (!$publicTrail || $guestOrder);
 $pendingPayment = $mayPay ? Payments::pendingOnlinePayment((int) $order['id']) : null;
 
+// How the money reads, and the ways of paying that apply. The same helper the
+// account list uses, so the two pages can never disagree. An order on the credit
+// line reads as paid by the credit line; the credit layer is the repayment.
+$money = OrderMoney::describe(
+    $order,
+    (string) $order['payment_option'] === 'on_account' ? (OrderMoney::creditFor([(int) $order['id']])[(int) $order['id']] ?? null) : null
+);
+$facility = (!$publicTrail && Customer::isBusiness() && Customer::id() !== null)
+    ? Credit::facilityForUser((int) Customer::id())
+    : null;
+$payMethods = $mayPay ? PayMethods::forOrder($order, $facility, !$publicTrail && !$guestOrder) : [];
+$creditFlag  = (string) okv_input('credit', '');
+$creditError = (string) okv_input('credit_error', '');
+$creditErrorCodes = ['not_found', 'not_convertible', 'payment_in_progress', 'credit_not_approved', 'credit_limit_exceeded', 'invalid_charge'];
+
 // The money story of this order (PRD 9.3a). A signed-in owner sees all of it in
 // the Payments panel. A token view is the shareable Order Trail, which shows no
 // money, so it only ever reads the state, never an amount.
@@ -178,13 +194,8 @@ $publicStatus = [
   <h1 class="mt-2 font-display text-4xl font-extrabold text-ink"><?= $publicTrail ? 'Follow this order' : 'We have your order' ?></h1>
   <p class="mt-3 text-ink-60">
     Status: <?= okv_e($publicStatus) ?><?php
-      if (!$publicTrail) {
-          $paidLabels = [
-              'paid'      => '. Paid in full.',
-              'part_paid' => '. Part paid, a balance is still owed.',
-              'unpaid'    => '. Nothing has been paid yet.',
-          ];
-          echo okv_e($paidLabels[(string) $order['payment_status']] ?? '');
+      if (!$publicTrail && $money['kind'] !== OrderMoney::KIND_CANCELLED) {
+          echo okv_e('. ' . $money['headline']);
           if ($paymentSummary['state'] === 'awaiting') {
               echo okv_e(' A bank transfer receipt is pending verification by OK Veggies.');
           }
@@ -197,6 +208,16 @@ $publicStatus = [
           ? 'border-foliage bg-foliage-tint text-ink'
           : ($paymentNotice[1] === 'problem' ? 'border-clay bg-clay-tint text-ink' : 'border-mist bg-white text-ink') ?>" role="status">
       <?= okv_e($paymentNotice[0]) ?>
+    </p>
+  <?php endif; ?>
+
+  <?php if ($creditFlag === 'on_credit' || $creditFlag === 'already_on_credit'): ?>
+    <p class="mt-4 rounded-xl border border-foliage bg-foliage-tint px-4 py-3 text-sm text-ink" role="status">
+      <?= $creditFlag === 'already_on_credit' ? 'This order is already on your credit line.' : 'This order is now on your credit line.' ?>
+    </p>
+  <?php elseif ($creditError !== ''): ?>
+    <p class="mt-4 rounded-xl border border-clay bg-clay-tint px-4 py-3 text-sm text-ink" role="alert">
+      <?= okv_e(in_array($creditError, $creditErrorCodes, true) ? Credit::message($creditError) : 'We could not use your credit line. Please try again.') ?>
     </p>
   <?php endif; ?>
 
@@ -242,29 +263,33 @@ $publicStatus = [
           <dt class="text-sm text-ink-60">Payment choice</dt>
           <dd><?= okv_e(($labels[$order['payment_option']] ?? (string) $order['payment_option']) . (!empty($paymentSummary['via_transfer']) ? ', by bank transfer' : '')) ?></dd>
         </div><?php endif; ?>
-        <?php if (!$publicTrail && $order['amount_due_subunit'] !== null): ?>
+        <?php if (!$publicTrail && $money['on_credit']): ?>
+          <div>
+            <dt class="text-sm text-ink-60">Payment</dt>
+            <dd><?= okv_e($money['kind'] === OrderMoney::KIND_CREDIT_REPAID ? 'Paid with your credit line, repaid' : 'Paid with your credit line') ?></dd>
+          </div>
+          <?php if ($money['credit_line'] !== ''): ?>
+            <div>
+              <dt class="text-sm text-ink-60">Credit line</dt>
+              <dd><?= okv_e($money['credit_line']) ?></dd>
+            </div>
+          <?php endif; ?>
+        <?php elseif (!$publicTrail && $pendingPayment !== null): ?>
           <div>
             <dt class="text-sm text-ink-60">Amount due now</dt>
-            <dd class="font-mono"><?= okv_e(Money::format((int) $order['amount_due_subunit'])) ?></dd>
+            <dd class="font-mono"><?= okv_e(Money::format(Money::balance((int) $pendingPayment['expected_amount_subunit'], (int) $pendingPayment['paid_amount_subunit']))) ?></dd>
+          </div>
+        <?php elseif (!$publicTrail && $money['owed_subunit'] > 0): ?>
+          <div>
+            <dt class="text-sm text-ink-60">To pay on delivery</dt>
+            <dd class="font-mono"><?= okv_e(Money::format($money['owed_subunit'])) ?></dd>
           </div>
         <?php endif; ?>
       </dl>
-      <?php if ($pendingPayment !== null): ?>
-        <?php $due = Money::balance((int) $pendingPayment['expected_amount_subunit'], (int) $pendingPayment['paid_amount_subunit']); ?>
-        <form action="/api/v1/payments.php" method="POST" class="mt-5">
-          <?= Csrf::field() ?>
-          <input type="hidden" name="action" value="initialise">
-          <input type="hidden" name="payment_id" value="<?= (int) $pendingPayment['id'] ?>">
-          <?php if ($publicTrail): ?>
-            <input type="hidden" name="token" value="<?= okv_e($token) ?>">
-          <?php endif; ?>
-          <button class="okv-btn w-full justify-center min-h-[44px]">
-            Pay <?= okv_e(Money::format($due)) ?> now
-          </button>
-          <p class="mt-2 text-center text-xs text-ink-60">
-            You will be taken to Paystack to pay by card, transfer or USSD. We never see your card details.
-          </p>
-        </form>
+      <?php if ($payMethods !== []): ?>
+        <div class="mt-5">
+          <?php okv_pay_action($order, $payMethods, $publicTrail ? $token : ''); ?>
+        </div>
       <?php endif; ?>
 
       <p class="mt-5 text-sm text-ink-60">Delivery fee is arranged and settled separately after we confirm your area.</p>
