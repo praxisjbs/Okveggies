@@ -52,6 +52,32 @@
     return drawer ? drawer.querySelector('[role="dialog"]') : null;
   }
 
+  function submitMiniCartForm(event) {
+    event.preventDefault();
+    var form = event.currentTarget;
+    var button = form.querySelector('button[type="submit"]');
+    if (button) { button.disabled = true; }
+    fetch('/api/v1/cart.php', {
+      method: 'POST',
+      body: new FormData(form),
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' }
+    }).then(function (response) {
+      return response.json().then(function (data) {
+        if (!response.ok) { throw new Error(data.message || 'We could not update your basket.'); }
+        return data;
+      });
+    }).then(function (data) {
+      renderBody(data);
+      updateCounts(data.count || 0);
+    }).catch(function (error) {
+      if (window.OKV && window.OKV.toast) {
+        window.OKV.toast(error.message || 'We could not update your basket.', 'error');
+      }
+      if (button) { button.disabled = false; }
+    });
+  }
+
   function renderBody(state) {
     var body = drawer.querySelector('[data-mini-cart-body]');
     var subtotal = drawer.querySelector('[data-mini-cart-subtotal]');
@@ -63,14 +89,42 @@
       return;
     }
 
-    var list = el('ul', 'space-y-3');
+    var list = el('ul', 'space-y-4');
     state.lines.forEach(function (line) {
-      var row = el('li', 'flex justify-between gap-4 text-sm');
-      var left = el('span');
-      left.appendChild(el('strong', 'block text-ink', line.name));
-      left.appendChild(el('span', 'text-ink-60', line.quantity_display + ' ' + line.unit));
-      row.appendChild(left);
-      row.appendChild(el('span', 'font-mono text-forest', line.line_total_display));
+      var row = el('li', 'border-b border-mist pb-4 text-sm last:border-0 last:pb-0');
+      var top = el('div', 'flex justify-between gap-4');
+      var left = el('span', 'min-w-0');
+      left.appendChild(el('strong', 'block truncate text-ink', line.name));
+      left.appendChild(el('span', 'text-ink-60', line.quantity_display + ' ' + line.unit + ' at ' + line.unit_price_display));
+      top.appendChild(left);
+      top.appendChild(el('span', 'flex-none font-mono text-forest', line.line_total_display));
+      row.appendChild(top);
+
+      var form = el('form', 'mt-3 flex items-end gap-2');
+      form.setAttribute('data-mini-cart-form', '');
+      var action = el('input');
+      action.type = 'hidden'; action.name = 'action';
+      action.value = line.item_type === 'combo' ? 'update_combo' : 'update_product';
+      var lineId = el('input');
+      lineId.type = 'hidden'; lineId.name = 'line_id'; lineId.value = String(line.id);
+      var csrfSource = drawer.querySelector('[data-mini-cart-csrf] input');
+      var csrf = el('input');
+      csrf.type = 'hidden'; csrf.name = csrfSource ? csrfSource.name : '_csrf';
+      csrf.value = csrfSource ? csrfSource.value : '';
+      var label = el('label', 'text-sm font-semibold text-ink', 'Quantity');
+      var quantity = el('input', 'okv-input mt-1 w-24');
+      quantity.type = 'number'; quantity.name = 'quantity'; quantity.inputMode = 'decimal';
+      quantity.value = line.quantity_display;
+      quantity.min = line.item_type === 'combo' ? '1' : line.minimum_quantity;
+      quantity.step = line.item_type === 'combo' ? '1' : line.quantity_increment;
+      quantity.setAttribute('aria-label', 'Quantity for ' + line.name);
+      label.appendChild(quantity);
+      var update = el('button', 'okv-btn-outline px-3', 'Update');
+      update.type = 'submit';
+      form.appendChild(action); form.appendChild(lineId); form.appendChild(csrf);
+      form.appendChild(label); form.appendChild(update);
+      form.addEventListener('submit', submitMiniCartForm);
+      row.appendChild(form);
       list.appendChild(row);
     });
     body.appendChild(list);
