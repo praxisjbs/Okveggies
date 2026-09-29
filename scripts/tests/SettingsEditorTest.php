@@ -162,3 +162,43 @@ okv_test_eq('On', SettingsEditor::display($gate, true), 'a gate that is on reads
 okv_test_eq('Off', SettingsEditor::display($gate, false), 'a gate that is off reads as Off');
 okv_test_eq('Not set', SettingsEditor::display($day, ''), 'a blank text value reads as Not set');
 okv_test_ok(str_contains(SettingsEditor::display($minOrder, 500000), '5,000'), 'the smallest order reads back in naira with a comma');
+
+
+// -----------------------------------------------------------------------------
+// Direct bank transfer settings (PRD 9.3a). These change where a customer's
+// money goes, so the account number is held to exactly ten digits and the
+// switch cannot be turned on over a half-filled account.
+// -----------------------------------------------------------------------------
+$paymentGroup = SettingsEditor::group('payment');
+okv_test_ok($paymentGroup !== null && isset($paymentGroup['fields']['bank_transfer_account_number']), 'the Payments tab carries the bank account number');
+foreach (['bank_transfer_enabled', 'bank_transfer_bank_name', 'bank_transfer_account_name', 'bank_transfer_account_number'] as $bankKey) {
+    okv_test_ok(!empty($paymentGroup['fields'][$bankKey]['confirm']), "$bankKey needs the confirmation step, because it redirects customer money");
+    okv_test_ok(SettingsEditor::isEditable('payment', $bankKey), "$bankKey is editable through the registry");
+}
+okv_test_ok(!empty($paymentGroup['fields']['bank_transfer_enabled']['section']['title']), 'the bank fields start a named Direct bank transfer section');
+
+$numberField = $paymentGroup['fields']['bank_transfer_account_number'];
+okv_test_eq('0123456789', SettingsEditor::validateField($numberField, '0123456789')['value'], 'a ten digit account number is kept as typed, leading zero and all');
+okv_test_eq('0123456789', SettingsEditor::validateField($numberField, '0123 456 789')['value'], 'spaces copied from a banking app are stripped');
+okv_test_eq('0123456789', SettingsEditor::validateField($numberField, '0123-456-789')['value'], 'so are dashes');
+okv_test_eq('', SettingsEditor::validateField($numberField, '')['value'], 'an empty number is allowed while the option is off');
+okv_test_ok(SettingsEditor::validateField($numberField, '012345678')['error'] !== null, 'nine digits is refused');
+okv_test_ok(SettingsEditor::validateField($numberField, '01234567890')['error'] !== null, 'eleven digits is refused');
+okv_test_ok(SettingsEditor::validateField($numberField, '01234A6789')['error'] !== null, 'a letter is refused');
+okv_test_ok(str_contains((string) SettingsEditor::validateField($numberField, 'abc')['error'], '10 digit'), 'and the refusal says what is wanted');
+
+$complete = ['bank_transfer_enabled' => '1', 'bank_transfer_bank_name' => 'GTBank', 'bank_transfer_account_name' => 'OK Veggies Limited', 'bank_transfer_account_number' => '0123456789'];
+$result = SettingsEditor::validate('payment', $complete);
+okv_test_eq([], $result['errors'], 'a complete account can be switched on');
+okv_test_eq(true, $result['clean']['bank_transfer_enabled'], 'and the switch is read as on');
+
+foreach (['bank_transfer_bank_name', 'bank_transfer_account_name', 'bank_transfer_account_number'] as $missing) {
+    $partial = $complete;
+    $partial[$missing] = '';
+    $result = SettingsEditor::validate('payment', $partial);
+    okv_test_ok(isset($result['errors']['bank_transfer_enabled']), "switching on with no $missing is refused");
+}
+$off = SettingsEditor::validate('payment', ['bank_transfer_enabled' => '', 'bank_transfer_bank_name' => '', 'bank_transfer_account_name' => '', 'bank_transfer_account_number' => '']);
+okv_test_eq([], $off['errors'], 'switching off with the account cleared is fine');
+okv_test_eq(false, $off['clean']['bank_transfer_enabled'], 'and reads as off');
+okv_test_eq('Not set', SettingsEditor::display($numberField, ''), 'an empty account number reads as Not set on the confirmation screen');

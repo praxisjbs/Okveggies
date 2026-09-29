@@ -14,6 +14,8 @@ require_once __DIR__ . '/../includes/components/shop/header.php';
 require_once __DIR__ . '/../includes/components/shop/footer.php';
 require_once __DIR__ . '/../includes/components/shop/empty_state.php';
 require_once __DIR__ . '/../includes/components/shop/icons.php';
+require_once __DIR__ . '/../includes/components/shop/payment_summary.php';
+require_once __DIR__ . '/../includes/components/shop/bank_transfer.php';
 
 $token   = trim((string) okv_input('token', ''));
 $orderId = (int) okv_input('order', 0);
@@ -121,9 +123,27 @@ $shareUrl = $trailUrl !== ''
 $mayPay = (string) $order['order_status'] !== 'cancelled'
     && (!$publicTrail || $guestOrder);
 $pendingPayment = $mayPay ? Payments::pendingOnlinePayment((int) $order['id']) : null;
+
+// The money story of this order (PRD 9.3a). A signed-in owner sees all of it in
+// the Payments panel. A token view is the shareable Order Trail, which shows no
+// money, so it only ever reads the state, never an amount.
+$paymentSummary = PaymentSummary::forOrder((int) $order['id']);
+$transferNext   = $mayPay ? TransferProofs::nextTransferPayment((int) $order['id']) : null;
+$bank           = TransferProofs::bankDetails();
+$bankReady      = $bank['bank_name'] !== '' && $bank['account_name'] !== '' && TransferProofs::accountNumberIsValid($bank['account_number']);
+$declinedReceipt = null;
+foreach ($paymentSummary['receipts'] ?? [] as $receipt) {
+    if ($receipt['status'] === TransferProofs::PROOF_DECLINED) {
+        $declinedReceipt = $receipt;
+    }
+}
+$receiptError = (string) okv_input('receipt_error', '');
 $paymentFlag    = (string) okv_input('payment', '');
 $paymentNotices = [
     'paid'        => ['Payment received. Thank you.', 'ok'],
+    'awaiting'    => ['Payment pending verification. We have your receipt and our team is checking it against the bank. You will get an email and a notification as soon as it is confirmed.', 'wait'],
+    'receipt_needed' => ['Your order is placed, but we could not keep your receipt. Send it again below so we can check your payment.', 'problem'],
+    'receipt_refused' => [TransferProofs::receiptProblemMessage($receiptError !== '' ? $receiptError : 'upload_failed'), 'problem'],
     'pending'     => ['We are still confirming your payment with the bank. This page updates once it clears.', 'wait'],
     'review'      => ['Payment received. The amount differs from what we expected, so we are checking it and will be in touch.', 'wait'],
     'failed'      => ['That payment did not go through. Nothing has been taken. You can try again below.', 'problem'],
@@ -165,6 +185,9 @@ $publicStatus = [
               'unpaid'    => '. Nothing has been paid yet.',
           ];
           echo okv_e($paidLabels[(string) $order['payment_status']] ?? '');
+          if ($paymentSummary['state'] === 'awaiting') {
+              echo okv_e(' A bank transfer receipt is pending verification by OK Veggies.');
+          }
       }
     ?>
   </p>
@@ -217,7 +240,7 @@ $publicStatus = [
         </div>
         <?php if (!$publicTrail): ?><div>
           <dt class="text-sm text-ink-60">Payment choice</dt>
-          <dd><?= okv_e($labels[$order['payment_option']] ?? (string) $order['payment_option']) ?></dd>
+          <dd><?= okv_e(($labels[$order['payment_option']] ?? (string) $order['payment_option']) . (!empty($paymentSummary['via_transfer']) ? ', by bank transfer' : '')) ?></dd>
         </div><?php endif; ?>
         <?php if (!$publicTrail && $order['amount_due_subunit'] !== null): ?>
           <div>
@@ -250,6 +273,63 @@ $publicStatus = [
       <?php endif; ?>
     </aside>
   </div>
+
+  <?php if ($publicTrail && $paymentSummary['state'] === 'awaiting'): ?>
+    <!-- The shareable trail shows no money, so it only says where things stand. -->
+    <p class="okv-note mt-6 bg-gold-tint text-ink" role="status">
+      <?php okv_icon('clock', 'mr-1 inline h-4 w-4'); ?>Payment pending verification. We have a bank transfer receipt for this order and our team is checking it.
+    </p>
+  <?php endif; ?>
+
+  <?php if ($transferNext !== null): ?>
+    <?php
+      $supportNumber = preg_replace('/\D+/', '', Settings::str('support_whatsapp_number', '2348000000000'));
+      $supportText   = rawurlencode('Please send me the bank details to pay for order ' . $order['order_number'] . '.');
+    ?>
+    <!-- The receipt is what is owed: this is the action on the page. -->
+    <section class="okv-card mt-6" aria-labelledby="transfer-heading" data-transfer-card>
+      <div class="flex items-start gap-3">
+        <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('banknote', 'h-5 w-5'); ?></span>
+        <div class="min-w-0">
+          <h2 id="transfer-heading" class="font-display text-xl font-bold text-ink">Pay by bank transfer</h2>
+          <p class="mt-1 text-sm text-ink-60">Send the amount below, then upload your receipt. Our team checks it against the bank and confirms by email.</p>
+        </div>
+      </div>
+
+      <?php if ($declinedReceipt !== null): ?>
+        <p class="okv-note-bad mt-4" role="status">
+          We could not confirm your last receipt.
+          <?php if ($declinedReceipt['note'] !== ''): ?><span class="block">Reason: <?= okv_e($declinedReceipt['note']) ?></span><?php endif; ?>
+          <span class="block">Upload a clearer one below, or message us if you think we made a mistake.</span>
+        </p>
+      <?php endif; ?>
+
+      <?php if ($bankReady): ?>
+        <div class="mt-4 max-w-xl">
+          <?php okv_bank_transfer_details($bank, (int) $transferNext['due_subunit'], (string) $order['order_number']); ?>
+        </div>
+        <form action="/api/v1/payments.php" method="POST" enctype="multipart/form-data" class="mt-2 max-w-xl" data-transfer-form>
+          <?= Csrf::field() ?>
+          <input type="hidden" name="action" value="submit_transfer">
+          <input type="hidden" name="order_id" value="<?= (int) $order['id'] ?>">
+          <?php if ($publicTrail): ?><input type="hidden" name="token" value="<?= okv_e($token) ?>"><?php endif; ?>
+          <?php okv_receipt_field('order-transfer', true); ?>
+          <button class="okv-btn mt-5 w-full justify-center min-h-[44px] sm:w-auto" data-transfer-submit>
+            <?php okv_icon('upload', 'h-4 w-4'); ?> Send receipt for checking
+          </button>
+        </form>
+      <?php else: ?>
+        <p class="okv-note mt-4 bg-clay-tint">
+          The bank details are not available on screen right now. Message us and we will send them straight away.
+          <a class="inline-flex min-h-[44px] items-center font-semibold underline underline-offset-2" href="https://wa.me/<?= okv_e($supportNumber) ?>?text=<?= okv_e($supportText) ?>" rel="noopener" target="_blank">Message us on WhatsApp</a>
+        </p>
+      <?php endif; ?>
+    </section>
+  <?php endif; ?>
+
+  <?php if (!$publicTrail && $paymentSummary !== null): ?>
+    <?php okv_payment_panel($paymentSummary, ['receipt_href' => '/public/payment/receipt.php?order=' . (int) $order['id']]); ?>
+  <?php endif; ?>
 
   <?php if (!$publicTrail && $cancellation): ?>
     <?php
@@ -547,5 +627,6 @@ $publicStatus = [
 
 <?php okv_shop_footer(); ?>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>"></script>
+<script src="<?= okv_e(okv_asset('/assets/js/bank-transfer.min.js')) ?>" defer></script>
 </body>
 </html>

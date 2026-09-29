@@ -34,6 +34,8 @@ final class CustomerNotifications
         $id = max(0, (int) $relatedId);
         return match ($relatedType) {
             'order' => $id > 0 ? '/public/order.php?order=' . $id : '/account.php',
+            // A verified payment opens the green "Payment received" screen.
+            'payment_receipt' => $id > 0 ? '/public/payment/receipt.php?order=' . $id : '/account.php',
             'kitchen_run' => $id > 0 ? '/kitchen-runs.php?request=' . $id : '/kitchen-runs.php',
             'credit_application' => '/pro/credit.php',
             default => '/account.php',

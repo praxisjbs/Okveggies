@@ -15,6 +15,11 @@
  *      card, and the submit turns into a waiting state so nobody double pays
  *      by double tapping. No reload on a radio change: the choice is part of
  *      the same form the button submits.
+ *   4. The payment method. For a full payment or a deposit the customer picks
+ *      Paystack or a direct bank transfer. The transfer panel (account, exact
+ *      amount for the chosen option, receipt box) shows only while it is
+ *      chosen, and the method inputs are switched off for any other payment
+ *      choice so a stale value is never posted.
  *
  * Every value written to the page goes through textContent, never innerHTML.
  * -----------------------------------------------------------------------------
@@ -119,28 +124,43 @@
     on_account: 'Place order',
   };
 
+  // The amount is online-payable only for these two choices; only they have a method.
+  function isOnlineChoice(value) {
+    return value === 'pay_in_full' || value === 'deposit';
+  }
+
+  /** True when a direct bank transfer is the chosen way to send the money. */
+  function transferChosen() {
+    var checked = document.querySelector('[data-payment-options] input[name="payment_option"]:checked');
+    if (!checked || !isOnlineChoice(checked.value)) { return false; }
+    var method = document.querySelector('[data-method-group] input[name="payment_method"]:checked');
+    return !!method && method.value === 'bank_transfer';
+  }
+
   function wirePayBar() {
     var options = document.querySelector('[data-payment-options]');
     if (!options) { return; }
     var labels = document.querySelectorAll('[data-pay-label]');
     var submits = document.querySelectorAll('[data-pay-submit]');
+    var form = document.getElementById('checkout-payment-form');
 
     function paint() {
       var checked = options.querySelector('input[name="payment_option"]:checked');
       var text = checked ? (PAY_LABELS[checked.value] || 'Pay now') : 'Pay now';
+      if (transferChosen()) { text = 'Place order'; }
       labels.forEach(function (label) { label.textContent = text; });
     }
 
-    options.addEventListener('change', paint);
+    // The whole form, not just the cards: the method radios change the label too.
+    (form || options).addEventListener('change', paint);
     paint();
 
-    var form = document.getElementById('checkout-payment-form');
     if (form) {
       form.addEventListener('submit', function () {
         var waiting = document.querySelector('[data-payment-options] input[name="payment_option"]:checked');
-        var message = waiting && (waiting.value === 'pay_in_full' || waiting.value === 'deposit')
-          ? 'Taking you to Paystack'
-          : 'Placing your order';
+        var message = transferChosen()
+          ? 'Placing your order'
+          : (waiting && isOnlineChoice(waiting.value) ? 'Taking you to Paystack' : 'Placing your order');
         submits.forEach(function (button) {
           button.setAttribute('aria-busy', 'true');
           button.classList.add('pointer-events-none', 'opacity-80');
@@ -152,9 +172,46 @@
     }
   }
 
+  function wireMethods() {
+    var group = document.querySelector('[data-method-group]');
+    var options = document.querySelector('[data-payment-options]');
+    if (!group || !options) { return; }
+    var panel = document.querySelector('[data-transfer-panel]');
+    var amounts = panel ? panel.querySelectorAll('[data-transfer-amount]') : [];
+    var receipt = panel ? panel.querySelector('[data-receipt-input]') : null;
+    var methods = group.querySelectorAll('input[name="payment_method"]');
+
+    function paint() {
+      var checked = options.querySelector('input[name="payment_option"]:checked');
+      var option = checked ? checked.value : '';
+      var online = isOnlineChoice(option);
+      var transfer = transferChosen();
+
+      // A payment choice with no method (pay on delivery, on account) posts none.
+      group.hidden = !online;
+      methods.forEach(function (input) { input.disabled = !online; });
+
+      if (panel) { panel.hidden = !transfer; }
+      amounts.forEach(function (block) {
+        block.hidden = block.getAttribute('data-transfer-amount') !== option;
+      });
+      // The receipt is required only while a transfer is chosen, and is not even
+      // uploaded otherwise.
+      if (receipt) {
+        receipt.required = transfer;
+        receipt.disabled = !transfer;
+      }
+    }
+
+    var form = document.getElementById('checkout-payment-form');
+    (form || group).addEventListener('change', paint);
+    paint();
+  }
+
   function ready() {
     wireSheets();
     wirePickers();
+    wireMethods();
     wirePayBar();
   }
 

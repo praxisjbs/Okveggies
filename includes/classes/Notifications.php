@@ -87,12 +87,16 @@ final class Notifications
         'order_payment_pending' => ['template' => 'order_payment_pending', 'label' => 'Payment still pending', 'audience' => 'customer'],
         'deposit_received'  => ['template' => 'deposit_received',  'label' => 'Deposit received',        'audience' => 'customer'],
         'payment_recorded'  => ['template' => 'payment_recorded',  'label' => 'Payment recorded by staff', 'audience' => 'customer'],
+        'transfer_receipt_received' => ['template' => 'transfer_receipt_received', 'label' => 'Transfer receipt received', 'audience' => 'customer'],
+        'transfer_verified' => ['template' => 'transfer_verified', 'label' => 'Transfer payment verified', 'audience' => 'customer'],
+        'transfer_declined' => ['template' => 'transfer_declined', 'label' => 'Transfer receipt declined', 'audience' => 'customer'],
         'refund_processed'  => ['template' => 'refund_processed',  'label' => 'Refund sent',             'audience' => 'customer'],
         'refund_failed'     => ['template' => 'refund_failed',     'label' => 'Refund failed',           'audience' => 'staff'],
         'admin_new_order'   => ['template' => 'admin_new_order',   'label' => 'New order, for staff',    'audience' => 'staff'],
         'admin_order_cancelled' => ['template' => 'admin_order_cancelled', 'label' => 'Order cancelled, for staff', 'audience' => 'staff'],
         'admin_stage_email_failed' => ['template' => 'admin_stage_email_failed', 'label' => 'Stage email failed, for staff', 'audience' => 'staff'],
         'admin_manual_payment_proof' => ['template' => 'admin_manual_payment_proof', 'label' => 'Payment proof to review, for staff', 'audience' => 'staff'],
+        'admin_transfer_receipt' => ['template' => 'admin_transfer_receipt', 'label' => 'Transfer receipt to verify, for staff', 'audience' => 'staff'],
         'admin_new_contact' => ['template' => 'admin_new_contact', 'label' => 'New contact message, for staff', 'audience' => 'staff'],
         'contact_acknowledgement' => ['template' => 'contact_acknowledgement', 'label' => 'We have your message',  'audience' => 'customer'],
         'issue_report_received' => ['template' => 'issue_report_received', 'label' => 'Report received', 'audience' => 'customer'],
@@ -128,6 +132,9 @@ final class Notifications
         'order_payment_pending' => ['customer_name', 'order_number', 'amount_due', 'delivery_day', 'pay_url'],
         'deposit_received'  => ['customer_name', 'order_number', 'amount', 'balance_line', 'order_trail_url'],
         'payment_recorded'  => ['customer_name', 'order_number', 'amount', 'balance_line', 'order_trail_url'],
+        'transfer_receipt_received' => ['customer_name', 'order_number', 'amount', 'delivery_day', 'order_trail_url'],
+        'transfer_verified' => ['customer_name', 'order_number', 'amount', 'balance_line', 'delivery_day', 'source_line', 'receipt_url'],
+        'transfer_declined' => ['customer_name', 'order_number', 'amount', 'delivery_day', 'decline_reason', 'pay_url'],
         'refund_processed'  => ['customer_name', 'order_number', 'amount', 'order_trail_url'],
         'refund_failed'     => ['order_number', 'amount', 'reason', 'admin_url'],
         'admin_new_order'   => ['customer_name', 'order_number', 'order_total', 'delivery_day', 'zone_name', 'payment_choice', 'admin_url'],
@@ -139,6 +146,7 @@ final class Notifications
         'admin_order_cancelled' => ['customer_name', 'order_number', 'cancellation_source', 'cancellation_reason', 'delivery_day', 'refund_state', 'admin_url'],
         'admin_stage_email_failed' => ['customer_name', 'order_number', 'stage_label', 'delivery_day', 'failure_reason', 'admin_url'],
         'admin_manual_payment_proof' => ['order_number', 'amount', 'recorded_by', 'admin_url'],
+        'admin_transfer_receipt' => ['customer_name', 'order_number', 'amount', 'admin_url'],
         'admin_new_contact' => ['contact_name', 'contact_method', 'source_label', 'subject', 'message_preview', 'admin_url'],
         'contact_acknowledgement' => ['customer_name', 'received_at', 'whatsapp_url'],
         'issue_report_received' => ['customer_name', 'order_number', 'category', 'reported_at', 'description_preview', 'issue_url'],
@@ -744,6 +752,9 @@ final class Notifications
                     o.order_total_subunit, o.amount_paid_subunit, o.balance_due_subunit,
                     o.preferred_delivery_date, o.source_regions_snapshot, o.user_id, o.contact_email,
                     a.recipient_name, z.name AS zone_name,
+                    EXISTS (SELECT 1 FROM payments pt
+                             WHERE pt.order_id = o.id AND pt.provider = \'manual\'
+                               AND pt.payment_type IN (\'pay_in_full\', \'deposit\')) AS via_transfer,
                     u.email AS user_email,
                     TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
                FROM orders o
@@ -781,6 +792,7 @@ final class Notifications
         return [
             'order_id'           => (int) $order['id'],
             'payment_option'     => (string) $order['payment_option'],
+            'via_transfer'       => (int) ($order['via_transfer'] ?? 0) === 1,
             'amount_due_subunit' => $amountDue,
             'pay_url'            => $trailUrl,
             'recipients' => self::customerRecipients($order),
@@ -790,7 +802,7 @@ final class Notifications
                 'delivery_day'   => date('l jS F', strtotime((string) $order['preferred_delivery_date'])),
                 'order_total'    => Money::format((int) $order['order_total_subunit']),
                 'zone_name'      => trim((string) ($order['zone_name'] ?? '')) ?: 'Not assigned',
-                'payment_choice' => self::paymentChoiceLabel((string) $order['payment_option']),
+                'payment_choice' => self::paymentChoiceLabel((string) $order['payment_option'], (int) ($order['via_transfer'] ?? 0) === 1),
                 'source_line'    => okv_sourced_line($regions, Settings::str('source_day', '')),
                 'balance_line'   => self::balanceLine((int) $order['balance_due_subunit']),
                 'order_trail_url' => $trailUrl,
@@ -821,8 +833,14 @@ final class Notifications
             : 'Nothing is left to pay on this order.';
     }
 
-    private static function paymentChoiceLabel(string $option): string
+    private static function paymentChoiceLabel(string $option, bool $viaTransfer = false): string
     {
+        if ($viaTransfer && $option === 'pay_in_full') {
+            return 'Paid in full by bank transfer';
+        }
+        if ($viaTransfer && $option === 'deposit') {
+            return 'Deposit by bank transfer, balance on delivery';
+        }
         return [
             'pay_in_full'     => 'Paid in full online',
             'deposit'         => 'Deposit online, balance on delivery',
@@ -864,15 +882,22 @@ final class Notifications
      * closed the Paystack tab and walked away. Staff hear about every order the
      * moment it is placed, paid or not, so nothing is invisible to the team.
      */
-    public static function announceOrderPlaced(int $orderId, string $trailToken = ''): void
+    public static function announceOrderPlaced(int $orderId, string $trailToken = '', bool $customerReceiptFollows = false): void
     {
         $context = self::orderContext($orderId, $trailToken !== '' ? $trailToken : null);
         if ($context === null) {
             return;
         }
         $option = (string) $context['payment_option'];
+        $viaTransfer = !empty($context['via_transfer']);
 
-        if ($option === 'pay_in_full') {
+        // A direct transfer is not confirmed by a gateway, so there is nothing
+        // to hold a "payment confirmed" email for: the customer is told when
+        // staff verify the money, with its own email and its own receipt link.
+        // If they have just handed in a receipt, that acknowledgement is their
+        // copy and this one is left out; if not, they get the ordinary receipt
+        // of the order, which is true and asks nothing of them.
+        if ($option === 'pay_in_full' && !$viaTransfer) {
             self::hold(
                 'payment_confirmed',
                 $context['vars'] + ['amount' => $context['vars']['order_total']],
@@ -880,11 +905,11 @@ final class Notifications
                 'order',
                 $orderId
             );
-        } else {
+        } elseif (!$customerReceiptFollows) {
             self::send('order_placed', $context['vars'], $context['recipients'], 'order', $orderId);
         }
 
-        if (in_array($option, ['pay_in_full', 'deposit'], true)) {
+        if (!$viaTransfer && in_array($option, ['pay_in_full', 'deposit'], true)) {
             self::queuePaymentReminder($orderId, $context);
         }
 
@@ -2104,6 +2129,107 @@ final class Notifications
             (int) $row['id'],
             $staffId
         );
+    }
+
+    /**
+     * A receipt the customer has just uploaded. Two notices: the customer is
+     * told it is with the team and pending verification, and staff are told
+     * there is one to check. Nothing has been credited yet.
+     *
+     * $trailToken is the order's own link when the caller still has it (the
+     * moment of checkout), so the customer's copy can carry a working no-login
+     * link to follow the order.
+     */
+    public static function announceTransferSubmitted(array $result, string $trailToken = ''): void
+    {
+        $orderId = (int) ($result['order_id'] ?? 0);
+        if (empty($result['ok']) || $orderId < 1) {
+            return;
+        }
+        $context = self::orderContext($orderId, $trailToken !== '' ? $trailToken : null);
+        if ($context === null) {
+            return;
+        }
+        $amount = Money::format((int) ($result['amount_subunit'] ?? 0));
+
+        self::send(
+            'transfer_receipt_received',
+            $context['vars'] + ['amount' => $amount],
+            $context['recipients'],
+            'order',
+            $orderId
+        );
+
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        self::send(
+            'admin_transfer_receipt',
+            [
+                'customer_name' => $context['vars']['customer_name'],
+                'order_number'  => $context['vars']['order_number'],
+                'amount'        => $amount,
+                'admin_url'     => $base . '/admin/payments.php#queue-heading',
+            ],
+            self::staffRecipients('payments.view'),
+            'payment_proof',
+            (int) ($result['proof_id'] ?? 0)
+        );
+    }
+
+    /**
+     * Staff verified a transfer. The customer hears it by email and in the app,
+     * and the link opens the green "Payment received" screen, not the trail:
+     * that one deliberately shows no money.
+     */
+    public static function announceTransferVerified(array $result, ?int $staffId = null): void
+    {
+        $orderId = (int) ($result['order_id'] ?? 0);
+        if (empty($result['ok']) || $orderId < 1) {
+            return;
+        }
+        $context = self::orderContext($orderId);
+        if ($context === null) {
+            return;
+        }
+        // The money is in, so nothing is pending any more.
+        self::cancelPending('order', $orderId, ['order_payment_pending']);
+
+        $vars = $context['vars'] + ['amount' => Money::format((int) ($result['amount_subunit'] ?? 0))];
+        unset($vars['order_trail_url']);
+        $token = ReceiptLink::issue($orderId);
+        $vars['receipt_url'] = $token !== null ? ReceiptLink::url($token) : ReceiptLink::urlForOrder($orderId);
+
+        self::send('transfer_verified', $vars, $context['recipients'], 'payment_receipt', $orderId, $staffId);
+    }
+
+    /**
+     * Staff could not match a receipt. The customer is told why and where to
+     * upload another. A guest has no account to sign in to, so their way back is
+     * a trail link issued now; an account holder signs in and uses their order.
+     */
+    public static function announceTransferDeclined(array $result, ?int $staffId = null): void
+    {
+        $orderId = (int) ($result['order_id'] ?? 0);
+        if (empty($result['ok']) || $orderId < 1) {
+            return;
+        }
+        $context = self::orderContext($orderId);
+        if ($context === null) {
+            return;
+        }
+        $order = Database::one('SELECT user_id FROM orders WHERE id = :id', [':id' => $orderId]);
+        $guestToken = ($order['user_id'] ?? null) === null ? OrderTrail::issueForOrder($orderId, $staffId) : null;
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+
+        $vars = $context['vars'] + [
+            'amount'         => Money::format((int) ($result['amount_subunit'] ?? 0)),
+            'decline_reason' => trim((string) ($result['reason'] ?? '')) ?: 'We could not match it to a payment in our bank.',
+            'pay_url'        => $guestToken !== null
+                ? $base . '/public/order.php?token=' . rawurlencode($guestToken)
+                : $base . '/public/order.php?order=' . $orderId,
+        ];
+        unset($vars['order_trail_url']);
+
+        self::send('transfer_declined', $vars, $context['recipients'], 'order', $orderId, $staffId);
     }
 
     /** A refund that landed goes to the customer; one that failed goes to staff. */

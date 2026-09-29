@@ -19,6 +19,7 @@ const sources = [
   'assets/js/catalogue.js',
   'assets/js/basket.js',
   'assets/js/checkout.js',
+  'assets/js/bank-transfer.js',
   'assets/js/admin-products.js',
   'assets/js/admin-pricing.js',
   'assets/js/admin-combos.js',
