@@ -27,6 +27,7 @@ if (!function_exists('okv_mini_cart')) {
             <div class="flex-1 overflow-auto px-5 py-4" data-mini-cart-body aria-live="polite">
               <p class="text-sm text-ink-60">Loading your basket.</p>
             </div>
+            <div hidden aria-hidden="true" data-mini-cart-csrf><?= Csrf::field() ?></div>
             <footer class="border-t border-mist px-5 py-4">
               <div class="flex items-center justify-between font-semibold text-ink">
                 <span>Subtotal</span>

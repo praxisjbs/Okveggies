@@ -171,13 +171,24 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
           </h2>
           <ul class="mt-5 divide-y divide-mist">
             <?php foreach ($basket['lines'] as $line): ?>
-              <li class="flex items-center gap-4 py-4">
-                <span class="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-forest-tint text-forest"><?php okv_icon($line['item_type'] === 'combo' ? 'basket' : 'leaf', 'h-5 w-5'); ?></span>
+              <?php $combo = $line['item_type'] === 'combo'; ?>
+              <li class="flex flex-wrap items-center gap-4 py-4">
+                <span class="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-forest-tint text-forest"><?php okv_icon($combo ? 'basket' : 'leaf', 'h-5 w-5'); ?></span>
                 <span class="min-w-0 flex-1">
                   <strong class="block truncate text-ink"><?= okv_e($line['name']) ?></strong>
                   <span class="block text-sm text-ink-60"><?= okv_e($line['quantity_display']) ?> <?= okv_e($line['unit']) ?> at <?= okv_e($line['unit_price_display']) ?></span>
                 </span>
                 <span class="font-mono font-semibold text-forest"><?= okv_e($line['line_total_display']) ?></span>
+                <form method="post" action="/api/v1/cart.php" class="flex w-full items-end gap-2 pl-16 sm:w-auto sm:pl-0" data-basket-form>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="<?= $combo ? 'update_combo' : 'update_product' ?>">
+                  <input type="hidden" name="line_id" value="<?= (int) $line['id'] ?>">
+                  <input type="hidden" name="return_to" value="/checkout.php?step=1">
+                  <label class="text-sm font-semibold text-ink">Quantity
+                    <input name="quantity" inputmode="decimal" value="<?= okv_e($line['quantity_display']) ?>" min="<?= okv_e($combo ? '1' : $line['minimum_quantity']) ?>" step="<?= okv_e($combo ? '1' : $line['quantity_increment']) ?>" aria-label="Quantity for <?= okv_e($line['name']) ?>" class="okv-input mt-1 w-24">
+                  </label>
+                  <button class="okv-btn-outline px-3">Update</button>
+                </form>
               </li>
             <?php endforeach; ?>
           </ul>
