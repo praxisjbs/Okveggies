@@ -2114,4 +2114,4 @@ Deferred:
 
 - Replaced the six item mobile bar with Home, Shop, Kitchen Runs and Account. Shop opens Individual items and Combos. Basket remains in the header action.
 - Added a floating safe area aware tab bar with the existing Forest, Gold and Tomato design tokens, larger icons, compact labels, focus states and reduced motion support.
-- Automated checks and mobile and desktop browser review are pending.
+- GitHub CI passed on both the push and pull request runs, including PHP lint, CSS and JS build, brand checks and unit tests. Mobile and desktop browser review is still pending.
