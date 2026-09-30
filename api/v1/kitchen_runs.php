@@ -7,7 +7,9 @@
  *
  * Every action is gated twice: the method and the CSRF token first, then either
  * a customer session or an RBAC permission. The frontend gate is UX only and
- * this file assumes nothing from it.
+ * this file assumes nothing from it. The one read, `browse`, is a GET that
+ * renders the staff queue for the live search and changes nothing, so there is
+ * no token for it to carry; it is gated on kitchen_runs.view all the same.
  *
  * Two callers, one controller. The storefront and the admin screens post their
  * forms natively so the flow works with JavaScript switched off, and their JS
@@ -134,6 +136,55 @@ if ($postedZone > 0) {
 $backTo      = $action === 'staff_submit'
     ? $newRunUrl
     : (in_array($action, ['quote', 'decline', 'convert', 'staff_approve', 'save_note'], true) ? $adminUrl : $customerUrl);
+
+if ($action === 'browse') {
+    // The live search behind the queue on /admin/kitchen_runs.php. A read, so
+    // a GET with no CSRF token to carry, gated on the same permission the
+    // screen opens with. The markup comes from the one component the screen
+    // renders on a plain load, so typing and reloading the same URL agree.
+    if (okv_is_post()) {
+        okv_error('Use GET for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission('kitchen_runs.view');
+
+    $filter   = (string) okv_input('status', '');
+    $customer = mb_substr(trim((string) okv_input('customer', '')), 0, 100);
+    $openId   = (int) okv_input('request', 0);
+    $runs     = KitchenRuns::allForStaff($filter, 100, $customer);
+
+    // The same query builder the screen uses, so the row links keep both
+    // filters in place.
+    $queryWith = static function (array $extra) use ($filter, $customer): string {
+        $query = array_filter($extra + ['status' => $filter, 'customer' => $customer], static fn($v): bool => (string) $v !== '');
+        return $query ? '?' . http_build_query($query) : '?';
+    };
+
+    require_once __DIR__ . '/../../includes/components/admin/kitchen_run_queue.php';
+    ob_start();
+    okv_admin_kitchen_run_queue($runs, $customer, $filter, $openId, $queryWith);
+    $html = (string) ob_get_clean();
+
+    // The auto-fill suggestions: the request number goes into the box,
+    // because it names exactly one list, with the customer and the status
+    // underneath so a colleague can check they have the right one.
+    $suggestions = array_slice(array_map(static function (array $run): array {
+        $name = trim((string) $run['customer_name']) ?: trim((string) $run['contact_name']);
+        return [
+            'value' => (string) $run['request_number'],
+            'label' => $name !== '' ? $name : 'No name on this list',
+            'sub'   => (string) $run['request_number'] . ' . ' . (string) $run['status_label'],
+        ];
+    }, $runs), 0, 7);
+
+    okv_json([
+        'status'      => 'ok',
+        'html'        => $html,
+        'summary'     => $customer === ''
+            ? count($runs) . ' list' . (count($runs) === 1 ? '' : 's') . ' in the queue'
+            : count($runs) . ' list' . (count($runs) === 1 ? '' : 's') . ' match' . (count($runs) === 1 ? 'es' : ''),
+        'suggestions' => $suggestions,
+    ]);
+}
 
 if (!okv_is_post()) {
     okv_error('Use POST for this action.', 405, 'method_not_allowed');

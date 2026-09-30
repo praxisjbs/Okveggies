@@ -121,6 +121,7 @@ run "motion_coverage_test.mjs" node scripts/tests/motion_coverage_test.mjs
 run "lesser_text_test.mjs" node scripts/tests/lesser_text_test.mjs
 run "image_contract_test.mjs" node scripts/tests/image_contract_test.mjs
 run "zone_picker_test.mjs" node scripts/tests/zone_picker_test.mjs
+run "admin_live_search_test.mjs" node scripts/tests/admin_live_search_test.mjs
 
 echo
 echo "-------------------------------------------------------------"

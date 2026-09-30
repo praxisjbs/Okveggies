@@ -19,6 +19,7 @@
 
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/components/shop/delivery_picker.php';
+require_once __DIR__ . '/../includes/components/admin/kitchen_run_queue.php';
 Rbac::requirePermission('kitchen_runs.view');
 
 $filter   = (string) okv_input('status', '');
@@ -134,14 +135,17 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <!-- Find one customer's runs. Same search a colleague already knows from
          the orders screen: the name on the account, the email, the phone
          number on the request, or the request number itself. -->
-    <form method="get" class="mt-4 flex flex-wrap items-end gap-3">
+    <form method="get" class="mt-4 flex flex-wrap items-end gap-3"
+          data-live-form data-live-endpoint="/api/v1/kitchen_runs.php" data-live-param="customer"
+          data-live-page="/admin/kitchen_runs.php" data-live-keep="request" data-live-min="1">
       <?php if ($filter !== ''): ?>
-        <input type="hidden" name="status" value="<?= okv_e($filter) ?>">
+        <input type="hidden" name="status" value="<?= okv_e($filter) ?>" data-live-state>
       <?php endif; ?>
       <div class="min-w-[16rem] flex-1">
         <label class="okv-label" for="filter-customer">Customer, phone or request number</label>
         <input class="okv-input mt-1" id="filter-customer" name="customer" value="<?= okv_e($customer) ?>"
-               maxlength="100" placeholder="Ada, 0803..., or OKR26004">
+               maxlength="100" placeholder="Ada, 0803..., or OKR26004"
+               data-live-input autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>
       <button class="okv-btn-outline min-h-[44px] px-4" type="submit">Search</button>
       <?php if ($customer !== ''): ?>
@@ -149,57 +153,10 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <?php endif; ?>
     </form>
 
-    <?php if (!$runs): ?>
-      <p class="mt-4 rounded-lg border border-mist bg-canvas px-4 py-6 text-center text-sm text-ink-60">
-        <?php if ($customer !== ''): ?>
-          Nothing matches "<?= okv_e($customer) ?>"<?= $filter === '' ? '' : ' with that status' ?>.
-        <?php else: ?>
-          Nothing here<?= $filter === '' ? ' yet' : ' with that status' ?>.
-        <?php endif; ?>
-      </p>
-    <?php else: ?>
-      <div class="mt-4 overflow-x-auto">
-        <table class="w-full min-w-[46rem] text-left text-sm">
-          <thead class="border-b border-mist text-ink-60">
-            <tr>
-              <th scope="col" class="py-2 pr-3 font-medium">Request</th>
-              <th scope="col" class="py-2 pr-3 font-medium">Customer</th>
-              <th scope="col" class="py-2 pr-3 font-medium">How it came in</th>
-              <th scope="col" class="py-2 pr-3 font-medium">Items</th>
-              <th scope="col" class="py-2 pr-3 font-medium">Status</th>
-              <th scope="col" class="py-2 font-medium text-right">Quote</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($runs as $run): ?>
-              <tr class="border-b border-mist/60 <?= $openId === (int) $run['id'] ? 'bg-foliage-tint' : '' ?>">
-                <td class="py-2 pr-3">
-                  <a class="font-mono font-semibold text-forest underline-offset-2 hover:underline" href="<?= okv_e($queryWith(['request' => (int) $run['id']])) ?>">
-                    <?= okv_e($run['request_number']) ?>
-                  </a>
-                  <span class="block text-ink-60"><?= okv_e(date('j M', strtotime((string) $run['created_at']))) ?></span>
-                </td>
-                <td class="py-2 pr-3">
-                  <?= okv_e(trim((string) $run['customer_name']) ?: (string) $run['contact_name']) ?>
-                  <span class="block text-ink-60"><?= okv_e((string) $run['customer_email']) ?></span>
-                </td>
-                <td class="py-2 pr-3">
-                  <?= okv_e(KitchenRuns::modeLabel((string) $run['input_mode'])) ?>
-                  <?php if (!empty($run['is_open_budget'])): ?>
-                    <span class="block text-ink-60">Open budget</span>
-                  <?php endif; ?>
-                </td>
-                <td class="py-2 pr-3"><?= (int) $run['line_count'] ?></td>
-                <td class="py-2 pr-3"><?= okv_e($run['status_label']) ?></td>
-                <td class="py-2 text-right font-mono">
-                  <?= $run['quoted_total_subunit'] === null ? '<span class="text-ink-60">Not priced</span>' : okv_e(Money::format((int) $run['quoted_total_subunit'])) ?>
-                </td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    <?php endif; ?>
+    <div data-live-results>
+      <?php okv_admin_kitchen_run_queue($runs, $customer, $filter, $openId, $queryWith); ?>
+    </div>
+    <p class="sr-only" role="status" data-live-status></p>
   </section>
 
   <?php if ($request): ?>
@@ -207,6 +164,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
   <?php endif; ?>
 
 </div>
+<script src="<?= okv_e(okv_asset('/assets/js/admin-live-search.min.js')) ?>" defer></script>
 <script src="<?= okv_e(okv_asset('/assets/js/admin-kitchen-runs.min.js')) ?>" defer></script>
 <script src="<?= okv_e(okv_asset('/assets/js/zone-picker.min.js')) ?>" defer></script>
 <?php require __DIR__ . '/../includes/components/admin/footer.php'; ?>
