@@ -28,6 +28,8 @@ if (!function_exists('okv_icon')) {
         $paths = [
             // A woven market basket, the shop's own mark for "things you buy".
             'basket'       => '<path d="M4 10h16l-1.5 9a2 2 0 0 1-2 1.7h-9a2 2 0 0 1-2-1.7L4 10Z"/><path d="M8 10 12 3l4 7"/><path d="M9.5 14v3M14.5 14v3"/>',
+            // The storefront's front door.
+            'home'         => '<path d="m3.5 10 8.5-7 8.5 7"/><path d="M5.5 9v11h13V9"/><path d="M9.5 20v-6h5v6"/>',
             // One person.
             'user'         => '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1.2-3.2 3.8-4.8 7-4.8s5.8 1.6 7 4.8"/>',
             // Calendar with a marked day, for the delivery picker.
