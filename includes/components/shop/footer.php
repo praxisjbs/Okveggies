@@ -60,7 +60,7 @@ if (!function_exists('okv_shop_footer')) {
             'Legal' => $legal,
         ];
         ?>
-        <footer class="mb-14 bg-forest text-white md:mb-0">
+        <footer class="okv-shop-footer mb-14 bg-forest text-white md:mb-0">
           <div class="okv-container grid gap-10 py-12 md:grid-cols-12 md:gap-8 md:py-16">
             <div class="md:col-span-5">
               <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup-white.svg')) ?>"
