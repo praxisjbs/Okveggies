@@ -2,9 +2,14 @@
 /** Role administration. All role state and assignments are database-backed. */
 require_once __DIR__ . '/../../includes/bootstrap.php';
 
+/**
+ * This endpoint writes roles too, so it answers to the same rule the Permissions
+ * module does rather than to one of its own. Two doors onto one thing, with a
+ * different lock on each, is how a boundary quietly stops meaning anything.
+ */
 function rbac_guard_write(): void {
     if (!okv_is_post()) okv_error('Use POST for this action.', 405, 'method_not_allowed');
-    if (!Rbac::canManageRoles()) okv_error('You do not have access to manage roles.', 403, 'forbidden');
+    if (!PermissionMatrix::canAssign()) okv_error('Only the Owner can change what a role can do.', 403, 'owner_only');
     if (!Csrf::validate()) okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
 }
 function rbac_role_input(): array {

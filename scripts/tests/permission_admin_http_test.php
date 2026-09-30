@@ -176,6 +176,34 @@ try {
     t_eq(403, $code, 'the Manager is refused a save by the server');
     t_ok(str_contains($body, 'owner_only'), 'the refusal says it is the Owner\'s alone');
 
+    // The Users screen writes roles through a second endpoint, and it has to
+    // answer to the same rule. It used to carry a Manager bypass, so a colleague
+    // the catalogue says may not touch a role could still rewrite one by posting
+    // straight at api/v1/rbac.php.
+    foreach ([
+        ['update_role', ['role_id' => $scratchId, 'name' => 'permission-http-test', 'permissions' => ['orders.view']]],
+        ['create_role', ['name' => 'manager-made-role', 'slug' => 'manager-made-role']],
+        ['set_status',  ['role_id' => $scratchId, 'status' => 'disabled']],
+    ] as [$oldAction, $fields]) {
+        [$code, ] = req($jarManager, $base . '/api/v1/rbac.php', $fields + [
+            'action'   => $oldAction,
+            'okv_csrf' => $managerToken,
+        ]);
+        t_eq(403, $code, 'the Manager is refused ' . $oldAction . ' on the roles endpoint');
+    }
+
+    t_eq(
+        null,
+        Database::one('SELECT id FROM roles WHERE name = :n', [':n' => 'manager-made-role']),
+        'the role the Manager tried to create does not exist'
+    );
+    t_eq([], PermissionMatrix::grants($scratchId), 'the Manager changed nothing on the way past');
+    t_eq(
+        'active',
+        (string) Database::one('SELECT status FROM roles WHERE id = :id', [':id' => $scratchId])['status'],
+        'the Manager did not switch the role off'
+    );
+
     // Even if the Manager somehow held rbac.roles.edit, the Owner role is protected.
     [$code, $body] = req($jarManager, $base . '/api/v1/permissions.php', [
         'action'      => 'save',
