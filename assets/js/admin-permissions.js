@@ -65,6 +65,12 @@
     var dirtyTag = form ? form.querySelector('[data-perm-dirty]') : null;
     var errBox   = form ? form.querySelector('[data-okv-error]') : null;
 
+    // A role the Owner may not change is drawn read only: every box disabled, no
+    // tools and no save bar. The per module counts and the tally on that grid are
+    // exactly what the server rendered, so nothing here may recompute them, and
+    // nothing can be dirty because nothing can be moved.
+    var editable = !!save;
+
     // Which modules were open when the page arrived, so clearing the search puts
     // the screen back the way the reader had it rather than reshaping it.
     var openState = {};
@@ -81,6 +87,7 @@
     }
 
     function isDirty() {
+      if (!editable) { return false; }
       return allBoxes().some(function (box) {
         return (box.checked ? '1' : '0') !== (box.getAttribute('data-original') || '0');
       });
@@ -89,6 +96,8 @@
     // --- Counts and dirty state ---------------------------------------------
 
     function refresh() {
+      if (!editable) { return; }   // a read-only grid keeps the server's counts
+
       var on = 0;
       modules.forEach(function (module) {
         var modOn = 0;

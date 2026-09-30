@@ -152,8 +152,37 @@ try {
     t_ok(str_contains($page, 'admin-permissions.js'), 'the screen loads its script');
     t_ok(!str_contains($page, 'okv_head_meta') && str_contains($page, 'site.webmanifest'), 'the brand head block rendered');
 
-    // The Owner role is the one the screen opens on, and it has no form at all.
-    t_ok(!str_contains($page, 'data-perm-form'), 'the Owner role is shown locked, with nothing to save');
+    // The Owner role opens first, and it is drawn read only: the whole grid is
+    // there so the screen answers "what does the Owner hold?", every box is
+    // ticked, and every box is locked so nothing can be posted by hand.
+    t_ok(str_contains($page, 'data-perm-readonly'), 'the Owner role is drawn read only');
+    t_ok(!str_contains($page, 'data-perm-save'), 'the Owner role offers nothing to save');
+    t_ok(!str_contains($page, 'data-perm-all='), 'the Owner role offers none of the module tools');
+
+    preg_match_all('/<input type="checkbox"[^>]*>/', $page, $boxMatches);
+    $boxes  = $boxMatches[0];
+    $ticked = 0;
+    $locked = 0;
+    foreach ($boxes as $box) {
+        if (str_contains($box, 'checked')) { $ticked++; }
+        if (str_contains($box, 'disabled')) { $locked++; }
+    }
+    t_ok(count($boxes) > 50, 'the Owner grid carries the whole catalogue, not a sample');
+    t_eq(count($boxes), $ticked, 'every box in the Owner grid is ticked');
+    t_eq(count($boxes), $locked, 'every box in the Owner grid is locked');
+
+    // The Manager is protected too, and the read-only grid is the only place its
+    // set is visible at all, so it has to be rendered rather than merely counted.
+    [$code, $managerPage] = req($jarOwner, $base . '/admin/permissions.php?role=' . (int) Database::one("SELECT id FROM roles WHERE name = 'manager'")['id']);
+    t_eq(200, $code, 'the Owner can open the Manager role read only');
+    t_ok(str_contains($managerPage, 'data-perm-readonly'), 'the Manager role is drawn read only');
+    t_ok(!str_contains($managerPage, 'data-perm-save'), 'the Manager role offers nothing to save');
+    preg_match_all('/<input type="checkbox"[^>]*>/', $managerPage, $managerMatches);
+    t_ok(count($managerMatches[0]) > 50, 'the Manager grid lists the catalogue');
+    t_ok(
+        str_contains($managerPage, 'orders.view'),
+        'the Manager grid shows a permission the Manager really holds'
+    );
 
     // --- A role of the Owner's own making is editable ----------------------------
 

@@ -181,30 +181,41 @@ require __DIR__ . '/../includes/components/admin/header.php';
 
           <?php if ($isOwnerRole): ?>
             <p class="okv-panel-body text-sm text-ink-60 border-t border-mist">
-              The Owner holds every permission there is, including ones added later, so there is nothing
-              to tick here. This is what stops the Owner being locked out of the screen that hands out
-              permissions.
+              The Owner holds every permission there is, including ones added later, so every box below
+              is ticked and cannot be changed. This is what stops the Owner being locked out of the
+              screen that hands out permissions.
             </p>
           <?php elseif ($isSystem): ?>
             <p class="okv-panel-body text-sm text-ink-60 border-t border-mist">
               <?= okv_e(okv_role_label((string) $role['name'])) ?> is a system role, so its meaning is fixed when it ships
-              and it is not changed here. To give someone a different mix, create a role of your own on
+              and it is not changed here. What it carries is shown below, read only. To give someone a
+              different mix, create a role of your own on
               <a href="/admin/users.php" class="text-forest underline underline-offset-2">Users</a>.
             </p>
           <?php elseif (!$canAssign): ?>
             <p class="okv-panel-body text-sm text-ink-60 border-t border-mist">
-              You can see what this role carries. Only the Owner can change it.
+              You can see what this role carries below. Only the Owner can change it.
             </p>
           <?php endif; ?>
         </div>
 
-        <?php if ($editable): ?>
-        <form id="okv-perm-form" action="/api/v1/permissions.php" method="POST" data-perm-form>
+        <?php
+        // The grid is drawn for every role, not only the ones the Owner can
+        // change. A read-only grid is the answer to "what does this role
+        // actually carry?", which is the whole question for the Owner role
+        // (everything, always) and the only way to see the Manager's set at all.
+        // What is withheld when the role cannot be edited is the means to change
+        // it: no Select all, no Clear, no quick adds, no save bar, and every box
+        // disabled so nothing can be posted even by hand.
+        ?>
+        <form id="okv-perm-form" action="/api/v1/permissions.php" method="POST" data-perm-form<?= $editable ? '' : ' data-perm-readonly' ?>>
           <?= Csrf::field() ?>
           <input type="hidden" name="action" value="save">
           <input type="hidden" name="role_id" value="<?= $roleId ?>">
 
+          <?php if ($editable): ?>
           <div data-okv-error role="alert" aria-live="polite" class="okv-note-bad mb-4" hidden></div>
+          <?php endif; ?>
 
           <!-- Finding one key in a list of eighty --------------------------- -->
           <div class="okv-panel okv-panel-body mb-4">
@@ -233,6 +244,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
               </summary>
 
               <div class="border-t border-mist px-4 py-4">
+                <?php if ($editable): ?>
                 <div class="flex flex-wrap items-center gap-2 mb-4">
                   <button type="button" class="okv-btn-outline-sm" data-perm-all="1">Select all</button>
                   <button type="button" class="okv-btn-outline-sm" data-perm-all="0">Clear</button>
@@ -245,14 +257,20 @@ require __DIR__ . '/../includes/components/admin/header.php';
                     <?php endforeach; ?>
                   <?php endif; ?>
                 </div>
+                <?php endif; ?>
 
                 <div class="grid gap-1 sm:grid-cols-2">
                   <?php foreach ($definition['permissions'] as $permission):
                       $key     = (string) $permission['key'];
                       $checked = $isOwnerRole || isset($granted[$key]);
-                      $locked  = !$permission['grantable'];
+                      // Two different reasons a box will not move, so the reader
+                      // is told which one it is: a key no migration has inserted
+                      // cannot be granted to anybody, and a role the Owner may
+                      // not change is shown rather than offered.
+                      $ungrantable = !$permission['grantable'];
+                      $locked      = $ungrantable || !$editable;
                   ?>
-                    <label class="flex gap-2.5 items-start rounded-md px-2 py-2 min-h-[44px] hover:bg-forest-tint"
+                    <label class="flex gap-2.5 items-start rounded-md px-2 py-2 min-h-[44px] <?= $editable ? 'hover:bg-forest-tint' : '' ?>"
                            data-perm-row data-perm-text="<?= okv_e(strtolower($key . ' ' . $permission['description'])) ?>">
                       <input type="checkbox" name="permissions[]" value="<?= okv_e($key) ?>"
                              class="mt-0.5 h-5 w-5 shrink-0 rounded border-mist text-forest"
@@ -263,7 +281,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                       <span class="min-w-0">
                         <span class="block text-sm font-mono text-ink break-all"><?= okv_e($key) ?></span>
                         <span class="block text-xs text-ink-60"><?= okv_e($permission['description']) ?></span>
-                        <?php if ($locked): ?>
+                        <?php if ($ungrantable): ?>
                           <span class="block text-xs text-tomato mt-0.5">Not in the database yet, so it cannot be granted.</span>
                         <?php endif; ?>
                       </span>
@@ -274,6 +292,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
             </details>
           <?php endforeach; ?>
 
+          <?php if ($editable): ?>
           <!-- The save bar --------------------------------------------------- -->
           <div class="sticky bottom-0 z-10 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-mist bg-white px-4 py-3 shadow-okv-1">
             <p class="text-sm text-ink-60">
@@ -286,8 +305,8 @@ require __DIR__ . '/../includes/components/admin/header.php';
               <button type="submit" class="okv-btn-sm" data-perm-save disabled>Save permissions</button>
             </div>
           </div>
+          <?php endif; ?>
         </form>
-        <?php endif; ?>
 
         <!-- Change history -------------------------------------------------- -->
         <div class="okv-panel mt-4">
