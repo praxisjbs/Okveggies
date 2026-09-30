@@ -73,7 +73,7 @@ Same seal, same promise everywhere. What changes between surfaces is information
 
 ### 4.1 Storefront (`/`)
 
-- **Top navigation (desktop) / bottom tab bar (mobile):** Home, Shop, Combos, Kitchen Runs (a clear button, not buried), Basket, Account.
+- **Top navigation (desktop):** Shop, Combos, Kitchen Runs, Basket and Account, with the logo returning Home. **Bottom tab bar (mobile):** Home, Shop, Kitchen Runs and Account. Shop opens a menu with Individual items and Combos; Basket stays in the header.
 - **Shop:** search plus filter by category. Product cards show photo, name, unit, this week's price, and an add control. The search is live and the grid is paginated; see Section 5.6.
 - **Product page:** gallery, name, unit, this week's price, description, the "Sourced [day] from [state]" line, and at the bottom a **"Goes well with"** row of suggested products that pair with this one.
 - **Combos:** the ready-made baskets, editorial treatment, one-tap "Add full basket".
