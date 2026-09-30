@@ -52,6 +52,12 @@ $okv_pro_home   = $okv_pro_active === '/pro/';
       </div>
     </div>
   </header>
+  <?php
+  // The customer notification panel is rendered outside the header, beside the
+  // portal navigation, so no header style can become the containing block for
+  // its fixed phone sheet. The bell button inside the header opens it.
+  ?>
+  <?php okv_customer_bell_panel(); ?>
   <?php okv_pro_nav($okv_pro_active); ?>
 
   <main id="okv-pro-main" class="okv-container w-full flex-1 py-6 md:py-8">
