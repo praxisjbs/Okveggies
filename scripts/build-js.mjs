@@ -12,6 +12,7 @@ const sources = [
   'assets/js/okv-rbac.js',
   'assets/js/auth.js',
   'assets/js/admin-users.js',
+  'assets/js/admin-permissions.js',
   'assets/js/admin-dashboard.js',
   'assets/js/admin-shortcuts.js',
   'assets/js/admin-notifications.js',

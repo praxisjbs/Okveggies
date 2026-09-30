@@ -83,6 +83,17 @@ final class Rbac
         return self::$cache['roles'] ?? [];
     }
 
+    /**
+     * Is the signed-in user the Owner? The Owner holds every permission, now and
+     * for every key added later, so this is the one question the Permissions
+     * module asks before it lets anyone change what a role carries. It reads the
+     * flag loadFromDb() set from the roles table, not a string the caller passed.
+     */
+    public static function isOwner(): bool
+    {
+        return (bool) (self::$cache['is_owner'] ?? false);
+    }
+
     public static function isStaff(): bool
     {
         return !empty(self::$cache['roles']);
