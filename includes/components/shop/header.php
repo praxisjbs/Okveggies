@@ -103,6 +103,13 @@ if (!function_exists('okv_shop_header')) {
             <span class="okv-mobile-tab__label">Account</span>
           </a>
         </nav>
+        <?php
+        // The notification panel is rendered here, outside the header, because
+        // the header's backdrop-blur would otherwise become the containing
+        // block for the panel's fixed phone sheet and trap it in the 64px bar.
+        // The mini-cart drawer follows it, so it still paints on top.
+        ?>
+        <?php okv_customer_bell_panel(); ?>
         <?php okv_mini_cart(); ?>
         <?php
     }

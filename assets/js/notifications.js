@@ -2,22 +2,28 @@
 (function () {
   'use strict';
 
+  // The button renders inside the header, where it belongs. The panel renders
+  // outside it, beside the mini-cart drawer, because the storefront header's
+  // backdrop-blur makes that header the containing block for fixed descendants
+  // and would trap the phone sheet in its 64px bar. So the panel is found by
+  // its id rather than looked for inside the button's wrapper.
   var root = document.querySelector('[data-customer-notifications]');
-  if (!root) { return; }
+  var backdrop = document.getElementById('okv-customer-notification-panel');
+  if (!root || !backdrop) { return; }
   var endpoint = '/api/v1/notifications.php';
   var trigger = root.querySelector('[data-notification-open]');
-  var backdrop = root.querySelector('[data-notification-backdrop]');
   var panel = backdrop.querySelector('[role="dialog"]');
-  var state = root.querySelector('[data-notification-state]');
-  var attentionSection = root.querySelector('[data-notification-attention]');
-  var attentionList = root.querySelector('[data-notification-attention-list]');
-  var recentSection = root.querySelector('[data-notification-recent]');
-  var recentList = root.querySelector('[data-notification-list]');
-  var markAll = root.querySelector('[data-notification-mark-all]');
+  var state = backdrop.querySelector('[data-notification-state]');
+  var attentionSection = backdrop.querySelector('[data-notification-attention]');
+  var attentionList = backdrop.querySelector('[data-notification-attention-list]');
+  var recentSection = backdrop.querySelector('[data-notification-recent]');
+  var recentList = backdrop.querySelector('[data-notification-list]');
+  var markAll = backdrop.querySelector('[data-notification-mark-all]');
   var badge = root.querySelector('[data-notification-badge]');
   var live = root.querySelector('[data-notification-live]');
   var opener = null;
   var loading = false;
+  var narrow = window.matchMedia('(max-width: 767px)');
 
   function csrf() {
     return window.OKV && window.OKV.csrf ? window.OKV.csrf : '';
@@ -33,6 +39,29 @@
     badge.textContent = value > 99 ? '99+' : String(value);
     badge.classList.toggle('hidden', value < 1);
     trigger.setAttribute('aria-label', 'Updates, ' + value + ' unread');
+  }
+
+  // On desktop the panel is fixed to the viewport instead of absolute inside
+  // the bell's wrapper, because it no longer sits in that wrapper. The
+  // backdrop is the fixed box, so it carries the coordinates: place it under
+  // the bell with the right edges aligned, and when a short window leaves no
+  // room below, slide it up so the whole panel stays on screen. The sticky
+  // header is 64px, so there is never room above the bell to flip into. On a
+  // phone the stylesheet's bottom sheet stands, so the coordinates are
+  // cleared.
+  function anchorPanel() {
+    backdrop.style.top = '';
+    backdrop.style.right = '';
+    if (narrow.matches) { return; }
+    var box = trigger.getBoundingClientRect();
+    var gap = 8;
+    var below = box.bottom + gap;
+    var top = below;
+    if (below + panel.offsetHeight > window.innerHeight - gap) {
+      top = Math.max(gap, window.innerHeight - panel.offsetHeight - gap);
+    }
+    backdrop.style.top = Math.round(top) + 'px';
+    backdrop.style.right = Math.round(Math.max(gap, window.innerWidth - box.right)) + 'px';
   }
 
   function clear(element) {
@@ -135,6 +164,9 @@
       renderAttention(Array.isArray(data.attention) ? data.attention : []);
       renderRecent(Array.isArray(data.notifications) ? data.notifications : []);
       state.hidden = true;
+      // The rows make the panel taller than the loading state it was placed
+      // at, so on desktop it is placed again now that it has its real height.
+      if (!backdrop.hidden) { anchorPanel(); }
     }).catch(function () {
       if (!silent) {
         state.hidden = false;
@@ -158,6 +190,7 @@
     trigger.setAttribute('aria-expanded', 'true');
     document.body.style.overflow = 'hidden';
     panel.focus();
+    anchorPanel();
     load(false);
   }
 
@@ -166,12 +199,14 @@
     backdrop.hidden = true;
     trigger.setAttribute('aria-expanded', 'false');
     document.body.style.overflow = '';
+    backdrop.style.top = '';
+    backdrop.style.right = '';
     if (opener && typeof opener.focus === 'function' && document.contains(opener)) { opener.focus(); }
     else { trigger.focus(); }
   }
 
   trigger.addEventListener('click', openPanel);
-  root.querySelector('[data-notification-close]').addEventListener('click', closePanel);
+  backdrop.querySelector('[data-notification-close]').addEventListener('click', closePanel);
   backdrop.addEventListener('click', function (event) { if (event.target === backdrop) { closePanel(); } });
   panel.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') { event.preventDefault(); closePanel(); return; }
@@ -197,4 +232,16 @@
       announce('Your updates could not be changed. Try again.');
     }).finally(function () { markAll.disabled = false; });
   });
+
+  // The panel is fixed to the viewport on desktop, so a resize while it is
+  // open has to place it again against the bell's new position.
+  window.addEventListener('resize', function () {
+    if (!backdrop.hidden) { anchorPanel(); }
+  });
+
+  // Parity with the admin bell: refresh in the background on the same cadence
+  // while the tab is visible, so a page left open keeps an honest badge.
+  window.setInterval(function () {
+    if (document.visibilityState === 'visible') { load(true); }
+  }, 60000);
 }());

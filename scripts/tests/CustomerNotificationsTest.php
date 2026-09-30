@@ -36,7 +36,7 @@ $customerNotificationsPhp = (string) file_get_contents(dirname(__DIR__, 2) . '/i
 
 okv_test_ok(!str_contains($js, 'innerHTML'), 'notification data is never rendered through innerHTML');
 okv_test_ok(str_contains($js, 'textContent') && str_contains($js, 'document.createElement'), 'notification rows use safe DOM construction');
-okv_test_ok(!str_contains($js, 'setInterval') && !str_contains($js, '60000'), 'the customer feed does not poll, it loads on open');
+okv_test_ok(str_contains($js, 'setInterval') && str_contains($js, '60000') && str_contains($js, 'visibilityState'), 'the customer feed refreshes on the same 60 second cadence as the admin bell while the tab is visible');
 okv_test_ok(str_contains($js, "event.key === 'Escape'"), 'the customer dialog closes on Escape');
 okv_test_ok(str_contains($js, "action: 'mark_read'") && str_contains($js, "action: 'mark_all_read'"), 'individual and bulk read controls use explicit actions');
 okv_test_ok(str_contains($js, "event.key !== 'Tab'") && str_contains($js, 'event.shiftKey'), 'the customer dialog traps focus in both directions');

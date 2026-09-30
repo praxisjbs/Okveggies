@@ -359,6 +359,62 @@ try {
 
     await shopContext.close();
 
+    // ---- The customer notification bell -----------------------------------
+    // The bell panel is a position: fixed bottom sheet on a phone and an
+    // anchored panel on desktop. It is rendered outside the shop header,
+    // because the header's backdrop-blur makes that header the containing
+    // block for fixed descendants: inside the header the sheet was laid out
+    // against the 64px bar instead of the viewport and opened above the top of
+    // the screen, leaving only its footer, the mark all as read and view all
+    // controls, visible. This drives the real bell at both widths.
+    const bellContext = await browser.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      hasTouch: viewport.touch,
+      isMobile: viewport.touch,
+    });
+    const bellPage = await bellContext.newPage();
+    bellPage.on('pageerror', (err) => report(false, `JavaScript error: ${err.message}`));
+    await signIn(bellPage, '/account.php', HOUSEHOLD, PASSWORD);
+    await bellPage.goto(BASE + '/shop.php', { waitUntil: 'networkidle' });
+
+    const bellTrigger = bellPage.locator('[data-customer-notifications] [data-notification-open]');
+    report(await bellTrigger.count() === 1, 'a signed-in customer sees one bell in the storefront header');
+    const bellDialog = bellPage.locator('#okv-customer-notification-panel [role="dialog"]');
+    report(!(await bellDialog.isVisible()), 'the bell panel starts closed');
+    await bellTrigger.click();
+    await bellPage.waitForTimeout(400);
+    report(await bellDialog.isVisible(), 'the bell panel opens');
+    const bellBox = await bellDialog.boundingBox();
+    if (viewport.touch) {
+      report(bellBox && bellBox.y >= -1 && bellBox.y + bellBox.height <= viewport.height + 1,
+        'on mobile the panel sits inside the viewport',
+        `(top ${Math.round(bellBox?.y || 0)}, bottom ${Math.round((bellBox?.y || 0) + (bellBox?.height || 0))} of ${viewport.height})`);
+      report(bellBox && Math.abs((bellBox.y + bellBox.height) - viewport.height) < 2,
+        'on mobile it is anchored to the bottom edge',
+        `(panel ends ${Math.round((bellBox?.y || 0) + (bellBox?.height || 0))} of ${viewport.height})`);
+    } else {
+      report(bellBox && bellBox.width < viewport.width * 0.6,
+        'on desktop it is a panel beside the bell, not a full-width sheet',
+        `(${Math.round(bellBox?.width || 0)} of ${viewport.width})`);
+      const bellTriggerBox = await bellTrigger.boundingBox();
+      report(bellBox && bellTriggerBox
+        && Math.abs((bellBox.x + bellBox.width) - (bellTriggerBox.x + bellTriggerBox.width)) < 2,
+        'on desktop the panel hangs under the bell, right edges aligned',
+        `(panel right ${Math.round((bellBox?.x || 0) + (bellBox?.width || 0))}, bell right ${Math.round((bellTriggerBox?.x || 0) + (bellTriggerBox?.width || 0))})`);
+    }
+    const insideHeader = await bellPage.evaluate(
+      () => Boolean(document.getElementById('okv-customer-notification-panel')?.closest('header')));
+    report(!insideHeader, 'the panel is rendered outside the shop header');
+
+    // Escape closes it and hands focus back to the bell.
+    await bellPage.keyboard.press('Escape');
+    await bellPage.waitForTimeout(200);
+    report(!(await bellDialog.isVisible()), 'Escape closes the bell panel');
+    report(await bellPage.evaluate(
+      () => document.activeElement?.hasAttribute('data-notification-open') === true),
+      'and focus goes back to the bell');
+    await bellContext.close();
+
     // Reduced motion: the same page, with the preference set.
     const calmContext = await browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
