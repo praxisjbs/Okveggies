@@ -78,10 +78,18 @@ require_once __DIR__ . '/../../config/nav.php';
 
           <?php require __DIR__ . '/notification_bell.php'; ?>
 
-          <a href="/" class="okv-btn-text text-sm shrink-0">
+          <?php
+          // The storefront shop page, never "/". index.php sends a signed-in
+          // staff member straight back to /admin/, so the home URL made this
+          // button loop into the dashboard it was meant to leave. /shop.php
+          // carries no such gate, and it opens in a new tab so the dashboard
+          // (and its state) stays open behind it.
+          ?>
+          <a href="/shop.php" target="_blank" rel="noopener" class="okv-btn-text text-sm shrink-0">
             <span class="hidden sm:inline">View shop</span>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
             <span class="sr-only sm:hidden">View shop</span>
+            <span class="sr-only">(opens in a new tab)</span>
           </a>
         </div>
       </header>

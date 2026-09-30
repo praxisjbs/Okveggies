@@ -8,6 +8,20 @@ $okv_command_items = okv_admin_nav_commands(
     $OKV_ADMIN_NAV,
     static fn(string $permission): bool => Rbac::can($permission)
 );
+
+// The storefront is the one destination outside the admin nav, so the palette
+// carries it explicitly, matching the header's View shop control. It opens the
+// shop page in a new tab, never "/": index.php bounces a signed-in staff
+// member back to /admin/, which would loop this command into the dashboard.
+$okv_command_items[] = [
+    'label'    => 'View shop',
+    'href'     => '/shop.php',
+    'icon'     => 'leaf',
+    'heading'  => 'Storefront',
+    'keywords' => ['shop', 'storefront', 'store', 'customer', 'site'],
+    'shortcut' => [],
+    'new_tab'  => true,
+];
 ?>
 <div id="okv-command-palette" class="okv-command-backdrop" data-command-palette hidden>
   <section class="okv-command-panel" role="dialog" aria-modal="true" tabindex="-1"
@@ -35,7 +49,9 @@ $okv_command_items = okv_admin_nav_commands(
       <div id="okv-command-results" class="mt-3 max-h-80 overflow-y-auto" role="listbox" aria-label="Available admin pages">
         <?php foreach ($okv_command_items as $okv_command_index => $okv_command): ?>
           <a id="okv-command-option-<?= okv_e((string) $okv_command_index) ?>"
-             href="<?= okv_e($okv_command['href']) ?>" role="option" aria-selected="false" tabindex="-1"
+             href="<?= okv_e($okv_command['href']) ?>"
+             <?= !empty($okv_command['new_tab']) ? 'target="_blank" rel="noopener"' : '' ?>
+             role="option" aria-selected="false" tabindex="-1"
              class="okv-command-option"
              data-command-item
              <?= count($okv_command['shortcut']) === 2 ? 'data-command-shortcut="' . okv_e(implode(' ', $okv_command['shortcut'])) . '"' : '' ?>
