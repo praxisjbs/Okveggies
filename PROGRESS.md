@@ -2110,3 +2110,8 @@ Deferred:
 - Receipts are kept under `uploads/payment_proofs/` with a random name, the same as staff-recorded proofs. They are not served through a permission check; the name is 128 bits of randomness and PHP execution is denied there. A gated download is a possible hardening.
 - The Owner has to enter the bank account in Settings, Payments before the card appears. Nothing shows to customers until then.
 
+### 30 September 2026, mobile storefront navigation
+
+- Replaced the six item mobile bar with Home, Shop, Kitchen Runs and Account. Shop opens Individual items and Combos. Basket remains in the header action.
+- Added a floating safe area aware tab bar with the existing Forest, Gold and Tomato design tokens, larger icons, compact labels, focus states and reduced motion support.
+- Automated checks and mobile and desktop browser review are pending.
