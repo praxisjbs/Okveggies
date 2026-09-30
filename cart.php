@@ -20,11 +20,13 @@ require_once __DIR__ . '/includes/components/shop/picture.php';
 $basket = Basket::state();
 $sourceRegions = Settings::str('source_regions', 'Ogun State, Jos');
 $notice = (string) okv_input('basket', '');
+$undoToken = (string) okv_input('undo_token', '');
 $notices = [
     'added'    => 'Added to your basket.',
     'repriced' => 'The latest amount was added at its new price. Your earlier amount keeps the price you were given.',
     'updated'  => 'Basket updated.',
     'removed'  => 'Item removed from your basket.',
+    'restored' => 'Item restored to your basket.',
     'quantity' => 'Use the minimum and quantity steps shown for this item.',
     'missing'  => 'We could not find that item. It may have left the catalogue.',
     'unavailable' => 'That item is no longer available.',
@@ -65,9 +67,18 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
   </div>
 
   <?php if (isset($notices[$notice])): ?>
-    <p class="mt-6 rounded-md border border-foliage bg-foliage-tint px-4 py-3 text-sm text-forest" role="status">
-      <?= okv_e($notices[$notice]) ?>
-    </p>
+    <div class="mt-6 flex flex-wrap items-center gap-3 rounded-md border border-foliage bg-foliage-tint px-4 py-3 text-sm text-forest" role="status">
+      <span><?= okv_e($notices[$notice]) ?></span>
+      <?php if ($notice === 'removed' && preg_match('/^[a-f0-9]{48}$/', $undoToken)): ?>
+        <form method="post" action="/api/v1/cart.php" class="inline-flex">
+          <?= Csrf::field() ?>
+          <input type="hidden" name="action" value="undo_remove">
+          <input type="hidden" name="undo_token" value="<?= okv_e($undoToken) ?>">
+          <input type="hidden" name="return_to" value="/cart.php">
+          <button type="submit" class="okv-btn-text min-h-[44px] px-2 font-semibold underline underline-offset-2">Undo</button>
+        </form>
+      <?php endif; ?>
+    </div>
   <?php endif; ?>
 
   <?php if ($basket['has_repriced']): ?>
@@ -79,7 +90,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
   <?php if (!$basket['lines']): ?>
     <div class="mt-8">
       <?php okv_empty_state('basket-empty', 'Your basket is empty', 'Pick the produce or ready baskets you need.', [
-          ['href' => '/shop.php', 'label' => 'Shop produce', 'icon' => 'leaf'],
+          ['href' => '/shop.php', 'label' => 'Continue shopping', 'icon' => 'leaf'],
           ['href' => '/combos.php', 'label' => 'See combos', 'style' => 'outline', 'icon' => 'basket'],
       ]); ?>
     </div>
@@ -87,7 +98,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
     <div class="mt-8 grid gap-8 lg:grid-cols-12">
       <section class="space-y-4 lg:col-span-8" aria-label="Basket items">
         <?php foreach ($basket['lines'] as $line): $combo = $line['item_type'] === 'combo'; ?>
-          <article class="okv-enter rounded-lg bg-white p-4 shadow-okv-1 sm:flex sm:items-start sm:gap-5">
+          <article class="okv-enter rounded-lg bg-white p-4 shadow-okv-1 sm:flex sm:items-start sm:gap-5" data-basket-line data-line-id="<?= (int) $line['id'] ?>">
             <div class="hidden h-20 w-20 flex-none overflow-hidden rounded-md bg-forest-tint sm:block">
               <?php if ($line['image_url'] !== ''): ?>
                 <img src="<?= okv_e($line['image_url']) ?>"
@@ -112,24 +123,26 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
                 <p class="mt-1 text-sm text-tomato"><?= okv_e($line['availability_note']) ?></p>
               <?php endif; ?>
             </div>
-            <div class="mt-4 flex flex-wrap items-end gap-3 sm:mt-0 sm:flex-col sm:items-end">
-              <form method="post" action="/api/v1/cart.php" class="flex items-end gap-2" data-basket-form>
-                <?= Csrf::field() ?>
-                <input type="hidden" name="action" value="<?= $combo ? 'update_combo' : 'update_product' ?>">
-                <input type="hidden" name="line_id" value="<?= (int) $line['id'] ?>">
-                <input type="hidden" name="return_to" value="/cart.php">
-                <label class="text-sm font-semibold text-ink">Quantity
-                  <input name="quantity" inputmode="decimal" value="<?= okv_e($line['quantity_display']) ?>" class="okv-input mt-1 w-24">
-                </label>
-                <button class="okv-btn-outline px-3">Update</button>
-              </form>
-              <form method="post" action="/api/v1/cart.php" data-basket-form>
-                <?= Csrf::field() ?>
-                <input type="hidden" name="action" value="<?= $combo ? 'remove_combo' : 'remove_product' ?>">
-                <input type="hidden" name="line_id" value="<?= (int) $line['id'] ?>">
-                <input type="hidden" name="return_to" value="/cart.php">
-                <button class="okv-btn-text px-2 text-tomato">Remove</button>
-              </form>
+            <div class="mt-4 flex flex-col items-start gap-3 sm:mt-0 sm:items-end">
+              <div class="flex flex-wrap items-end gap-2">
+                <form method="post" action="/api/v1/cart.php" class="flex items-end gap-2" data-basket-form>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="<?= $combo ? 'update_combo' : 'update_product' ?>">
+                  <input type="hidden" name="line_id" value="<?= (int) $line['id'] ?>">
+                  <input type="hidden" name="return_to" value="/cart.php">
+                  <label class="text-sm font-semibold text-ink">Quantity
+                    <input name="quantity" inputmode="decimal" value="<?= okv_e($line['quantity_display']) ?>" class="okv-input mt-1 w-24">
+                  </label>
+                  <button type="submit" class="okv-btn-outline px-3">Update</button>
+                </form>
+                <form method="post" action="/api/v1/cart.php" data-basket-form>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="<?= $combo ? 'remove_combo' : 'remove_product' ?>">
+                  <input type="hidden" name="line_id" value="<?= (int) $line['id'] ?>">
+                  <input type="hidden" name="return_to" value="/cart.php">
+                  <button type="submit" class="okv-btn-text min-h-[44px] px-2 text-tomato" aria-label="Remove <?= okv_e($line['name']) ?> from basket">Remove</button>
+                </form>
+              </div>
               <p class="font-mono font-semibold text-forest"><?= okv_e($line['line_total_display']) ?></p>
             </div>
           </article>
@@ -142,7 +155,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/cart.php';
           <span class="mt-2 block w-12 border-t-2 border-gold" aria-hidden="true"></span>
           <div class="mt-5 flex justify-between font-mono text-lg font-semibold text-forest">
             <span>Subtotal</span>
-            <span><?= okv_e($basket['subtotal_display']) ?></span>
+            <span data-basket-subtotal><?= okv_e($basket['subtotal_display']) ?></span>
           </div>
           <p class="okv-trust-line mt-4"><?php okv_icon('leaf', 'mt-0.5 h-4 w-4 flex-none text-forest'); ?> Delivery is arranged and settled after we confirm your area.</p>
           <a href="/checkout.php" class="okv-btn mt-6 h-14 w-full justify-center rounded-xl text-base shadow-lg shadow-forest/20 active:scale-[0.98]">Continue to checkout <?php okv_icon('arrow-right', 'h-5 w-5'); ?></a>

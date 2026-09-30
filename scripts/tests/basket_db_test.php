@@ -104,8 +104,29 @@ try {
     Basket::updateProduct($firstLineId, '2.000');
     $q = Database::one('SELECT quantity FROM cart_items WHERE id = :id', [':id' => $firstLineId]);
     t_eq('2.000', (string) $q['quantity'], 'a valid update sets the quantity');
-    Basket::updateProduct($firstLineId, '0');
+    $zeroUndoToken = Basket::updateProduct($firstLineId, '0');
     t_ok(!Database::one('SELECT id FROM cart_items WHERE id = :id', [':id' => $firstLineId]), 'a zero update removes the line');
+    t_ok(is_string($zeroUndoToken) && preg_match('/^[a-f0-9]{48}$/', $zeroUndoToken) === 1, 'a zero update returns a session-bound undo token');
+    Basket::restoreRemovedLine((string) $zeroUndoToken);
+    $zeroRestored = Database::one('SELECT quantity, unit_price_subunit FROM cart_items WHERE cart_id = (SELECT id FROM shopping_carts WHERE session_token = :t) AND unit_price_subunit = 270000 LIMIT 1', [':t' => $_SESSION['okv_basket_token']]);
+    t_eq('2.000', (string) $zeroRestored['quantity'], 'undo restores the exact quantity that was removed');
+    t_eq(270000, (int) $zeroRestored['unit_price_subunit'], 'undo restores the original price snapshot');
+
+    $lineToRemove = (int) Database::one('SELECT id FROM cart_items WHERE cart_id = (SELECT id FROM shopping_carts WHERE session_token = :t) AND unit_price_subunit = 300000 LIMIT 1', [':t' => $_SESSION['okv_basket_token']])['id'];
+    $removeUndoToken = Basket::removeProduct($lineToRemove);
+    t_ok(preg_match('/^[a-f0-9]{48}$/', $removeUndoToken) === 1, 'Remove returns a one-time Undo token');
+    Basket::restoreRemovedLine($removeUndoToken);
+    $restoredLine = Database::one('SELECT id, quantity, unit_price_subunit FROM cart_items WHERE cart_id = (SELECT id FROM shopping_carts WHERE session_token = :t) AND unit_price_subunit = 300000 LIMIT 1', [':t' => $_SESSION['okv_basket_token']]);
+    t_eq($lineToRemove, (int) $restoredLine['id'], 'Undo restores the line in its original basket order');
+    t_eq('1.000', (string) $restoredLine['quantity'], 'Undo restores an explicitly removed line');
+    t_eq(300000, (int) $restoredLine['unit_price_subunit'], 'explicit Remove undo keeps the line price snapshot');
+    $replayRejected = false;
+    try {
+        Basket::restoreRemovedLine($removeUndoToken);
+    } catch (DomainException $e) {
+        $replayRejected = $e->getMessage() === 'undo_expired';
+    }
+    t_ok($replayRejected, 'an Undo token is one-time and cannot restore duplicate lines');
 
     // --- Guest merge into an account -----------------------------------------
     $guestToken = $_SESSION['okv_basket_token'];

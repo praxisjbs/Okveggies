@@ -190,21 +190,52 @@
     document.querySelectorAll('form[data-once]').forEach(releaseOnce);
   });
 
-  // Transient bottom banner. type: 'ok' | 'error'.
-  OKV.toast = function (message, type) {
+  // Transient bottom banner. type: 'ok' | 'error'. An optional action adds a
+  // keyboard-accessible button, used by the basket's short-lived Undo affordance.
+  OKV.toast = function (message, type, action) {
     var host = document.getElementById('okv-toast');
     if (!host) {
       host = document.createElement('div');
       host.id = 'okv-toast';
-      host.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;';
+      host.setAttribute('aria-live', 'polite');
+      host.setAttribute('aria-atomic', 'false');
+      host.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:8px;max-width:calc(100vw - 24px);pointer-events:none;';
       document.body.appendChild(host);
     }
-    var el = document.createElement('div');
+    var toast = document.createElement('div');
     var bg = type === 'error' ? '#C8321E' : '#0F5132';
-    el.style.cssText = 'background:' + bg + ';color:#fff;padding:12px 16px;border-radius:6px;box-shadow:0 12px 32px rgba(3,16,10,0.14);font:500 15px/1.4 sans-serif;max-width:90vw;';
-    el.textContent = message;
-    host.appendChild(el);
-    setTimeout(function () { el.style.opacity = '0'; el.style.transition = 'opacity 240ms'; }, 3200);
-    setTimeout(function () { el.remove(); }, 3600);
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    toast.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;background:' + bg + ';color:#fff;padding:8px 12px 8px 16px;border-radius:8px;box-shadow:0 12px 32px rgba(3,16,10,0.14);font:500 15px/1.4 sans-serif;max-width:calc(100vw - 24px);pointer-events:auto;';
+    var text = document.createElement('span');
+    text.textContent = message;
+    toast.appendChild(text);
+
+    var dismissTimer;
+    var removeTimer;
+    function removeToast() {
+      clearTimeout(dismissTimer);
+      clearTimeout(removeTimer);
+      toast.remove();
+    }
+
+    if (action && typeof action.onClick === 'function') {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = action.label || 'Undo';
+      button.style.cssText = 'flex:none;min-height:44px;padding:0 12px;border:1px solid rgba(255,255,255,.65);border-radius:6px;background:transparent;color:inherit;font:700 14px/1 sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;';
+      button.addEventListener('click', function () {
+        removeToast();
+        action.onClick();
+      });
+      toast.appendChild(button);
+    }
+
+    host.appendChild(toast);
+    var duration = action ? 7000 : 3600;
+    dismissTimer = setTimeout(function () {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 240ms';
+    }, duration - 400);
+    removeTimer = setTimeout(removeToast, duration);
   };
 })();

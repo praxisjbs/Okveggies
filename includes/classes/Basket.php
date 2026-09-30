@@ -28,6 +28,9 @@
 final class Basket
 {
     private const SESSION_TOKEN_KEY = 'okv_basket_token';
+    private const SESSION_UNDO_KEY  = 'okv_basket_undo';
+    private const UNDO_TTL_SECONDS  = 600;
+    private const MAX_UNDO_LINES    = 10;
 
     /**
      * Packing ceilings per line, in whole units. Above these it is no longer a
@@ -608,20 +611,23 @@ final class Basket
         ];
     }
 
-    public static function updateProduct(int $lineId, string $quantity): void { self::updateLine($lineId, $quantity, 'product'); }
-    public static function updateCombo(int $lineId, string $quantity): void { self::updateLine($lineId, $quantity, 'combo'); }
-    public static function removeProduct(int $lineId): void { self::removeLine($lineId, 'product'); }
-    public static function removeCombo(int $lineId): void { self::removeLine($lineId, 'combo'); }
+    public static function updateProduct(int $lineId, string $quantity): ?string { return self::updateLine($lineId, $quantity, 'product'); }
+    public static function updateCombo(int $lineId, string $quantity): ?string { return self::updateLine($lineId, $quantity, 'combo'); }
+    public static function removeProduct(int $lineId): string { return self::removeLine($lineId, 'product'); }
+    public static function removeCombo(int $lineId): string { return self::removeLine($lineId, 'combo'); }
 
     /**
      * Set the quantity on one line of this basket. Clearing the box (a blank or
      * zero quantity) is read as "take this out". Anything off the packing grid
      * or below the minimum is refused, so the server never stores a quantity the
-     * packing team cannot weigh.
+     * packing team cannot weigh. A removal returns a short-lived, session-bound
+     * undo token; the item and its original price snapshot stay server-side.
      */
-    private static function updateLine(int $lineId, string $quantity, string $type): void
+    private static function updateLine(int $lineId, string $quantity, string $type): ?string
     {
         $pdo = Database::getInstance()->getConnection();
+        $removedLine = null;
+        $cartId = null;
         try {
             $pdo->beginTransaction();
             $cartId = self::findActiveCartId();
@@ -630,7 +636,9 @@ final class Basket
             }
 
             $line = Database::one(
-                'SELECT ci.id, p.minimum_quantity, p.quantity_increment
+                'SELECT ci.id, ci.item_type, ci.product_id, ci.combo_package_id,
+                        ci.quantity, ci.unit_price_subunit, ci.created_at,
+                        p.minimum_quantity, p.quantity_increment
                    FROM cart_items ci
                    LEFT JOIN products p ON p.id = ci.product_id
                   WHERE ci.id = :id AND ci.cart_id = :cart_id AND ci.item_type = :type
@@ -647,6 +655,7 @@ final class Basket
 
             if ($action === 'remove') {
                 Database::run('DELETE FROM cart_items WHERE id = :id', [':id' => (int) $line['id']]);
+                $removedLine = $line;
             } elseif ($action === 'update') {
                 Database::run(
                     'UPDATE cart_items SET quantity = :quantity WHERE id = :id',
@@ -664,10 +673,12 @@ final class Basket
             }
             throw $e;
         }
+
+        return $removedLine === null ? null : self::rememberUndoLine((int) $cartId, $removedLine);
     }
 
-    /** Take one line out of the basket. The line has to be in this basket. */
-    private static function removeLine(int $lineId, string $type): void
+    /** Take one line out of the basket and return its short-lived undo token. */
+    private static function removeLine(int $lineId, string $type): string
     {
         $pdo = Database::getInstance()->getConnection();
         try {
@@ -676,12 +687,103 @@ final class Basket
             if ($cartId === null) {
                 throw new DomainException('not_found');
             }
-            $changed = Database::run(
-                'DELETE FROM cart_items WHERE id = :id AND cart_id = :cart_id AND item_type = :type',
+            $line = Database::one(
+                'SELECT id, item_type, product_id, combo_package_id, quantity,
+                        unit_price_subunit, created_at
+                   FROM cart_items
+                  WHERE id = :id AND cart_id = :cart_id AND item_type = :type
+                  FOR UPDATE',
                 [':id' => $lineId, ':cart_id' => $cartId, ':type' => $type]
             );
-            if ($changed === 0) {
+            if (!$line) {
                 throw new DomainException('not_found');
+            }
+            Database::run('DELETE FROM cart_items WHERE id = :id', [':id' => (int) $line['id']]);
+            self::touchCart($cartId);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        return self::rememberUndoLine((int) $cartId, $line);
+    }
+
+    /**
+     * Restore a line removed in this session. A random token references a
+     * server-side snapshot, never client-supplied price or quantity data.
+     */
+    public static function restoreRemovedLine(string $token): void
+    {
+        $token = strtolower(trim($token));
+        $entries = self::validUndoEntries();
+        if (!preg_match('/^[a-f0-9]{48}$/', $token) || !isset($entries[$token])) {
+            throw new DomainException('undo_expired');
+        }
+
+        $entry = $entries[$token];
+        $cartId = self::findActiveCartId();
+        if ($cartId === null || $cartId !== (int) ($entry['cart_id'] ?? 0)) {
+            unset($entries[$token]);
+            self::saveUndoEntries($entries);
+            throw new DomainException('undo_expired');
+        }
+
+        $type = (string) ($entry['item_type'] ?? '');
+        $productId = (int) ($entry['product_id'] ?? 0);
+        $comboId = (int) ($entry['combo_package_id'] ?? 0);
+        if (($type === 'product' && $productId < 1) || ($type === 'combo' && $comboId < 1) || !in_array($type, ['product', 'combo'], true)) {
+            unset($entries[$token]);
+            self::saveUndoEntries($entries);
+            throw new DomainException('undo_expired');
+        }
+
+        $pdo = Database::getInstance()->getConnection();
+        try {
+            $pdo->beginTransaction();
+            $activeCart = Database::one(
+                'SELECT id FROM shopping_carts WHERE id = :id AND status = \'active\' FOR UPDATE',
+                [':id' => $cartId]
+            );
+            if (!$activeCart) {
+                throw new DomainException('undo_expired');
+            }
+
+            $exists = $type === 'product'
+                ? Database::one('SELECT id FROM products WHERE id = :id', [':id' => $productId])
+                : Database::one('SELECT id FROM combo_packages WHERE id = :id', [':id' => $comboId]);
+            if (!$exists) {
+                throw new DomainException('undo_expired');
+            }
+
+            $restore = [
+                ':cart_id'    => $cartId,
+                ':item_type'  => $type,
+                ':product_id' => $type === 'product' ? $productId : null,
+                ':combo_id'   => $type === 'combo' ? $comboId : null,
+                ':quantity'   => self::normaliseQuantity((string) ($entry['quantity'] ?? '')),
+                ':price'      => max(0, (int) ($entry['unit_price_subunit'] ?? 0)),
+                ':created_at' => (string) ($entry['created_at'] ?? date('Y-m-d H:i:s')),
+            ];
+            $originalLineId = (int) ($entry['line_id'] ?? 0);
+            $idIsAvailable = $originalLineId > 0
+                && !Database::one('SELECT id FROM cart_items WHERE id = :id FOR UPDATE', [':id' => $originalLineId]);
+            if ($idIsAvailable) {
+                Database::run(
+                    'INSERT INTO cart_items
+                        (id, cart_id, item_type, product_id, combo_package_id, quantity, unit_price_subunit, created_at)
+                     VALUES (:id, :cart_id, :item_type, :product_id, :combo_id, :quantity, :price, :created_at)',
+                    [':id' => $originalLineId] + $restore
+                );
+            } else {
+                Database::run(
+                    'INSERT INTO cart_items
+                        (cart_id, item_type, product_id, combo_package_id, quantity, unit_price_subunit, created_at)
+                     VALUES (:cart_id, :item_type, :product_id, :combo_id, :quantity, :price, :created_at)',
+                    $restore
+                );
             }
             self::touchCart($cartId);
             $pdo->commit();
@@ -690,6 +792,60 @@ final class Basket
                 $pdo->rollBack();
             }
             throw $e;
+        }
+
+        unset($entries[$token]);
+        self::saveUndoEntries($entries);
+    }
+
+    /** Keep a bounded set of one-time undo snapshots in the current session. */
+    private static function rememberUndoLine(int $cartId, array $line): string
+    {
+        $entries = self::validUndoEntries();
+        while (count($entries) >= self::MAX_UNDO_LINES) {
+            unset($entries[array_key_first($entries)]);
+        }
+
+        $token = bin2hex(random_bytes(24));
+        $entries[$token] = [
+            'cart_id'           => $cartId,
+            'line_id'           => (int) ($line['id'] ?? 0),
+            'item_type'         => (string) ($line['item_type'] ?? ''),
+            'product_id'        => isset($line['product_id']) ? (int) $line['product_id'] : null,
+            'combo_package_id'  => isset($line['combo_package_id']) ? (int) $line['combo_package_id'] : null,
+            'quantity'          => self::normaliseQuantity((string) ($line['quantity'] ?? '')),
+            'unit_price_subunit' => max(0, (int) ($line['unit_price_subunit'] ?? 0)),
+            'created_at'        => (string) ($line['created_at'] ?? date('Y-m-d H:i:s')),
+            'expires_at'        => time() + self::UNDO_TTL_SECONDS,
+        ];
+        self::saveUndoEntries($entries);
+        return $token;
+    }
+
+    /** Return only unexpired and well-shaped entries, pruning old session data. */
+    private static function validUndoEntries(): array
+    {
+        $entries = $_SESSION[self::SESSION_UNDO_KEY] ?? [];
+        if (!is_array($entries)) {
+            $entries = [];
+        }
+        $now = time();
+        foreach ($entries as $token => $entry) {
+            if (!is_string($token) || !preg_match('/^[a-f0-9]{48}$/', $token)
+                || !is_array($entry) || (int) ($entry['expires_at'] ?? 0) <= $now) {
+                unset($entries[$token]);
+            }
+        }
+        self::saveUndoEntries($entries);
+        return $entries;
+    }
+
+    private static function saveUndoEntries(array $entries): void
+    {
+        if ($entries) {
+            $_SESSION[self::SESSION_UNDO_KEY] = $entries;
+        } else {
+            unset($_SESSION[self::SESSION_UNDO_KEY]);
         }
     }
 

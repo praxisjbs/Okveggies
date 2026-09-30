@@ -28,12 +28,15 @@ function cart_return_to(): string
 }
 
 /** Send a plain form post back where it came from with a single basket notice. */
-function cart_redirect_notice(string $notice): void
+function cart_redirect_notice(string $notice, string $undoToken = ''): void
 {
     [$path, $query] = array_pad(explode('?', cart_return_to(), 2), 2, '');
     parse_str($query, $params);
-    unset($params['basket']);
+    unset($params['basket'], $params['undo_token']);
     $params['basket'] = $notice;
+    if ($undoToken !== '') {
+        $params['undo_token'] = $undoToken;
+    }
     okv_redirect($path . '?' . http_build_query($params), 303);
 }
 
@@ -45,6 +48,7 @@ function cart_fail(Throwable $e, string $context): void
         'not_found'        => ['We could not find that basket item.', 404, 'missing', 'not_found'],
         'unavailable'      => ['That item is no longer available.', 409, 'unavailable', 'unavailable'],
         'invalid_quantity' => ['Use the minimum and quantity steps shown for this item.', 422, 'quantity', 'invalid_quantity'],
+        'undo_expired'     => ['That undo option has expired. You can add the item again from the shop.', 410, 'error', 'undo_expired'],
     ];
     [$message, $status, $notice, $clientCode] = $known[$reason]
         ?? ['We could not update your basket. Please try again.', 500, 'error', 'failed'];
@@ -62,7 +66,7 @@ if ($action === 'state') {
     okv_json(['status' => 'ok'] + Basket::state());
 }
 
-$allowed = ['add_product', 'add_combo', 'update_product', 'remove_product', 'update_combo', 'remove_combo'];
+$allowed = ['add_product', 'add_combo', 'update_product', 'remove_product', 'update_combo', 'remove_combo', 'undo_remove'];
 if (!in_array($action, $allowed, true)) {
     okv_error('This action is not available.', 400, 'unknown_action');
 }
@@ -78,6 +82,7 @@ if (!Csrf::validate()) {
 
 $notice = 'updated';
 $message = 'Basket updated.';
+$undoToken = '';
 try {
     switch ($action) {
         case 'add_product':
@@ -106,24 +111,29 @@ try {
                 : 'Added to your basket.';
             break;
         case 'update_product':
-            Basket::updateProduct((int) okv_input('line_id', 0), (string) okv_input('quantity', ''));
-            $notice = 'updated';
-            $message = 'Basket updated.';
+            $undoToken = Basket::updateProduct((int) okv_input('line_id', 0), (string) okv_input('quantity', '')) ?? '';
+            $notice = $undoToken !== '' ? 'removed' : 'updated';
+            $message = $undoToken !== '' ? 'Item removed from your basket.' : 'Basket updated.';
             break;
         case 'update_combo':
-            Basket::updateCombo((int) okv_input('line_id', 0), (string) okv_input('quantity', ''));
-            $notice = 'updated';
-            $message = 'Basket updated.';
+            $undoToken = Basket::updateCombo((int) okv_input('line_id', 0), (string) okv_input('quantity', '')) ?? '';
+            $notice = $undoToken !== '' ? 'removed' : 'updated';
+            $message = $undoToken !== '' ? 'Basket removed from your order.' : 'Basket updated.';
             break;
         case 'remove_product':
-            Basket::removeProduct((int) okv_input('line_id', 0));
+            $undoToken = Basket::removeProduct((int) okv_input('line_id', 0));
             $notice = 'removed';
             $message = 'Item removed from your basket.';
             break;
-        default: // remove_combo
-            Basket::removeCombo((int) okv_input('line_id', 0));
+        case 'remove_combo':
+            $undoToken = Basket::removeCombo((int) okv_input('line_id', 0));
             $notice = 'removed';
             $message = 'Basket removed from your order.';
+            break;
+        case 'undo_remove':
+            Basket::restoreRemovedLine((string) okv_input('undo_token', ''));
+            $notice = 'restored';
+            $message = 'Item restored to your basket.';
             break;
     }
 } catch (Throwable $e) {
@@ -131,11 +141,12 @@ try {
 }
 
 if (!cart_is_fetch()) {
-    cart_redirect_notice($notice);
+    cart_redirect_notice($notice, $undoToken);
 }
 okv_json([
     'status'       => 'ok',
     'message'      => $message,
     'repriced'     => $notice === 'repriced',
+    'undo_token'   => $undoToken !== '' ? $undoToken : null,
     'basket_count' => Basket::count(),
 ] + Basket::state());
