@@ -67,6 +67,9 @@ try {
     [$pageStatus, $page] = anh_request($base, $jar, '/admin/');
     anh_eq(200, $pageStatus, 'the admin dashboard renders');
     anh_ok(strpos($page, 'data-admin-notifications') < strpos($page, 'View shop'), 'the shared bell renders beside and before View shop');
+    anh_ok(str_contains($page, 'href="/shop.php" target="_blank" rel="noopener"'), 'View shop opens the storefront shop page in a new tab');
+    anh_ok(!str_contains($page, 'href="/" class="okv-btn-text'), 'no admin screen links View shop at the staff-bouncing home URL');
+    anh_ok((bool) preg_match('#data-command-search-text="View shop Storefront[^"]*"#', $page), 'the command palette carries the storefront command');
     anh_ok(str_contains($page, 'aria-label="Notifications, 1 unread"'), 'the server-rendered badge excludes the forbidden payment alert');
     anh_ok(str_contains($page, 'role="dialog"') && str_contains($page, 'aria-describedby="okv-notification-description"'), 'the bell panel is a named and described dialog');
     anh_ok(str_contains($page, '/assets/js/admin-notifications.js'), 'the shared admin page loads the notification controller');
