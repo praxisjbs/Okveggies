@@ -29,6 +29,45 @@ function payments_is_fetch(): bool
         || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
 }
 
+if ($action === 'browse') {
+    // The live search behind the "Record a payment" box on
+    // /admin/payments.php. A read, so a GET, and gated on the same permission
+    // the screen opens with. The markup comes from the one component the
+    // screen renders on a plain load, so typing and reloading agree exactly.
+    if (okv_is_post()) {
+        okv_error('Use GET for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission('payments.view');
+
+    $search      = mb_substr(trim((string) okv_input('q', okv_input('order', ''))), 0, 100);
+    $openOrderId = (int) okv_input('order_id', 0);
+    $matches     = $search !== '' ? Payments::searchOrders($search) : [];
+
+    require_once __DIR__ . '/../../includes/components/admin/payment_search_results.php';
+    ob_start();
+    okv_admin_payment_search_results($matches, $search, $openOrderId);
+    $html = (string) ob_get_clean();
+
+    // The auto-fill suggestions: the order number goes into the box, because
+    // it is the one spelling that identifies exactly one order, and the name
+    // and the day ride alongside so a colleague can check it against the
+    // caller before they take it.
+    $suggestions = array_slice(array_map(static function (array $match): array {
+        return [
+            'value' => (string) $match['order_number'],
+            'label' => okv_payments_customer_name($match),
+            'sub'   => (string) $match['order_number'] . ' . ' . date('j M Y', strtotime((string) $match['created_at'])),
+        ];
+    }, $matches), 0, 7);
+
+    okv_json([
+        'status'      => 'ok',
+        'html'        => $html,
+        'summary'     => $search === '' ? '' : count($matches) . ' order' . (count($matches) === 1 ? '' : 's') . ' match' . (count($matches) === 1 ? 'es' : ''),
+        'suggestions' => $suggestions,
+    ]);
+}
+
 /**
  * Start a Paystack charge for a payment the caller has already been proved to
  * own, then answer: JSON for a fetch, otherwise a 303 to Paystack. One tail for
