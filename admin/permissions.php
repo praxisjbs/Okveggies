@@ -152,9 +152,9 @@ require __DIR__ . '/../includes/components/admin/header.php';
               <p class="mt-1">The code checks these, but no role can hold them yet, so they are shown unticked and switched off: <span class="font-mono"><?= okv_e(implode(', ', $drift['missing_in_db'])) ?></span>.</p>
             <?php endif; ?>
             <?php if ($drift['missing_in_code']): ?>
-              <p class="mt-1">These are held in the database but nothing checks them: <span class="font-mono"><?= okv_e(implode(', ', $drift['missing_in_code'])) ?></span>.</p>
+              <p class="mt-1">These are held in the database but missing from the catalogue the code ships, so they are drawn from the database row alone: <span class="font-mono"><?= okv_e(implode(', ', $drift['missing_in_code'])) ?></span>.</p>
             <?php endif; ?>
-            <p class="mt-1">A migration brings the two back together.</p>
+            <p class="mt-1">A migration adds a key the code checks; the other kind is a line missing from <span class="font-mono">includes/config/permissions.php</span>.</p>
           </div>
         <?php endif; ?>
 
