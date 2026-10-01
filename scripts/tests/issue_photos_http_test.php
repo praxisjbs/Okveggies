@@ -192,6 +192,7 @@ try {
     ]);
     iph_eq(201, $status, 'a valid 2-photo report is created');
     iph_eq(2, (int) ($body['photo_count'] ?? 0), 'the response confirms the persisted photo count');
+    iph_ok(str_contains((string) ($body['message'] ?? ''), '2 photos attached.'), 'and says it in words: 2 photos attached');
     $issue = Database::one('SELECT id FROM issue_reports WHERE order_id = :id', [':id' => $orderId]);
     $issueId = (int) ($issue['id'] ?? 0);
     $issueIds[] = $issueId;
@@ -202,6 +203,38 @@ try {
         iph_ok(preg_match('#^uploads/issues/[a-f0-9]{32}\.png$#', (string) $row['photo_url']) === 1, 'each stored photo has a randomised server name');
         iph_ok(is_file($root . '/' . $row['photo_url']), 'each stored photo exists under uploads/issues');
     }
+
+    // What the customer sees after the redirect: the count of what was actually stored.
+    [$status, $afterReport] = iph_req($base, $ownerJar, 'GET', '/public/order.php?order=' . $orderId . '&issue=reported');
+    iph_eq(200, $status, 'the order page opens after the report is sent');
+    iph_ok(preg_match('/data-issue-confirmation[^>]*>.*We received your report for order ' . preg_quote($orderNumber, '/') . '\..*<strong>2 photos attached\.<\/strong>/s', (string) $afterReport) === 1, 'the confirmation says 2 photos attached');
+    iph_ok(preg_match('/data-issue-photo-count[^>]*>2 photos attached\./', (string) $afterReport) === 1, 'and the report card repeats it');
+    iph_eq(2, preg_match_all('#<img src="/public/issue_photo\.php\?photo=\d+"#', (string) $afterReport), 'with exactly the two photos shown below it');
+
+    // One photo reads as one photo, and no photos is said plainly rather than left out.
+    [$onePhotoOrderId, $onePhotoOrderNumber] = $makeOrder($ownerId);
+    [, $onePage] = iph_req($base, $ownerJar, 'GET', '/public/order.php?order=' . $onePhotoOrderId);
+    $clearRate();
+    [$status, $oneBody] = $submit($onePhotoOrderId, iph_csrf((string) $onePage), ['photos[0]' => new CURLFile($validPng, 'image/png', 'single.png')]);
+    iph_eq(201, $status, 'a 1-photo report is created');
+    iph_ok(str_contains((string) ($oneBody['message'] ?? ''), '1 photo attached.') && !str_contains((string) ($oneBody['message'] ?? ''), '1 photos'), 'and the wording is singular');
+    $oneIssue = Database::one('SELECT id FROM issue_reports WHERE order_id = :id', [':id' => $onePhotoOrderId]);
+    $issueIds[] = (int) ($oneIssue['id'] ?? 0);
+    foreach (Database::all('SELECT photo_url FROM issue_report_photos WHERE issue_id = :id', [':id' => (int) ($oneIssue['id'] ?? 0)]) as $oneRow) { $storedPaths[] = (string) $oneRow['photo_url']; }
+
+    [$noPhotoOrderId] = $makeOrder($ownerId);
+    [, $nonePage] = iph_req($base, $ownerJar, 'GET', '/public/order.php?order=' . $noPhotoOrderId);
+    $clearRate();
+    [$status, $noneBody] = $submit($noPhotoOrderId, iph_csrf((string) $nonePage), []);
+    iph_eq(201, $status, 'a report with no photos is created');
+    iph_eq(0, (int) ($noneBody['photo_count'] ?? -1), 'it carries a photo count of zero');
+    iph_ok(str_contains((string) ($noneBody['message'] ?? ''), 'No photos attached.'), 'and says so plainly');
+    $noneIssue = Database::one('SELECT id FROM issue_reports WHERE order_id = :id', [':id' => $noPhotoOrderId]);
+    $issueIds[] = (int) ($noneIssue['id'] ?? 0);
+    [, $noneAfter] = iph_req($base, $ownerJar, 'GET', '/public/order.php?order=' . $noPhotoOrderId . '&issue=reported');
+    iph_ok(preg_match('/data-issue-confirmation[^>]*>.*<strong>No photos attached\.<\/strong>/s', (string) $noneAfter) === 1, 'the page confirmation says No photos attached');
+    [, $strangerAfter] = iph_req($base, $otherJar, 'GET', '/public/order.php?order=' . $orderId . '&issue=reported');
+    iph_ok(!str_contains((string) $strangerAfter, 'photos attached'), 'another customer sees no photo count for someone else\'s report');
 
     $photoId = (int) $rows[0]['id'];
     [$status, , $type] = iph_req($base, $ownerJar, 'GET', '/public/issue_photo.php?photo=' . $photoId);

@@ -184,7 +184,7 @@ if (issue_wants_json()) {
         'code' => (string) $result['code'],
         'message' => ($result['code'] ?? '') === 'already_open'
             ? 'We already have an open report for order ' . ($result['order_number'] ?? '') . '.'
-            : 'We received your report for order ' . ($result['order_number'] ?? '') . '.',
+            : 'We received your report for order ' . ($result['order_number'] ?? '') . '. ' . IssueReports::photoCountLine((int) ($result['photo_count'] ?? 0)),
         'order_number' => (string) ($result['order_number'] ?? ''),
         'photo_count' => (int) ($result['photo_count'] ?? 0),
     ], ($result['code'] ?? '') === 'reported' ? 201 : 200);
