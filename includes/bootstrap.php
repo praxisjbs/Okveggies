@@ -69,6 +69,7 @@ require_once __DIR__ . '/classes/Settings.php';
 require_once __DIR__ . '/classes/SettingsEditor.php';
 require_once __DIR__ . '/classes/Password.php';
 require_once __DIR__ . '/classes/Rbac.php';
+require_once __DIR__ . '/classes/PermissionMatrix.php';
 require_once __DIR__ . '/classes/Audit.php';
 require_once __DIR__ . '/classes/ContentPages.php';
 require_once __DIR__ . '/classes/ContentImages.php';
@@ -107,6 +108,9 @@ require_once __DIR__ . '/classes/Uploads.php';
 // scripts/tests/BootstrapTest.php guards that from happening again.
 require_once __DIR__ . '/classes/Payments.php';
 require_once __DIR__ . '/classes/ManualPayments.php';
+require_once __DIR__ . '/classes/TransferProofs.php';
+require_once __DIR__ . '/classes/PaymentSummary.php';
+require_once __DIR__ . '/classes/ReceiptLink.php';
 require_once __DIR__ . '/classes/Refunds.php';
 require_once __DIR__ . '/classes/Cancellation.php';
 require_once __DIR__ . '/classes/OrderCancellation.php';

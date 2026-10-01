@@ -30,6 +30,10 @@ foreach (Notifications::EVENTS as $event => $definition) {
         || in_array('credit_url', $tokens, true)
         || in_array('wallet_url', $tokens, true)
         || in_array('issue_url', $tokens, true)
+        // A verified transfer opens the green payment screen. That is the page
+        // the email is about, and the trail link would be the wrong one because
+        // it deliberately shows no money.
+        || in_array('receipt_url', $tokens, true)
         // The contact acknowledgement has no order or request to point at. Its
         // next step is the other half of the support offer, so WhatsApp counts.
         || in_array('whatsapp_url', $tokens, true),
@@ -226,8 +230,8 @@ okv_test_ok(str_contains($paystack, "in_array(\$scheme, ['http', 'https'], true)
 $notifications = (string) file_get_contents(dirname(__DIR__, 2) . '/includes/classes/Notifications.php');
 
 okv_test_ok(
-    str_contains($notifications, "if (\$option === 'pay_in_full') {"),
-    'a placed order asks what the customer chose to do about the money before it says anything'
+    str_contains($notifications, "if (\$option === 'pay_in_full' && !\$viaTransfer) {"),
+    'a placed order asks what the customer chose to do about the money before it says anything, and a transfer, which no gateway confirms, is never held for a confirmation that will not come'
 );
 okv_test_ok(
     str_contains($notifications, "self::hold(\n                'payment_confirmed',"),

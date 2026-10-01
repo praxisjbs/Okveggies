@@ -26,9 +26,19 @@ require_once __DIR__ . '/includes/components/shop/support_widget.php';
 require_once __DIR__ . '/includes/components/shop/delivery_picker.php';
 require_once __DIR__ . '/includes/components/shop/icons.php';
 require_once __DIR__ . '/includes/components/shop/policy_links.php';
+require_once __DIR__ . '/includes/components/shop/bank_transfer.php';
 
 $step   = max(1, min(4, (int) okv_input('step', 1)));
 $basket = Basket::state();
+$basketNotice = (string) okv_input('basket', '');
+$undoToken = (string) okv_input('undo_token', '');
+$basketNotices = [
+    'removed'  => 'Item removed from your basket.',
+    'restored' => 'Item restored to your basket.',
+    'updated'  => 'Basket updated.',
+    'quantity' => 'Use the minimum and quantity steps shown for this item.',
+    'error'    => 'We could not update your basket. Please try again.',
+];
 $bag    = Checkout::bag();
 $savedCustomer = $bag['customer'] ?? [];
 $savedDelivery = $bag['delivery'] ?? [];
@@ -63,7 +73,17 @@ $staleZoneName = $savedZoneId > 0 && $chosenZoneId !== $savedZoneId
     ? (string) (Delivery::zoneNameById($savedZoneId) ?? '')
     : '';
 $payment = (string) ($bag['payment']['payment_option'] ?? 'pay_in_full');
+$payMethod = (string) ($bag['payment']['payment_method'] ?? '');
 $deposit = Money::deposit((int) $basket['subtotal_subunit'], Settings::depositPercentage());
+
+// Direct bank transfer (PRD 9.3a): offered only while the Owner has it switched
+// on with a complete account. The server checks the same rule on placing.
+$transferOffered = TransferProofs::isEnabled();
+$bank            = TransferProofs::bankDetails();
+$payMethod       = $transferOffered && $payMethod === TransferProofs::METHOD_TRANSFER
+    ? TransferProofs::METHOD_TRANSFER
+    : TransferProofs::METHOD_PAYSTACK;
+$receiptError    = (string) okv_input('receipt_error', '');
 $depositPercent = rtrim(rtrim(number_format(Settings::depositPercentage(), 2), '0'), '.');
 $sourceRegions  = Settings::str('source_regions', 'Ogun State, Jos');
 // Wallet credit the customer already holds. It is offered ticked, and used first
@@ -127,6 +147,21 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
     <h1 class="mt-2 font-display text-4xl font-extrabold text-ink">Checkout</h1>
   </div>
 
+  <?php if (isset($basketNotices[$basketNotice])): ?>
+    <div class="mt-6 flex flex-wrap items-center gap-3 rounded-md border border-foliage bg-foliage-tint px-4 py-3 text-sm text-forest" role="status">
+      <span><?= okv_e($basketNotices[$basketNotice]) ?></span>
+      <?php if ($basketNotice === 'removed' && preg_match('/^[a-f0-9]{48}$/', $undoToken)): ?>
+        <form method="post" action="/api/v1/cart.php" class="inline-flex">
+          <?= Csrf::field() ?>
+          <input type="hidden" name="action" value="undo_remove">
+          <input type="hidden" name="undo_token" value="<?= okv_e($undoToken) ?>">
+          <input type="hidden" name="return_to" value="/checkout.php?step=<?= (int) $step ?>">
+          <button type="submit" class="okv-btn-text min-h-[44px] px-2 font-semibold underline underline-offset-2">Undo</button>
+        </form>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+
   <!-- The progress line: one circle per step, icon in the circle, a line
        between them, done steps ticked. It is a real list, so a screen reader
        hears "list, 4 items" and the current step is named with aria-current. -->
@@ -160,7 +195,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
       <h2 class="mt-4 font-display text-2xl font-bold text-ink">Your basket is empty</h2>
       <p class="mt-2 text-ink-60">Add produce or a ready basket before checkout.</p>
       <div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-        <a class="okv-btn w-full justify-center sm:w-auto" href="/shop.php">Shop produce <?php okv_icon('arrow-right', 'h-4 w-4'); ?></a>
+        <a class="okv-btn w-full justify-center sm:w-auto" href="/shop.php">Continue shopping <?php okv_icon('arrow-right', 'h-4 w-4'); ?></a>
         <a class="okv-btn-outline w-full justify-center sm:w-auto" href="/combos.php">See combos</a>
       </div>
     </section>
@@ -175,7 +210,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
           <ul class="mt-5 divide-y divide-mist">
             <?php foreach ($basket['lines'] as $line): ?>
               <?php $combo = $line['item_type'] === 'combo'; ?>
-              <li class="flex flex-wrap items-center gap-4 py-4">
+              <li class="flex flex-wrap items-center gap-4 py-4" data-basket-line data-line-id="<?= (int) $line['id'] ?>">
                 <span class="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-forest-tint text-forest"><?php okv_icon($combo ? 'basket' : 'leaf', 'h-5 w-5'); ?></span>
                 <span class="min-w-0 flex-1">
                   <strong class="block truncate text-ink"><?= okv_e($line['name']) ?></strong>
@@ -188,9 +223,16 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                   <input type="hidden" name="line_id" value="<?= (int) $line['id'] ?>">
                   <input type="hidden" name="return_to" value="/checkout.php?step=1">
                   <label class="text-sm font-semibold text-ink">Quantity
-                    <input name="quantity" inputmode="decimal" value="<?= okv_e($line['quantity_display']) ?>" min="<?= okv_e($combo ? '1' : $line['minimum_quantity']) ?>" step="<?= okv_e($combo ? '1' : $line['quantity_increment']) ?>" aria-label="Quantity for <?= okv_e($line['name']) ?>" class="okv-input mt-1 w-24">
+                    <input name="quantity" inputmode="decimal" value="<?= okv_e($line['quantity_display']) ?>" aria-label="Quantity for <?= okv_e($line['name']) ?>" class="okv-input mt-1 w-24">
                   </label>
-                  <button class="okv-btn-outline px-3">Update</button>
+                  <button type="submit" class="okv-btn-outline px-3">Update</button>
+                </form>
+                <form method="post" action="/api/v1/cart.php" class="pl-16 sm:pl-0" data-basket-form>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="<?= $combo ? 'remove_combo' : 'remove_product' ?>">
+                  <input type="hidden" name="line_id" value="<?= (int) $line['id'] ?>">
+                  <input type="hidden" name="return_to" value="/checkout.php?step=1">
+                  <button type="submit" class="okv-btn-text min-h-[44px] px-2 text-tomato" aria-label="Remove <?= okv_e($line['name']) ?> from basket">Remove</button>
                 </form>
               </li>
             <?php endforeach; ?>
@@ -290,9 +332,12 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
             <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('card', 'h-5 w-5'); ?></span>
             Choose how to pay
           </h2>
-          <form id="checkout-payment-form" class="mt-6" method="post" action="/api/v1/checkout.php">
+          <form id="checkout-payment-form" class="mt-6" method="post" action="/api/v1/checkout.php" enctype="multipart/form-data">
             <?= Csrf::field() ?>
             <input type="hidden" name="action" value="place_order">
+            <?php if ($receiptError !== ''): ?>
+              <p class="okv-note-bad mb-4" role="alert"><?= okv_e(TransferProofs::receiptProblemMessage($receiptError)) ?></p>
+            <?php endif; ?>
             <fieldset>
               <legend class="sr-only">How would you like to pay?</legend>
               <div class="space-y-3" data-payment-options>
@@ -306,12 +351,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                       <span class="font-semibold text-ink">Pay in full now</span>
                       <span class="font-mono text-sm font-semibold text-forest"><?= okv_e(Money::format((int) $basket['subtotal_subunit'])) ?></span>
                     </span>
-                    <span class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-60">
-                      <span class="flex items-center gap-1"><?php okv_icon('card', 'h-4 w-4'); ?><span class="text-xs">Card</span></span>
-                      <span class="flex items-center gap-1"><?php okv_icon('banknote', 'h-4 w-4'); ?><span class="text-xs">Bank transfer</span></span>
-                      <span class="flex items-center gap-1"><?php okv_icon('phone', 'h-4 w-4'); ?><span class="text-xs">USSD</span></span>
-                    </span>
-                    <span class="mt-1 block text-xs text-ink-60">On Paystack, in one go.</span>
+                    <span class="mt-1 block text-xs text-ink-60">The whole basket, paid now. Nothing left to settle.</span>
                   </span>
                   <span class="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('card', 'h-5 w-5'); ?></span>
                 </label>
@@ -364,6 +404,70 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
               </div>
             </fieldset>
 
+            <!-- How the amount is sent, for a full payment or a deposit. Amount
+                 and method are separate choices (PRD 9.3a), so a deposit can be
+                 paid either way. Without JavaScript both cards and the account
+                 details are simply on the page, and the server holds the rules. -->
+            <?php if ($transferOffered): ?>
+              <fieldset class="mt-6" data-method-group>
+                <legend class="font-display text-lg font-bold text-ink">How will you send it?</legend>
+                <div class="mt-3 space-y-3">
+                  <label class="okv-choice">
+                    <span class="flex flex-none items-center pt-1">
+                      <input type="radio" class="okv-radio peer" name="payment_method" value="paystack" <?= $payMethod === 'paystack' ? 'checked' : '' ?>>
+                      <span class="pointer-events-none -ml-5 h-3 w-3 scale-50 rounded-full bg-forest opacity-0 transition duration-bounce ease-bounce peer-checked:scale-100 peer-checked:opacity-100"></span>
+                    </span>
+                    <span class="min-w-0 flex-1">
+                      <span class="font-semibold text-ink">Paystack: card, transfer or USSD</span>
+                      <span class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-60">
+                        <span class="flex items-center gap-1"><?php okv_icon('card', 'h-4 w-4'); ?><span class="text-xs">Card</span></span>
+                        <span class="flex items-center gap-1"><?php okv_icon('banknote', 'h-4 w-4'); ?><span class="text-xs">Bank transfer</span></span>
+                        <span class="flex items-center gap-1"><?php okv_icon('phone', 'h-4 w-4'); ?><span class="text-xs">USSD</span></span>
+                      </span>
+                      <span class="mt-1 block text-xs text-ink-60">Secure, and confirmed at once.</span>
+                    </span>
+                    <span class="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('card', 'h-5 w-5'); ?></span>
+                  </label>
+
+                  <label class="okv-choice">
+                    <span class="flex flex-none items-center pt-1">
+                      <input type="radio" class="okv-radio peer" name="payment_method" value="bank_transfer" <?= $payMethod === 'bank_transfer' ? 'checked' : '' ?>>
+                      <span class="pointer-events-none -ml-5 h-3 w-3 scale-50 rounded-full bg-forest opacity-0 transition duration-bounce ease-bounce peer-checked:scale-100 peer-checked:opacity-100"></span>
+                    </span>
+                    <span class="min-w-0 flex-1">
+                      <span class="font-semibold text-ink">Direct bank transfer</span>
+                      <span class="mt-1 block text-xs text-ink-60">Send it to our account, then attach your receipt. Our team checks it before your order is confirmed.</span>
+                    </span>
+                    <span class="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-gold-tint text-gold-ink"><?php okv_icon('receipt', 'h-5 w-5'); ?></span>
+                  </label>
+                </div>
+
+                <!-- The account, the exact amount and the receipt box. Shown when
+                     Direct bank transfer is chosen. -->
+                <div class="mt-4 rounded-xl border border-forest/15 bg-forest-tint p-4 sm:p-5" data-transfer-panel>
+                  <h3 class="font-display text-lg font-bold text-ink">Send it, then attach your receipt</h3>
+                  <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-60">
+                    <li>Send the exact amount to the account below, from your banking app.</li>
+                    <li>Attach the receipt or screenshot from your bank.</li>
+                    <li>Place your order. We check the receipt and email you once it is confirmed.</li>
+                  </ol>
+                  <div class="mt-4 max-w-xl">
+                    <div data-transfer-amount="pay_in_full">
+                      <p class="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-ink-60">If you pay in full</p>
+                      <?php okv_bank_transfer_details($bank, (int) $basket['subtotal_subunit']); ?>
+                    </div>
+                    <div data-transfer-amount="deposit">
+                      <p class="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-ink-60">If you pay a <?= okv_e($depositPercent) ?>% deposit</p>
+                      <?php okv_bank_transfer_details($bank, $deposit); ?>
+                    </div>
+                    <?php okv_receipt_field('checkout-transfer', false); ?>
+                  </div>
+                </div>
+              </fieldset>
+            <?php endif; ?>
+
+            <!-- Wallet credit, spent first on a card payment. A direct bank transfer
+                 is a separate way of paying, so the box is hidden for it. -->
             <?php if ($walletBalance > 0): ?>
               <label class="okv-choice mt-3" data-wallet-option
                      data-wallet="<?= (int) $walletBalance ?>" data-total="<?= (int) $basket['subtotal_subunit'] ?>" data-deposit="<?= (int) $deposit ?>">
@@ -496,18 +600,30 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
           <span class="mt-2 block w-12 border-t-2 border-gold" aria-hidden="true"></span>
           <ul class="mt-4 divide-y divide-mist">
             <?php foreach ($basket['lines'] as $line): ?>
-              <li class="flex items-baseline justify-between gap-3 py-2.5">
+              <?php $combo = $line['item_type'] === 'combo'; ?>
+              <li class="flex items-start justify-between gap-3 py-2.5" data-basket-line data-line-id="<?= (int) $line['id'] ?>">
                 <span class="min-w-0 text-sm text-ink-60">
                   <?= okv_e($line['name']) ?>
                   <span class="block text-xs text-ink-60"><?= okv_e($line['quantity_display']) ?> <?= okv_e($line['unit']) ?></span>
                 </span>
-                <span class="font-mono text-sm font-semibold text-forest"><?= okv_e($line['line_total_display']) ?></span>
+                <div class="flex flex-none flex-col items-end gap-1">
+                  <span class="font-mono text-sm font-semibold text-forest"><?= okv_e($line['line_total_display']) ?></span>
+                  <?php if ($step > 1): ?>
+                    <form method="post" action="/api/v1/cart.php" data-basket-form>
+                      <?= Csrf::field() ?>
+                      <input type="hidden" name="action" value="<?= $combo ? 'remove_combo' : 'remove_product' ?>">
+                      <input type="hidden" name="line_id" value="<?= (int) $line['id'] ?>">
+                      <input type="hidden" name="return_to" value="/checkout.php?step=<?= (int) $step ?>">
+                      <button type="submit" class="okv-btn-text min-h-[44px] px-1 text-tomato" aria-label="Remove <?= okv_e($line['name']) ?> from basket">Remove</button>
+                    </form>
+                  <?php endif; ?>
+                </div>
               </li>
             <?php endforeach; ?>
           </ul>
           <p class="mt-3 flex items-center justify-between border-t border-mist pt-3 font-semibold">
             <span>Total</span>
-            <span class="font-mono text-forest"><?= okv_e($basket['subtotal_display']) ?></span>
+            <span class="font-mono text-forest" data-basket-subtotal><?= okv_e($basket['subtotal_display']) ?></span>
           </p>
           <p class="okv-trust-line mt-4"><?php okv_icon('leaf', 'mt-0.5 h-4 w-4 flex-none text-forest'); ?> Sourced from <?= okv_e($sourceRegions) ?>.</p>
           <p class="okv-trust-line mt-2"><?php okv_icon('trail', 'mt-0.5 h-4 w-4 flex-none text-forest'); ?> Delivery is settled after we confirm your area.</p>
@@ -538,6 +654,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
 <?php okv_shop_footer(); ?>
 <script src="<?= okv_e(okv_asset('/assets/js/okv.min.js')) ?>" defer></script>
 <script src="<?= okv_e(okv_asset('/assets/js/checkout.min.js')) ?>" defer></script>
+<script src="<?= okv_e(okv_asset('/assets/js/bank-transfer.min.js')) ?>" defer></script>
 <script src="<?= okv_e(okv_asset('/assets/js/zone-picker.min.js')) ?>" defer></script>
 </body>
 </html>

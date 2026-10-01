@@ -53,6 +53,10 @@ $OKV_ADMIN_NAV = [
         'items' => [
             ['label' => 'Settings',      'href' => '/admin/settings.php',     'icon' => 'cog',         'permission' => 'settings.view', 'keywords' => ['settings', 'order cutoff', 'notifications', 'site']],
             ['label' => 'Users',         'href' => '/admin/users.php',        'icon' => 'shield',      'permission' => 'users.view', 'keywords' => ['users', 'roles', 'staff', 'permissions', 'team']],
+            // The assignment half of users and roles. It carries rbac.roles.view
+            // rather than users.view, because looking at what a role can do is
+            // the permission it needs and changing it is the Owner's alone.
+            ['label' => 'Permissions',   'href' => '/admin/permissions.php',   'icon' => 'key',         'permission' => 'rbac.roles.view', 'keywords' => ['permissions', 'roles', 'access', 'grants', 'owner']],
         ],
     ],
 ];

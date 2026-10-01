@@ -21,6 +21,7 @@
  */
 
 require_once __DIR__ . '/../includes/bootstrap.php';
+require_once __DIR__ . '/../includes/components/admin/payment_search_results.php';
 Rbac::requirePermission('payments.view');
 
 $canRecord         = Rbac::can('payments.record');
@@ -55,6 +56,26 @@ $pendingProofs = Database::all(
       ORDER BY mp.created_at
       LIMIT 50',
     [':status' => ManualPayments::PROOF_PENDING]
+);
+
+// Receipts customers have uploaded for a direct bank transfer (PRD 9.3a). Nothing
+// on these has been credited: they wait for someone to look at the bank.
+$transferReceipts = Database::all(
+    'SELECT mp.id AS proof_id, mp.amount_subunit, mp.bank_reference, mp.payer_name,
+            mp.proof_url, mp.created_at,
+            p.payment_type, p.expected_amount_subunit, p.paid_amount_subunit,
+            o.id AS order_id, o.order_number, o.order_status, o.preferred_delivery_date,
+            COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))), \'\'), a.recipient_name, \'A customer\') AS customer_name
+       FROM manual_payment_proofs mp
+       JOIN payment_transactions t ON t.id = mp.payment_transaction_id
+       JOIN payments p ON p.id = t.payment_id
+       JOIN orders o ON o.id = p.order_id
+       LEFT JOIN users u ON u.id = o.user_id
+       LEFT JOIN order_addresses a ON a.order_id = o.id
+      WHERE mp.status = :status AND mp.submitted_by_customer = 1
+      ORDER BY mp.created_at
+      LIMIT 50',
+    [':status' => TransferProofs::PROOF_SUBMITTED]
 );
 
 $openReversals = Database::all(
@@ -93,49 +114,10 @@ $openReversals = Database::all(
 $search = mb_substr(trim((string) okv_input('q', okv_input('order', ''))), 0, 100);
 $openOrderId = (int) okv_input('order_id', 0);
 
-/** Every order matching what a colleague typed, newest first. */
-function okv_payments_search(string $term, int $limit = 25): array
-{
-    $like  = '%' . Catalogue::escapeLike($term) . '%';
-    $phone = Phone::normalize($term);
-
-    return Database::all(
-        'SELECT o.id, o.user_id, o.order_number, o.order_total_subunit, o.amount_paid_subunit,
-                o.balance_due_subunit, o.payment_status, o.order_status, o.customer_type,
-                o.created_at, o.preferred_delivery_date,
-                TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS account_name,
-                a.recipient_name, u.phone AS account_phone, u.email AS account_email
-           FROM orders o
-           LEFT JOIN users u ON u.id = o.user_id
-           LEFT JOIN order_addresses a ON a.order_id = o.id
-          WHERE o.order_number LIKE :number
-             OR TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) LIKE :account
-             OR a.recipient_name LIKE :recipient
-             OR u.email LIKE :email
-             OR u.phone LIKE :phone_raw
-             OR u.phone = :phone_exact
-             OR a.recipient_phone LIKE :recipient_phone
-             OR EXISTS (
-                  SELECT 1 FROM payments p
-                    JOIN payment_transactions t ON t.payment_id = p.id
-                   WHERE p.order_id = o.id AND t.reference LIKE :reference
-                )
-          ORDER BY o.id DESC
-          LIMIT ' . $limit,
-        [
-            ':number'          => $like,
-            ':account'         => $like,
-            ':recipient'       => $like,
-            ':email'           => $like,
-            ':phone_raw'       => $like,
-            ':phone_exact'     => $phone ?? '',
-            ':recipient_phone' => $like,
-            ':reference'       => $like,
-        ]
-    );
-}
-
-$matches       = $search !== '' ? okv_payments_search($search) : [];
+// The query lives in Payments::searchOrders(), shared with the live search
+// endpoint at api/v1/payments.php, so a typed term and a filtered page ask the
+// same question and cannot disagree about who an order belongs to.
+$matches       = $search !== '' ? Payments::searchOrders($search) : [];
 $foundOrder    = null;
 $orderPayments = [];
 
@@ -166,17 +148,6 @@ if ($foundOrder) {
            FROM payments WHERE order_id = :id ORDER BY id',
         [':id' => (int) $foundOrder['id']]
     );
-}
-
-/** The name to put on an order: whoever it is going to, else the account. */
-function okv_payments_customer_name(array $order): string
-{
-    $recipient = trim((string) ($order['recipient_name'] ?? ''));
-    if ($recipient !== '') {
-        return $recipient;
-    }
-    $account = trim((string) ($order['account_name'] ?? ''));
-    return $account !== '' ? $account : 'No name on this order';
 }
 
 $canRefund = Rbac::can('payments.refund');
@@ -234,24 +205,11 @@ $recent = Database::all(
       LIMIT 20'
 );
 
-/** The badge tone for a transaction status. Colour is never the only signal. */
-function okv_payment_badge(string $status): string
-{
-    switch ($status) {
-        case 'success':  return 'okv-badge-available';
-        case 'failed':
-        case 'reversed': return 'okv-badge-out';
-        case 'mismatch':
-        case 'unknown':  return 'okv-badge-warn';
-        default:         return 'okv-badge-neutral';
-    }
-}
-
 $flash = (string) okv_input('payments', '');
 
 $okv_admin_title  = 'Payments';
 $okv_admin_note   = 'The queue waiting on you, recording money that arrived outside Paystack, refunds, and every transaction so far.';
-$okv_admin_script = '/assets/js/admin-payments.js';
+$okv_admin_script = ['/assets/js/admin-payments.js', '/assets/js/admin-live-search.js'];
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
 <div class="space-y-8">
@@ -261,6 +219,8 @@ require __DIR__ . '/../includes/components/admin/header.php';
       $messages = [
         'recorded'           => 'Payment recorded and the order credited.',
         'reviewed'           => 'Proof reviewed.',
+        'verified'           => 'Transfer verified and the order credited. The customer has been told.',
+        'declined'           => 'Receipt declined. The customer has been told why and can upload another.',
         'reversal_requested' => 'Reversal requested. Someone else has to approve it.',
         'reversal_approved'  => 'Reversal approved. The money has come off the order.',
         'reversal_declined'  => 'Reversal declined. The payment stands.',
@@ -327,11 +287,95 @@ require __DIR__ . '/../includes/components/admin/header.php';
   <section class="okv-card" aria-labelledby="queue-heading">
     <h2 id="queue-heading" class="font-display text-xl font-bold text-ink">Waiting on you</h2>
     <p class="mt-1 text-sm text-ink-60">
-      Proofs nobody has checked, and reversals nobody has decided.
-      <?php if (!$pendingProofs && !$openReversals): ?>
+      Transfer receipts to verify, proofs nobody has checked, and reversals nobody has decided.
+      <?php if (!$transferReceipts && !$pendingProofs && !$openReversals): ?>
         Nothing is waiting.
       <?php endif; ?>
     </p>
+
+    <?php if ($transferReceipts): ?>
+      <h3 class="mt-5 text-sm font-semibold uppercase tracking-wide text-ink">
+        Transfers to verify (<?= count($transferReceipts) ?>)
+      </h3>
+      <p class="mt-1 text-sm text-ink-60">
+        A customer sent this receipt. Nothing is credited until you check it against the bank and say how much arrived.
+      </p>
+      <div class="mt-3 space-y-3">
+        <?php foreach ($transferReceipts as $receipt):
+          $cancelled = (string) $receipt['order_status'] === 'cancelled';
+          $stillOwed = Money::balance((int) $receipt['expected_amount_subunit'], (int) $receipt['paid_amount_subunit']);
+        ?>
+          <div class="rounded-lg border border-gold p-4" data-transfer-receipt="<?= (int) $receipt['proof_id'] ?>">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <p class="font-mono text-lg font-semibold text-ink">
+                <?= okv_e(Money::format((int) $receipt['amount_subunit'])) ?>
+                <span class="okv-badge okv-badge-warn font-sans">Customer receipt</span>
+                <?php if ($cancelled): ?><span class="okv-badge okv-badge-out font-sans">Order cancelled</span><?php endif; ?>
+              </p>
+              <a class="text-sm underline" href="/admin/orders.php?order=<?= (int) $receipt['order_id'] ?>">
+                Order <?= okv_e($receipt['order_number']) ?>
+              </a>
+            </div>
+            <p class="mt-1 text-sm text-ink-60">
+              <?= okv_e($receipt['customer_name']) ?> sent this on <?= okv_e(date('j M Y, H:i', strtotime((string) $receipt['created_at']))) ?>
+              for the <?= okv_e(strtolower(TransferProofs::typeLabel((string) $receipt['payment_type']))) ?>.
+              Delivery day <?= okv_e(date('D j M', strtotime((string) $receipt['preferred_delivery_date']))) ?>.
+              <?php if (!empty($receipt['payer_name'])): ?>Payer: <?= okv_e($receipt['payer_name']) ?>.<?php endif; ?>
+              <?php if (!empty($receipt['bank_reference'])): ?>Reference: <?= okv_e($receipt['bank_reference']) ?>.<?php endif; ?>
+            </p>
+            <?php if (!empty($receipt['proof_url'])): ?>
+              <p class="mt-1 text-sm">
+                <a class="underline" href="/<?= okv_e(ltrim((string) $receipt['proof_url'], '/')) ?>" target="_blank" rel="noopener noreferrer">
+                  View the receipt<span class="sr-only">, opens in a new tab</span>
+                </a>
+              </p>
+            <?php endif; ?>
+
+            <?php if ($canRecord && !$cancelled): ?>
+              <form action="/api/v1/payments.php" method="POST" class="mt-3 flex flex-wrap items-end gap-3">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="action" value="verify_transfer">
+                <input type="hidden" name="proof_id" value="<?= (int) $receipt['proof_id'] ?>">
+                <label class="text-sm text-ink-60">Amount you see in the bank (naira)
+                  <input class="okv-input mt-1 font-mono" name="amount" inputmode="decimal" required
+                         value="<?= okv_e(Money::format($stillOwed > 0 ? $stillOwed : (int) $receipt['amount_subunit'], false, false)) ?>">
+                </label>
+                <label class="text-sm text-ink-60">Note
+                  <input class="okv-input mt-1" name="note" maxlength="500" placeholder="Optional">
+                </label>
+                <label class="flex min-h-[44px] items-center gap-2 text-sm text-ink">
+                  <input type="checkbox" name="confirmed" value="1" required class="h-5 w-5 rounded border-mist text-forest">
+                  I checked this against the bank
+                </label>
+                <button class="okv-btn min-h-[44px]">Verify and credit the order</button>
+              </form>
+              <p class="mt-1 text-xs text-ink-60">
+                What you type here is what is credited, not what the customer sent.
+                It is still owed: <span class="font-mono"><?= okv_e(Money::format($stillOwed)) ?></span>.
+                Less leaves a balance owing; more is credited and flagged for a refund decision.
+              </p>
+            <?php elseif ($cancelled): ?>
+              <p class="mt-3 rounded-md border border-mist bg-forest-tint px-3 py-2 text-sm text-ink-60">
+                This order was cancelled, so it cannot be credited. If the customer really paid, arrange the refund with them, then decline this receipt.
+              </p>
+            <?php endif; ?>
+
+            <?php if ($canRecord): ?>
+              <form action="/api/v1/payments.php" method="POST" class="mt-3 flex flex-wrap items-end gap-2">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="action" value="decline_transfer">
+                <input type="hidden" name="proof_id" value="<?= (int) $receipt['proof_id'] ?>">
+                <label class="text-sm text-ink-60">Why it cannot be confirmed (the customer is sent this)
+                  <input class="okv-input mt-1 sm:w-96" name="reason" maxlength="500" required
+                         placeholder="For example: we cannot see this transfer in our account yet">
+                </label>
+                <button class="okv-btn-outline min-h-[44px]">Decline the receipt</button>
+              </form>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
 
     <?php if ($pendingProofs): ?>
       <h3 class="mt-5 text-sm font-semibold uppercase tracking-wide text-ink">
@@ -473,10 +517,13 @@ require __DIR__ . '/../includes/components/admin/header.php';
     <h2 id="record-heading" class="font-display text-xl font-bold text-ink">Record a payment</h2>
     <p class="mt-1 text-sm text-ink-60">Find the order, then record the transfer or cash against what it owes. The order is credited straight away.</p>
 
-    <form method="GET" class="mt-4 flex flex-wrap items-end gap-2">
-      <label class="text-sm text-ink-60 grow sm:grow-0">Find the customer or the order
+    <form method="GET" class="mt-4 flex flex-wrap items-end gap-2"
+          data-live-form data-live-endpoint="/api/v1/payments.php" data-live-param="q"
+          data-live-page="/admin/payments.php" data-live-keep="order_id" data-live-min="1">
+      <label class="text-sm text-ink-60 grow sm:grow-0 relative">Find the customer or the order
         <input class="okv-input mt-1 sm:w-80" name="q" value="<?= okv_e($search) ?>" required
-               placeholder="Name, phone, email, OKV26000123">
+               placeholder="Name, phone, email, OKV26000123"
+               data-live-input autocomplete="off" autocapitalize="off" spellcheck="false">
       </label>
       <button class="okv-btn-outline min-h-[44px]">Search</button>
       <?php if ($search !== ''): ?>
@@ -488,62 +535,10 @@ require __DIR__ . '/../includes/components/admin/header.php';
       the email address and the Paystack reference.
     </p>
 
-    <?php if ($search !== '' && !$matches): ?>
-      <p class="mt-4 rounded-md border border-clay bg-clay-tint px-3 py-2 text-sm text-ink" role="status">
-        Nothing matches <?= okv_e($search) ?>. Try the phone number, or part of the name.
-      </p>
-    <?php endif; ?>
-
-    <?php if (count($matches) > 1 || ($matches && $openOrderId > 0)): ?>
-      <!-- The result list. Name and date first, because those are what a
-           colleague can check against the person on the phone. -->
-      <div class="okv-table-wrap mt-4">
-        <table class="okv-table">
-          <caption class="sr-only">Orders matching <?= okv_e($search) ?></caption>
-          <thead>
-            <tr>
-              <th scope="col">Customer</th>
-              <th scope="col">Order</th>
-              <th scope="col">Ordered</th>
-              <th scope="col">Delivery</th>
-              <th scope="col">Total</th>
-              <th scope="col">Outstanding</th>
-              <th scope="col">Payment</th>
-              <th scope="col"><span class="sr-only">Choose</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($matches as $match): ?>
-              <?php $isOpen = $foundOrder && (int) $foundOrder['id'] === (int) $match['id']; ?>
-              <tr<?= $isOpen ? ' class="bg-foliage-tint"' : '' ?>>
-                <td>
-                  <span class="font-medium text-ink"><?= okv_e(okv_payments_customer_name($match)) ?></span>
-                  <span class="okv-table-sub"><?= okv_e(Phone::display((string) ($match['account_phone'] ?? ''))) ?></span>
-                </td>
-                <td class="font-mono"><?= okv_e($match['order_number']) ?></td>
-                <td><?= okv_e(date('j M Y', strtotime((string) $match['created_at']))) ?></td>
-                <td><?= okv_e(date('D j M', strtotime((string) $match['preferred_delivery_date']))) ?></td>
-                <td><?= okv_e(Money::format((int) $match['order_total_subunit'])) ?></td>
-                <td><?= okv_e(Money::format((int) $match['balance_due_subunit'])) ?></td>
-                <td>
-                  <span class="okv-badge <?= okv_e(okv_payment_badge((string) $match['payment_status'] === 'paid' ? 'success' : 'pending')) ?>">
-                    <?= okv_e(str_replace('_', ' ', (string) $match['payment_status'])) ?>
-                  </span>
-                </td>
-                <td>
-                  <?php if ($isOpen): ?>
-                    <span class="text-sm text-ink-60">Open below</span>
-                  <?php else: ?>
-                    <a class="okv-btn-outline-sm inline-flex min-h-[44px] items-center"
-                       href="?q=<?= rawurlencode($search) ?>&amp;order_id=<?= (int) $match['id'] ?>#record-heading">Record</a>
-                  <?php endif; ?>
-                </td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    <?php endif; ?>
+    <div data-live-results>
+      <?php okv_admin_payment_search_results($matches, $search, $openOrderId); ?>
+    </div>
+    <p class="sr-only" role="status" data-live-status></p>
 
     <?php if ($foundOrder): ?>
       <div class="mt-5 rounded-lg border border-mist p-4">
@@ -741,7 +736,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 <td><?= okv_e($row['provider'] === 'manual' ? ($row['channel'] ?: 'manual') : ($row['provider'] === 'wallet' ? 'Wallet' : 'Paystack')) ?></td>
                 <td>
                   <span class="okv-badge <?= okv_e(okv_payment_badge((string) $row['status'])) ?>">
-                    <?= okv_e($row['status']) ?>
+                    <?= okv_e(str_replace('_', ' ', (string) $row['status'])) ?>
                   </span>
                 </td>
                 <td><?= okv_e(date('j M Y, H:i', strtotime((string) ($row['paid_at'] ?: $row['created_at'])))) ?></td>

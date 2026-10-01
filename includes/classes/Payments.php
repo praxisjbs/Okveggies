@@ -748,6 +748,60 @@ final class Payments
      * applyVerifiedCharge, which admits exactly one credit per payment.
      * Designed to be run from cron every few minutes.
      */
+    /**
+     * Every order matching what a colleague typed on the payments screen,
+     * newest first. One question, two callers: the screen at
+     * /admin/payments.php and the live search endpoint both ask here, so a
+     * typed name and a filtered page can never disagree about who an order
+     * belongs to.
+     *
+     * One named placeholder per position. The connection runs native prepared
+     * statements and MySQL refuses the same named placeholder twice in one
+     * statement, the defect that took the orders screen down once already.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function searchOrders(string $term, int $limit = 25): array
+    {
+        $like  = '%' . Catalogue::escapeLike($term) . '%';
+        $phone = Phone::normalize($term);
+
+        return Database::all(
+            'SELECT o.id, o.user_id, o.order_number, o.order_total_subunit, o.amount_paid_subunit,
+                    o.balance_due_subunit, o.payment_status, o.order_status, o.customer_type,
+                    o.created_at, o.preferred_delivery_date,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS account_name,
+                    a.recipient_name, u.phone AS account_phone, u.email AS account_email
+               FROM orders o
+               LEFT JOIN users u ON u.id = o.user_id
+               LEFT JOIN order_addresses a ON a.order_id = o.id
+              WHERE o.order_number LIKE :number
+                 OR TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) LIKE :account
+                 OR a.recipient_name LIKE :recipient
+                 OR u.email LIKE :email
+                 OR u.phone LIKE :phone_raw
+                 OR u.phone = :phone_exact
+                 OR a.recipient_phone LIKE :recipient_phone
+                 OR EXISTS (
+                      SELECT 1 FROM payments p
+                        JOIN payment_transactions t ON t.payment_id = p.id
+                       WHERE p.order_id = o.id AND t.reference LIKE :reference
+                    )
+          ORDER BY o.id DESC
+          LIMIT ' . max(1, min(100, $limit)),
+            [
+                ':number'          => $like,
+                ':account'         => $like,
+                ':recipient'       => $like,
+                ':email'           => $like,
+                ':phone_raw'       => $like,
+                ':phone_exact'     => $phone ?? '',
+                ':recipient_phone' => $like,
+                ':reference'       => $like,
+            ]
+        );
+    }
+
     public static function sweep(int $limit = 50): array
     {
         // Both are integers before they reach the query: a placeholder inside an

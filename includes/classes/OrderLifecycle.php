@@ -113,6 +113,16 @@ final class OrderLifecycle
                 $pdo->rollBack();
                 return self::failure('stale', 'This order changed after the page loaded. Reload it before choosing the next stage.');
             }
+            // An order placed to be paid by bank transfer is held until a payment
+            // has been verified or recorded (PRD 9.3a). Nothing here cancels it:
+            // the customer may really have paid and the delay may be ours.
+            if ($targetStatus === 'confirmed') {
+                $held = TransferProofs::confirmationBlock($orderId);
+                if ($held !== null) {
+                    $pdo->rollBack();
+                    return self::failure('payment_unverified', $held);
+                }
+            }
 
             $creditCharged = false;
             $overridden    = false;

@@ -1,11 +1,13 @@
 <?php
 /** Shared storefront navigation for desktop and mobile. */
 require_once __DIR__ . '/mini_cart.php';
+require_once __DIR__ . '/icons.php';
 
 if (!function_exists('okv_shop_header')) {
     function okv_shop_header(string $active = ''): void
     {
         $basketCount = Basket::count();
+        $mobileActive = $active === 'combos' ? 'shop' : $active;
         $accountLabel = Customer::isLoggedIn() && Customer::firstName() !== '' ? Customer::firstName() : 'Account';
         $links = [
             'home' => ['/', 'Home'],
@@ -49,14 +51,65 @@ if (!function_exists('okv_shop_header')) {
             </div>
           </div>
         </header>
-        <nav class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-mist bg-white px-1 pb-2 md:hidden" aria-label="Mobile navigation">
-          <?php foreach ($links as $key => [$url, $label]): ?>
-            <a href="<?= okv_e($url) ?>" class="flex min-h-[56px] flex-col items-center justify-center px-1 text-center text-xs font-semibold leading-tight <?= $active === $key ? 'text-forest' : 'text-ink-60' ?>" <?= $active === $key ? 'aria-current="page"' : '' ?> <?= $key === 'basket' ? 'aria-label="Basket, ' . $basketCount . ' items" data-basket-open' : '' ?>>
-              <span><?= okv_e($label) ?></span>
-              <?php if ($key === 'basket'): ?><span class="okv-basket-count text-xs" aria-live="polite"><?= $basketCount ?></span><?php endif; ?>
-            </a>
-          <?php endforeach; ?>
+        <nav class="okv-mobile-nav" aria-label="Mobile navigation">
+          <a href="/"
+             class="okv-mobile-tab<?= $mobileActive === 'home' ? ' okv-mobile-tab--active' : '' ?>"
+             <?= $mobileActive === 'home' ? 'aria-current="page"' : '' ?>>
+            <span class="okv-mobile-tab__icon"><?php okv_icon('home', 'okv-mobile-icon'); ?></span>
+            <span class="okv-mobile-tab__label">Home</span>
+          </a>
+          <details class="okv-mobile-shop">
+            <summary class="okv-mobile-tab<?= $mobileActive === 'shop' ? ' okv-mobile-tab--active' : '' ?>"
+                     <?= $mobileActive === 'shop' ? 'aria-current="page"' : '' ?>>
+              <span class="okv-mobile-tab__icon"><?php okv_icon('leaf', 'okv-mobile-icon'); ?></span>
+              <span class="okv-mobile-tab__label">
+                Shop <span class="okv-mobile-shop__chevron"><?php okv_icon('chevron-down', 'okv-mobile-chevron-icon'); ?></span>
+              </span>
+            </summary>
+            <div class="okv-mobile-shop__menu">
+              <p class="okv-mobile-shop__eyebrow">Shop by</p>
+              <div class="okv-mobile-shop__options" role="group" aria-label="Shop categories">
+                <a href="/shop.php"
+                   class="okv-mobile-shop__option<?= $active === 'shop' ? ' okv-mobile-shop__option--active' : '' ?>"
+                   <?= $active === 'shop' ? 'aria-current="page"' : '' ?>>
+                  <span class="okv-mobile-shop__option-icon"><?php okv_icon('leaf', 'okv-mobile-menu-icon'); ?></span>
+                  <span class="okv-mobile-shop__option-copy">
+                    <span class="okv-mobile-shop__option-title">Individual items</span>
+                    <span class="okv-mobile-shop__option-note">Fresh produce, by item</span>
+                  </span>
+                </a>
+                <a href="/combos.php"
+                   class="okv-mobile-shop__option<?= $active === 'combos' ? ' okv-mobile-shop__option--active' : '' ?>"
+                   <?= $active === 'combos' ? 'aria-current="page"' : '' ?>>
+                  <span class="okv-mobile-shop__option-icon"><?php okv_icon('plate', 'okv-mobile-menu-icon'); ?></span>
+                  <span class="okv-mobile-shop__option-copy">
+                    <span class="okv-mobile-shop__option-title">Combos</span>
+                    <span class="okv-mobile-shop__option-note">Ready-made kitchen baskets</span>
+                  </span>
+                </a>
+              </div>
+            </div>
+          </details>
+          <a href="/kitchen-runs.php"
+             class="okv-mobile-tab<?= $mobileActive === 'kitchen-runs' ? ' okv-mobile-tab--active' : '' ?>"
+             <?= $mobileActive === 'kitchen-runs' ? 'aria-current="page"' : '' ?>>
+            <span class="okv-mobile-tab__icon"><?php okv_icon('list', 'okv-mobile-icon'); ?></span>
+            <span class="okv-mobile-tab__label">Kitchen Runs</span>
+          </a>
+          <a href="/account.php"
+             class="okv-mobile-tab<?= $mobileActive === 'account' ? ' okv-mobile-tab--active' : '' ?>"
+             <?= $mobileActive === 'account' ? 'aria-current="page"' : '' ?>>
+            <span class="okv-mobile-tab__icon"><?php okv_icon('user', 'okv-mobile-icon'); ?></span>
+            <span class="okv-mobile-tab__label">Account</span>
+          </a>
         </nav>
+        <?php
+        // The notification panel is rendered here, outside the header, because
+        // the header's backdrop-blur would otherwise become the containing
+        // block for the panel's fixed phone sheet and trap it in the 64px bar.
+        // The mini-cart drawer follows it, so it still paints on top.
+        ?>
+        <?php okv_customer_bell_panel(); ?>
         <?php okv_mini_cart(); ?>
         <?php
     }

@@ -93,6 +93,11 @@ $entryPoints = [
     'public/documents/receipt.php',
     'public/order.php',
     'scripts/payment_sweep.php',
+    // The Permissions module. It ships its own screen and endpoint, and it is the
+    // one screen where a renamed method would not fail loudly to a customer: the
+    // Owner would simply find that permissions could not be handed out.
+    'admin/permissions.php',
+    'api/v1/permissions.php',
 ];
 $languageWords = ['PHP_EOL', 'STR_PAD_LEFT', 'self', 'static', 'parent', 'PHP_SAPI'];
 

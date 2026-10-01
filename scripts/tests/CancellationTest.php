@@ -36,11 +36,12 @@ okv_test_ok(!Cancellation::isWithinCutoff('rubbish', '18:00', $at('2026-09-01 09
 // -----------------------------------------------------------------------------
 // Who may cancel
 // -----------------------------------------------------------------------------
-okv_test_ok(Cancellation::customerMayCancel('pending', 'unpaid', true, true),   'an unpaid order before the cutoff is the customer to cancel');
-okv_test_ok(!Cancellation::customerMayCancel('pending', 'unpaid', false, true), 'after the cutoff it stops being self service');
-okv_test_ok(!Cancellation::customerMayCancel('pending', 'paid', true, true),    'once money has been paid it is a staff decision');
-okv_test_ok(!Cancellation::customerMayCancel('pending', 'part_paid', true, true), 'a deposit already paid is a staff decision');
-okv_test_ok(!Cancellation::customerMayCancel('pending', 'unpaid', true, false), 'the setting can switch self service off entirely');
+okv_test_ok(Cancellation::customerMayCancel('pending', 'unpaid', true, true),    'an unpaid order before the cutoff is the customer to cancel');
+okv_test_ok(Cancellation::customerMayCancel('pending', 'unpaid', false, true),   'a placed or sourced order can still be self-cancelled after the cutoff');
+okv_test_ok(Cancellation::customerMayCancel('pending', 'paid', true, true),      'a paid placed order can be self-cancelled');
+okv_test_ok(Cancellation::customerMayCancel('pending', 'part_paid', true, true), 'a part-paid placed order can be self-cancelled');
+okv_test_ok(Cancellation::customerMayCancel('confirmed', 'part_paid', false, true), 'a sourced part-paid order can be self-cancelled after the cutoff');
+okv_test_ok(!Cancellation::customerMayCancel('pending', 'unpaid', true, false),  'the setting can switch self service off entirely');
 okv_test_ok(!Cancellation::customerMayCancel('delivered', 'unpaid', true, true), 'a delivered order cannot be cancelled');
 okv_test_ok(!Cancellation::customerMayCancel('cancelled', 'unpaid', true, true), 'a cancelled order cannot be cancelled again');
 

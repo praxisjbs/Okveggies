@@ -20,6 +20,7 @@
  */
 require_once __DIR__ . '/../includes/bootstrap.php';
 require_once __DIR__ . '/../includes/components/pagination.php';
+require_once __DIR__ . '/../includes/components/admin/customer_list.php';
 Rbac::requirePermission('customers.view');
 
 $canSeeAddresses = Rbac::can('customers.addresses.view');
@@ -95,7 +96,10 @@ $urlFor = static function (array $changes = []) use ($baseQuery): string {
 $paymentStates = ['unpaid' => 'Unpaid', 'part_paid' => 'Part paid', 'paid' => 'Paid'];
 
 $okv_admin_title  = 'Customers';
-$okv_admin_script = $canEdit ? '/assets/js/admin-customers.js' : [];
+$okv_admin_script = array_values(array_filter([
+    $canEdit ? '/assets/js/admin-customers.js' : null,
+    '/assets/js/admin-live-search.js',
+]));
 $okv_admin_note  = 'Households and businesses, their addresses, their orders and their credit.';
 require __DIR__ . '/../includes/components/admin/header.php';
 ?>
@@ -110,16 +114,19 @@ require __DIR__ . '/../includes/components/admin/header.php';
   <p class="okv-note" role="status">That customer is not available. Choose one from the list below.</p>
 <?php endif; ?>
 
-<form method="get" action="/admin/customers.php" class="okv-panel mt-4" aria-label="Find a customer">
+<form method="get" action="/admin/customers.php" class="okv-panel mt-4" aria-label="Find a customer"
+      data-live-form data-live-endpoint="/api/v1/customers.php" data-live-param="search"
+      data-live-page="/admin/customers.php" data-live-keep="customer" data-live-min="1">
   <div class="okv-panel-body grid gap-3 sm:grid-cols-[minmax(12rem,1fr)_minmax(14rem,2fr)_auto]">
     <div>
       <label class="okv-label" for="customer-search">Search</label>
       <input class="okv-input" id="customer-search" name="search" value="<?= okv_e($listing['search']) ?>"
-             placeholder="Name, email, phone number or business name" maxlength="100">
+             placeholder="Name, email, phone number or business name" maxlength="100"
+             data-live-input autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
     <div>
       <label class="okv-label" for="customer-type">Account type</label>
-      <select class="okv-input" id="customer-type" name="type">
+      <select class="okv-input" id="customer-type" name="type" data-live-state>
         <option value="">All customers</option>
         <?php foreach (Customers::TYPES as $type): ?>
           <option value="<?= okv_e($type) ?>" <?= $listing['type'] === $type ? 'selected' : '' ?>><?= okv_e(Customers::typeLabel($type)) ?></option>
@@ -135,33 +142,12 @@ require __DIR__ . '/../includes/components/admin/header.php';
   <section class="okv-panel min-w-0" aria-labelledby="customer-list-heading">
     <div class="okv-panel-head">
       <h2 id="customer-list-heading" class="okv-panel-title">Customers</h2>
-      <span class="text-sm text-ink-60"><?= (int) $listing['count'] ?> total</span>
+      <span class="text-sm text-ink-60" data-live-summary><?= (int) $listing['count'] ?> total</span>
     </div>
-    <?php if (!$listing['customers']): ?>
-      <p class="p-5 text-sm text-ink-60">No customer matches that search. Clear it to see everyone.</p>
-    <?php else: ?>
-      <ul class="divide-y divide-mist">
-        <?php foreach ($listing['customers'] as $row): ?>
-          <?php $isSelected = (int) $row['id'] === $selectedId; ?>
-          <li>
-            <a href="<?= okv_e($urlFor(['customer' => (int) $row['id']])) ?>"
-               class="block min-h-[44px] px-4 py-3 hover:bg-forest-tint <?= $isSelected ? 'bg-forest-tint' : '' ?>"
-               <?= $isSelected ? 'aria-current="page"' : '' ?>>
-              <span class="flex flex-wrap items-center justify-between gap-2">
-                <strong class="text-ink"><?= okv_e(Customers::displayName($row)) ?></strong>
-                <span class="okv-badge okv-badge-neutral"><?= okv_e(Customers::typeLabel((string) $row['user_type'])) ?></span>
-              </span>
-              <span class="mt-1 block text-sm text-ink-60"><?= okv_e((string) $row['email']) ?></span>
-              <span class="mt-1 flex flex-wrap justify-between gap-2 text-xs text-ink-60">
-                <span><?= (int) $row['order_count'] ?> order<?= (int) $row['order_count'] === 1 ? '' : 's' ?></span>
-                <span><?= $row['last_order_at'] ? 'Last order ' . okv_e(date('j M Y', strtotime((string) $row['last_order_at']))) : 'No orders yet' ?></span>
-              </span>
-            </a>
-          </li>
-        <?php endforeach; ?>
-      </ul>
-      <?php okv_pagination((int) $listing['page'], (int) $listing['lastPage'], static fn(int $page): string => $urlFor(['page' => $page, 'customer' => null]), 'Customer pages'); ?>
-    <?php endif; ?>
+    <div data-live-results>
+      <?php okv_admin_customer_list($listing['customers'], $selectedId, $urlFor, (int) $listing['page'], (int) $listing['lastPage']); ?>
+    </div>
+    <p class="sr-only" role="status" data-live-status></p>
   </section>
 
   <div class="min-w-0 space-y-5">

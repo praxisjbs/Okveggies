@@ -35,7 +35,7 @@ if (!function_exists('okv_mini_cart')) {
               </div>
               <div class="mt-4 grid grid-cols-2 gap-2">
                 <a href="/cart.php" class="okv-btn-outline justify-center px-3">View basket</a>
-                <a href="/checkout.php" class="okv-btn justify-center px-3">Checkout</a>
+                <a class="okv-btn pointer-events-none justify-center px-3" style="opacity:0.5;" data-mini-cart-checkout aria-disabled="true" tabindex="-1">Checkout</a>
               </div>
             </footer>
           </section>

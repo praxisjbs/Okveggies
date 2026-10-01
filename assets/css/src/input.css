@@ -113,12 +113,19 @@
 }
 
 @layer components {
-  /* Buttons. Three variants, touch-safe height. Gold is never a fill. */
+  /* Buttons. Four variants, touch-safe height. Gold is never a fill. */
   .okv-btn {
     @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-6 rounded-md
            bg-forest text-white font-medium
            transition duration-botanical ease-botanical
            hover:bg-forest-hover active:bg-forest-active
+           disabled:bg-mist disabled:text-ink-40 disabled:cursor-not-allowed;
+  }
+  .okv-btn-danger {
+    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-6 rounded-md
+           bg-tomato text-white font-medium
+           transition duration-botanical ease-botanical
+           hover:bg-tomato-hover active:bg-tomato-active
            disabled:bg-mist disabled:text-ink-40 disabled:cursor-not-allowed;
   }
   .okv-btn-outline {
@@ -522,6 +529,14 @@
     @apply fixed inset-0 z-50 flex items-end bg-ink/50 md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:block md:w-96 md:bg-transparent;
   }
   .okv-notification-backdrop[hidden] { display: none; }
+  /* The customer panel is rendered outside the shop header (the header's
+     backdrop-filter would otherwise trap the phone sheet in its 64px bar), so
+     it has no positioned ancestor to hang from. Its desktop panel is fixed to
+     the viewport instead, and the controller anchors it under the bell. The
+     admin bell keeps the absolute panel above. */
+  .okv-notification-backdrop--outside {
+    @apply md:fixed md:mt-0;
+  }
   .okv-notification-panel {
     @apply w-full max-h-[92vh] overflow-hidden rounded-t-xl bg-white shadow-okv-3 animate-okv-rise md:rounded-xl md:border md:border-mist;
   }
@@ -653,5 +668,249 @@
   .okv-doc-rule, .okv-doc-lines th, .okv-doc-total-row td, .okv-doc-stamp {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+}
+
+
+/* Storefront mobile navigation. Keep the bar compact, touch friendly and on brand. */
+.okv-mobile-nav {
+  position: fixed;
+  z-index: 40;
+  right: theme('spacing.4');
+  bottom: calc(theme('spacing.3') + env(safe-area-inset-bottom, 0px));
+  left: theme('spacing.4');
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: theme('spacing.1');
+  min-height: theme('spacing.16');
+  padding: theme('spacing.1') theme('spacing.2');
+  border: 1px solid theme('colors.ink.10');
+  border-radius: theme('borderRadius.sheet');
+  background: linear-gradient(135deg, rgba(255,255,255,.96) 0%, theme('colors.forest.tint') 72%, theme('colors.gold.tint') 100%);
+  box-shadow: theme('boxShadow.okv-3');
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  animation: okv-mobile-nav-enter 240ms theme('transitionTimingFunction.botanical') both;
+}
+.okv-mobile-tab,
+.okv-mobile-shop > summary {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: theme('spacing.12');
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: theme('spacing.1');
+  padding: 0 theme('spacing.1');
+  border: 0;
+  border-radius: theme('borderRadius.lg');
+  background: transparent;
+  color: theme('colors.ink.60');
+  font: inherit;
+  font-size: theme('fontSize.okv-micro');
+  font-weight: 600;
+  line-height: 1.1;
+  text-align: center;
+  text-decoration: none;
+  touch-action: manipulation;
+  user-select: none;
+  transition: color 240ms theme('transitionTimingFunction.botanical'), background-color 240ms theme('transitionTimingFunction.botanical'), transform 240ms theme('transitionTimingFunction.botanical');
+}
+.okv-mobile-tab__icon {
+  position: relative;
+  display: grid;
+  width: theme('spacing.12');
+  height: theme('spacing.8');
+  place-items: center;
+  border-radius: theme('borderRadius.lg');
+  color: inherit;
+  transition: background-color 240ms theme('transitionTimingFunction.botanical'), transform 240ms theme('transitionTimingFunction.botanical');
+}
+.okv-mobile-icon,
+.okv-mobile-menu-icon {
+  display: block;
+  width: theme('spacing.6');
+  height: theme('spacing.6');
+}
+.okv-mobile-tab__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: theme('spacing.1');
+  max-width: 100%;
+  overflow: hidden;
+  font-size: theme('fontSize.okv-micro');
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.okv-mobile-tab--active,
+.okv-mobile-shop[open] > summary {
+  color: theme('colors.forest.DEFAULT');
+}
+.okv-mobile-tab--active .okv-mobile-tab__icon,
+.okv-mobile-shop[open] > summary .okv-mobile-tab__icon {
+  background: linear-gradient(135deg, theme('colors.forest.tint'), theme('colors.gold.tint'));
+}
+.okv-mobile-tab--active .okv-mobile-tab__icon::after {
+  position: absolute;
+  top: theme('spacing.1');
+  right: theme('spacing.1');
+  width: theme('spacing.1');
+  height: theme('spacing.1');
+  border-radius: theme('borderRadius.full');
+  background: theme('colors.gold.DEFAULT');
+  content: "";
+}
+.okv-mobile-shop {
+  position: relative;
+  min-width: 0;
+  list-style: none;
+}
+.okv-mobile-shop > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.okv-mobile-shop > summary::-webkit-details-marker,
+.okv-mobile-shop > summary::marker {
+  display: none;
+  content: "";
+}
+.okv-mobile-chevron-icon {
+  display: block;
+  width: theme('spacing.3');
+  height: theme('spacing.3');
+  transition: transform 240ms theme('transitionTimingFunction.botanical');
+}
+.okv-mobile-shop[open] .okv-mobile-chevron-icon {
+  transform: rotate(180deg);
+}
+.okv-mobile-shop__menu {
+  position: absolute;
+  bottom: calc(100% + theme('spacing.3'));
+  left: 50%;
+  width: min(320px, calc(100vw - theme('spacing.8')));
+  max-width: 320px;
+  padding: theme('spacing.4') theme('spacing.2') theme('spacing.2');
+  transform: translateX(-50%);
+  border: 1px solid theme('colors.ink.10');
+  border-radius: theme('borderRadius.sheet');
+  background: linear-gradient(145deg, theme('colors.white'), theme('colors.forest.tint') 82%, theme('colors.gold.tint'));
+  box-shadow: theme('boxShadow.okv-3');
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  animation: okv-mobile-menu-enter 240ms theme('transitionTimingFunction.botanical') both;
+}
+.okv-mobile-shop__menu::before {
+  position: absolute;
+  top: theme('spacing.2');
+  left: theme('spacing.4');
+  width: theme('spacing.12');
+  height: theme('spacing.1');
+  border-radius: theme('borderRadius.full');
+  background: linear-gradient(90deg, theme('colors.forest.DEFAULT') 0 55%, theme('colors.tomato.DEFAULT') 55% 78%, theme('colors.gold.DEFAULT') 78% 100%);
+  content: "";
+}
+.okv-mobile-shop__eyebrow {
+  margin: 0 0 theme('spacing.1') theme('spacing.1');
+  color: theme('colors.forest.DEFAULT');
+  font-size: theme('fontSize.okv-micro');
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+.okv-mobile-shop__options {
+  display: grid;
+  gap: theme('spacing.1');
+}
+.okv-mobile-shop__option {
+  display: grid;
+  min-height: theme('spacing.16');
+  grid-template-columns: theme('spacing.12') minmax(0, 1fr);
+  align-items: center;
+  gap: theme('spacing.2');
+  padding: theme('spacing.2');
+  border: 1px solid transparent;
+  border-radius: theme('borderRadius.lg');
+  color: theme('colors.ink.DEFAULT');
+  text-decoration: none;
+  transition: background-color 240ms theme('transitionTimingFunction.botanical'), border-color 240ms theme('transitionTimingFunction.botanical'), transform 240ms theme('transitionTimingFunction.botanical');
+}
+.okv-mobile-shop__option-icon {
+  display: grid;
+  width: theme('spacing.12');
+  height: theme('spacing.12');
+  place-items: center;
+  border-radius: theme('borderRadius.lg');
+  background: theme('colors.forest.tint');
+  color: theme('colors.forest.DEFAULT');
+}
+.okv-mobile-shop__option-copy {
+  display: grid;
+  min-width: 0;
+  gap: theme('spacing.1');
+}
+.okv-mobile-shop__option-title {
+  color: theme('colors.ink.DEFAULT');
+  font-size: theme('fontSize.okv-label');
+  font-weight: 700;
+  line-height: 1.3;
+}
+.okv-mobile-shop__option-note {
+  color: theme('colors.ink.60');
+  font-size: theme('fontSize.okv-micro');
+  line-height: 1.4;
+}
+.okv-mobile-shop__option--active {
+  border-color: theme('colors.forest.tint2');
+  background: linear-gradient(135deg, theme('colors.forest.tint'), theme('colors.gold.tint'));
+}
+.okv-mobile-tab:focus-visible,
+.okv-mobile-shop > summary:focus-visible,
+.okv-mobile-shop__option:focus-visible {
+  outline: 2px solid theme('colors.gold.DEFAULT');
+  outline-offset: theme('spacing.1');
+}
+@media (hover: hover) {
+  .okv-mobile-tab:not(.okv-mobile-tab--active):hover,
+  .okv-mobile-shop:not([open]) > summary:hover {
+    color: theme('colors.forest.DEFAULT');
+    background: theme('colors.forest.tint');
+  }
+  .okv-mobile-shop__option:hover {
+    background: theme('colors.forest.tint');
+  }
+}
+.okv-mobile-tab:active,
+.okv-mobile-shop > summary:active,
+.okv-mobile-shop__option:active {
+  transform: scale(.97);
+}
+.okv-shop-footer {
+  margin-bottom: calc(theme('spacing.24') + env(safe-area-inset-bottom, 0px));
+}
+@keyframes okv-mobile-nav-enter {
+  from { opacity: 0; transform: translateY(theme('spacing.2')); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes okv-mobile-menu-enter {
+  from { opacity: 0; transform: translate(-50%, theme('spacing.2')) scale(.98); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+@media (min-width: 768px) {
+  .okv-mobile-nav { display: none; }
+  .okv-shop-footer { margin-bottom: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .okv-mobile-nav,
+  .okv-mobile-tab,
+  .okv-mobile-shop > summary,
+  .okv-mobile-shop__menu,
+  .okv-mobile-chevron-icon,
+  .okv-mobile-shop__option {
+    animation: none !important;
+    transition: none !important;
   }
 }

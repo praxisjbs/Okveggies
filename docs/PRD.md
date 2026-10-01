@@ -73,7 +73,7 @@ Same seal, same promise everywhere. What changes between surfaces is information
 
 ### 4.1 Storefront (`/`)
 
-- **Top navigation (desktop) / bottom tab bar (mobile):** Home, Shop, Combos, Kitchen Runs (a clear button, not buried), Basket, Account.
+- **Top navigation (desktop):** Shop, Combos, Kitchen Runs, Basket and Account, with the logo returning Home. **Bottom tab bar (mobile):** Home, Shop, Kitchen Runs and Account. Shop opens a menu with Individual items and Combos; Basket stays in the header.
 - **Shop:** search plus filter by category. Product cards show photo, name, unit, this week's price, and an add control. The search is live and the grid is paginated; see Section 5.6.
 - **Product page:** gallery, name, unit, this week's price, description, the "Sourced [day] from [state]" line, and at the bottom a **"Goes well with"** row of suggested products that pair with this one.
 - **Combos:** the ready-made baskets, editorial treatment, one-tap "Add full basket".
@@ -229,6 +229,18 @@ Steps kept to the minimum: basket, then delivery details and day, then payment c
 
 Anyone choosing to pay on delivery must have an account and must activate it with an OTP first (Section 10.2). The delivery fee is never charged on the platform; a clear note explains it is arranged and settled on delivery, and the customer's area is captured so the team can confirm the fee before dispatch (Section 13).
 
+### 9.3a Direct bank transfer with a receipt (Owner decisions, 29 September 2026)
+
+Paying in full and paying a deposit each have two ways to pay: **Paystack** (card, bank transfer or USSD on Paystack) or a **direct bank transfer** to the OK Veggies account, with the receipt uploaded here for the team to check. Amount and method are separate choices, so a deposit can be paid either way.
+
+- **The card.** The Direct bank transfer card shows the bank, the account name, the account number (with a copy button) and the exact amount to send, then asks for the receipt. The receipt is a JPG, PNG, WebP or PDF within the upload size cap. It is required: an order cannot be placed by direct transfer without one. Bank reference and payer name are optional extras.
+- **Where the account is set.** Settings, Payments tab, in a "Direct bank transfer" section: an on and off switch, the bank, the account name and the 10 digit account number. Owner only, every change audited, and the account number carries the confirmation step because changing it redirects customer money. The card is hidden until the switch is on and all three details are filled in.
+- **Pending verification.** A submitted receipt credits nothing. The order is placed and holds its delivery day, the customer sees "Payment pending verification by OK Veggies", staff cannot confirm the order until a payment has been verified, and nothing lapses on its own: the customer may really have paid and the delay may be ours, so the system never cancels an order by itself.
+- **Who verifies.** Anyone with `payments.record` (the Owner and the Manager) verifies in the Payments screen, under "Transfers to verify". Staff type the amount they actually see in the bank, and that figure is what is credited. A shortfall is a part payment with the balance still due. An excess is credited as received and follows the existing overpayment review, so it is never hidden. A receipt that cannot be matched is declined with a reason, the customer is told, and they can upload a new one on the same order. Nothing is deleted: the declined receipt stays on file.
+- **Payment received screen.** After Paystack confirms, and after staff verify a transfer, the customer sees a green "Payment received" screen with the amount received, the order details and what is still due. The same figures live permanently in a Payments panel on the order page: received, still due, and each payment with its date and method, so an order that is reopened later still says plainly what has been paid and what has not.
+- **Who can open it.** The shareable Order Trail link stays free of money. A signed-in customer opens the screen from their order. A guest gets a separate private receipt link, with its own token stored only as a hash, in the email. Nobody can reach it from the shared trail link.
+- **Notifications.** Receipt submitted (customer email and in-app, "we are checking it"; staff alert to review), payment verified (customer email and in-app, the link opens the green screen), receipt declined (customer email and in-app, with the reason and the way to upload again).
+
 ### 9.4 Delivery day picker
 
 The picker only offers the days allowed for that customer type (Section 13), respects the cutoff time and minimum lead days, and greys out full or excepted dates with a plain explanation.
@@ -286,6 +298,7 @@ Paystack is the gateway. Money is stored in **subunits (kobo)** everywhere, as i
 - **Channels:** all Paystack channels enabled (card, bank transfer, USSD, bank).
 - **Online payments** are initialised and verified through Paystack; the signed **webhook** lands in an idempotent inbox (`payment_webhook_events`) and drives status changes. Reconciliation against Paystack settlements is supported.
 - **Deposit balance and pay-on-delivery** amounts are recorded by the admin (cash or transfer) with an optional proof, reviewed in the admin panel (`manual_payment_proofs`).
+- **Direct bank transfer submitted by the customer** (Section 9.3a) lands in the same `manual_payment_proofs` table as a proof in the `submitted` state. It credits nothing until staff verify it, at which point it moves through the same ledger as any other manual money.
 - **Refunds, settlements and disputes** are modelled and tracked (append-only status history on payments and refunds).
 - **Deposit percentage** is a setting, not a constant.
 - **Late cancellation costs the deposit share, whichever way it was paid** (Owner decision, 20 September 2026, `docs/CANCELLATION_ASYMMETRY_DECISION.md`): the deposit taken at checkout, or the same percentage of an order paid in full. Never more than was actually paid, and everything above the share always comes back.
@@ -328,7 +341,7 @@ Every order, B2C or B2B, gets a visible trail the customer can open from a link 
 
 ## 15. Notifications
 
-- **Email (SMTP, via a `Mail` class on PHPMailer):** order placed, payment confirmed, deposit received, order dispatched, order delivered, and the order-trail link. Transactional, plain, always with a next step. Templates live in `notification_templates`; deliveries are tracked in `notification_deliveries`.
+- **Email (SMTP, via a `Mail` class on PHPMailer):** order placed, payment confirmed, deposit received, transfer receipt received, transfer payment verified, transfer receipt declined, order dispatched, order delivered, and the order-trail link. Transactional, plain, always with a next step. Templates live in `notification_templates`; deliveries are tracked in `notification_deliveries`.
 - **WhatsApp:** the floating support widget opens `wa.me` with a prefilled message. WhatsApp remains the human, trust-building channel. Automated WhatsApp Business API messaging is Phase 2.
 - **Contact form:** the "Contact us" option lands a `contact_messages` row in the admin panel and notifies staff.
 - **Admin alerts:** new order, new kitchen run, new manual payment proof to review, new contact message, new make-it-right report, and a cancelled order (Owner decision, 23 September 2026: a cancellation reaches every active staff member who may open the order, whichever side pressed the button, telling them the order number, the customer, who cancelled it and why, the delivery date it was going out on, and where the money now stands. The alert carries no naira figure; the amounts stay on Order 360 behind the same `orders.view` gate, and a refund that failed still reaches the payments team through its own alert with the figure attached).

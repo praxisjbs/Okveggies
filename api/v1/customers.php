@@ -9,6 +9,10 @@
  *           phone-order and typed-in-list screens. One search, not two: both
  *           call Customers::listing(), so they cannot disagree about who a
  *           number belongs to.
+ *   browse  (GET, customers.view) one page of the customer list, server
+ *           rendered for the live search on /admin/customers.php, so what a
+ *           colleague sees while typing is what a reload of the same URL
+ *           shows.
  *   get     One customer with the address we last delivered to, the days we can
  *           offer them and whether credit is open, so the order form can fill
  *           itself in rather than making a colleague read it all back.
@@ -24,15 +28,73 @@
  * Customers module (the profile, the addresses, the credit terms) is the
  * screen at /admin/customers.php, not this endpoint.
  *
- * Every action is POST, CSRF checked and gated on its own permission.
+ * Every write is POST, CSRF checked and gated on its own permission. The one
+ * read, `browse`, is a GET: it renders the customer list for the live search
+ * and changes nothing, so there is no token for it to carry.
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/../../includes/bootstrap.php';
 
+$action = okv_action();
+
+if ($action === 'browse') {
+    // The live search behind the customer list on /admin/customers.php. A
+    // read, so a GET with no CSRF token to carry, gated on the same
+    // permission the screen opens with. The markup comes from the one
+    // component the screen renders on a plain load, so typing and reloading
+    // the same URL agree exactly.
+    if (okv_is_post()) {
+        okv_error('Use GET for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission('customers.view');
+
+    $filters = Customers::normaliseFilters([
+        'search' => okv_input('search', ''),
+        'type'   => okv_input('type', ''),
+        'page'   => okv_input('page', 1),
+    ]);
+    $listing  = Customers::listing($filters, $filters['page']);
+    $selected = (int) okv_input('customer', 0);
+
+    // The same URL builder the screen uses, so the row links and the page
+    // links keep every filter that is in play.
+    $baseQuery = array_filter([
+        'search' => $listing['search'],
+        'type'   => $listing['type'],
+        'page'   => $listing['page'] > 1 ? $listing['page'] : null,
+    ], static fn($value) => $value !== '' && $value !== null);
+    $urlFor = static function (array $changes = []) use ($baseQuery): string {
+        $query = array_filter(array_merge($baseQuery, $changes), static fn($value) => $value !== '' && $value !== null);
+        return '/admin/customers.php' . ($query ? '?' . http_build_query($query) : '');
+    };
+
+    require_once __DIR__ . '/../../includes/components/admin/customer_list.php';
+    ob_start();
+    okv_admin_customer_list($listing['customers'], $selected, $urlFor, (int) $listing['page'], (int) $listing['lastPage']);
+    $html = (string) ob_get_clean();
+
+    // The auto-fill suggestions: the name goes into the box, with the phone
+    // and the account type underneath so two Adaezes tell apart before a
+    // colleague takes one.
+    $suggestions = array_slice(array_map(static function (array $row): array {
+        $name = Customers::displayName($row);
+        return [
+            'value' => $name,
+            'label' => $name,
+            'sub'   => trim(Phone::display((string) $row['phone']) . ' . ' . Customers::typeLabel((string) $row['user_type']), ' .'),
+        ];
+    }, $listing['customers']), 0, 7);
+
+    okv_json([
+        'status'      => 'ok',
+        'html'        => $html,
+        'summary'     => (int) $listing['count'] . ' total',
+        'suggestions' => $suggestions,
+    ]);
+}
+
 if (!okv_is_post()) { okv_error('Use POST for this action.', 405, 'method_not_allowed'); }
 if (!Csrf::validate()) { okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired'); }
-
-$action = okv_action();
 
 /** True when the caller wants JSON rather than a redirect. */
 function customers_is_fetch(): bool

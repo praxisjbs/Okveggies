@@ -167,7 +167,12 @@ okv_test_ok(str_contains($screen, "\$canCreate       = Rbac::can('customers.crea
 okv_test_ok(str_contains($screen, "\$canEdit         = Rbac::can('customers.edit')"), 'correcting a customer is offered only to staff who may edit one');
 okv_test_ok(str_contains($screen, "\$canGiveCredit   = Rbac::can('wallet.credit')"), 'giving wallet credit is offered only to staff who hold wallet.credit');
 okv_test_ok(str_contains($screen, '<?php if ($canGiveCredit): ?>'), 'and the form is drawn only inside that check');
-okv_test_ok(str_contains($screen, 'okv_pagination('), 'the customer list uses the shared pagination component');
+// The list markup (rows, empty sentence, page switcher) lives in one component
+// that the screen and the live search endpoint both render, so a typed filter
+// and a reload of the same URL cannot drift. The pagination pin moved with it.
+$customerList = (string) file_get_contents($root . '/includes/components/admin/customer_list.php');
+okv_test_ok(str_contains($customerList, 'okv_pagination('), 'the customer list uses the shared pagination component');
+okv_test_ok(str_contains($screen, 'okv_admin_customer_list('), 'the screen renders its list through the one component the live search also renders');
 okv_test_ok(str_contains($screen, 'Customers::PER_PAGE') === false, 'the screen takes its page size from the domain class rather than repeating it');
 foreach ([
     '/admin/orders.php?order=' => 'an order',
