@@ -76,7 +76,11 @@ foreach ($document['payments'] as $payment) {
     }
     $lines[] = [
         'name'     => ucfirst(str_replace('_', ' ', (string) $payment['payment_type'])),
-        'unit'     => (string) $payment['provider'] === 'manual' ? 'recorded by us' : 'through Paystack',
+        'unit'     => match ((string) $payment['provider']) {
+            'manual' => 'recorded by us',
+            'wallet' => 'from your wallet',
+            default  => 'through Paystack',
+        },
         'quantity' => $payment['confirmed_at'] ? date('j M Y', strtotime((string) $payment['confirmed_at'])) : '',
         'amount'   => okv_document_money($held),
     ];

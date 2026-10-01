@@ -41,6 +41,9 @@ if (!function_exists('okv_pay_form')) {
           <?php if (isset($method['order_id'])): ?>
             <input type="hidden" name="order_id" value="<?= (int) $method['order_id'] ?>">
           <?php endif; ?>
+          <?php foreach ((array) ($method['fields'] ?? []) as $fieldName => $fieldValue): ?>
+            <input type="hidden" name="<?= okv_e((string) $fieldName) ?>" value="<?= okv_e((string) $fieldValue) ?>">
+          <?php endforeach; ?>
           <?php if ($guestToken !== ''): ?>
             <input type="hidden" name="token" value="<?= okv_e($guestToken) ?>">
           <?php endif; ?>

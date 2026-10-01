@@ -137,11 +137,25 @@ try {
     irdb_eq('bad_amount', (string) $badAmount['code'], 'credit cannot exceed the selected item total');
     $creditResult = IssueResolutions::resolve($creditIssue, 'in_progress', $handlerId, 'credit',
         'We added account credit for the affected produce.', [$creditOrder['item_id']], 200000);
-    irdb_eq('resolved', (string) $creditResult['code'], 'approved business credit resolves through M8');
-    $creditRow = Database::one('SELECT transaction_type, source_key, amount_subunit FROM credit_transactions WHERE id = :id', [':id' => $creditResult['credit_transaction_id']]);
-    irdb_eq('adjustment', (string) $creditRow['transaction_type'], 'issue credit is an M8 adjustment');
-    irdb_eq(-200000, (int) $creditRow['amount_subunit'], 'issue credit is a signed reduction on the account');
-    irdb_eq('issue:' . $creditIssue . ':credit', (string) $creditRow['source_key'], 'issue credit carries an idempotent source key');
+    irdb_eq('resolved', (string) $creditResult['code'], 'a wallet credit resolves the report');
+    $walletEntry = Database::one('SELECT user_id, entry_type, source, source_key, amount_subunit FROM wallet_entries WHERE id = :id', [':id' => $creditResult['wallet_entry_id']]);
+    irdb_eq('credit', (string) $walletEntry['entry_type'], 'issue credit is a wallet credit');
+    irdb_eq('complaint', (string) $walletEntry['source'], 'and says it came from a complaint');
+    irdb_eq(200000, (int) $walletEntry['amount_subunit'], 'for exactly the amount staff decided');
+    irdb_eq('issue:' . $creditIssue . ':wallet', (string) $walletEntry['source_key'], 'issue credit carries an idempotent source key');
+    irdb_eq(200000, Wallet::balance($businessId), 'the customer can spend it');
+    irdb_eq(1, (int) Database::one('SELECT COUNT(*) AS n FROM credit_notes WHERE wallet_entry_id = :id', [':id' => $creditResult['wallet_entry_id']])['n'], 'and a credit note was issued for it');
+    irdb_eq((int) $creditResult['wallet_entry_id'], (int) Database::one('SELECT resolution_wallet_entry_id AS w FROM issue_reports WHERE id = :id', [':id' => $creditIssue])['w'], 'the report points at the wallet entry');
+    irdb_eq(0, (int) Database::one('SELECT COUNT(*) AS n FROM credit_transactions WHERE source_key = :k', [':k' => 'issue:' . $creditIssue . ':credit'])['n'], 'a complaint no longer writes to the business credit ledger');
+
+    // A household customer can be credited too: the wallet is for everyone.
+    $householdCreditOrder = $makeOrder($householdId, 'household', 6);
+    $householdCreditIssue = $makeIssue($householdCreditOrder, $householdId, $handlerId);
+    $householdCredit = IssueResolutions::resolve($householdCreditIssue, 'in_progress', $handlerId, 'credit',
+        'We added credit for the affected produce.', [$householdCreditOrder['item_id']], 100000);
+    irdb_eq('resolved', (string) $householdCredit['code'], 'a household customer can be given wallet credit');
+    irdb_eq(100000, Wallet::balance($householdId), 'and finds it in their wallet');
+    irdb_ok(IssueResolutions::options($householdCreditIssue)['credit_available'], 'the form offers wallet credit for any customer with an account');
 
     $replacementOriginal = $makeOrder($householdId, 'household', 3);
     $replacementOrder = $makeOrder($householdId, 'household', 4, $handlerId);
@@ -174,6 +188,13 @@ try {
     }
     foreach (array_unique($issueIds) as $issueId) {
         Database::run('DELETE FROM issue_reports WHERE id = :id', [':id' => $issueId]);
+    }
+    if ($userIds) {
+        $in = implode(',', array_map('intval', $userIds));
+        Database::run("DELETE FROM audit_logs WHERE entity_type = 'wallet_entry' AND entity_id IN (SELECT id FROM wallet_entries WHERE user_id IN ($in))");
+        Database::run("DELETE FROM credit_notes WHERE user_id IN ($in)");
+        Database::run("DELETE FROM wallet_entries WHERE user_id IN ($in)");
+        Database::run("DELETE FROM wallet_accounts WHERE user_id IN ($in)");
     }
     foreach ($paymentIds as $paymentId) {
         Database::run('DELETE FROM payment_transactions WHERE payment_id = :id', [':id' => $paymentId]);

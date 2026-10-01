@@ -77,7 +77,7 @@ try {
     [, $page] = irhttp_req($base, $jar, 'GET', '/admin/make_it_right.php?report=' . $issueId);
     $csrf = irhttp_csrf((string) $page);
     irhttp_ok(str_contains((string) $page, 'Record final outcome'), 'the assigned handler sees the resolution form');
-    irhttp_ok(str_contains((string) $page, 'Account credit (Owner permission required)'), 'credit stays visible but disabled without its finance permission');
+    irhttp_ok(str_contains((string) $page, 'Wallet credit (Owner permission required)'), 'credit stays visible but disabled without its finance permission');
 
     $common = ['action' => 'resolve', 'issue_id' => $issueId, 'expected_status' => 'in_progress',
         'item_ids' => [$original['item_id']], 'resolution_note' => 'We linked a replacement order for these tomatoes.',

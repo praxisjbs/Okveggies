@@ -112,6 +112,8 @@ final class Notifications
         'credit_charge_posted'       => ['template' => 'credit_charge_posted',       'label' => 'Charge placed on account',      'audience' => 'customer'],
         'admin_new_credit_application' => ['template' => 'admin_new_credit_application', 'label' => 'New credit application, for staff', 'audience' => 'staff'],
 
+        'wallet_credited'            => ['template' => 'wallet_credited',            'label' => 'Credit added to wallet',        'audience' => 'customer'],
+
         'order_rescheduled'          => ['template' => 'order_rescheduled',          'label' => 'Delivery rescheduled',          'audience' => 'customer'],
         'admin_order_rescheduled'    => ['template' => 'admin_order_rescheduled',    'label' => 'Order rescheduled, for staff',  'audience' => 'staff'],
     ];
@@ -156,6 +158,7 @@ final class Notifications
         'credit_approved'            => ['customer_name', 'business_name', 'credit_limit', 'credit_days', 'credit_url'],
         'credit_declined'            => ['customer_name', 'business_name', 'declined_reason', 'credit_url'],
         'credit_charge_posted'       => ['customer_name', 'business_name', 'order_number', 'amount', 'due_date', 'order_trail_url'],
+        'wallet_credited'            => ['customer_name', 'amount', 'reason', 'credit_note_number', 'wallet_balance', 'wallet_url'],
         'admin_new_credit_application' => ['customer_name', 'business_name', 'requested_days', 'requested_limit', 'reason', 'admin_url'],
 
         'order_rescheduled'          => ['customer_name', 'order_number', 'old_delivery_day', 'new_delivery_day', 'reschedule_source', 'order_trail_url'],
@@ -1042,6 +1045,7 @@ final class Notifications
                     i.resolution_amount_subunit, i.replacement_order_id,
                     o.id AS order_id, o.order_number,
                     r.status AS refund_status, ro.order_number AS replacement_order_number,
+                    cn.credit_note_number,
                     u.id AS user_id, u.email AS user_email,
                     TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
                FROM issue_reports i
@@ -1049,6 +1053,7 @@ final class Notifications
                JOIN users u ON u.id = i.user_id
           LEFT JOIN refunds r ON r.issue_report_id = i.id
           LEFT JOIN orders ro ON ro.id = i.replacement_order_id
+          LEFT JOIN credit_notes cn ON cn.wallet_entry_id = i.resolution_wallet_entry_id
               WHERE i.id = :id AND i.status IN (:resolved_status, :declined_status)',
             [':id' => $issueId, ':resolved_status' => 'resolved', ':declined_status' => 'declined']
         );
@@ -1063,6 +1068,9 @@ final class Notifications
             : $note;
         if ((string) $report['resolution_type'] === 'refund' && $report['refund_status'] !== null) {
             $outcome .= ' ' . Refunds::customerStatusLine((string) $report['refund_status']);
+        }
+        if ((string) $report['resolution_type'] === 'credit' && trim((string) ($report['credit_note_number'] ?? '')) !== '') {
+            $outcome .= ' It has been added to your wallet. Credit note ' . (string) $report['credit_note_number'] . '.';
         }
         if ((string) $report['resolution_type'] === 'replacement' && trim((string) $report['replacement_order_number']) !== '') {
             $outcome .= ' Your replacement is on order ' . (string) $report['replacement_order_number'] . '.';
@@ -1468,6 +1476,45 @@ final class Notifications
         }
         // Never echo the customer's own application reason, only the reviewer decision.
         self::send('credit_declined', $context['vars'], $context['recipients'], 'credit_application', $applicationId, $actorId);
+    }
+
+    /**
+     * A credit added to a customer's wallet, told with its credit note number and
+     * the balance it left. Sent for the credits that have no email of their own:
+     * a complaint outcome and a cancellation already say it in their own words.
+     */
+    public static function announceWalletCredited(int $creditNoteId, ?int $actorId = null): void
+    {
+        $row = Database::one(
+            'SELECT n.id, n.user_id, n.amount_subunit, n.reason_code, n.reason_text, n.credit_note_number,
+                    u.email AS user_email,
+                    TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS user_name
+               FROM credit_notes n
+               JOIN users u ON u.id = n.user_id
+              WHERE n.id = :id',
+            [':id' => $creditNoteId]
+        );
+        if ($row === null) {
+            return;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $name = trim((string) $row['user_name']);
+        $reason = trim((string) ($row['reason_text'] ?? ''));
+        self::send(
+            'wallet_credited',
+            [
+                'customer_name'      => $name !== '' ? (explode(' ', $name)[0] ?: 'there') : 'there',
+                'amount'             => Money::format((int) $row['amount_subunit']),
+                'reason'             => $reason !== '' ? $reason : Wallet::reasonLabel((string) $row['reason_code']),
+                'credit_note_number' => (string) $row['credit_note_number'],
+                'wallet_balance'     => Money::format(Wallet::balance((int) $row['user_id'])),
+                'wallet_url'         => $base . '/wallet.php',
+            ],
+            self::customerRecipients(['user_email' => $row['user_email'], 'user_id' => $row['user_id']]),
+            'credit_note',
+            $creditNoteId,
+            $actorId
+        );
     }
 
     /** A charge placed on account, with amount and due date. */
@@ -1991,12 +2038,18 @@ final class Notifications
         $refund  = (int) ($result['refund_subunit'] ?? 0);
         $forfeit = (int) ($result['forfeit_subunit'] ?? 0);
         $manual  = (int) ($result['manual_subunit'] ?? 0);
+        $wallet  = (int) ($result['wallet_subunit'] ?? 0);
         $status  = (string) ($result['refund_status'] ?? 'not_required');
 
         if ($refund < 1 && $forfeit < 1) {
             return 'Nothing had been paid on this order, so there is no refund to wait for.';
         }
         $lines = [];
+        if ($wallet > 0) {
+            $lines[] = Money::format($wallet) . ' has been added to your OK Veggies wallet. It is ready to spend on your next order.';
+            // What is left to describe is only the money that went elsewhere.
+            $refund = max(0, $refund - $wallet);
+        }
         if ($refund > 0) {
             if ($status === 'processed') {
                 $lines[] = 'We have sent ' . Money::format($refund) . ' back to you.';
@@ -2048,6 +2101,25 @@ final class Notifications
             return;
         }
         self::send('payment_confirmed', $vars, $context['recipients'], 'order', $orderId);
+    }
+
+    /**
+     * An order the wallet paid in full. It reads exactly like a card payment to
+     * the customer, so it goes through the same announcement, keyed on the row
+     * the wallet paid (a deposit row sends the deposit email). A part payment
+     * says nothing yet: the card payment that finishes it will.
+     */
+    public static function announceWalletPayment(array $result, int $orderId): void
+    {
+        if (empty($result['ok']) || (string) ($result['code'] ?? '') !== 'paid') {
+            return;
+        }
+        self::announceCharge([
+            'ok'         => true,
+            'order_id'   => $orderId,
+            'payment_id' => (int) ($result['target_payment_id'] ?? 0),
+            'credited'   => (int) ($result['amount_subunit'] ?? 0),
+        ]);
     }
 
     /** Cash or a transfer recorded by staff. */

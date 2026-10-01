@@ -9,7 +9,7 @@ okv_test_ok(!IssueResolutions::amountIsValid(0, [900000], 900000), 'a zero-value
 
 $service = file_get_contents(dirname(__DIR__, 2) . '/includes/classes/IssueResolutions.php');
 okv_test_ok(str_contains($service, 'Refunds::request('), 'refund resolution delegates to the M5 engine');
-okv_test_ok(str_contains($service, 'Credit::grantIssueCredit('), 'credit resolution delegates to the M8 engine');
+okv_test_ok(str_contains($service, 'Wallet::credit('), 'credit resolution delegates to the wallet, which issues the credit note');
 okv_test_ok(str_contains($service, 'replacement_order_id'), 'replacement resolution keeps its order link');
 okv_test_ok(str_contains($service, 'FOR UPDATE'), 'resolution paths use row locks');
 okv_test_ok(str_contains($service, "'issue_reports.resolve.' . \$type"), 'every terminal outcome is audited by type');

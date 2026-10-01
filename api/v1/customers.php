@@ -240,4 +240,67 @@ if ($action === 'update') {
     ]);
 }
 
+// -----------------------------------------------------------------------------
+// Goodwill credit. Owner only: it is money going from OK Veggies to a customer.
+// -----------------------------------------------------------------------------
+if ($action === 'give_wallet_credit') {
+    Rbac::requirePermission('wallet.credit');
+
+    $staffId    = (int) Rbac::userId();
+    $customerId = (int) okv_input('customer_id', 0);
+    $amount     = Money::toSubunit((string) okv_input('amount', ''));
+    $reason     = trim((string) okv_input('reason', ''));
+    $token      = trim((string) okv_input('credit_token', ''));
+    $maximum    = 100000000; // 1,000,000 naira in one go. Anything bigger is not goodwill.
+    $dest       = customers_return_to('/admin/customers.php?customer=' . $customerId);
+    $back       = static function (string $flag) use ($dest): void {
+        okv_redirect($dest . (str_contains($dest, '?') ? '&' : '?') . 'wallet=' . rawurlencode($flag), 303);
+    };
+    $refuse = static function (string $message, string $code, int $status) use ($back): void {
+        if (customers_is_fetch()) {
+            okv_error($message, $status, $code);
+        }
+        $back($code);
+    };
+
+    if ($customerId < 1 || Customers::find($customerId) === null) {
+        $refuse('That customer could not be found.', 'not_found', 404);
+    }
+    if ($amount < 1 || $amount > $maximum) {
+        $refuse('Enter an amount between ' . Money::format(1) . ' and ' . Money::format($maximum) . '.', 'bad_amount', 422);
+    }
+    if (mb_strlen($reason) < 10 || mb_strlen($reason) > 200) {
+        $refuse('Give a reason of 10 to 200 characters. It is kept on the credit note.', 'bad_reason', 422);
+    }
+    if ($token === '' || strlen($token) > 64) {
+        $refuse('Reload the page and try again.', 'bad_token', 422);
+    }
+
+    try {
+        $result = Wallet::creditNow($customerId, $amount, 'goodwill', $reason, 'goodwill:' . $customerId . ':' . $token, null, $staffId);
+    } catch (Throwable $e) {
+        error_log('customers.give_wallet_credit failed: ' . $e->getMessage());
+        okv_error('We could not add that credit. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        $refuse($result['message'], $result['code'], 422);
+    }
+    if (empty($result['already'])) {
+        try {
+            Notifications::announceWalletCredited((int) $result['credit_note_id'], $staffId);
+        } catch (Throwable $e) {
+            error_log('customers.give_wallet_credit announce failed: ' . $e->getMessage());
+        }
+    }
+    if (customers_is_fetch()) {
+        okv_json([
+            'status'             => 'ok',
+            'code'               => $result['code'],
+            'message'            => Money::format($amount) . ' added to the wallet.',
+            'credit_note_number' => $result['credit_note_number'],
+        ]);
+    }
+    $back(!empty($result['already']) ? 'already_credited' : 'credited');
+}
+
 okv_error('That action is not available.', 400, 'unknown_action');

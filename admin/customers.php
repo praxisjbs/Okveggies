@@ -28,6 +28,8 @@ $canSeeCredit    = Rbac::can('credit.view');
 $canSeeRuns      = Rbac::can('kitchen_runs.view');
 $canSeeOrders    = Rbac::can('orders.view');
 $canGrantCredit  = Rbac::can('credit.grant');
+$canSeeWallet    = Rbac::can('wallet.view');
+$canGiveCredit   = Rbac::can('wallet.credit');
 $canCreate       = Rbac::can('customers.create');
 $canEdit         = Rbac::can('customers.edit');
 
@@ -57,6 +59,16 @@ $orders     = $customer && $canSeeOrders ? Customers::orders((int) $customer['id
 $payments   = $customer && $canSeePayments ? Customers::payments((int) $customer['id']) : [];
 $runs       = $customer && $canSeeRuns ? Customers::kitchenRuns((int) $customer['id']) : [];
 $totals     = $customer ? Customers::totals((int) $customer['id']) : null;
+$wallet     = $customer && $canSeeWallet ? Wallet::view((int) $customer['id'], 15) : null;
+$walletFlag = (string) okv_input('wallet', '');
+$walletNotices = [
+    'credited'         => ['Credit added to the wallet and the credit note issued.', 'ok'],
+    'already_credited' => ['That credit was already added. Nothing was added twice.', 'ok'],
+    'bad_amount'       => ['Enter an amount between ₦1 and ₦1,000,000.', 'problem'],
+    'bad_reason'       => ['Give a reason of 10 to 200 characters. It is kept on the credit note.', 'problem'],
+    'bad_token'        => ['Reload the page and try again.', 'problem'],
+    'not_found'        => ['That customer could not be found.', 'problem'],
+];
 
 // Credit belongs to a business and to nobody else. A household never gets an
 // empty facility card invented for it.
@@ -386,6 +398,64 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 </li>
               <?php endforeach; ?>
             </ul>
+          <?php endif; ?>
+        </section>
+      <?php endif; ?>
+
+      <?php if ($wallet !== null): ?>
+        <section class="okv-panel" aria-labelledby="customer-wallet-heading" id="wallet">
+          <div class="okv-panel-head">
+            <h2 id="customer-wallet-heading" class="okv-panel-title">Wallet</h2>
+            <span class="font-mono text-lg font-semibold text-forest"><?= okv_e(Money::format((int) $wallet['balance_subunit'])) ?></span>
+          </div>
+          <div class="okv-panel-body">
+            <?php if (isset($walletNotices[$walletFlag])): ?>
+              <p class="mb-4 rounded-md border px-4 py-3 text-sm <?= $walletNotices[$walletFlag][1] === 'ok' ? 'border-foliage bg-foliage-tint text-forest' : 'border-tomato bg-tomato-tint text-tomato' ?>" role="<?= $walletNotices[$walletFlag][1] === 'ok' ? 'status' : 'alert' ?>">
+                <?= okv_e($walletNotices[$walletFlag][0]) ?>
+              </p>
+            <?php endif; ?>
+            <p class="text-sm text-ink-60">Credit OK Veggies has given this customer. They spend it on their orders. Every credit has a credit note.</p>
+            <?php if ($canGiveCredit): ?>
+              <details class="mt-4 rounded-md border border-mist">
+                <summary class="flex min-h-[44px] cursor-pointer list-none items-center px-4 text-sm font-semibold text-forest">Give goodwill credit</summary>
+                <form method="POST" action="/api/v1/customers.php" class="grid gap-3 border-t border-mist p-4" data-once>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="give_wallet_credit">
+                  <input type="hidden" name="customer_id" value="<?= (int) $customer['id'] ?>">
+                  <input type="hidden" name="credit_token" value="<?= okv_e(bin2hex(random_bytes(8))) ?>">
+                  <input type="hidden" name="return_to" value="/admin/customers.php?customer=<?= (int) $customer['id'] ?>#wallet">
+                  <div>
+                    <label class="okv-label" for="wc_amount">Amount in naira</label>
+                    <input class="okv-input" id="wc_amount" name="amount" inputmode="decimal" required placeholder="2000">
+                  </div>
+                  <div>
+                    <label class="okv-label" for="wc_reason">Reason, kept on the credit note</label>
+                    <input class="okv-input" id="wc_reason" name="reason" required minlength="10" maxlength="200" placeholder="For the late delivery on Tuesday">
+                  </div>
+                  <button type="submit" class="okv-btn min-h-[44px]">Add credit</button>
+                </form>
+              </details>
+            <?php endif; ?>
+          </div>
+          <?php if ($wallet['entries']): ?>
+            <div class="overflow-x-auto">
+              <table class="okv-table min-w-[36rem]">
+                <thead><tr><th>Entry</th><th>Amount</th><th>Order</th><th>Credit note</th><th>Date</th></tr></thead>
+                <tbody>
+                  <?php foreach ($wallet['entries'] as $entry): ?>
+                    <tr>
+                      <td><?= okv_e((string) $entry['label']) ?></td>
+                      <td class="font-mono"><?= (int) $entry['amount_subunit'] > 0 ? '+' : '-' ?><?= okv_e(Money::format(abs((int) $entry['amount_subunit']))) ?></td>
+                      <td><?php if (!empty($entry['order_number'])): ?><a class="font-mono text-forest underline" href="/admin/orders.php?order=<?= (int) $entry['order_id'] ?>"><?= okv_e((string) $entry['order_number']) ?></a><?php else: ?>Not on an order<?php endif; ?></td>
+                      <td><?php if (!empty($entry['credit_note_id'])): ?><a class="font-mono text-forest underline" href="/public/documents/credit_note.php?id=<?= (int) $entry['credit_note_id'] ?>"><?= okv_e((string) $entry['credit_note_number']) ?></a><?php else: ?>None<?php endif; ?></td>
+                      <td><?= okv_e(date('j M Y', strtotime((string) $entry['created_at']))) ?></td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          <?php else: ?>
+            <p class="px-5 pb-5 text-sm text-ink-60">Nothing in this wallet yet.</p>
           <?php endif; ?>
         </section>
       <?php endif; ?>

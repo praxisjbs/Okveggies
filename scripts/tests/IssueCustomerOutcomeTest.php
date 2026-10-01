@@ -14,6 +14,7 @@ okv_test_ok(str_contains(IssueReports::customerNextStep(['status' => 'declined']
 okv_test_ok(str_contains($reports, 'ORDER BY i.created_at DESC, i.id DESC'), 'E: private history is newest first');
 okv_test_ok(!str_contains(substr($reports, strpos($reports, 'function historyForCustomer'), strpos($reports, 'function customerStatusLabel') - strpos($reports, 'function historyForCustomer')), 'handled_by'), 'E: customer history does not expose handler data');
 okv_test_ok(str_contains($page, '$reportIndex === 0'), 'E: newest report starts expanded');
-okv_test_ok(str_contains($page, '/pro/credit.php'), 'E: eligible business credit outcome links to Pro Credit');
+okv_test_ok(str_contains($page, '/wallet.php'), 'E: a credit outcome links to the customer wallet');
+okv_test_ok(str_contains($page, '/public/documents/credit_note.php?id='), 'E: and to its credit note');
 okv_test_ok(str_contains($page, '/public/order.php?order='), 'E: replacement outcome links to an authenticated order view');
 okv_test_ok(str_contains($trail, 'r.issue_report_id IS NULL'), 'E: Make It Right refunds stay off the public token trail');

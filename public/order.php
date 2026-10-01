@@ -137,6 +137,8 @@ $payMethods = $mayPay ? PayMethods::forOrder($order, $facility, !$publicTrail &&
 $creditFlag  = (string) okv_input('credit', '');
 $creditError = (string) okv_input('credit_error', '');
 $creditErrorCodes = ['not_found', 'not_convertible', 'payment_in_progress', 'credit_not_approved', 'credit_limit_exceeded', 'invalid_charge'];
+$walletFlag  = (string) okv_input('wallet', '');
+$walletError = (string) okv_input('wallet_error', '');
 $paymentFlag    = (string) okv_input('payment', '');
 $paymentNotices = [
     'paid'        => ['Payment received. Thank you.', 'ok'],
@@ -195,6 +197,16 @@ $publicStatus = [
   <?php elseif ($creditError !== ''): ?>
     <p class="mt-4 rounded-xl border border-clay bg-clay-tint px-4 py-3 text-sm text-ink" role="alert">
       <?= okv_e(in_array($creditError, $creditErrorCodes, true) ? Credit::message($creditError) : 'We could not use your credit line. Please try again.') ?>
+    </p>
+  <?php endif; ?>
+
+  <?php if ($walletFlag === 'paid' || $walletFlag === 'part_paid'): ?>
+    <p class="mt-4 rounded-xl border border-foliage bg-foliage-tint px-4 py-3 text-sm text-ink" role="status">
+      <?= $walletFlag === 'paid' ? 'Paid from your wallet. Thank you.' : 'Part of this order was paid from your wallet. The rest is still to pay below.' ?>
+    </p>
+  <?php elseif ($walletError !== ''): ?>
+    <p class="mt-4 rounded-xl border border-clay bg-clay-tint px-4 py-3 text-sm text-ink" role="alert">
+      <?= okv_e(Wallet::message($walletError)) ?>
     </p>
   <?php endif; ?>
 
@@ -470,8 +482,14 @@ $publicStatus = [
                   <?php endif; ?>
                   <?php if ((string) $customerReport['refund_line'] !== ''): ?>
                     <p class="mt-2"><?= okv_e((string) $customerReport['refund_line']) ?></p>
-                  <?php elseif ((string) $customerReport['resolution_type'] === 'credit' && !empty($customerReport['credit_link_available'])): ?>
-                    <a class="okv-btn-text mt-3 min-h-[44px]" href="/pro/credit.php">Open Pro Credit</a>
+                  <?php elseif ((string) $customerReport['resolution_type'] === 'credit'): ?>
+                    <p class="mt-2">Added to your wallet.</p>
+                    <div class="mt-2 flex flex-wrap gap-x-4">
+                      <a class="okv-btn-text min-h-[44px]" href="/wallet.php">Open my wallet</a>
+                      <?php if (!empty($customerReport['credit_note_id'])): ?>
+                        <a class="okv-btn-text min-h-[44px]" href="/public/documents/credit_note.php?id=<?= (int) $customerReport['credit_note_id'] ?>">Credit note <?= okv_e((string) $customerReport['credit_note_number']) ?></a>
+                      <?php endif; ?>
+                    </div>
                   <?php elseif ((string) $customerReport['resolution_type'] === 'replacement' && !empty($customerReport['replacement_order_id']) && trim((string) $customerReport['replacement_order_number']) !== ''): ?>
                     <a class="okv-btn-text mt-3 min-h-[44px]" href="/public/order.php?order=<?= (int) $customerReport['replacement_order_id'] ?>">Open replacement order <?= okv_e((string) $customerReport['replacement_order_number']) ?></a>
                   <?php endif; ?>

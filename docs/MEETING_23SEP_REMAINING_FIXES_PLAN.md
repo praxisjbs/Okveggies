@@ -101,6 +101,47 @@ report order (1 = ERR-01 ... 19 = VERIFY-02).
 - Repay on an on-account order posts the repayment and frees the limit through
   the existing settlement, once.
 
+## How PR2 is split, and what was decided while building it
+
+PR2 is two pull requests, because the wallet is useful on its own and the out of
+stock flow needs the manual refund queue on top of it.
+
+- **PR2a: the wallet.** Ledger, credit notes, complaint credits, wallet on the
+  Pay sheet and at checkout, cancellation refunds back to the wallet, goodwill
+  credit by the Owner, wallet pages for households and businesses.
+- **PR2b: out of stock and manual refunds.** Staff mark a line short during
+  sourcing, the customer picks bank refund or wallet from an emailed link, staff
+  can decide for them, the manual refund queue (bank details in, staff pay, mark
+  refunded), and wallet cash out on request through the same queue.
+
+Decisions taken in PR2a that were not in the Q and A, and why:
+
+1. **A partial wallet payment gets its own paid payment row.** A card charge
+   overwrites the paid amount of its row (one row, one charge), so a wallet part
+   on the same row would be lost when the card charge for the rest arrives. The
+   wallet part is a `wallet` row, paid on creation, and the row still owed is
+   reduced by the same amount (voided if nothing is left, never deleted), so the
+   rows keep adding up to the order total and the card charge is an exact match.
+2. **Wallet plus the credit line is not offered together.** The credit line
+   settlement reads paid cash as repayment of the charge, so a wallet part paid
+   before the conversion would be counted twice. A customer picks the wallet
+   (with the rest by card) or the credit line. The wallet can repay a credit
+   order, in full or in part.
+3. **The wallet is withheld while a card attempt is unresolved**, exactly like
+   the credit line, because that charge could still arrive for the full amount.
+4. **Credit notes print from the browser, like invoices and receipts.** They use
+   the same document frame and its Print button, so Save as PDF is one tap. No
+   second PDF engine for one document.
+5. **Complaint credit always goes to the wallet**, for households too, and no
+   longer writes to the business credit ledger. The Owner permission for it is
+   unchanged (`credit.grant`).
+6. **Cancellation returns wallet money to the wallet at once**, keyed on the
+   transaction so a retry cannot pay it twice, with a credit note. Nothing waits
+   on a person for money that never left the building.
+7. **Checkout uses the wallet only for a pay in full or a deposit order.** On
+   account and pay on delivery have nothing to pay online at that moment; a pay
+   on delivery customer can pay the deposit from the wallet afterwards.
+
 ## Test plan
 Unit tests for every pure rule (`OrderMoneyTest`, `SourcingGateTest`, additions to
 `CreditTest`, `PayMethodsTest`). Database suites on MySQL 8 for the locked paths
