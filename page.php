@@ -96,14 +96,22 @@ if ($databaseFailed || $page === null) {
 $rendered = $slug === 'faq'
     ? ['html' => '', 'headings' => []]
     : ContentRenderer::render((string) $page['body']);
+
+// Every word the page says besides its title and body is a slot the Owner edits
+// in Content and Messages. The published value is shown, and the standard
+// wording stands in only for a slot that has never been filled in.
+$copy = ContentSlots::copy($slug, (array) ($page['content_data'] ?? []));
+
 if ($slug === 'about') {
-    $founderPhotoPath = __DIR__ . '/assets/img/story/founder-kumbish-emmanuel-putleh.jpg';
+    // The founder's portrait is a photograph slot: the one the Owner uploaded, or
+    // the standard picture. Its description and caption are slots too.
+    $portrait = ContentSlots::image('about', 'founder_portrait', $copy);
     $rendered['html'] = okv_story_founder_portrait($rendered['html'], [
         'anchor' => 'the-person-behind-it',
-        'file' => $founderPhotoPath,
-        'url' => okv_asset('/assets/img/story/founder-kumbish-emmanuel-putleh.jpg'),
-        'alt' => 'Kumbish Emmanuel Putleh, founder of OK Veggies',
-        'caption' => 'Kumbish Emmanuel Putleh, Founder',
+        'file' => __DIR__ . $portrait['path'],
+        'url' => $portrait['custom'] ? okv_image_url($portrait['path']) : okv_asset($portrait['path']),
+        'alt' => $portrait['alt'],
+        'caption' => $copy['founder_caption'],
     ]);
 }
 $visibleTitle = (string) $page['title'];
@@ -126,20 +134,15 @@ $isStory = $slug === 'about';
 $isHow = $slug === 'how-it-works';
 $isFaq = $slug === 'faq';
 $isLegal = in_array($slug, ['terms', 'privacy', 'delivery-policy'], true);
-$eyebrow = match ($slug) {
-    'about' => 'Our story',
-    'how-it-works' => 'From list to doorstep',
-    'faq' => 'Questions and answers',
-    'terms' => 'Legal information',
-    'privacy' => 'Your information',
-    'delivery-policy' => 'Delivery and customer care',
-};
-$actions = match ($slug) {
-    'about' => [['/shop.php', 'Browse the shop', 'primary'], ['/combos.php', 'See the combos', 'outline'], ['/contact.php', 'Contact us', 'text']],
-    'how-it-works' => [['/shop.php', 'Start shopping', 'primary'], ['/kitchen-runs.php', 'Send a Kitchen Run', 'outline']],
-    'faq' => [['/contact.php', 'Send us a message', 'primary'], [okv_support_whatsapp_url(), 'Chat on WhatsApp', 'outline']],
-    default => [['/shop.php', 'Back to the shop', 'primary'], ['/contact.php', 'Ask us a question', 'outline']],
-};
+$eyebrow = $copy['eyebrow'];
+// The closing panel: the first button is the solid one, the second is outlined,
+// and Our Story has a third that reads as a link.
+$actionStyles = $slug === 'about' ? ['primary', 'outline', 'text'] : ['primary', 'outline'];
+$actions = [];
+foreach ($actionStyles as $actionIndex => $actionStyle) {
+    $n = $actionIndex + 1;
+    $actions[] = [$copy["action_{$n}_path"], $copy["action_{$n}_label"], $actionStyle];
+}
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -168,7 +171,7 @@ $actions = match ($slug) {
           <div class="p-6 md:p-10 lg:col-span-6 lg:flex lg:flex-col lg:justify-center">
             <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
             <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h2"><?= okv_e($visibleTitle) ?></h1>
-            <p class="mt-5 text-okv-lead text-ink-60">Fresh produce begins with people, places and work we can stand behind.</p>
+            <p class="mt-5 text-okv-lead text-ink-60"><?= okv_e($copy['lead']) ?></p>
           </div>
           <figure class="bg-forest-tint lg:col-span-6">
             <?php if ((string) $page['image_url'] !== ''): ?>
@@ -206,7 +209,7 @@ $actions = match ($slug) {
           <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($visibleTitle) ?></h1>
         </header>
-        <?php okv_how_it_works_steps($rendered['html']); ?>
+        <?php okv_how_it_works_steps($rendered['html'], $copy); ?>
         <?php require __DIR__ . '/includes/components/shop/make_it_right_guidance.php'; ?>
       </article>
     <?php elseif ($isFaq): ?>
@@ -214,20 +217,20 @@ $actions = match ($slug) {
         <header class="border-b border-mist pb-8">
           <p class="okv-eyebrow"><?= okv_e($eyebrow) ?></p>
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($visibleTitle) ?></h1>
-          <p class="mt-4 max-w-2xl text-ink-60">Open a question. Chat if yours is not here.</p>
+          <p class="mt-4 max-w-2xl text-ink-60"><?= okv_e($copy['lead']) ?></p>
         </header>
         <?php if ($faqItems): ?>
           <div class="mt-6"><?php okv_faq_disclosures($faqItems); ?></div>
         <?php else: ?>
-          <div class="mt-8"><?php okv_empty_state('info', 'We are preparing these answers', 'There are no published questions just now.', [
-              ['href' => '/contact.php', 'label' => 'Contact us', 'icon' => 'user'],
-              ['href' => okv_support_whatsapp_url(), 'label' => 'Chat on WhatsApp', 'style' => 'outline', 'icon' => 'phone'],
+          <div class="mt-8"><?php okv_empty_state('info', $copy['empty_heading'], $copy['empty_body'], [
+              ['href' => $copy['help_contact_path'], 'label' => $copy['help_contact_label'], 'icon' => 'user'],
+              ['href' => $copy['help_chat_path'], 'label' => $copy['help_chat_label'], 'style' => 'outline', 'icon' => 'phone'],
           ]); ?></div>
         <?php endif; ?>
         <?php if ($faqItems): ?><aside class="mt-8 border-t border-mist pt-6">
-          <h2 class="font-editorial text-okv-h6 text-ink">Still need a hand?</h2>
-          <p class="mt-2 text-ink-60">Send a form or start a chat.</p>
-          <div class="mt-5 flex flex-wrap gap-3"><a class="okv-btn" href="/contact.php"><?php okv_icon('user', 'h-4 w-4'); ?> Contact us</a><a class="okv-btn-outline" href="<?= okv_e(okv_support_whatsapp_url()) ?>" target="_blank" rel="noopener noreferrer"><?php okv_icon('phone', 'h-4 w-4'); ?> Chat on WhatsApp</a></div>
+          <h2 class="font-editorial text-okv-h6 text-ink"><?= okv_e($copy['help_heading']) ?></h2>
+          <p class="mt-2 text-ink-60"><?= okv_e($copy['help_line']) ?></p>
+          <div class="mt-5 flex flex-wrap gap-3"><a class="okv-btn" href="<?= okv_e($copy['help_contact_path']) ?>"><?php okv_icon('user', 'h-4 w-4'); ?> <?= okv_e($copy['help_contact_label']) ?></a><a class="okv-btn-outline" href="<?= okv_e($copy['help_chat_path']) ?>" <?= str_starts_with($copy['help_chat_path'], 'https://') ? 'target="_blank" rel="noopener noreferrer"' : '' ?>><?php okv_icon('phone', 'h-4 w-4'); ?> <?= okv_e($copy['help_chat_label']) ?></a></div>
         </aside><?php endif; ?>
       </article>
     <?php elseif ($isLegal): ?>
@@ -237,13 +240,13 @@ $actions = match ($slug) {
           <h1 class="mt-3 font-editorial text-okv-h4 text-ink md:text-okv-h3"><?= okv_e($visibleTitle) ?></h1>
         </header>
         <?php if ($slug === 'delivery-policy'): ?>
-          <?php okv_delivery_policy_table($rendered['html']); ?>
+          <?php okv_delivery_policy_table($rendered['html'], $copy); ?>
           <?php require __DIR__ . '/includes/components/shop/make_it_right_guidance.php'; ?>
         <?php else: ?>
           <?php $levelTwo = array_values(array_filter($rendered['headings'], static fn(array $heading): bool => $heading['level'] === 2)); ?>
           <?php if (count($levelTwo) >= 2): ?>
             <nav class="mt-8 rounded-lg bg-forest-tint p-5" aria-label="On this page">
-              <h2 class="font-semibold text-ink">On this page</h2>
+              <h2 class="font-semibold text-ink"><?= okv_e($copy['toc_label']) ?></h2>
               <ul class="mt-2 grid gap-1 sm:grid-cols-2">
                 <?php foreach ($levelTwo as $heading): ?><li><a class="inline-flex min-h-[44px] items-center font-semibold text-forest underline underline-offset-2" href="#<?= okv_e($heading['id']) ?>"><?= okv_e($heading['text']) ?></a></li><?php endforeach; ?>
               </ul>
@@ -255,8 +258,8 @@ $actions = match ($slug) {
     <?php endif; ?>
 
     <aside class="mx-auto mt-10 max-w-4xl rounded-xl bg-forest p-6 text-white md:p-8" aria-labelledby="content-next-heading">
-      <p class="okv-eyebrow-invert">Keep going</p>
-      <h2 id="content-next-heading" class="mt-2 font-editorial text-okv-h6 text-white">What would you like to do next?</h2>
+      <p class="okv-eyebrow-invert"><?= okv_e($copy['closing_eyebrow']) ?></p>
+      <h2 id="content-next-heading" class="mt-2 font-editorial text-okv-h6 text-white"><?= okv_e($copy['closing_heading']) ?></h2>
       <div class="mt-5 flex flex-wrap gap-3">
         <?php foreach ($actions as [$href, $label, $style]): ?>
           <a href="<?= okv_e($href) ?>" <?= str_starts_with($href, 'https://') ? 'target="_blank" rel="noopener noreferrer"' : '' ?> class="<?= $style === 'primary' ? 'okv-btn bg-white text-forest hover:bg-forest-tint' : ($style === 'outline' ? 'inline-flex min-h-[44px] items-center justify-center rounded-md border border-white px-5 font-semibold text-white hover:bg-white/10' : 'inline-flex min-h-[44px] items-center px-3 font-semibold text-white underline underline-offset-4') ?>"><?= okv_e($label) ?></a>

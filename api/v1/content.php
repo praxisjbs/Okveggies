@@ -43,7 +43,7 @@ if (!Csrf::validate()) {
 $action = okv_action();
 $slug = trim((string) okv_input('slug', ''));
 $returnTo = content_return_path($slug);
-if (!in_array($action, ['save_draft', 'upload_image', 'remove_image', 'publish', 'unpublish'], true)) {
+if (!in_array($action, ['save_draft', 'upload_image', 'remove_image', 'upload_slot_image', 'remove_slot_image', 'publish', 'unpublish'], true)) {
     content_fail(['code' => 'unknown_action', 'message' => 'That content action is not available.'], 400, $returnTo);
 }
 if (!ContentPages::isSupportedSlug($slug)) {
@@ -108,6 +108,53 @@ try {
             }
             $result['code'] = 'image_removed';
         }
+    } elseif ($action === 'upload_slot_image' || $action === 'remove_slot_image') {
+        // A photograph slot on the page (the founder's portrait, for example). It is
+        // saved into the draft like every other slot and goes live with the page.
+        $slotKey = trim((string) okv_input('slot', ''));
+        if (!in_array($slotKey, ContentSlots::imageKeys($slug), true)) {
+            content_fail(['code' => 'image_not_supported', 'message' => 'That photograph is not part of this page.'], 422, $returnTo);
+        }
+        $beforePage = ContentPages::findForAdmin($slug);
+        $oldDraft = (string) ($beforePage['content_data'][$slotKey] ?? '');
+        $oldPublished = (string) ($beforePage['published']['content_data'][$slotKey] ?? '');
+        if ($action === 'upload_slot_image') {
+            $alt = trim((string) okv_input('image_alt', ''));
+            if ($alt === '') {
+                content_fail(['code' => 'image_alt_required', 'message' => 'Describe the photograph before uploading it.'], 422, $returnTo);
+            }
+            $stored = ContentImages::storeUploaded($_FILES['image'] ?? []);
+            if (empty($stored['ok'])) {
+                content_fail([
+                    'code' => (string) ($stored['code'] ?? 'invalid_image'),
+                    'message' => 'That photograph could not be prepared. Check its type, size and dimensions.',
+                ], 422, $returnTo);
+            }
+            $newPath = (string) $stored['path'];
+            try {
+                $result = ContentPages::updateDraftSlotImage($slug, $slotKey, $newPath, $alt, $fingerprint, (int) Rbac::userId());
+            } catch (Throwable $e) {
+                ContentImages::removeSet($newPath);
+                throw $e;
+            }
+            if (empty($result['ok'])) {
+                ContentImages::removeSet($newPath);
+            } else {
+                // A replaced draft photograph that never went live is no longer needed.
+                if (ContentSlots::isUploadedPath($oldDraft) && $oldDraft !== $oldPublished && $oldDraft !== $newPath) {
+                    ContentImages::removeSet($oldDraft);
+                }
+                $result['code'] = 'image_updated';
+            }
+        } else {
+            $result = ContentPages::updateDraftSlotImage($slug, $slotKey, '', '', $fingerprint, (int) Rbac::userId());
+            if (!empty($result['ok'])) {
+                if (ContentSlots::isUploadedPath($oldDraft) && $oldDraft !== $oldPublished) {
+                    ContentImages::removeSet($oldDraft);
+                }
+                $result['code'] = 'image_removed';
+            }
+        }
     } elseif ($action === 'publish') {
         if ((string) okv_input('confirm', '') !== '1') {
             content_fail(['code' => 'confirmation_required', 'message' => 'Confirm publication before continuing.'], 422, $returnTo);
@@ -131,7 +178,7 @@ try {
 
 if (empty($result['ok'])) {
     $code = (string) ($result['code'] ?? 'failed');
-    $status = in_array($code, ['unknown_page', 'page_not_seeded'], true) ? 404
+    $status = in_array($code, ['unknown_page', 'page_not_seeded', 'unknown_slot'], true) ? 404
         : ($code === 'stale_draft' ? 409 : ($code === 'invalid_actor' ? 403 : 422));
     content_fail($result, $status, $returnTo);
 }

@@ -49,7 +49,24 @@ require __DIR__ . '/../includes/components/admin/header.php';
         <?php if (!$faq['ok']): ?><div class="okv-note-bad mt-6" role="alert"><p class="font-semibold">This FAQ draft is incomplete. Its saved source is shown safely below.</p><ul class="mt-2 list-disc space-y-1 pl-5"><?php foreach ($faq['errors'] as $message): ?><li><?= okv_e($message) ?></li><?php endforeach; ?></ul></div><div class="mt-6 whitespace-pre-wrap text-okv-body"><?= okv_e($page['body']) ?></div><?php else: ?><div class="mt-6"><?php okv_faq_disclosures($previewFaq ?? [], false); ?></div><?php endif; ?>
       <?php else: ?><div class="mt-6 whitespace-pre-wrap text-okv-body"><?= okv_e($page['body']) ?></div><?php endif; ?>
     </article>
-    <?php if ($slug === 'home'): ?><section class="okv-panel okv-panel-body"><h2 class="okv-panel-title">Homepage structured copy</h2><dl class="mt-4 grid gap-4 md:grid-cols-2"><?php foreach ($page['content_data'] as $key => $value): ?><div><dt class="text-xs font-semibold uppercase tracking-wide text-ink-60"><?= okv_e(str_replace('_', ' ', (string) $key)) ?></dt><dd class="mt-1 whitespace-pre-wrap text-sm"><?= okv_e((string) $value) ?></dd></div><?php endforeach; ?></dl></section><?php endif; ?>
+    <?php if (ContentSlots::has($slug)): ?>
+      <?php $slotPreview = ContentSlots::formValues($slug, (array) $page['content_data']); ?>
+      <section class="okv-panel okv-panel-body">
+        <h2 class="okv-panel-title">Every other word on this page</h2>
+        <p class="mt-1 text-sm text-ink-60">As the page will read once this draft is published. Anything you have not changed shows the standard wording.</p>
+        <?php foreach (ContentSlots::groups($slug) as $group): ?>
+          <h3 class="mt-6 text-sm font-semibold uppercase tracking-wide text-ink"><?= okv_e($group['group']) ?></h3>
+          <dl class="mt-3 grid gap-4 md:grid-cols-2">
+            <?php foreach ($group['slots'] as $key => $slot): ?>
+              <div class="<?= in_array($slot['kind'], ['long', 'text', 'rows'], true) ? 'md:col-span-2' : '' ?>">
+                <dt class="text-xs font-semibold uppercase tracking-wide text-ink-60"><?= okv_e($slot['label']) ?></dt>
+                <dd class="mt-1 whitespace-pre-wrap text-sm"><?php if ($slot['kind'] === 'image'): ?><?php $previewImage = ContentSlots::image($slug, $key, $slotPreview); ?><img class="max-h-48 rounded-md" src="<?= okv_e($previewImage['custom'] ? okv_image_url($previewImage['path']) : okv_asset($previewImage['path'])) ?>" alt="<?= okv_e($previewImage['alt']) ?>"><?php else: ?><?= okv_e($slotPreview[$key]) ?><?php endif; ?></dd>
+              </div>
+            <?php endforeach; ?>
+          </dl>
+        <?php endforeach; ?>
+      </section>
+    <?php endif; ?>
     <section class="okv-panel okv-panel-body"><h2 class="okv-panel-title">Search metadata</h2><dl class="mt-4 grid gap-4 md:grid-cols-2"><div><dt class="text-sm text-ink-60">SEO title</dt><dd class="mt-1"><?= okv_e($page['meta_title'] !== '' ? $page['meta_title'] : 'Uses the page title') ?></dd></div><div><dt class="text-sm text-ink-60">SEO description</dt><dd class="mt-1"><?= okv_e($page['meta_description'] !== '' ? $page['meta_description'] : 'Not supplied') ?></dd></div></dl></section>
   </div>
 <?php endif; ?>

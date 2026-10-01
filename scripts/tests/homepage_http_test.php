@@ -68,9 +68,16 @@ try {
     [$status, $body] = hph_get('/');
     hph_eq(200, $status, 'homepage remains available with a published content snapshot');
     $hero = hph_hero($body);
-    hph_ok(str_contains($hero, 'Bringing the Best of the Farm Straight to Your Kitchen.'), 'approved hero heading takes precedence over older CMS wording');
-    hph_ok(str_contains($hero, 'Freshness You Can Trust. Sourced daily from local farms, carefully selected, and delivered perfectly to you.'), 'approved supporting text is rendered exactly');
-    hph_ok(!str_contains($hero, $copy['hero_heading']) && !str_contains($hero, $copy['hero_intro']), 'older heading and introduction are not rendered in this composition');
+    // The dashboard is the source of truth: whatever the Owner published is what the hero says.
+    hph_ok(str_contains($hero, $copy['hero_heading']), 'the hero heading is the one published in the dashboard');
+    hph_ok(str_contains($hero, $copy['hero_intro']), 'and so is the introduction');
+    hph_ok(!str_contains($hero, 'Bringing the Best of the Farm Straight to Your Kitchen.') && !str_contains($hero, 'Freshness You Can Trust. Sourced daily'), 'the old hardcoded wording no longer overrides what the dashboard says');
+    // Only a slot that was never filled in shows the standard wording, which is the approved wording.
+    Database::run('UPDATE content_pages SET content_data = :content_data WHERE slug = :slug', [':content_data' => json_encode(array_merge($copy, ['hero_heading' => '', 'hero_intro' => ''])), ':slug' => 'home']);
+    [, $blankBody] = hph_get('/');
+    $blankHero = hph_hero($blankBody);
+    hph_ok(str_contains($blankHero, 'Bringing the Best of the Farm Straight to Your Kitchen.') && str_contains($blankHero, 'Freshness You Can Trust. Sourced daily from local farms, carefully selected, and delivered perfectly to you.'), 'a blank heading and introduction fall back to the approved standard wording, never an empty hero');
+    Database::run('UPDATE content_pages SET content_data = :content_data WHERE slug = :slug', [':content_data' => json_encode($copy), ':slug' => 'home']);
     foreach (['hero_eyebrow', 'primary_cta_label', 'secondary_cta_label'] as $field) {
         hph_ok(str_contains($hero, $copy[$field]), $field . ' still comes from the published CMS snapshot');
     }

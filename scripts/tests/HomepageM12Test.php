@@ -9,18 +9,19 @@ $controller = (string) file_get_contents($root . '/api/v1/content.php');
 $images = (string) file_get_contents($root . '/includes/classes/ContentImages.php');
 
 okv_test_ok(str_contains($home, "ContentPages::findPublished('home')"), 'editable homepage copy comes from the published ContentPages snapshot');
-okv_test_ok(str_contains($home, '$fallback') && !str_contains($home, 'findPreview'), 'homepage has reviewed continuity copy and never reads a draft');
-okv_test_ok(str_contains($home, 'ContentRenderer::render($copy[\'promise_body\'])'), 'the editable promise uses the restricted Markdown renderer');
-okv_test_ok(str_contains($home, 'The OK Veggies promise'), 'the promise has its own semantic section');
-foreach (['/shop.php', '/combos.php', '/kitchen-runs.php'] as $route) {
-    okv_test_ok(str_contains($home, 'href="' . $route . '"'), "homepage has a clear route to $route");
+okv_test_ok(str_contains($home, "ContentSlots::copy('home'") && !str_contains($home, 'findPreview'), 'every homepage word comes from the published slots, with standard wording for any slot never filled in, and never from a draft');
+okv_test_ok(str_contains($home, 'ContentSlots::html($copy[\'promise_body\'])'), 'the editable promise uses the restricted Markdown renderer');
+okv_test_ok(str_contains($home, 'aria-labelledby="promise-heading"') && str_contains($home, '$copy[\'promise_eyebrow\']'), 'the promise has its own semantic section, with its words from the slots');
+okv_test_eq('The OK Veggies promise', ContentSlots::defaults('home')['promise_eyebrow'], 'and its standard wording is the one the site has always shown');
+foreach (['start_shop' => '/shop.php', 'start_combos' => '/combos.php', 'start_kitchen' => '/kitchen-runs.php'] as $slot => $route) {
+    okv_test_ok(str_contains($home, '$copy[\'' . $slot . '_path\']') && ContentSlots::defaults('home')[$slot . '_path'] === $route, "homepage has a clear route to $route, which the Owner can repoint");
 }
 okv_test_ok(str_contains($home, 'ContentPages::findPublished') && str_contains($home, 'Catalogue::featuredCombos') && str_contains($home, 'Catalogue::featuredProducts'), 'content and catalogue responsibilities remain separate');
 okv_test_ok(!preg_match('/(?:SELECT|INSERT|UPDATE|DELETE)\s+/i', $home), 'homepage contains no catalogue or content SQL');
 okv_test_ok(str_contains($catalogue, "(bool) (\$combo['is_featured'] ?? false)"), 'featured combo selection respects the explicit database flag');
-okv_test_ok(str_contains($home, 'No featured combo is on the stall today'), 'combos have an honest empty state');
-okv_test_ok(str_contains($home, 'No produce has been marked as a weekly pick'), 'featured products have an honest empty state');
-okv_test_ok(str_contains($home, 'The category list is being prepared') && str_contains($home, 'Being sourced'), 'categories have section and zero-item states');
+okv_test_ok(str_contains($home, '$copy[\'combos_empty_heading\']') && ContentSlots::defaults('home')['combos_empty_heading'] === 'No featured combo is on the stall today', 'combos have an honest empty state, in words the Owner can change');
+okv_test_ok(str_contains($home, '$copy[\'products_empty_heading\']') && ContentSlots::defaults('home')['products_empty_heading'] === 'No produce has been marked as a weekly pick', 'featured products have an honest empty state, in words the Owner can change');
+okv_test_ok(str_contains($home, '$copy[\'categories_empty_heading\']') && ContentSlots::defaults('home')['categories_empty_heading'] === 'The category list is being prepared' && str_contains($home, 'Being sourced'), 'categories have section and zero-item states');
 foreach (['home.categories failed', 'home.featured_combos failed', 'home.featured_products failed'] as $failure) {
     okv_test_ok(str_contains($home, $failure), "$failure is isolated and logged");
 }
@@ -49,11 +50,16 @@ $unknown = ContentImages::presentation('/assets/img/product_images/Fresh Tomatoe
 okv_test_eq('', $unknown['srcset'], 'a product image is never treated as a documentary responsive set');
 okv_test_eq('/assets/img/product_images/Fresh Tomatoes.jpeg', $unknown['src'], 'an unrelated safe path is returned unchanged for neutral presentation');
 
-// The approved presentation copy is fixed without writing to the CMS snapshot.
-okv_test_ok(str_contains($home, "\$heroHeading = 'Bringing the Best of the Farm Straight to Your Kitchen.';")
-    && str_contains($home, 'okv_e($heroHeading)'), 'hero renders the approved heading, even when older CMS copy exists');
-okv_test_ok(str_contains($home, "\$heroIntro = 'Freshness You Can Trust. Sourced daily from local farms, carefully selected, and delivered perfectly to you.';")
-    && str_contains($home, 'okv_e($heroIntro)'), 'hero renders the approved supporting text exactly');
+// The hero reads the dashboard like every other word. The approved wording is the
+// standard wording for the slot, and migration 070 puts it into the dashboard in
+// place of the first seed text, so the dashboard is the source of truth.
+okv_test_ok(!str_contains($home, 'Bringing the Best of the Farm') && !str_contains($home, 'Freshness You Can Trust'), 'no hero wording is hardcoded in the page');
+okv_test_ok(str_contains($home, 'okv_e($copy[\'hero_heading\'])') && str_contains($home, 'okv_e($copy[\'hero_intro\'])'), 'the hero heading and introduction come from the slots');
+okv_test_eq('Bringing the Best of the Farm Straight to Your Kitchen.', ContentSlots::defaults('home')['hero_heading'], 'the standard hero heading is the wording the client approved');
+okv_test_eq('Freshness You Can Trust. Sourced daily from local farms, carefully selected, and delivered perfectly to you.', ContentSlots::defaults('home')['hero_intro'], 'and so is the standard introduction');
+$heroMigration = (string) file_get_contents($root . '/migrations/070_homepage_hero_wording_in_dashboard.sql');
+okv_test_ok(str_contains($heroMigration, "= 'We are bringing the other half home.'") && str_contains($heroMigration, "= 'Freshness You Can Trust. From Farm to Your Kitchen.'"), 'migration 070 replaces only the original seed text, so wording the Owner has written is never overwritten');
+okv_test_ok(!str_contains($heroMigration, "\u{2014}"), 'and has no em dash');
 foreach (['hero_eyebrow', 'primary_cta_path', 'primary_cta_label', 'secondary_cta_path', 'secondary_cta_label'] as $field) {
     okv_test_ok(str_contains($home, 'okv_e($copy[\'' . $field . '\'])'), $field . ' still honours the published CMS value');
 }

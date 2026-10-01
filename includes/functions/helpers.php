@@ -450,8 +450,10 @@ if (!function_exists('okv_story_founder_portrait')) {
      * rendered by ContentRenderer, so the figure is inserted directly after
      * the deterministic heading anchor. The width and height attributes come
      * from the photograph itself, so the committed image and the markup can
-     * never disagree. If the heading is gone or the photograph is not in the
-     * tree, the body renders exactly as written.
+     * never disagree. If the photograph is not in the tree, the body renders
+     * exactly as written. If the Owner has renamed or removed the heading, the
+     * portrait follows the body instead of vanishing, because the portrait is
+     * its own editable slot and must not depend on a word in the body.
      *
      * $portrait keys: anchor, file (absolute path in this tree), url, alt,
      * caption.
@@ -462,20 +464,15 @@ if (!function_exists('okv_story_founder_portrait')) {
         if ($anchor === '') {
             return $html;
         }
-        $position = strpos($html, 'id="' . $anchor . '"');
-        if ($position === false) {
-            return $html;
-        }
         $file = (string) ($portrait['file'] ?? '');
         $size = $file !== '' ? @getimagesize($file) : false;
         if ($size === false) {
             return $html;
         }
-        $closing = strpos($html, '</h2>', $position);
-        if ($closing === false) {
-            return $html;
-        }
-        $insertAt = $closing + 5;
+        $position = strpos($html, 'id="' . $anchor . '"');
+        $closing = $position === false ? false : strpos($html, '</h2>', $position);
+        // Under the heading when it is there, at the end of the story when it is not.
+        $insertAt = $closing === false ? strlen($html) : $closing + 5;
         $figure = '<figure class="okv-founder mt-6">'
             . '<img src="' . okv_e((string) ($portrait['url'] ?? '')) . '"'
             . ' alt="' . okv_e((string) ($portrait['alt'] ?? '')) . '"'

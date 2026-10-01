@@ -72,6 +72,7 @@ require_once __DIR__ . '/classes/Rbac.php';
 require_once __DIR__ . '/classes/PermissionMatrix.php';
 require_once __DIR__ . '/classes/Audit.php';
 require_once __DIR__ . '/classes/ContentPages.php';
+require_once __DIR__ . '/classes/ContentSlots.php';
 require_once __DIR__ . '/classes/ContentImages.php';
 require_once __DIR__ . '/classes/ProductImages.php';
 require_once __DIR__ . '/classes/ContentRenderer.php';

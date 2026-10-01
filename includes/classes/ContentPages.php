@@ -43,28 +43,6 @@ final class ContentPages
         'delivery-policy' => ['label' => 'Delivery Policy', 'path' => '/delivery-policy', 'legal' => true],
     ];
 
-    private const HOME_FIELDS = [
-        'hero_eyebrow' => 60,
-        'hero_heading' => 160,
-        'hero_intro' => 500,
-        'primary_cta_label' => 60,
-        'primary_cta_path' => 255,
-        'secondary_cta_label' => 60,
-        'secondary_cta_path' => 255,
-        'promise_heading' => 160,
-        'promise_body' => 10000,
-        'combos_eyebrow' => 60,
-        'combos_heading' => 160,
-        'categories_eyebrow' => 60,
-        'categories_heading' => 160,
-        'products_eyebrow' => 60,
-        'products_heading' => 160,
-    ];
-
-    private const CTA_PATHS = [
-        '/', '/shop.php', '/combos.php', '/kitchen-runs.php', '/contact.php', '/account.php',
-    ];
-
     private const SELECT_COLUMNS =
         'id, slug, title, body, draft_title, draft_body, '
         . 'draft_meta_title, draft_meta_description, meta_title, meta_description, '
@@ -96,7 +74,20 @@ final class ContentPages
     /** Homepage field names and their maximum lengths, for neutral admin forms. */
     public static function homeFields(): array
     {
-        return self::HOME_FIELDS;
+        return ContentSlots::textLimits('home');
+    }
+
+    /**
+     * Whether a slot value would be accepted: the same text rules the page body
+     * has (no HTML, no control characters, no em dash, within its length, and for
+     * Markdown only the supported syntax), returned as a message, or an empty
+     * string when it is fine.
+     */
+    public static function slotTextError(string $value, int $max, bool $markdown): string
+    {
+        $errors = [];
+        self::validateText($value, 'slot', $max, $errors, $markdown);
+        return (string) ($errors['slot'] ?? '');
     }
 
     /** List only fixed, seeded pages. Missing fixed rows simply do not appear. */
@@ -272,26 +263,19 @@ final class ContentPages
             $errors['body'] = 'Page copy is required before publishing.';
         }
 
+        // Every page with editable slots saves them in the same draft. A blank slot
+        // is allowed and means "use the standard wording", so no slot is ever
+        // required before publishing.
         $contentData = [];
-        if ($slug === 'home') {
+        if (ContentSlots::has($slug)) {
             $rawData = $input['content_data'] ?? [];
             if (!is_array($rawData)) {
                 $rawData = [];
-                $errors['content_data'] = 'Homepage fields must be submitted as a field set.';
+                $errors['content_data'] = 'Page fields must be submitted as a field set.';
             }
-            foreach (self::HOME_FIELDS as $field => $max) {
-                $value = str_ends_with($field, '_path')
-                    ? self::normaliseLine($rawData[$field] ?? '')
-                    : self::normaliseText($rawData[$field] ?? '');
-                $contentData[$field] = $value;
-                self::validateText($value, 'content_data.' . $field, $max, $errors, $field === 'promise_body');
-                if ($forPublish && $value === '') {
-                    $errors['content_data.' . $field] = 'This homepage field is required before publishing.';
-                }
-                if (str_ends_with($field, '_path') && $value !== '' && !in_array($value, self::CTA_PATHS, true)) {
-                    $errors['content_data.' . $field] = 'Choose an approved storefront destination.';
-                }
-            }
+            $slotResult = ContentSlots::clean($slug, $rawData);
+            $contentData = $slotResult['clean'];
+            $errors = array_merge($errors, $slotResult['errors']);
         }
 
         if ($slug === 'faq' && $forPublish) {
@@ -383,7 +367,7 @@ final class ContentPages
     public static function draftFingerprint(array $page): string
     {
         $data = self::decodeData($page['draft_content_data'] ?? $page['content_data'] ?? []);
-        $data = self::orderedData($data);
+        $data = self::orderedData($data, (string) ($page['slug'] ?? ''));
         $snapshot = [
             'title' => self::normaliseText($page['draft_title'] ?? $page['title'] ?? ''),
             'body' => self::normaliseText($page['draft_body'] ?? $page['body'] ?? ''),
@@ -404,7 +388,14 @@ final class ContentPages
         }
         return self::mutate($slug, $expectedFingerprint, $actorId, function (array $row) use ($validation, $actorId): array {
             $clean = $validation['clean'];
-            $newData = $row['slug'] === 'home' ? $clean['content_data'] : [];
+            // The text form has no box for the photographs a page holds, so they are
+            // carried over rather than wiped by a save.
+            $newData = ContentSlots::has((string) $row['slug'])
+                ? self::orderedData(
+                    ContentSlots::withImages((string) $row['slug'], self::decodeData($row['draft_content_data'] ?? null), $clean['content_data']),
+                    (string) $row['slug']
+                )
+                : [];
             $before = self::draftSnapshot($row);
             $after = $before;
             $after['title'] = $clean['title'];
@@ -423,7 +414,7 @@ final class ContentPages
                     ':title' => $clean['title'], ':body' => $clean['body'],
                     ':meta_title' => self::nullIfEmpty($clean['meta_title']),
                     ':meta_description' => self::nullIfEmpty($clean['meta_description']),
-                    ':content_data' => $row['slug'] === 'home' ? self::encodeData($newData) : null,
+                    ':content_data' => ContentSlots::has((string) $row['slug']) ? self::encodeData($newData, (string) $row['slug']) : null,
                     ':actor' => $actorId, ':id' => (int) $row['id'],
                 ]
             );
@@ -465,6 +456,67 @@ final class ContentPages
         });
     }
 
+    /**
+     * Set or clear one photograph slot in the draft, with its description. The
+     * file has already been prepared by ContentImages; this only records it. The
+     * description is the slot named by the photograph's `alt`, so it is edited
+     * and published with the rest of the page copy.
+     */
+    public static function updateDraftSlotImage(
+        string $slug,
+        string $key,
+        string $path,
+        string $alt,
+        string $expectedFingerprint,
+        int $actorId
+    ): array {
+        if (!ContentSlots::has($slug)) {
+            return self::failure('unknown_page', ['slug' => 'That page is not managed here.']);
+        }
+        $slot = ContentSlots::slots($slug)[$key] ?? null;
+        if ($slot === null || $slot['kind'] !== 'image') {
+            return self::failure('unknown_slot', ['slot' => 'That photograph is not part of this page.']);
+        }
+        $altKey = (string) ($slot['alt'] ?? '');
+        $path = self::normaliseLine($path);
+        $alt = self::normaliseLine($alt);
+        $errors = [];
+        if ($path !== '' && !ContentSlots::isUploadedPath($path)) {
+            $errors['content_data.' . $key] = 'Choose a verified content image from the protected upload workflow.';
+        }
+        if ($path !== '' && $alt === '') {
+            $errors['content_data.' . $altKey] = 'Describe the photograph before saving it.';
+        }
+        if ($alt !== '') {
+            $message = self::slotTextError($alt, 255, false);
+            if ($message !== '') {
+                $errors['content_data.' . $altKey] = $message;
+            }
+        }
+        if ($errors) {
+            return self::failure('validation_failed', $errors);
+        }
+        return self::mutate($slug, $expectedFingerprint, $actorId, function (array $row) use ($slug, $key, $altKey, $path, $alt, $actorId): array {
+            $data = self::decodeData($row['draft_content_data'] ?? null);
+            $before = ['slot' => $key, 'image' => (string) ($data[$key] ?? ''), 'alt' => $altKey === '' ? '' : (string) ($data[$altKey] ?? '')];
+            $after = ['slot' => $key, 'image' => $path, 'alt' => $path === '' ? '' : $alt];
+            if ($before === $after) {
+                return ['ok' => true, 'code' => 'unchanged', 'changed' => false, 'page' => self::adminProjection($row)];
+            }
+            $data[$key] = $path;
+            if ($altKey !== '') {
+                $data[$altKey] = $after['alt'];
+            }
+            Database::run(
+                'UPDATE content_pages SET draft_content_data = :data, updated_by = :actor WHERE id = :id',
+                [':data' => self::encodeData($data, $slug), ':actor' => $actorId, ':id' => (int) $row['id']]
+            );
+            Audit::record(self::ACTION_IMAGE, self::AUDIT_ENTITY, (int) $row['id'], $before, $after, $actorId);
+            $fresh = self::findStored((string) $row['slug'], true);
+            return ['ok' => true, 'code' => 'updated', 'changed' => true, 'page' => self::adminProjection($fresh)];
+        });
+    }
+
     public static function publish(
         string $slug,
         string $expectedFingerprint,
@@ -488,6 +540,10 @@ final class ContentPages
             $imageErrors = self::imageErrors(
                 (string) ($row['draft_image_url'] ?? ''),
                 (string) ($row['draft_image_alt'] ?? '')
+            );
+            $imageErrors = array_merge(
+                $imageErrors,
+                ContentSlots::imageErrors((string) $row['slug'], self::decodeData($row['draft_content_data'] ?? null))
             );
             if ($imageErrors) {
                 $validation['ok'] = false;
@@ -642,6 +698,9 @@ final class ContentPages
             'label' => self::PAGES[(string) $row['slug']]['label'],
             'legal' => self::PAGES[(string) $row['slug']]['legal'],
             'is_published' => (bool) $row['is_published'],
+            // A published page whose saved draft differs from what is public. The Owner
+            // needs a way to put those changes live without taking the page down.
+            'unpublished_changes' => (bool) $row['is_published'] && !self::publishedMatchesDraft($row),
             'published_at' => self::nullableString($row['published_at'] ?? null),
             'published_by' => isset($row['published_by']) ? (int) $row['published_by'] : null,
             'published_by_name' => isset($row['published_by']) ? ($staffNames[(int) $row['published_by']] ?? null) : null,
@@ -726,7 +785,9 @@ final class ContentPages
             'body' => (string) ($row['draft_body'] ?? ''),
             'meta_title' => (string) ($row['draft_meta_title'] ?? ''),
             'meta_description' => (string) ($row['draft_meta_description'] ?? ''),
-            'content_data' => self::decodeData($row['draft_content_data'] ?? null),
+            // MySQL stores a JSON object with its keys in its own order, so the slots
+            // are put back in registry order before they are compared or audited.
+            'content_data' => self::orderedData(self::decodeData($row['draft_content_data'] ?? null), (string) ($row['slug'] ?? '')),
             'image_url' => (string) ($row['draft_image_url'] ?? ''),
             'image_alt' => (string) ($row['draft_image_alt'] ?? ''),
         ];
@@ -739,7 +800,7 @@ final class ContentPages
             'body' => (string) ($row['body'] ?? ''),
             'meta_title' => (string) ($row['meta_title'] ?? ''),
             'meta_description' => (string) ($row['meta_description'] ?? ''),
-            'content_data' => self::decodeData($row['content_data'] ?? null),
+            'content_data' => self::orderedData(self::decodeData($row['content_data'] ?? null), (string) ($row['slug'] ?? '')),
             'image_url' => (string) ($row['image_url'] ?? ''),
             'image_alt' => (string) ($row['image_alt'] ?? ''),
             'is_published' => (bool) ($row['is_published'] ?? false),
@@ -873,10 +934,10 @@ final class ContentPages
         return is_array($decoded) ? $decoded : [];
     }
 
-    private static function orderedData(array $data): array
+    private static function orderedData(array $data, string $slug = ''): array
     {
         $ordered = [];
-        foreach (self::HOME_FIELDS as $key => $_max) {
+        foreach (ContentSlots::keys($slug) as $key) {
             if (array_key_exists($key, $data)) {
                 $ordered[$key] = (string) $data[$key];
             }
@@ -884,9 +945,9 @@ final class ContentPages
         return $ordered;
     }
 
-    private static function encodeData(array $data): string
+    private static function encodeData(array $data, string $slug): string
     {
-        return (string) json_encode(self::orderedData($data), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return (string) json_encode(self::orderedData($data, $slug), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     private static function nullIfEmpty(string $value): ?string
