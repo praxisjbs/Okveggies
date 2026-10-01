@@ -245,7 +245,10 @@ final class OrderCancellation
                 ];
             }
 
-            $paid = max(0, (int) $order['amount_paid_subunit']);
+            // What is still the customer's to take back: what was paid, less what a
+            // shortage already returned to them (the wallet, or a bank refund
+            // waiting to be sent). Cancelling must not return that a second time.
+            $paid = max(0, (int) $order['amount_paid_subunit'] - Shortages::returnedSubunit($orderId));
             if ($actorType === 'staff' && $paid > 0 && !$mayRefund) {
                 $pdo->rollBack();
                 return ['ok' => false, 'code' => 'refund_permission_required', 'message' => 'A paid order can only be cancelled by someone who may also issue its refund.'];
@@ -565,9 +568,10 @@ final class OrderCancellation
                 $within,
                 $customerAllowed
             );
+        $paidNow = max(0, (int) $order['amount_paid_subunit'] - Shortages::returnedSubunit((int) $order['id']));
         $outcome = Cancellation::moneyOutcome(
-            (int) $order['amount_paid_subunit'],
-            self::forfeitCap($order, max(0, (int) $order['amount_paid_subunit'])),
+            $paidNow,
+            self::forfeitCap($order, $paidNow),
             $within,
             $forfeitAfterCutoff,
             $stage,

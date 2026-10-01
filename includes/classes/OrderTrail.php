@@ -192,7 +192,7 @@ final class OrderTrail
 
         $order['items'] = Database::all(
             'SELECT item_name, quantity, unit_name, unit_price_subunit, line_total_subunit
-               FROM order_items WHERE order_id = :id ORDER BY id',
+               FROM order_items WHERE order_id = :id AND quantity > 0 ORDER BY id',
             [':id' => (int) $order['id']]
         );
         $order['history'] = Database::all(

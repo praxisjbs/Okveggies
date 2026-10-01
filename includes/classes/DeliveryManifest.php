@@ -57,6 +57,7 @@ final class DeliveryManifest
         $items = Database::all(
             'SELECT id, order_id, item_type, item_name, quantity, unit_name
                FROM order_items WHERE order_id IN (' . implode(',', array_fill(0, count($orderIds), '?')) . ')
+                AND quantity > 0
               ORDER BY order_id, id',
             $orderIds
         );

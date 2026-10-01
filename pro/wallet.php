@@ -13,6 +13,7 @@ require_business_customer();
 require_once __DIR__ . '/../includes/components/shop/wallet_panel.php';
 
 $view = Wallet::view((int) Customer::id());
+$view['cashout_flag'] = (string) okv_input('cashout', '');
 
 $okv_pro_title  = 'Wallet';
 $okv_pro_note   = 'Credit from OK Veggies that you can spend on any order. It is separate from your credit line.';

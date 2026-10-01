@@ -1076,6 +1076,44 @@ final class Credit
     }
 
     /**
+     * An item that could not be sourced takes its value off what an on-account
+     * order owes, never more than is still open and never twice for the same
+     * shortage.
+     */
+    public static function adjustShortage(int $orderId, int $shortageId, int $amount): void
+    {
+        self::adjustOrder($orderId, 'shortage:' . $shortageId, $amount);
+    }
+
+    /**
+     * Undo adjustShortage() when the shortage was marked by mistake. Nothing is
+     * deleted: an opposite row is appended, so the journal shows both. A no-op
+     * when the shortage never adjusted anything or was already undone.
+     */
+    public static function restoreShortage(int $orderId, int $shortageId): void
+    {
+        $key = 'order:' . $orderId . ':shortage:' . $shortageId;
+        $original = Database::one(
+            'SELECT business_customer_id, amount_subunit FROM credit_transactions WHERE source_key = :key',
+            [':key' => $key]
+        );
+        if (!$original || (int) $original['amount_subunit'] >= 0) {
+            return;
+        }
+        if (Database::one('SELECT id FROM credit_transactions WHERE source_key = :key', [':key' => $key . ':undo'])) {
+            return;
+        }
+        Database::one('SELECT id FROM business_customers WHERE id = :id FOR UPDATE', [':id' => (int) $original['business_customer_id']]);
+        Database::run(
+            'INSERT INTO credit_transactions
+                (business_customer_id, order_id, transaction_type, source_key, amount_subunit, status)
+             VALUES (:business, :order, :type, :key, :amount, :status)',
+            [':business' => $original['business_customer_id'], ':order' => $orderId, ':type' => 'adjustment',
+             ':key' => $key . ':undo', ':amount' => -(int) $original['amount_subunit'], ':status' => 'posted']
+        );
+    }
+
+    /**
      * Put a Make It Right value on an approved business account. The negative
      * journal entry reduces what is owed now or offsets the next credit draw.
      * The issue source key makes a replay return the original entry.

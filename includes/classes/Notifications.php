@@ -117,6 +117,11 @@ final class Notifications
         'admin_new_credit_application' => ['template' => 'admin_new_credit_application', 'label' => 'New credit application, for staff', 'audience' => 'staff'],
 
         'wallet_credited'            => ['template' => 'wallet_credited',            'label' => 'Credit added to wallet',        'audience' => 'customer'],
+        'shortage_choose'            => ['template' => 'shortage_choose',            'label' => 'Out of stock, choose a refund', 'audience' => 'customer'],
+        'shortage_reduced'           => ['template' => 'shortage_reduced',           'label' => 'Out of stock, balance reduced', 'audience' => 'customer'],
+        'shortage_choice_received'   => ['template' => 'shortage_choice_received',   'label' => 'Refund choice received',        'audience' => 'customer'],
+        'manual_refund_paid'         => ['template' => 'manual_refund_paid',         'label' => 'Refund sent to your bank',      'audience' => 'customer'],
+        'admin_manual_refund_requested' => ['template' => 'admin_manual_refund_requested', 'label' => 'Refund to pay by hand, for staff', 'audience' => 'staff'],
 
         'order_rescheduled'          => ['template' => 'order_rescheduled',          'label' => 'Delivery rescheduled',          'audience' => 'customer'],
         'admin_order_rescheduled'    => ['template' => 'admin_order_rescheduled',    'label' => 'Order rescheduled, for staff',  'audience' => 'staff'],
@@ -167,6 +172,11 @@ final class Notifications
         'credit_declined'            => ['customer_name', 'business_name', 'declined_reason', 'credit_url'],
         'credit_charge_posted'       => ['customer_name', 'business_name', 'order_number', 'amount', 'due_date', 'order_trail_url'],
         'wallet_credited'            => ['customer_name', 'amount', 'reason', 'credit_note_number', 'wallet_balance', 'wallet_url'],
+        'shortage_choose'            => ['customer_name', 'item_name', 'item_line', 'order_number', 'amount', 'choose_url'],
+        'shortage_reduced'           => ['customer_name', 'item_name', 'item_line', 'order_number', 'amount', 'balance_line', 'order_trail_url'],
+        'shortage_choice_received'   => ['customer_name', 'order_number', 'outcome_line', 'order_trail_url'],
+        'manual_refund_paid'         => ['customer_name', 'amount', 'bank_line', 'bank_reference', 'wallet_url'],
+        'admin_manual_refund_requested' => ['customer_name', 'amount', 'reason', 'refund_number', 'admin_url'],
         'admin_new_credit_application' => ['customer_name', 'business_name', 'requested_days', 'requested_limit', 'reason', 'admin_url'],
 
         'order_rescheduled'          => ['customer_name', 'order_number', 'old_delivery_day', 'new_delivery_day', 'reschedule_source', 'order_trail_url'],
@@ -1538,6 +1548,133 @@ final class Notifications
             self::customerRecipients(['user_email' => $row['user_email'], 'user_id' => $row['user_id']]),
             'credit_note',
             $creditNoteId,
+            $actorId
+        );
+    }
+
+    /**
+     * An item was marked short. When the customer is owed money back they get a
+     * link with two buttons (token present); when the value only came off what
+     * they still owe they are simply told. Called after the shortage committed.
+     */
+    public static function announceShortage(int $shortageId, ?string $token, ?int $actorId = null): void
+    {
+        $row = Database::one(
+            'SELECT s.id, s.order_id, s.short_quantity, s.amount_subunit, s.refund_due_subunit, i.item_name, i.unit_name
+               FROM order_shortages s JOIN order_items i ON i.id = s.order_item_id WHERE s.id = :id',
+            [':id' => $shortageId]
+        );
+        $context = $row === null ? null : self::orderContext((int) $row['order_id']);
+        if ($row === null || $context === null) {
+            return;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $vars = $context['vars'] + [
+            'item_name' => (string) $row['item_name'],
+            'item_line' => Shortages::itemLine((string) $row['short_quantity'], (string) $row['unit_name'], (string) $row['item_name']),
+        ];
+        if ($token !== null) {
+            self::send(
+                'shortage_choose',
+                $vars + ['amount' => Money::format((int) $row['refund_due_subunit']), 'choose_url' => $base . '/public/shortage.php?t=' . rawurlencode($token)],
+                $context['recipients'], 'order_shortage', $shortageId, $actorId
+            );
+            return;
+        }
+        $vars['amount'] = Money::format((int) $row['amount_subunit']);
+        if ($context['payment_option'] === 'on_account') {
+            $vars['balance_line'] = 'The charge on your credit account for this order came down by the same amount.';
+        }
+        self::send('shortage_reduced', $vars, $context['recipients'], 'order_shortage', $shortageId, $actorId);
+    }
+
+    /**
+     * The customer's choice, or a colleague's choice for them, is in. Tells the
+     * customer what happens next, and for a bank refund tells staff there is
+     * something to pay.
+     */
+    public static function announceShortageDecided(int $shortageId, ?int $actorId = null): void
+    {
+        $row = Database::one(
+            'SELECT s.id, s.order_id, s.resolution, s.refund_due_subunit, s.wallet_entry_id, r.id AS refund_id
+               FROM order_shortages s LEFT JOIN manual_refunds r ON r.shortage_id = s.id WHERE s.id = :id',
+            [':id' => $shortageId]
+        );
+        $context = $row === null ? null : self::orderContext((int) $row['order_id']);
+        if ($row === null || $context === null || !in_array((string) $row['resolution'], [Shortages::RESOLUTION_WALLET, Shortages::RESOLUTION_BANK], true)) {
+            return;
+        }
+        $amount = Money::format((int) $row['refund_due_subunit']);
+        if ((string) $row['resolution'] === Shortages::RESOLUTION_WALLET) {
+            $note = Database::one('SELECT credit_note_number FROM credit_notes WHERE wallet_entry_id = :e', [':e' => (int) $row['wallet_entry_id']]);
+            $outcome = $amount . ' is now in your OK Veggies wallet' . ($note ? ' (credit note ' . $note['credit_note_number'] . ')' : '') . '. It is offered first the next time you pay.';
+        } else {
+            $refund = $row['refund_id'] === null ? null : ManualRefunds::find((int) $row['refund_id']);
+            $outcome = 'We will send ' . $amount . ' to ' . ($refund ? ManualRefunds::bankLine($refund) : 'your bank account')
+                . ' and email you when it has gone.';
+        }
+        self::send('shortage_choice_received', $context['vars'] + ['outcome_line' => $outcome], $context['recipients'], 'order_shortage', $shortageId, $actorId);
+        if ($row['refund_id'] !== null) {
+            self::announceManualRefundRequested((int) $row['refund_id'], $actorId);
+        }
+    }
+
+    /** Staff are told there is a refund to send by hand. */
+    public static function announceManualRefundRequested(int $refundId, ?int $actorId = null): void
+    {
+        $refund = ManualRefunds::find($refundId);
+        if ($refund === null) {
+            return;
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $name = trim((string) ($refund['customer_name'] ?? '')) ?: 'A guest';
+        self::send(
+            'admin_manual_refund_requested',
+            [
+                'customer_name' => $name,
+                'amount'        => Money::format((int) $refund['amount_subunit']),
+                'reason'        => (string) $refund['kind'] === ManualRefunds::KIND_CASHOUT
+                    ? 'wallet cash out'
+                    : 'out of stock on order ' . (string) ($refund['order_number'] ?? ''),
+                'refund_number' => (string) $refund['refund_number'],
+                'admin_url'     => $base . '/admin/payments.php#refunds-heading',
+            ],
+            self::staffRecipients('payments.refund'),
+            'manual_refund',
+            $refundId,
+            $actorId
+        );
+    }
+
+    /** The money has been sent. Tells the customer, with the bank reference. */
+    public static function announceManualRefundPaid(int $refundId, ?int $actorId = null): void
+    {
+        $refund = ManualRefunds::find($refundId);
+        if ($refund === null || (string) $refund['status'] !== ManualRefunds::STATUS_PAID) {
+            return;
+        }
+        $email = trim((string) ($refund['customer_email'] ?? ''));
+        $recipients = $email !== '' || $refund['user_id'] !== null
+            ? [['email' => $email !== '' ? $email : null, 'user_id' => $refund['user_id'] === null ? null : (int) $refund['user_id']]]
+            : [];
+        if ($recipients === [] && $refund['order_id'] !== null) {
+            $context = self::orderContext((int) $refund['order_id']);
+            $recipients = $context['recipients'] ?? [];
+        }
+        $base = rtrim((string) (defined('APP_URL') ? APP_URL : ''), '/');
+        $name = trim((string) ($refund['customer_name'] ?? ''));
+        self::send(
+            'manual_refund_paid',
+            [
+                'customer_name'  => $name !== '' ? (explode(' ', $name)[0] ?: 'there') : 'there',
+                'amount'         => Money::format((int) $refund['amount_subunit']),
+                'bank_line'      => ManualRefunds::bankLine($refund),
+                'bank_reference' => (string) $refund['payment_reference'],
+                'wallet_url'     => $base . '/wallet.php',
+            ],
+            $recipients,
+            'manual_refund',
+            $refundId,
             $actorId
         );
     }

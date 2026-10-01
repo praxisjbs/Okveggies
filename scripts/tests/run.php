@@ -80,6 +80,8 @@ require_once $appRoot . '/includes/classes/OrderMoney.php';
 require_once $appRoot . '/includes/classes/SourcingGate.php';
 require_once $appRoot . '/includes/classes/PayMethods.php';
 require_once $appRoot . '/includes/classes/Wallet.php';
+require_once $appRoot . '/includes/classes/ManualRefunds.php';
+require_once $appRoot . '/includes/classes/Shortages.php';
 require_once $appRoot . '/includes/classes/OrderLifecycle.php';
 require_once $appRoot . '/includes/classes/DeliveryManifest.php';
 require_once $appRoot . '/includes/classes/Notifications.php';

@@ -158,6 +158,19 @@ if ($selected && (string) $selected['order_status'] === 'pending') {
 $gateBlocked = $gate !== null && !$gate['allowed'];
 $canOverride = Rbac::can('orders.source.override');
 $stageError = (string) okv_input('stage_error', '');
+// Out of stock: who may mark a line short, what has been marked, and what the
+// last action said.
+$canShort   = Rbac::can('orders.shortage.record');
+$canPayRefund = Rbac::can('payments.refund');
+$shortages  = $selectedId > 0 ? Shortages::forOrder($selectedId) : [];
+$shortageFlag  = (string) okv_input('shortage', '');
+$shortageError = (string) okv_input('shortage_error', '');
+$shortageNotices = [
+    'recorded_choice'  => 'Marked short. The customer has been emailed a link to choose how to get their money back.',
+    'recorded_reduced' => 'Marked short. The value came off what the customer still owes, so nothing is owed back.',
+    'decided'          => 'Done. The customer has been told.',
+    'withdrawn'        => 'Undone. The line is back on the order.',
+];
 $stageErrorMessages = [
     'stale'                   => 'This order changed after the page loaded. Reload it before choosing the next stage.',
     'invalid_transition'      => 'That order cannot move to the chosen stage.',
@@ -361,15 +374,111 @@ require __DIR__ . '/../includes/components/admin/header.php';
           <h3 class="text-sm font-semibold text-ink">Items</h3>
           <ul class="mt-2 divide-y divide-mist border-y border-mist">
             <?php foreach ($items as $item): ?>
-              <li class="flex justify-between gap-4 py-3 text-sm">
-                <span><?= okv_e(okv_quantity($item['quantity'])) ?> <?= okv_e($item['unit_name']) ?> <?= okv_e($item['item_name']) ?>
-                  <?php if ($item['components']): ?><span class="mt-1 block text-xs text-ink-60"><?php foreach ($item['components'] as $i => $component): ?><?= $i ? ', ' : '' ?><?= okv_e(okv_quantity($component['quantity'])) ?> <?= okv_e($component['unit_name']) ?> <?= okv_e($component['product_name']) ?> per basket<?php endforeach; ?></span><?php endif; ?>
-                </span>
-                <span class="font-mono"><?= okv_e(Money::format((int) $item['line_total_subunit'])) ?></span>
+              <li class="py-3 text-sm">
+                <div class="flex justify-between gap-4">
+                  <span><?= okv_e(okv_quantity($item['quantity'])) ?> <?= okv_e($item['unit_name']) ?> <?= okv_e($item['item_name']) ?>
+                    <?php if ($item['components']): ?><span class="mt-1 block text-xs text-ink-60"><?php foreach ($item['components'] as $i => $component): ?><?= $i ? ', ' : '' ?><?= okv_e(okv_quantity($component['quantity'])) ?> <?= okv_e($component['unit_name']) ?> <?= okv_e($component['product_name']) ?> per basket<?php endforeach; ?></span><?php endif; ?>
+                  </span>
+                  <span class="font-mono"><?= okv_e(Money::format((int) $item['line_total_subunit'])) ?></span>
+                </div>
+                <?php if ((float) $item['quantity'] <= 0): ?>
+                  <p class="mt-1 text-xs font-semibold text-clay-ink">Out of stock. This line is no longer on the order.</p>
+                <?php elseif ($canShort && in_array((string) $selected['order_status'], Shortages::STAGES, true)): ?>
+                  <details class="mt-2 rounded-md border border-mist">
+                    <summary class="flex min-h-[44px] cursor-pointer list-none items-center px-3 text-sm font-semibold text-forest">Mark out of stock</summary>
+                    <form action="/api/v1/shortages.php" method="POST" class="grid gap-3 border-t border-mist p-3 sm:grid-cols-2" data-once>
+                      <?= Csrf::field() ?>
+                      <input type="hidden" name="action" value="record">
+                      <input type="hidden" name="order_id" value="<?= (int) $selected['id'] ?>">
+                      <input type="hidden" name="item_id" value="<?= (int) $item['id'] ?>">
+                      <div>
+                        <label class="okv-label" for="short-qty-<?= (int) $item['id'] ?>">How many are short? (of <?= okv_e(okv_quantity($item['quantity'])) ?> <?= okv_e($item['unit_name']) ?>)</label>
+                        <input class="okv-input" id="short-qty-<?= (int) $item['id'] ?>" name="quantity" inputmode="decimal" value="<?= okv_e(okv_quantity($item['quantity'])) ?>">
+                      </div>
+                      <div>
+                        <label class="okv-label" for="short-reason-<?= (int) $item['id'] ?>">Note, for the team</label>
+                        <input class="okv-input" id="short-reason-<?= (int) $item['id'] ?>" name="reason" maxlength="200" placeholder="Optional">
+                      </div>
+                      <div class="flex flex-wrap gap-2 sm:col-span-2">
+                        <button type="submit" class="okv-btn min-h-[44px] px-4">Mark this many short</button>
+                        <button type="submit" name="whole" value="1" class="okv-btn-outline min-h-[44px] px-4">Whole line is out</button>
+                      </div>
+                    </form>
+                  </details>
+                <?php endif; ?>
               </li>
             <?php endforeach; ?>
           </ul>
         </div>
+
+        <?php if ($shortages || $shortageFlag !== '' || $shortageError !== ''): ?>
+        <div id="shortages" class="scroll-mt-20">
+          <h3 class="text-sm font-semibold text-ink">Out of stock</h3>
+          <?php if (isset($shortageNotices[$shortageFlag])): ?>
+            <p class="okv-note mt-2 bg-foliage-tint" role="status"><?= okv_e($shortageNotices[$shortageFlag]) ?></p>
+          <?php elseif ($shortageError !== ''): ?>
+            <p class="okv-note mt-2 bg-clay-tint" role="alert"><?= okv_e(Shortages::message($shortageError)) ?></p>
+          <?php endif; ?>
+          <ul class="mt-2 divide-y divide-mist border-y border-mist">
+            <?php foreach ($shortages as $sh): ?>
+              <li class="py-3 text-sm">
+                <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                  <span><strong class="text-ink"><?= okv_e((string) $sh['item_line']) ?></strong>
+                    <?php
+                      $shortageBits = ['worth ' . Money::format((int) $sh['amount_subunit'])];
+                      if ((int) $sh['reduced_subunit'] > 0) { $shortageBits[] = Money::format((int) $sh['reduced_subunit']) . ' off what is still to pay'; }
+                      if ((int) $sh['refund_due_subunit'] > 0) { $shortageBits[] = Money::format((int) $sh['refund_due_subunit']) . ' owed back'; }
+                    ?>
+                    <span class="text-ink-60"><?= okv_e(implode(', ', $shortageBits)) ?>.</span>
+                  </span>
+                  <span class="okv-badge <?= (string) $sh['status'] === 'awaiting_choice' ? 'okv-badge-warn' : ((string) $sh['status'] === 'withdrawn' ? 'okv-badge-neutral' : 'okv-badge-available') ?>"><?= okv_e((string) $sh['status_label']) ?></span>
+                </div>
+                <?php if (!empty($sh['reason'])): ?><p class="mt-1 text-xs text-ink-60"><?= okv_e((string) $sh['reason']) ?></p><?php endif; ?>
+                <?php if ($canShort && (string) $sh['status'] === 'awaiting_choice'): ?>
+                  <div class="mt-2 flex flex-wrap items-start gap-2">
+                    <?php if ($selected['user_id'] !== null): ?>
+                      <form action="/api/v1/shortages.php" method="POST" data-once>
+                        <?= Csrf::field() ?>
+                        <input type="hidden" name="action" value="decide_for_customer">
+                        <input type="hidden" name="shortage_id" value="<?= (int) $sh['id'] ?>">
+                        <input type="hidden" name="choice" value="wallet">
+                        <button type="submit" class="okv-btn min-h-[44px] px-4">Add to their wallet</button>
+                      </form>
+                    <?php endif; ?>
+                    <details class="rounded-md border border-mist">
+                      <summary class="flex min-h-[44px] cursor-pointer list-none items-center px-3 text-sm font-semibold text-forest">Refund to their bank</summary>
+                      <form action="/api/v1/shortages.php" method="POST" class="grid gap-2 border-t border-mist p-3" data-once>
+                        <?= Csrf::field() ?>
+                        <input type="hidden" name="action" value="decide_for_customer">
+                        <input type="hidden" name="shortage_id" value="<?= (int) $sh['id'] ?>">
+                        <input type="hidden" name="choice" value="bank">
+                        <input class="okv-input" name="bank_name" required maxlength="100" placeholder="Bank" aria-label="Bank">
+                        <input class="okv-input" name="account_number" required inputmode="numeric" maxlength="14" placeholder="Account number, 10 digits" aria-label="Account number">
+                        <input class="okv-input" name="account_name" required maxlength="150" placeholder="Name on the account" aria-label="Name on the account">
+                        <button type="submit" class="okv-btn min-h-[44px] px-4">Queue the refund</button>
+                      </form>
+                    </details>
+                  </div>
+                <?php endif; ?>
+                <?php if ($canShort && !empty($sh['can_undo'])): ?>
+                  <form action="/api/v1/shortages.php" method="POST" class="mt-2" data-once>
+                    <?= Csrf::field() ?>
+                    <input type="hidden" name="action" value="withdraw">
+                    <input type="hidden" name="shortage_id" value="<?= (int) $sh['id'] ?>">
+                    <button type="submit" class="okv-btn-text min-h-[44px]">Undo, it was marked by mistake</button>
+                  </form>
+                <?php endif; ?>
+                <?php if (!empty($sh['refund_number'])): ?>
+                  <p class="mt-1 text-xs text-ink-60">
+                    Refund <?= okv_e((string) $sh['refund_number']) ?>: <?= okv_e(ucfirst((string) $sh['refund_status'])) ?>.
+                    <?php if ($canPayRefund): ?><a class="text-forest underline" href="/admin/payments.php#refunds-heading">Open the refund queue</a><?php endif; ?>
+                  </p>
+                <?php endif; ?>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+        <?php endif; ?>
 
         <div>
           <h3 class="text-sm font-semibold text-ink">Status history</h3>
