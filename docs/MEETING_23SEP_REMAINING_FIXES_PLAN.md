@@ -142,6 +142,45 @@ Decisions taken in PR2a that were not in the Q and A, and why:
    account and pay on delivery have nothing to pay online at that moment; a pay
    on delivery customer can pay the deposit from the wallet afterwards.
 
+Decisions taken in PR2b that were not in the Q and A, and why:
+
+1. **Marking a line short changes the order, it does not annotate it.** The line
+   quantity and total, the order subtotal and total all come down, so every
+   screen, invoice, manifest and the sourcing gate read one truth. The original
+   quantity and line total are kept on `order_shortages`, with a JSON snapshot of
+   exactly which payment rows moved, so an undo puts back precisely that.
+2. **The value comes off what is unpaid first, newest payment row first.** A row
+   with nothing left and nothing paid is voided (expected 0), never deleted. A
+   row that already holds money never drops below it. Only what the unpaid rows
+   could not absorb is owed to the customer, so a deposit customer is not
+   refunded money they never paid.
+3. **A shortage waits for the customer, never defaults.** If money is owed, the
+   status is `awaiting_choice` and an email carries a link whose token is shown
+   once and stored only as a sha256 hash. If nothing is owed (it all came off the
+   balance) it is settled at once and the customer is told by a plain email.
+4. **Wallet or bank, once.** The choice is idempotent (a second tap, or a
+   different choice afterwards, changes nothing). The wallet choice credits the
+   wallet at once with a credit note. The bank choice raises a manual refund.
+   Guests have no wallet, so they are offered the bank only.
+5. **Manual refunds are their own queue, behind `payments.refund`.** Paystack
+   does not handle refunds for this shop. The customer gives bank, a ten digit
+   account number and the name on the account. Staff send it from the bank and
+   mark it paid with the bank reference and a confirmation tick. Colleagues
+   without the permission see the queue with the account masked. Cancelling a
+   refund sends a wallet cash out back to the wallet and sends a shortage refund
+   back to the customer to choose again.
+6. **Wallet cash out is the same queue.** The money leaves the wallet at once so
+   it cannot be spent while the transfer waits, keyed on a per form token so a
+   double tap asks once, and comes back whole if the refund is cancelled.
+7. **Cancelling the order afterwards does not refund twice.** The cancellation
+   plan subtracts what a shortage already returned.
+8. **Undo is only offered while no money has moved because of the shortage**:
+   waiting for the customer, or settled by reducing the balance. Once it went to
+   a wallet or a bank it is a refund, and a refund is cancelled, not undone.
+9. **A shortage is refused while a card attempt is in flight or a transfer
+   receipt is waiting**, because the amount the customer is about to pay is
+   changing under them. It is allowed at Placed and Sourced, never once packed.
+
 ## Test plan
 Unit tests for every pure rule (`OrderMoneyTest`, `SourcingGateTest`, additions to
 `CreditTest`, `PayMethodsTest`). Database suites on MySQL 8 for the locked paths

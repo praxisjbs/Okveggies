@@ -607,4 +607,91 @@ if ($action === 'request_refund') {
     payments_staff_done($result, 'refunded');
 }
 
+// -----------------------------------------------------------------------------
+// Refunds sent by hand: an out of stock refund or a wallet cash out. Paystack does
+// not handle these, so a colleague sends the money from the bank and records it.
+// -----------------------------------------------------------------------------
+if ($action === 'mark_refund_paid') {
+    // Money leaving the business: the same permission as every other refund.
+    $staffId = payments_staff_guard('payments.refund');
+    if (!okv_input('confirmed', '')) {
+        okv_error('Tick the confirmation before marking a refund paid.', 422, 'not_confirmed');
+    }
+    $refundId = (int) okv_input('refund_id', 0);
+    try {
+        $result = ManualRefunds::markPaid($refundId, (string) okv_input('reference', ''), $staffId);
+    } catch (Throwable $e) {
+        error_log('payments.mark_refund_paid failed: ' . $e->getMessage());
+        okv_error('We could not mark that refund paid. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    try {
+        Notifications::announceManualRefundPaid($refundId, $staffId);
+    } catch (Throwable $e) {
+        error_log('payments.mark_refund_paid announce failed: ' . $e->getMessage());
+    }
+    payments_staff_done($result, 'refund_paid');
+}
+
+if ($action === 'cancel_manual_refund') {
+    $staffId = payments_staff_guard('payments.refund');
+    $refundId = (int) okv_input('refund_id', 0);
+    try {
+        $result = ManualRefunds::cancel($refundId, (string) okv_input('reason', ''), $staffId);
+    } catch (Throwable $e) {
+        error_log('payments.cancel_manual_refund failed: ' . $e->getMessage());
+        okv_error('We could not cancel that refund. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        okv_error($result['message'], $result['code'] === 'not_found' ? 404 : 422, $result['code']);
+    }
+    payments_staff_done($result, 'refund_cancelled');
+}
+
+// A signed-in customer asks for part or all of their wallet back in their bank
+// account. The money leaves the wallet now, so it cannot be spent while the
+// transfer waits. The form's own token makes a double send ask once.
+if ($action === 'request_cashout') {
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Customer::requireLoginApi();
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    $userId = (int) Customer::id();
+    if (!RateLimiter::hit('wallet_cashout:' . $userId, 5, 3600)) {
+        okv_error('Too many requests. Wait a little and try again.', 429, 'rate_limited');
+    }
+    $wholeWallet = (string) okv_input('amount_mode', 'all') === 'all';
+    $amount = $wholeWallet ? Wallet::balance($userId) : Money::toSubunit((string) okv_input('amount', ''));
+    $bank = [
+        'bank_name'      => okv_input('bank_name', ''),
+        'account_number' => okv_input('account_number', ''),
+        'account_name'   => okv_input('account_name', ''),
+    ];
+    try {
+        $result = ManualRefunds::requestCashout($userId, $amount, $bank, trim((string) okv_input('cashout_token', '')));
+    } catch (Throwable $e) {
+        error_log('payments.request_cashout failed: ' . $e->getMessage());
+        okv_error('We could not send that request. Please try again.', 500, 'failed');
+    }
+    if (!empty($result['ok']) && empty($result['already'])) {
+        try {
+            Notifications::announceManualRefundRequested((int) $result['refund_id']);
+        } catch (Throwable $e) {
+            error_log('payments.request_cashout announce failed: ' . $e->getMessage());
+        }
+    }
+    if (payments_is_fetch()) {
+        if (empty($result['ok'])) {
+            okv_error((string) $result['message'], 422, (string) $result['code']);
+        }
+        okv_json(['status' => 'ok', 'code' => $result['code'], 'message' => $result['message']]);
+    }
+    okv_redirect('/wallet.php?cashout=' . rawurlencode(empty($result['ok']) ? 'error_' . (string) $result['code'] : (string) $result['code']), 303);
+}
+
 okv_error('That action is not available.', 400, 'unknown_action');

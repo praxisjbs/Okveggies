@@ -447,7 +447,7 @@ final class IssueReports
                FROM issue_report_photos WHERE issue_id = :issue_id
               UNION ALL
              SELECT \'item\' AS kind, id, item_name AS c1, quantity AS c2, unit_name AS c3, line_total_subunit AS c4, NULL AS c5
-               FROM order_items WHERE order_id = :order_id
+               FROM order_items WHERE order_id = :order_id AND quantity > 0
               ORDER BY kind, id',
             [':issue_id' => $issueId, ':order_id' => (int) $report['order_id']]
         );
@@ -531,7 +531,7 @@ final class IssueReports
                FROM issue_report_photos WHERE issue_id IN (' . $in . ')
               UNION ALL
              SELECT order_id AS owner_id, \'item\' AS kind, id, item_name AS c1, quantity AS c2, unit_name AS c3, line_total_subunit AS c4, NULL AS c5
-               FROM order_items WHERE order_id IN (' . $orderIn . ')
+               FROM order_items WHERE order_id IN (' . $orderIn . ') AND quantity > 0
               ORDER BY owner_id, kind, id',
             $allParams
         );

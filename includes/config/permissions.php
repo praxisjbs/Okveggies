@@ -25,6 +25,7 @@ $OKV_PERMISSIONS = [
         'orders.reschedule'            => 'Reschedule an order delivery date',
         'orders.create'                => 'Create an order by hand',
         'orders.source.override'       => 'Source an order the payment gate would refuse, with a reason',
+        'orders.shortage.record'       => 'Mark an order line out of stock and settle it for the customer',
     ],
     'products' => [
         'products.view'                => 'View products',

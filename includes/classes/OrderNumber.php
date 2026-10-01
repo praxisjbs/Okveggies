@@ -47,6 +47,15 @@ final class OrderNumber
         return self::format($prefix, $year2, $seq);
     }
 
+    /** Next manual refund number, e.g. RF26001. */
+    public static function nextManualRefundNumber(PDO $db, string $prefix = 'RF', ?int $year = null): string
+    {
+        $year  = $year ?? (int) date('Y');
+        $year2 = $year % 100;
+        $seq   = self::nextSequence($db, 'manual_refund:' . $year2);
+        return self::format($prefix, $year2, $seq);
+    }
+
     /**
      * Atomically increment and return a named counter. Uses the single-statement
      * INSERT ... ON DUPLICATE KEY UPDATE with LAST_INSERT_ID so two concurrent

@@ -35,8 +35,11 @@
  */
 final class Wallet
 {
-    public const ENTRY_CREDIT = 'credit';
-    public const ENTRY_SPEND  = 'spend';
+    public const ENTRY_CREDIT  = 'credit';
+    public const ENTRY_SPEND   = 'spend';
+    /** Money taken out to be sent to the customer's bank, and its reversal. */
+    public const ENTRY_CASHOUT = 'cashout';
+    public const ENTRY_RESTORE = 'cashout_reversal';
 
     /** Why money enters a wallet, as the customer reads it. */
     public const REASONS = [
@@ -138,9 +141,12 @@ final class Wallet
             [':u' => $userId]
         );
         foreach ($rows as &$row) {
-            $row['label'] = (string) $row['entry_type'] === self::ENTRY_SPEND
-                ? 'Paid toward ' . ((string) ($row['order_number'] ?? '') !== '' ? 'order ' . $row['order_number'] : 'an order')
-                : self::reasonLabel((string) $row['source']);
+            $row['label'] = match ((string) $row['entry_type']) {
+                self::ENTRY_SPEND   => 'Paid toward ' . ((string) ($row['order_number'] ?? '') !== '' ? 'order ' . $row['order_number'] : 'an order'),
+                self::ENTRY_CASHOUT => 'Sent to your bank account',
+                self::ENTRY_RESTORE => 'Cash out cancelled, back in your wallet',
+                default             => self::reasonLabel((string) $row['source']),
+            };
         }
         unset($row);
         return $rows;
@@ -149,11 +155,16 @@ final class Wallet
     /**
      * Everything a wallet screen draws: the balance and the latest activity.
      *
-     * @return array{balance_subunit:int, entries:list<array<string,mixed>>}
+     * @return array{balance_subunit:int, entries:list<array<string,mixed>>, refunds:list<array<string,mixed>>}
      */
     public static function view(int $userId, int $limit = 50): array
     {
-        return ['balance_subunit' => self::balance($userId), 'entries' => self::ledger($userId, $limit)];
+        return [
+            'balance_subunit' => self::balance($userId),
+            'entries'         => self::ledger($userId, $limit),
+            // Cash outs and bank refunds this customer has asked for, newest first.
+            'refunds'         => ManualRefunds::forUser($userId),
+        ];
     }
 
     /**
@@ -378,6 +389,84 @@ final class Wallet
             throw $e;
         }
         return ['ok' => true, 'code' => $credit['already'] ? 'already_credited' : 'credited', 'message' => ''] + $credit;
+    }
+
+    // -------------------------------------------------------------------------
+    // Money out: a cash out to the customer's bank, and putting it back
+    // -------------------------------------------------------------------------
+
+    /**
+     * Take money out of the wallet to be sent to the customer's bank by hand.
+     * The money leaves the balance now, so it cannot also be spent while the
+     * transfer is waiting. Runs inside the caller's transaction, locks the
+     * wallet, and never takes more than it holds. Idempotent on $sourceKey.
+     *
+     * @throws DomainException insufficient_balance, invalid_amount, not_found
+     * @return array{already:bool, entry_id:int, amount_subunit:int, balance_after_subunit:int}
+     */
+    public static function debitForCashout(int $userId, int $amountSubunit, string $sourceKey, ?int $actorId = null): array
+    {
+        if ($userId < 1 || $amountSubunit < 1 || $sourceKey === '' || strlen($sourceKey) > 150) {
+            throw new DomainException('invalid_amount');
+        }
+        $pdo = Database::getInstance()->getConnection();
+        if (!$pdo->inTransaction()) {
+            throw new LogicException('wallet cash out called outside a transaction');
+        }
+        $account = self::lockedAccount($userId);
+        $existing = Database::one('SELECT id, amount_subunit, balance_after_subunit FROM wallet_entries WHERE source_key = :key', [':key' => $sourceKey]);
+        if ($existing !== null) {
+            return ['already' => true, 'entry_id' => (int) $existing['id'], 'amount_subunit' => abs((int) $existing['amount_subunit']), 'balance_after_subunit' => (int) $existing['balance_after_subunit']];
+        }
+        $balance = (int) $account['balance_subunit'];
+        if ($amountSubunit > $balance) {
+            throw new DomainException('insufficient_balance');
+        }
+        $after = $balance - $amountSubunit;
+        Database::run(
+            'INSERT INTO wallet_entries
+                (wallet_account_id, user_id, entry_type, source, source_key, amount_subunit, balance_after_subunit, note, created_by)
+             VALUES (:account, :user, :type, \'cashout\', :key, :amount, :after, \'Cash out to bank\', :actor)',
+            [':account' => (int) $account['id'], ':user' => $userId, ':type' => self::ENTRY_CASHOUT, ':key' => $sourceKey,
+             ':amount' => -$amountSubunit, ':after' => $after, ':actor' => $actorId]
+        );
+        $entryId = (int) $pdo->lastInsertId();
+        Database::run('UPDATE wallet_accounts SET balance_subunit = :b WHERE id = :id', [':b' => $after, ':id' => (int) $account['id']]);
+        return ['already' => false, 'entry_id' => $entryId, 'amount_subunit' => $amountSubunit, 'balance_after_subunit' => $after];
+    }
+
+    /**
+     * Put a cash out back when it is cancelled before the money was sent. It is
+     * the customer's own money returning, not new credit from us, so it gets a
+     * ledger row and no credit note. Idempotent on $sourceKey.
+     *
+     * @return array{already:bool, entry_id:int, balance_after_subunit:int}
+     */
+    public static function restoreCashout(int $userId, int $amountSubunit, string $sourceKey, ?int $actorId = null): array
+    {
+        if ($userId < 1 || $amountSubunit < 1 || $sourceKey === '' || strlen($sourceKey) > 150) {
+            throw new DomainException('invalid_amount');
+        }
+        $pdo = Database::getInstance()->getConnection();
+        if (!$pdo->inTransaction()) {
+            throw new LogicException('wallet restore called outside a transaction');
+        }
+        $account = self::lockedAccount($userId);
+        $existing = Database::one('SELECT id, balance_after_subunit FROM wallet_entries WHERE source_key = :key', [':key' => $sourceKey]);
+        if ($existing !== null) {
+            return ['already' => true, 'entry_id' => (int) $existing['id'], 'balance_after_subunit' => (int) $existing['balance_after_subunit']];
+        }
+        $after = (int) $account['balance_subunit'] + $amountSubunit;
+        Database::run(
+            'INSERT INTO wallet_entries
+                (wallet_account_id, user_id, entry_type, source, source_key, amount_subunit, balance_after_subunit, note, created_by)
+             VALUES (:account, :user, :type, \'cashout_reversal\', :key, :amount, :after, \'Cash out cancelled\', :actor)',
+            [':account' => (int) $account['id'], ':user' => $userId, ':type' => self::ENTRY_RESTORE, ':key' => $sourceKey,
+             ':amount' => $amountSubunit, ':after' => $after, ':actor' => $actorId]
+        );
+        $entryId = (int) $pdo->lastInsertId();
+        Database::run('UPDATE wallet_accounts SET balance_subunit = :b WHERE id = :id', [':b' => $after, ':id' => (int) $account['id']]);
+        return ['already' => false, 'entry_id' => $entryId, 'balance_after_subunit' => $after];
     }
 
     // -------------------------------------------------------------------------

@@ -17,10 +17,12 @@ require_once __DIR__ . '/includes/components/shop/wallet_panel.php';
 
 Customer::requireLogin();
 if (Customer::isBusiness()) {
-    okv_redirect('/pro/wallet.php');
+    $flag = (string) okv_input('cashout', '');
+    okv_redirect('/pro/wallet.php' . ($flag !== '' ? '?cashout=' . rawurlencode($flag) : ''));
 }
 
 $view = Wallet::view((int) Customer::id());
+$view['cashout_flag'] = (string) okv_input('cashout', '');
 ?><!doctype html>
 <html lang="en">
 <head>

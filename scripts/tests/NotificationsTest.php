@@ -29,6 +29,7 @@ foreach (Notifications::EVENTS as $event => $definition) {
         || in_array('pay_url', $tokens, true)
         || in_array('credit_url', $tokens, true)
         || in_array('wallet_url', $tokens, true)
+        || in_array('choose_url', $tokens, true)
         || in_array('issue_url', $tokens, true)
         // A verified transfer opens the green payment screen. That is the page
         // the email is about, and the trail link would be the wrong one because

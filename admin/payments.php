@@ -153,6 +153,12 @@ if ($foundOrder) {
 $canRefund = Rbac::can('payments.refund');
 $refundsStuck = $canRefund ? Refunds::needingAttention() : [];
 
+// Bank refunds someone has to send by hand: a customer's out of stock choice or
+// a wallet cash out. Anyone who can open this screen sees the queue with the
+// account number masked; only payments.refund sees it whole and can act.
+$refundsToPay = ManualRefunds::queue(ManualRefunds::STATUS_REQUESTED);
+$refundsSent  = ManualRefunds::queue(ManualRefunds::STATUS_PAID, 8);
+
 // Reconciliation, from our own ledger. What we took, what Paystack kept as its
 // fee, what went back out, and what should therefore reach the bank. Computed
 // from the transactions we recorded rather than from Paystack's settlement
@@ -224,6 +230,8 @@ require __DIR__ . '/../includes/components/admin/header.php';
         'reversal_requested' => 'Reversal requested. Someone else has to approve it.',
         'reversal_approved'  => 'Reversal approved. The money has come off the order.',
         'reversal_declined'  => 'Reversal declined. The payment stands.',
+        'refund_paid'        => 'Marked as paid. The customer has been told it is on its way.',
+        'refund_cancelled'   => 'Refund cancelled. The money is back where it came from.',
       ];
     ?>
     <p class="rounded-xl border border-foliage bg-foliage-tint px-4 py-3 text-sm text-ink" role="status">
@@ -287,8 +295,8 @@ require __DIR__ . '/../includes/components/admin/header.php';
   <section class="okv-card" aria-labelledby="queue-heading">
     <h2 id="queue-heading" class="font-display text-xl font-bold text-ink">Waiting on you</h2>
     <p class="mt-1 text-sm text-ink-60">
-      Transfer receipts to verify, proofs nobody has checked, and reversals nobody has decided.
-      <?php if (!$transferReceipts && !$pendingProofs && !$openReversals): ?>
+      Transfer receipts to verify, proofs nobody has checked, reversals nobody has decided, and refunds to send to a bank.
+      <?php if (!$transferReceipts && !$pendingProofs && !$openReversals && !$refundsToPay): ?>
         Nothing is waiting.
       <?php endif; ?>
     </p>
@@ -464,6 +472,103 @@ require __DIR__ . '/../includes/components/admin/header.php';
             <p class="mt-1 text-xs text-ink-60">Reference <?= okv_e($stuck['reference']) ?>.</p>
           </div>
         <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($refundsToPay || $refundsSent): ?>
+      <h3 id="refunds-heading" class="mt-6 scroll-mt-20 text-sm font-semibold uppercase tracking-wide text-ink">
+        Refunds to pay by hand (<?= count($refundsToPay) ?>)
+      </h3>
+      <?php if ($refundsToPay): ?>
+        <p class="mt-1 text-sm text-ink-60">
+          Send the money from the bank, then mark it paid with the bank reference. The customer is emailed when you do.
+        </p>
+      <?php endif; ?>
+      <div class="mt-3 space-y-3">
+        <?php foreach ($refundsToPay as $refund): ?>
+          <div class="rounded-lg border border-mist p-4" id="refund-<?= (int) $refund['id'] ?>">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <p class="font-mono text-lg font-semibold tabular-nums text-ink">
+                <?= okv_e(Money::format((int) $refund['amount_subunit'])) ?>
+                <span class="okv-badge okv-badge-info"><?= okv_e(ManualRefunds::kindLabel((string) $refund['kind'])) ?></span>
+              </p>
+              <?php if (!empty($refund['order_id'])): ?>
+                <a class="text-sm underline" href="/admin/orders.php?order=<?= (int) $refund['order_id'] ?>">
+                  Order <?= okv_e((string) $refund['order_number']) ?>
+                </a>
+              <?php endif; ?>
+            </div>
+            <p class="mt-1 text-sm text-ink-60">
+              <?= okv_e((string) $refund['refund_number']) ?>
+              <?php if (trim((string) $refund['customer_name']) !== ''): ?>
+                for <?= okv_e((string) $refund['customer_name']) ?>
+              <?php endif; ?>
+              asked on <?= okv_e(date('j M Y, H:i', strtotime((string) $refund['created_at']))) ?>.
+            </p>
+
+            <?php if ($canRefund): ?>
+              <dl class="mt-3 grid gap-2 rounded-md bg-forest-tint p-3 text-sm sm:grid-cols-3">
+                <div><dt class="text-xs uppercase tracking-wide text-ink-60">Bank</dt><dd class="font-semibold text-ink"><?= okv_e((string) $refund['bank_name']) ?></dd></div>
+                <div><dt class="text-xs uppercase tracking-wide text-ink-60">Account number</dt><dd class="font-mono font-semibold tabular-nums text-ink"><?= okv_e((string) $refund['account_number']) ?></dd></div>
+                <div><dt class="text-xs uppercase tracking-wide text-ink-60">Name on the account</dt><dd class="font-semibold text-ink"><?= okv_e((string) $refund['account_name']) ?></dd></div>
+              </dl>
+
+              <form action="/api/v1/payments.php" method="POST" class="mt-3 flex flex-wrap items-end gap-2">
+                <?= Csrf::field() ?>
+                <input type="hidden" name="action" value="mark_refund_paid">
+                <input type="hidden" name="refund_id" value="<?= (int) $refund['id'] ?>">
+                <label class="text-sm text-ink-60">Bank reference
+                  <input class="okv-input mt-1 sm:w-64" name="reference" required minlength="3" maxlength="120" autocomplete="off" placeholder="From your bank's receipt">
+                </label>
+                <label class="flex min-h-[44px] items-center gap-2 text-sm text-ink">
+                  <input type="checkbox" name="confirmed" value="1" required class="h-5 w-5 rounded border-mist text-forest">
+                  I sent <?= okv_e(Money::format((int) $refund['amount_subunit'])) ?> to this account
+                </label>
+                <button class="okv-btn min-h-[44px]">Mark paid</button>
+              </form>
+
+              <details class="mt-2">
+                <summary class="inline-flex min-h-[44px] cursor-pointer items-center text-sm text-ink-60 underline">Cannot pay this one</summary>
+                <form action="/api/v1/payments.php" method="POST" class="mt-2 flex flex-wrap items-end gap-2">
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="cancel_manual_refund">
+                  <input type="hidden" name="refund_id" value="<?= (int) $refund['id'] ?>">
+                  <label class="text-sm text-ink-60">Why
+                    <input class="okv-input mt-1 sm:w-80" name="reason" required minlength="5" maxlength="200" placeholder="For example: the account number is wrong">
+                  </label>
+                  <button class="okv-btn-outline min-h-[44px]">Cancel this refund</button>
+                </form>
+                <p class="mt-1 text-xs text-ink-60">
+                  <?php if ((string) $refund['kind'] === ManualRefunds::KIND_CASHOUT): ?>
+                    The money goes back into the customer's wallet.
+                  <?php else: ?>
+                    The customer is asked to choose again.
+                  <?php endif; ?>
+                </p>
+              </details>
+            <?php else: ?>
+              <p class="mt-2 text-sm text-ink-60">
+                To <?= okv_e((string) $refund['bank_name']) ?>, account <?= okv_e(ManualRefunds::maskAccount((string) $refund['account_number'])) ?>.
+                Someone with refund permission sends it.
+              </p>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+
+        <?php if ($refundsSent): ?>
+          <details class="rounded-lg border border-mist p-4">
+            <summary class="flex min-h-[44px] cursor-pointer items-center text-sm font-semibold text-ink">Recently sent (<?= count($refundsSent) ?>)</summary>
+            <ul class="mt-2 divide-y divide-mist text-sm">
+              <?php foreach ($refundsSent as $sent): ?>
+                <li class="flex flex-wrap items-baseline justify-between gap-2 py-2">
+                  <span><span class="font-mono tabular-nums"><?= okv_e(Money::format((int) $sent['amount_subunit'])) ?></span>
+                    to <?= okv_e((string) $sent['bank_name']) ?> <?= okv_e(ManualRefunds::maskAccount((string) $sent['account_number'])) ?></span>
+                  <span class="text-ink-60"><?= okv_e((string) $sent['refund_number']) ?>, ref <?= okv_e((string) $sent['payment_reference']) ?></span>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          </details>
+        <?php endif; ?>
       </div>
     <?php endif; ?>
 

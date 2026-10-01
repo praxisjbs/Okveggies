@@ -259,6 +259,9 @@ final class PaymentSummary
             }
         }
 
+        // Money handed back because a line was out of stock is money handed back too.
+        $refunded += Shortages::returnedSubunit((int) $order['id']);
+
         $total     = (int) $order['order_total_subunit'];
         $cancelled = (string) $order['order_status'] === 'cancelled';
         $state     = self::state($cancelled, $total, $received, $anyAwaiting, $anyDeclined);

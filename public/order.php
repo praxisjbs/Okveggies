@@ -171,6 +171,16 @@ $paymentNotices = [
     'missing'     => ['We could not find that payment. If money left your account, message us.', 'problem'],
 ];
 $paymentNotice = $paymentNotices[$paymentFlag] ?? null;
+// Items we could not source. Only the signed-in owner sees them here; a guest
+// answers through the link in their email, and the public trail shows no money.
+$shortageNotes = [];
+if (!$publicTrail && !$guestOrder) {
+    foreach (Shortages::forOrder((int) $order['id']) as $shortageRow) {
+        if ((string) $shortageRow['status'] !== Shortages::STATUS_WITHDRAWN) {
+            $shortageNotes[] = $shortageRow;
+        }
+    }
+}
 $cancellationFlag = (string) okv_input('cancellation', '');
 $rescheduleFlag = (string) okv_input('reschedule', '');
 
@@ -247,6 +257,29 @@ $stepIcons = ['pending' => 'check', 'sourced' => 'leaf', 'packed' => 'basket', '
       <?= okv_e(Wallet::message($walletError)) ?>
     </p>
   <?php endif; ?>
+
+  <?php foreach ($shortageNotes as $shortageNote): ?>
+    <?php $awaitingChoice = (string) $shortageNote['status'] === Shortages::STATUS_AWAITING; ?>
+    <section class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 <?= $awaitingChoice ? 'border-gold bg-white shadow-okv-1' : 'border-mist bg-white' ?>"
+             aria-label="<?= okv_e($shortageNote['item_line']) ?> was out of stock">
+      <p class="min-w-0 text-sm text-ink">
+        <span class="font-semibold"><?= okv_e($shortageNote['item_line']) ?></span> was out of stock.
+        <?php if ($awaitingChoice): ?>
+          <?= okv_e(Money::format((int) $shortageNote['refund_due_subunit'])) ?> is yours. Choose where it goes.
+        <?php else: ?>
+          <span class="text-ink-60"><?= okv_e(match (true) {
+              (string) $shortageNote['resolution'] === Shortages::RESOLUTION_WALLET => 'The money is in your wallet.',
+              (string) $shortageNote['status'] === Shortages::STATUS_REFUND_PENDING => 'The money is on its way to your bank.',
+              (string) $shortageNote['resolution'] === Shortages::RESOLUTION_BANK   => 'The money has been sent to your bank.',
+              default                                                               => 'It came off what you owe.',
+          }) ?></span>
+        <?php endif; ?>
+      </p>
+      <?php if ($awaitingChoice): ?>
+        <a class="okv-btn inline-flex min-h-[44px] items-center px-5" href="/public/shortage.php?id=<?= (int) $shortageNote['id'] ?>">Choose</a>
+      <?php endif; ?>
+    </section>
+  <?php endforeach; ?>
 
   <?php if ($cancellationFlag !== ''): ?>
     <p class="mt-4 rounded-xl border border-foliage bg-foliage-tint px-4 py-3 text-sm text-ink" role="status">

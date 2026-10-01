@@ -19,6 +19,17 @@ if (!function_exists('okv_wallet_panel')) {
     function okv_wallet_panel(array $view): void
     {
         $balance = (int) $view['balance_subunit'];
+        $refunds = (array) ($view['refunds'] ?? []);
+        $flag    = (string) ($view['cashout_flag'] ?? '');
+        $flags   = [
+            'requested'                    => ['Your request is with our team. We send it by hand and email you when it has gone.', 'ok'],
+            'already_requested'            => ['That request was already sent.', 'ok'],
+            'error_bad_bank'               => ['Check your bank details and try again.', 'problem'],
+            'error_insufficient_balance'   => ['That is more than your wallet holds.', 'problem'],
+            'error_bad_amount'             => ['Enter an amount of at least ₦1.', 'problem'],
+            'error_bad_token'              => ['Reload the page and try again.', 'problem'],
+        ];
+        $naira = rtrim(rtrim(number_format($balance / 100, 2, '.', ''), '0'), '.');
         ?>
         <section class="okv-card" aria-labelledby="wallet-balance-h">
           <div class="flex items-start justify-between gap-4">
@@ -45,6 +56,72 @@ if (!function_exists('okv_wallet_panel')) {
             </details>
           </div>
         </section>
+
+        <?php if (isset($flags[$flag])): ?>
+          <p class="rounded-xl border px-4 py-3 text-sm text-ink <?= $flags[$flag][1] === 'ok' ? 'border-foliage bg-foliage-tint' : 'border-clay bg-clay-tint' ?>" role="<?= $flags[$flag][1] === 'ok' ? 'status' : 'alert' ?>">
+            <?= okv_e($flags[$flag][0]) ?>
+          </p>
+        <?php endif; ?>
+
+        <?php if ($balance > 0 || $refunds !== []): ?>
+          <section class="okv-card" aria-labelledby="wallet-cashout-h">
+            <div class="flex items-start justify-between gap-3">
+              <h2 id="wallet-cashout-h" class="font-editorial text-okv-h6 text-ink">Ask for it back</h2>
+              <details class="relative">
+                <summary class="flex min-h-[44px] min-w-[44px] cursor-pointer list-none items-center justify-center rounded-xl text-forest hover:bg-forest-tint" aria-label="More about asking for your money back">
+                  <?php okv_icon('info', 'h-5 w-5'); ?>
+                </summary>
+                <p class="absolute right-0 top-full z-10 mt-1 w-64 rounded-md border border-mist bg-white p-3 text-sm text-ink-60 shadow-okv-2">
+                  You can have your wallet sent to your bank account instead of spending it. A member of our team sends it by hand and we email you when it has gone. The money leaves your wallet as soon as you ask.
+                </p>
+              </details>
+            </div>
+            <?php if ($balance > 0): ?>
+              <details class="mt-4 rounded-xl border border-forest">
+                <summary class="flex min-h-[56px] cursor-pointer list-none items-center justify-center gap-2 rounded-xl px-5 font-semibold text-forest">
+                  <?php okv_icon('banknote', 'h-5 w-5'); ?> <span>Send it to my bank</span>
+                </summary>
+                <form action="/api/v1/payments.php" method="POST" class="grid gap-3 border-t border-mist p-4" data-once>
+                  <?= Csrf::field() ?>
+                  <input type="hidden" name="action" value="request_cashout">
+                  <input type="hidden" name="amount_mode" value="part">
+                  <input type="hidden" name="cashout_token" value="<?= okv_e(bin2hex(random_bytes(8))) ?>">
+                  <div>
+                    <label class="okv-label" for="co_amount">Amount in naira</label>
+                    <input class="okv-input" id="co_amount" name="amount" inputmode="decimal" required value="<?= okv_e($naira) ?>">
+                  </div>
+                  <div>
+                    <label class="okv-label" for="co_bank">Bank</label>
+                    <input class="okv-input" id="co_bank" name="bank_name" required maxlength="100" autocomplete="off" placeholder="For example GTBank">
+                  </div>
+                  <div>
+                    <label class="okv-label" for="co_number">Account number</label>
+                    <input class="okv-input" id="co_number" name="account_number" required inputmode="numeric" pattern="[0-9 \-]{10,14}" maxlength="14" autocomplete="off" placeholder="10 digits">
+                  </div>
+                  <div>
+                    <label class="okv-label" for="co_name">Name on the account</label>
+                    <input class="okv-input" id="co_name" name="account_name" required maxlength="150" autocomplete="off">
+                  </div>
+                  <button type="submit" class="okv-btn inline-flex min-h-[56px] w-full items-center justify-center rounded-xl px-5">Ask for it back</button>
+                </form>
+              </details>
+            <?php endif; ?>
+            <?php if ($refunds !== []): ?>
+              <ul class="mt-4 divide-y divide-mist">
+                <?php foreach ($refunds as $refund): ?>
+                  <li class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 text-sm">
+                    <span class="text-ink">
+                      <?= okv_e(Money::format((int) $refund['amount_subunit'])) ?> to <?= okv_e((string) $refund['bank_name']) ?> <?= okv_e(ManualRefunds::maskAccount((string) $refund['account_number'])) ?>
+                    </span>
+                    <span class="okv-badge <?= (string) $refund['status'] === 'paid' ? 'okv-badge-available' : 'okv-badge-warn' ?>">
+                      <?= (string) $refund['status'] === 'paid' ? 'Sent' : 'Waiting to be sent' ?>
+                    </span>
+                  </li>
+                <?php endforeach; ?>
+              </ul>
+            <?php endif; ?>
+          </section>
+        <?php endif; ?>
 
         <section class="okv-card" aria-labelledby="wallet-activity-h">
           <h2 id="wallet-activity-h" class="font-editorial text-okv-h6 text-ink">Activity</h2>

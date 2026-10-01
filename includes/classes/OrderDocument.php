@@ -55,7 +55,7 @@ final class OrderDocument
 
         $items = Database::all(
             'SELECT item_name, sku, unit_name, quantity, unit_price_subunit, line_total_subunit
-               FROM order_items WHERE order_id = :id ORDER BY id',
+               FROM order_items WHERE order_id = :id AND quantity > 0 ORDER BY id',
             [':id' => $orderId]
         );
 
@@ -71,6 +71,8 @@ final class OrderDocument
                FROM refunds WHERE order_id = :id AND status = :processed',
             [':id' => $orderId, ':processed' => Refunds::STATUS_PROCESSED]
         )['total'] ?? 0);
+        // What an out of stock line gave back, to the wallet or the bank, is on the receipt too.
+        $refunded += Shortages::returnedSubunit($orderId);
 
         return [
             'order'        => $order,
