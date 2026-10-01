@@ -12,11 +12,14 @@
  *      module's quick presets may offer. Every one of these is a rule that, if
  *      wrong, either hides a key the Owner wanted or writes one they did not.
  *
- *   2. The catalogue in includes/config/permissions.php against the migrations
- *      that seed the `permissions` table. A key the code checks but no migration
- *      inserts can never be granted to anyone, and the screen would show it
- *      unticked and switched off forever. This catches that at build time,
- *      which is where the note at the top of the config file asks for it.
+ *   2. The catalogue in includes/config/permissions.php against the code that
+ *      guards on it and the migrations that seed the `permissions` table. A key
+ *      the code checks but no migration inserts can never be granted to anyone,
+ *      and the screen would show it unticked and switched off forever. A key a
+ *      migration inserts but the catalogue omits leaves the database ahead of
+ *      the list the screen draws from, which is what the warning on
+ *      /admin/permissions.php is about. Both are caught at build time, which is
+ *      where the note at the top of the config file asks for it.
  * -----------------------------------------------------------------------------
  */
 require_once dirname(__DIR__, 2) . '/includes/classes/PermissionMatrix.php';
@@ -175,5 +178,104 @@ okv_test_eq(
     [],
     $orphanedOwnerOnlyKeys,
     'every key the Manager is held back from is a permission that exists'
+);
+
+// --- The catalogue against what the code guards on and the migrations seed ----
+
+// The assertion above catches a catalogue key no migration ever inserts. These
+// two are the other direction, and one of them is the one that failed: the two
+// payment reversals (migration 016), the notification resend (019) and the
+// typed-in kitchen run (041) were seeded by migrations, checked all over the
+// admin, and never added here. The catalogue is where /admin/permissions.php
+// reads the list from, so the screen warned that the permission list and the
+// database did not agree while every test passed.
+//
+//   1. Every permission key the shipped code hands to Rbac, as a literal or
+//      through one of the small _guard_write / _guard helpers the endpoints
+//      route their writes through. A key reached only through a configuration
+//      array is out of scope: a literal is the shape a test can read without
+//      running the application.
+//   2. Every key any migration inserts into `permissions`. No migration deletes
+//      from that table, so the union of the files is the table's intent.
+
+$guardedInCode = (static function (): array {
+    $root = dirname(__DIR__, 2);
+    $files = glob($root . '/*.php') ?: [];
+    foreach (['admin', 'api', 'includes', 'pro', 'public', 'scripts'] as $dir) {
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root . '/' . $dir));
+        foreach ($iterator as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $files[] = str_replace('\\', '/', $file->getPathname());
+            }
+        }
+    }
+
+    $keys = [];
+    foreach (array_unique($files) as $path) {
+        // This suite names keys to assert on them, which is not the application
+        // checking a permission.
+        if (str_contains($path, '/scripts/tests/')) {
+            continue;
+        }
+
+        $source = (string) file_get_contents($path);
+
+        // Comments are dropped: a docblock that writes Rbac::can('...') is
+        // describing the rule, not applying it. token_get_all is a bundled
+        // extension, so a host without it still leaves the scan working, at the
+        // cost of also reading what the comments say.
+        if (function_exists('token_get_all')) {
+            $stripped = '';
+            foreach (token_get_all($source) as $token) {
+                if (is_array($token) && ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT)) {
+                    continue;
+                }
+                $stripped .= is_array($token) ? $token[1] : $token;
+            }
+            $source = $stripped;
+        }
+
+        preg_match_all("/Rbac::(?:can|hasPermission|requirePermission)\(\s*'([a-z0-9_.]+)'/", $source, $direct);
+        preg_match_all("/\b[a-z0-9_]*guard[a-z0-9_]*\(\s*'([a-z0-9_.]+)'/i", $source, $through);
+        foreach (array_merge($direct[1], $through[1]) as $key) {
+            $keys[$key] = true;
+        }
+    }
+
+    $out = array_keys($keys);
+    sort($out, SORT_STRING);
+    return $out;
+})();
+
+okv_test_ok(count($guardedInCode) > 50, 'the scan reads the shipped code and finds the keys it guards on');
+okv_test_eq(
+    [],
+    array_values(array_diff($guardedInCode, array_keys($catalogue))),
+    'every permission key the code checks is in the catalogue, so a check cannot quietly guard nothing'
+);
+
+$seededKeys = (static function (): array {
+    $keys = [];
+    foreach (glob(dirname(__DIR__, 2) . '/migrations/*.sql') ?: [] as $migration) {
+        $sql = (string) file_get_contents($migration);
+        preg_match_all("/INSERT(?:\s+IGNORE)?\s+INTO\s+`?permissions`?\s*\([^)]*\)\s*VALUES(.*?);/is", $sql, $blocks);
+        foreach ($blocks[1] as $values) {
+            preg_match_all("/\(\s*'([a-z0-9_.]+)'\s*,/", $values, $rows);
+            foreach ($rows[1] as $key) {
+                $keys[$key] = true;
+            }
+        }
+    }
+
+    $out = array_keys($keys);
+    sort($out, SORT_STRING);
+    return $out;
+})();
+
+okv_test_ok(count($seededKeys) > 50, 'the scan reads the migrations and finds the permissions they insert');
+okv_test_eq(
+    [],
+    array_values(array_diff($seededKeys, array_keys($catalogue))),
+    'every permission a migration inserts is in the catalogue, so the screen never reports the two do not agree'
 );
 

@@ -7,6 +7,14 @@
  * must stay in step with it. To add a permission: add the key here, add it to a
  * new migration, and (if a default role should get it) grant it there too.
  *
+ * That rule runs both ways, and this file is the half that is easy to forget: a
+ * key a migration inserts and this file never lists leaves the database ahead of
+ * the catalogue, and /admin/permissions.php reports the two do not agree. The
+ * keys added after their migrations, rather than with them, are the four this
+ * file now carries for the reversal, resend and typed-in kitchen run work.
+ * scripts/tests/PermissionMatrixTest.php asserts both directions, so the next
+ * one fails the unit suite instead of waiting to be noticed on the screen.
+ *
  * Naming: module.entity.action, lower snake, dot separated.
  * Wildcards understood by Rbac::hasPermission(): '*' (superuser) and 'module.*'.
  * -----------------------------------------------------------------------------
@@ -23,7 +31,7 @@ $OKV_PERMISSIONS = [
         'orders.status.update'         => 'Move an order through its stages',
         'orders.cancel'                => 'Cancel an order',
         'orders.reschedule'            => 'Reschedule an order delivery date',
-        'orders.create'                => 'Create an order by hand',
+        'orders.create'                => 'Create an order by hand, for a phone order',
         'orders.source.override'       => 'Source an order the payment gate would refuse, with a reason',
         'orders.shortage.record'       => 'Mark an order line out of stock and settle it for the customer',
     ],
@@ -49,6 +57,7 @@ $OKV_PERMISSIONS = [
     ],
     'kitchen_runs' => [
         'kitchen_runs.view'            => 'View kitchen runs',
+        'kitchen_runs.create'          => 'Start a kitchen run on a customer\'s behalf',
         'kitchen_runs.quote'           => 'Price a kitchen run',
         'kitchen_runs.approve'         => 'Approve a kitchen run',
         'kitchen_runs.convert'         => 'Turn a kitchen run into an order',
@@ -65,6 +74,8 @@ $OKV_PERMISSIONS = [
     'payments' => [
         'payments.view'                => 'View payments',
         'payments.record'              => 'Record a cash or transfer payment',
+        'payments.reversal.request'    => 'Ask for a recorded payment to be reversed',
+        'payments.reversal.approve'    => 'Approve a reversal of a recorded payment',
         'payments.proof.review'        => 'Review a manual payment proof',
         'payments.refund'              => 'Issue a refund',
     ],
@@ -96,6 +107,7 @@ $OKV_PERMISSIONS = [
         'settings.edit'                => 'Edit site settings',
         'settings.order.edit'          => 'Edit order and deposit settings',
         'settings.notifications.edit'  => 'Edit notification templates',
+        'notifications.resend'         => 'Resend a notification that failed',
     ],
     'users' => [
         'users.view'                   => 'View staff users',
