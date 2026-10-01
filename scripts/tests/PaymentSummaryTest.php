@@ -52,6 +52,8 @@ okv_test_eq('USSD on Paystack',          PaymentSummary::methodLabel('paystack',
 okv_test_eq('Paystack',                  PaymentSummary::methodLabel('paystack', ''),             'a Paystack charge with no channel is just Paystack');
 okv_test_eq('Paystack',                  PaymentSummary::methodLabel('paystack', 'something_new'), 'a channel Paystack adds later does not show raw');
 okv_test_eq('Business credit',           PaymentSummary::methodLabel('account', ''),              'an on-account payment reads as Business credit');
+okv_test_eq('Wallet',                    PaymentSummary::methodLabel('wallet', 'wallet'),         'a wallet payment reads as Wallet');
+okv_test_ok(str_contains((string) file_get_contents(dirname(__DIR__, 2) . '/includes/classes/PaymentSummary.php'), "status <> :void"), 'a voided payment row (replaced by the credit line or the wallet) is not drawn as a line');
 
 // -----------------------------------------------------------------------------
 // Words. The banned-word scan itself is scripts/brand-check.sh, which reads this class.

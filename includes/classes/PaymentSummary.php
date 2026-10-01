@@ -92,6 +92,9 @@ final class PaymentSummary
         if ($provider === 'account') {
             return 'Business credit';
         }
+        if ($provider === 'wallet') {
+            return 'Wallet';
+        }
         return 'Payment';
     }
 
@@ -166,9 +169,9 @@ final class PaymentSummary
             'SELECT id, payment_type, provider, expected_amount_subunit, paid_amount_subunit,
                     refunded_amount_subunit, status, due_at, confirmed_at
                FROM payments
-              WHERE order_id = :order
+              WHERE order_id = :order AND status <> :void
               ORDER BY id',
-            [':order' => $orderId]
+            [':order' => $orderId, ':void' => Payments::STATUS_VOID]
         );
 
         $lines        = [];

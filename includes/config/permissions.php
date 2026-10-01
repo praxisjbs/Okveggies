@@ -58,6 +58,8 @@ $OKV_PERMISSIONS = [
         'customers.create'             => 'Create a customer account',
         'customers.edit'               => 'Edit a customer',
         'customers.addresses.view'     => 'View customer addresses',
+        'wallet.view'                  => 'See a customer wallet, its ledger and its credit notes',
+        'wallet.credit'                => 'Give a customer goodwill credit in their wallet',
     ],
     'payments' => [
         'payments.view'                => 'View payments',
@@ -112,6 +114,6 @@ $OKV_OWNER_ONLY = [
     'rbac.roles.view', 'rbac.roles.edit',
     'settings.edit', 'settings.order.edit', 'settings.notifications.edit',
     'products.delete', 'combos.delete',
-    'payments.refund', 'orders.source.override',
+    'payments.refund', 'orders.source.override', 'wallet.credit',
     'credit.apply.review', 'credit.grant', 'credit.limit.set',
 ];

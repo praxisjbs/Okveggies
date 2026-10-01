@@ -469,7 +469,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
             <!-- Wallet credit, spent first on a card payment. A direct bank transfer
                  is a separate way of paying, so the box is hidden for it. -->
             <?php if ($walletBalance > 0): ?>
-              <label class="okv-choice mt-3" data-wallet-option
+              <label class="mt-6 flex cursor-pointer items-start gap-4 rounded-xl border border-forest/20 bg-forest-tint p-4" data-wallet-option
                      data-wallet="<?= (int) $walletBalance ?>" data-total="<?= (int) $basket['subtotal_subunit'] ?>" data-deposit="<?= (int) $deposit ?>">
                 <span class="flex flex-none items-center pt-1">
                   <input type="checkbox" name="use_wallet" value="1" class="h-6 w-6 flex-none accent-forest" checked>
@@ -481,7 +481,7 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                   </span>
                   <span class="mt-1 block text-xs text-ink-60" data-wallet-hint>Spent first. Anything left is paid on Paystack.</span>
                 </span>
-                <span class="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('wallet', 'h-5 w-5'); ?></span>
+                <span class="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-white text-forest"><?php okv_icon('wallet', 'h-5 w-5'); ?></span>
               </label>
             <?php endif; ?>
 

@@ -121,7 +121,7 @@ okv_test_ok(str_contains($note, "Rbac::can('wallet.view')"), 'and for staff who 
 okv_test_ok(!str_contains($note, "okv_input('token'") && !str_contains($note, 'OrderTrail'), 'and never through a token link');
 
 $checkout = (string) file_get_contents($root . '/api/v1/checkout.php');
-okv_test_ok(str_contains($checkout, "!\$guest && (string) okv_input('use_wallet', '') === '1'"), 'checkout spends the wallet only for a signed-in customer who left the box ticked');
+okv_test_ok(str_contains($checkout, "!\$guest && !\$viaTransfer && (string) okv_input('use_wallet', '') === '1'"), 'checkout spends the wallet only for a signed-in customer who left the box ticked, and never on a direct bank transfer');
 okv_test_ok(str_contains($checkout, "['pay_in_full', 'deposit']"), 'and only on a pay in full or deposit order');
 
 $migration = (string) file_get_contents($root . '/migrations/067_wallet_and_credit_notes.sql');
