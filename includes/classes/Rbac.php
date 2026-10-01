@@ -83,6 +83,17 @@ final class Rbac
         return self::$cache['roles'] ?? [];
     }
 
+    /**
+     * Is the signed-in user the Owner? The Owner holds every permission, now and
+     * for every key added later, so this is the one question the Permissions
+     * module asks before it lets anyone change what a role carries. It reads the
+     * flag loadFromDb() set from the roles table, not a string the caller passed.
+     */
+    public static function isOwner(): bool
+    {
+        return (bool) (self::$cache['is_owner'] ?? false);
+    }
+
     public static function isStaff(): bool
     {
         return !empty(self::$cache['roles']);
@@ -118,10 +129,22 @@ final class Rbac
         return false;
     }
 
-    /** Owners and the launch Manager may administer roles. The server remains authoritative. */
+    /**
+     * Who may administer roles: the Owner, and only the Owner.
+     *
+     * This used to return true for anyone in the Manager role as well, through an
+     * `in_array('manager', ...)` bypass. That disagreed with the two things this
+     * project already decided: PRD Section 17.1 puts role editing outside the
+     * Manager's scope ("Not user management, role editing, or destructive
+     * settings"), and `$OKV_OWNER_ONLY` in includes/config/permissions.php lists
+     * rbac.roles.view and rbac.roles.edit as the Owner's. The bypass also meant
+     * api/v1/rbac.php would write a role for a colleague the catalogue says may
+     * not touch one. The Owner passes through `hasPermission('*')`, so this asks
+     * the catalogue rather than second-guessing it.
+     */
     public static function canManageRoles(): bool
     {
-        return self::isLoggedIn() && (self::hasPermission('rbac.roles.edit') || in_array('manager', self::roles(), true));
+        return self::isLoggedIn() && (self::isOwner() || self::hasPermission('rbac.roles.edit'));
     }
 
     /** Permissions this actor may delegate, expanded from the effective set. */

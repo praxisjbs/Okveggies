@@ -69,6 +69,7 @@ require_once __DIR__ . '/classes/Settings.php';
 require_once __DIR__ . '/classes/SettingsEditor.php';
 require_once __DIR__ . '/classes/Password.php';
 require_once __DIR__ . '/classes/Rbac.php';
+require_once __DIR__ . '/classes/PermissionMatrix.php';
 require_once __DIR__ . '/classes/Audit.php';
 require_once __DIR__ . '/classes/ContentPages.php';
 require_once __DIR__ . '/classes/ContentImages.php';
