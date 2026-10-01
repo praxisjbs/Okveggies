@@ -104,6 +104,7 @@ $csrf = Csrf::token();
         $updates = [];
     }
     $firstName = (string) ($me['first_name'] ?? '');
+    $walletBalance = Wallet::balance((int) Customer::id());
 ?>
   <!-- ============================ SIGNED-IN HOME ============================ -->
   <header class="bg-white border-b border-mist">
@@ -136,8 +137,9 @@ $csrf = Csrf::token();
     </h1>
 
     <div class="grid gap-6 lg:grid-cols-3 mt-8">
+      <div class="space-y-6 lg:col-span-1">
       <!-- Profile -->
-      <section class="okv-card lg:col-span-1" aria-labelledby="profile-h">
+      <section class="okv-card" aria-labelledby="profile-h">
         <div class="flex items-center justify-between">
           <h2 id="profile-h" class="font-editorial text-okv-h6 text-ink">Your details</h2>
           <button type="button" class="okv-btn-text" data-okv-open="profile-sheet">Edit</button>
@@ -159,6 +161,19 @@ $csrf = Csrf::token();
           <?php endif; ?>
         </dl>
       </section>
+
+      <!-- Wallet: what OK Veggies has credited to you, at a glance. The full
+           activity and every credit note are one tap away. -->
+      <section class="okv-card" aria-labelledby="wallet-h" data-wallet-card>
+        <div class="flex items-start justify-between gap-3">
+          <h2 id="wallet-h" class="font-editorial text-okv-h6 text-ink">Your wallet</h2>
+          <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-forest-tint text-forest"><?php okv_icon('wallet', 'h-5 w-5'); ?></span>
+        </div>
+        <p class="mt-3 font-mono text-3xl font-semibold text-forest"><?= okv_e(Money::format($walletBalance)) ?></p>
+        <p class="mt-1 text-sm text-ink-60"><?= $walletBalance > 0 ? 'Ready to spend. It is offered first when you pay.' : 'Credit from OK Veggies appears here.' ?></p>
+        <a href="/wallet.php" class="okv-btn-outline mt-4 inline-flex min-h-[44px] items-center px-5">Open wallet</a>
+      </section>
+      </div>
 
       <!-- Orders -->
       <section class="okv-card lg:col-span-2" aria-labelledby="orders-h">

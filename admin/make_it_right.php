@@ -66,7 +66,7 @@ $errorCopy = [
     'items_required' => 'Choose at least 1 affected order item.',
     'bad_amount' => 'Check the amount against the selected items and payment.',
     'invalid_transaction' => 'Choose a refundable Paystack payment from this order.',
-    'credit_not_available' => 'Account credit is available only for a business with an approved credit facility.',
+    'credit_not_available' => 'Credit can only be added for a report that has a customer account behind it.',
     'replacement_required' => 'Enter the replacement order number.',
     'invalid_replacement' => 'Choose an active manual order for the same customer.',
     'replacement_used' => 'That order already carries another replacement.',
@@ -287,7 +287,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
             <div class="mt-5 grid gap-4 lg:grid-cols-2">
               <section class="rounded-md border border-mist p-4" aria-labelledby="resolution-heading">
                 <h4 id="resolution-heading" class="font-semibold text-ink">Put it right</h4>
-                <p class="mt-2 text-sm text-ink-60">Choose the affected items, then record 1 final outcome. Refunds use Paystack, credit uses the approved business account, and a replacement links an order created through New order.</p>
+                <p class="mt-2 text-sm text-ink-60">Choose the affected items, then record 1 final outcome. Refunds use Paystack, credit goes into the customer's wallet with a credit note, and a replacement links an order created through New order.</p>
                 <form action="/api/v1/make_it_right.php" method="post" class="mt-4 space-y-4" novalidate>
                   <?= Csrf::field() ?>
                   <input type="hidden" name="action" value="resolve">
@@ -313,7 +313,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                     <select class="okv-input mt-1" id="resolution-type" name="resolution_type" required>
                       <option value="">Choose an outcome</option>
                       <option value="refund" <?= (!$canRefund || empty($resolutionOptions['transactions'])) ? 'disabled' : '' ?>>Refund<?= !$canRefund ? ' (Owner permission required)' : (empty($resolutionOptions['transactions']) ? ' (no refundable Paystack payment)' : '') ?></option>
-                      <option value="credit" <?= (!$canCredit || empty($resolutionOptions['credit_available'])) ? 'disabled' : '' ?>>Account credit<?= !$canCredit ? ' (Owner permission required)' : (empty($resolutionOptions['credit_available']) ? ' (approved business credit required)' : '') ?></option>
+                      <option value="credit" <?= (!$canCredit || empty($resolutionOptions['credit_available'])) ? 'disabled' : '' ?>>Wallet credit<?= !$canCredit ? ' (Owner permission required)' : (empty($resolutionOptions['credit_available']) ? ' (needs a customer account)' : '') ?></option>
                       <option value="replacement">Replacement</option>
                     </select>
                   </div>

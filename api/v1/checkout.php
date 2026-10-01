@@ -232,6 +232,24 @@ try {
     $payNow  = null;
     $pending = null;
     $orderId = (int) $result['order_id'];
+
+    // Wallet credit is spent first, on a pay in full or a deposit order, when the
+    // customer left the box ticked. A failure here never loses the order: the
+    // payment step below simply asks for the full amount as if nothing was used.
+    $walletPaid = 0;
+    if (!$guest && !$viaTransfer && (string) okv_input('use_wallet', '') === '1'
+        && in_array((string) ($input['payment_option'] ?? ''), ['pay_in_full', 'deposit'], true)
+    ) {
+        try {
+            $used = Wallet::payOrder($orderId, (int) Customer::id(), (int) Customer::id());
+            $walletPaid = !empty($used['ok']) ? (int) $used['amount_subunit'] : 0;
+            Notifications::announceWalletPayment($used, $orderId);
+        } catch (Throwable $e) {
+            error_log('checkout.place_order: wallet payment failed for order ' . $orderId . ': ' . $e->getMessage());
+        }
+    }
+    $result['wallet_paid_subunit'] = $walletPaid;
+
     try {
         $pending = Payments::pendingOnlinePayment($orderId);
         if ($pending) {
@@ -267,7 +285,10 @@ try {
         // pending verification, or asks for it again if it could not be kept.
         okv_redirect($fallback . '&payment=' . ($receiptSent || $alreadyPlaced ? 'awaiting' : 'receipt_needed'), 303);
     }
-    okv_redirect($fallback . ($pending !== null ? '&payment=unavailable' : ''), 303);
+    okv_redirect(
+        $fallback . ($pending !== null ? '&payment=unavailable' : '') . ($walletPaid > 0 && $pending === null ? '&wallet=paid' : ''),
+        303
+    );
 } catch (DomainException $e) {
     $known = [
         'payment_not_allowed' => ['That payment choice is not available for this account.', 'payment_not_allowed'],

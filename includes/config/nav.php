@@ -111,6 +111,7 @@ $OKV_PRO_NAV = [
     ['label' => 'Standing Orders', 'href' => '/pro/standing_orders.php','icon' => 'repeat'],
     ['label' => 'Orders and Invoices', 'href' => '/pro/orders.php',   'icon' => 'clipboard'],
     ['label' => 'Credit',          'href' => '/pro/credit.php',       'icon' => 'scale'],
+    ['label' => 'Wallet',          'href' => '/pro/wallet.php',       'icon' => 'scale'],
     ['label' => 'Account and Branches', 'href' => '/pro/account.php', 'icon' => 'user'],
 ];
 

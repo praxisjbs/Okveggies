@@ -44,10 +44,6 @@ final class IssueResolutions
         }
         unset($transaction);
 
-        $credit = Database::one(
-            'SELECT id, credit_status FROM business_customers WHERE user_id = :user_id',
-            [':user_id' => (int) $report['user_id']]
-        );
         $replacement = $report['replacement_order_id'] === null ? null : Database::one(
             'SELECT id, order_number FROM orders WHERE id = :id',
             [':id' => (int) $report['replacement_order_id']]
@@ -61,7 +57,9 @@ final class IssueResolutions
                 $transactions,
                 static fn(array $row): bool => (int) $row['refundable_subunit'] > 0
             )),
-            'credit_available' => $credit !== null && (string) $credit['credit_status'] === 'approved',
+            // Credit goes into the customer's wallet, so any customer with an
+            // account can receive it. A report with no account behind it cannot.
+            'credit_available' => (int) ($report['user_id'] ?? 0) > 0,
             'refund' => $refund,
             'replacement' => $replacement,
             'items' => self::storedItems($issueId),
@@ -286,24 +284,29 @@ final class IssueResolutions
                 $pdo->rollBack();
                 return $locked;
             }
-            $entry = Credit::grantIssueCredit(
+            $orderNumber = (string) (Database::one('SELECT order_number FROM orders WHERE id = :id', [':id' => (int) $report['order_id']])['order_number'] ?? '');
+            $entry = Wallet::credit(
                 (int) $report['user_id'],
+                $amount,
+                'complaint',
+                'Make It Right credit for order ' . $orderNumber,
+                'issue:' . (int) $report['id'] . ':wallet',
                 (int) $report['order_id'],
-                (int) $report['id'],
-                $amount
+                $actorId
             );
             self::storeItems((int) $report['id'], $items);
-            self::writeTerminal($report, 'credit', $note, $amount, (int) $entry['id'], null, $actorId);
+            self::writeTerminal($report, 'credit', $note, $amount, null, null, $actorId, (int) $entry['entry_id']);
             $pdo->commit();
             return ['ok' => true, 'code' => 'resolved', 'status' => 'resolved', 'type' => 'credit',
-                'amount_subunit' => $amount, 'credit_transaction_id' => (int) $entry['id']];
+                'amount_subunit' => $amount, 'wallet_entry_id' => (int) $entry['entry_id'],
+                'credit_note_id' => (int) $entry['credit_note_id'], 'credit_note_number' => (string) $entry['credit_note_number']];
         } catch (DomainException $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
             return self::failure(
-                $e->getMessage() === 'credit_not_available' ? 'credit_not_available' : 'invalid_credit',
-                'Account credit is available only for a business with an approved credit facility.'
+                'credit_not_available',
+                'Credit can only be added for a report that has a customer account behind it.'
             );
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -429,16 +432,19 @@ final class IssueResolutions
         ?int $amount,
         ?int $creditTransactionId,
         ?int $replacementOrderId,
-        int $actorId
+        int $actorId,
+        ?int $walletEntryId = null
     ): void {
         Database::run(
             'UPDATE issue_reports
                 SET status = :status, resolution_type = :type, resolution_note = :note,
                     resolution_amount_subunit = :amount, credit_transaction_id = :credit,
+                    resolution_wallet_entry_id = :wallet,
                     replacement_order_id = :replacement, resolved_at = NOW(), active_slot = NULL
               WHERE id = :id',
             [':status' => 'resolved', ':type' => $type, ':note' => $note, ':amount' => $amount,
-                ':credit' => $creditTransactionId, ':replacement' => $replacementOrderId, ':id' => (int) $report['id']]
+                ':credit' => $creditTransactionId, ':wallet' => $walletEntryId,
+                ':replacement' => $replacementOrderId, ':id' => (int) $report['id']]
         );
         self::history((int) $report['id'], 'in_progress', 'resolved', 'resolved_' . $type, $note, $actorId);
         Audit::record(
@@ -447,7 +453,8 @@ final class IssueResolutions
             (int) $report['id'],
             ['status' => 'in_progress'],
             ['status' => 'resolved', 'resolution_type' => $type, 'amount_subunit' => $amount,
-                'credit_transaction_id' => $creditTransactionId, 'replacement_order_id' => $replacementOrderId],
+                'credit_transaction_id' => $creditTransactionId, 'wallet_entry_id' => $walletEntryId,
+                'replacement_order_id' => $replacementOrderId],
             $actorId
         );
     }

@@ -219,6 +219,81 @@ if ($action === 'start_deposit') {
     payments_start_charge((int) $opened['payment_id']);
 }
 
+if ($action === 'use_wallet') {
+    // Pay an order, or as much of it as the wallet holds, from the customer's
+    // wallet. Only a signed-in account has a wallet, so there is no guest path.
+    // When the wallet cannot cover the whole amount and the form says so
+    // (then=card), what is left goes straight on to Paystack.
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Customer::requireLoginApi();
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    $userId  = (int) Customer::id();
+    $orderId = (int) okv_input('order_id', 0);
+    if ($orderId < 1) {
+        okv_error('That order could not be found.', 422, 'bad_order');
+    }
+    if (!RateLimiter::hit('wallet_pay:' . $userId, 10, 300)) {
+        okv_error('Too many attempts. Wait a few minutes and try again.', 429, 'rate_limited');
+    }
+    $order = Database::one(
+        'SELECT id, order_status, payment_option FROM orders WHERE id = :id AND user_id = :user',
+        [':id' => $orderId, ':user' => $userId]
+    );
+    if (!$order) {
+        okv_error('That order could not be found.', 404, 'not_found');
+    }
+
+    $walletBack = static function (string $code, string $message) use ($orderId): void {
+        if (payments_is_fetch()) {
+            okv_error($message, 422, $code);
+        }
+        okv_redirect('/public/order.php?order=' . $orderId . '&wallet_error=' . rawurlencode($code), 303);
+    };
+
+    try {
+        // A pay on delivery order has no online row until its deposit is opened.
+        if ((string) $order['payment_option'] === 'pay_on_delivery'
+            && (string) $order['order_status'] === 'pending'
+            && Payments::pendingOnlinePayment($orderId) === null
+        ) {
+            $opened = Payments::openDepositPayment($orderId, $userId, $userId);
+            if (!$opened['ok']) {
+                $walletBack($opened['code'], $opened['message']);
+            }
+        }
+        $result = Wallet::payOrder($orderId, $userId, $userId);
+    } catch (Throwable $e) {
+        error_log('payments.use_wallet failed: ' . $e->getMessage());
+        okv_error('We could not use your wallet just now. Please try again.', 500, 'failed');
+    }
+    if (!$result['ok']) {
+        $walletBack($result['code'], $result['message']);
+    }
+
+    try {
+        Notifications::announceWalletPayment($result, $orderId);
+    } catch (Throwable $e) {
+        error_log('payments.use_wallet announce failed: ' . $e->getMessage());
+    }
+    if ((string) okv_input('then', '') === 'card' && (int) $result['remaining_subunit'] > 0) {
+        payments_start_charge((int) $result['payment_id']);
+    }
+    if (payments_is_fetch()) {
+        okv_json([
+            'status'            => 'ok',
+            'code'              => $result['code'],
+            'message'           => $result['message'],
+            'amount_subunit'    => $result['amount_subunit'],
+            'remaining_subunit' => $result['remaining_subunit'],
+        ]);
+    }
+    okv_redirect('/public/order.php?order=' . $orderId . '&wallet=' . rawurlencode($result['code']), 303);
+}
+
 /**
  * Send a customer back to their order after a receipt, with what happened. A
  * guest comes back by the trail token they hold, a signed-in customer by their

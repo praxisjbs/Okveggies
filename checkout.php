@@ -86,6 +86,9 @@ $payMethod       = $transferOffered && $payMethod === TransferProofs::METHOD_TRA
 $receiptError    = (string) okv_input('receipt_error', '');
 $depositPercent = rtrim(rtrim(number_format(Settings::depositPercentage(), 2), '0'), '.');
 $sourceRegions  = Settings::str('source_regions', 'Ogun State, Jos');
+// Wallet credit the customer already holds. It is offered ticked, and used first
+// for a pay in full or deposit order; a guest has no wallet, so no box.
+$walletBalance  = Customer::isLoggedIn() && Customer::id() !== null ? Wallet::balance((int) Customer::id()) : 0;
 $steps   = [1 => 'Basket', 2 => 'Details', 3 => 'Delivery', 4 => 'Payment'];
 $stepIcons = [1 => 'basket', 2 => 'user', 3 => 'map-pin', 4 => 'card'];
 
@@ -461,6 +464,25 @@ $canonical = rtrim((string) APP_URL, '/') . '/checkout.php';
                   </div>
                 </div>
               </fieldset>
+            <?php endif; ?>
+
+            <!-- Wallet credit, spent first on a card payment. A direct bank transfer
+                 is a separate way of paying, so the box is hidden for it. -->
+            <?php if ($walletBalance > 0): ?>
+              <label class="mt-6 flex cursor-pointer items-start gap-4 rounded-xl border border-forest/20 bg-forest-tint p-4" data-wallet-option
+                     data-wallet="<?= (int) $walletBalance ?>" data-total="<?= (int) $basket['subtotal_subunit'] ?>" data-deposit="<?= (int) $deposit ?>">
+                <span class="flex flex-none items-center pt-1">
+                  <input type="checkbox" name="use_wallet" value="1" class="h-6 w-6 flex-none accent-forest" checked>
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <span class="font-semibold text-ink">Use my wallet first</span>
+                    <span class="font-mono text-sm font-semibold text-forest"><?= okv_e(Money::format($walletBalance)) ?></span>
+                  </span>
+                  <span class="mt-1 block text-xs text-ink-60" data-wallet-hint>Spent first. Anything left is paid on Paystack.</span>
+                </span>
+                <span class="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-white text-forest"><?php okv_icon('wallet', 'h-5 w-5'); ?></span>
+              </label>
             <?php endif; ?>
 
             <!-- A gold rule, never a gold fill, with the grocer's promise on it. -->

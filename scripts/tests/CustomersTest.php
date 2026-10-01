@@ -148,22 +148,25 @@ okv_test_ok(str_contains($screen, "\$canGrantCredit  = Rbac::can('credit.grant')
 // What made the old wording worth keeping is still true and is the real
 // property: the screen never handles a write itself. Every form posts to the
 // endpoint that owns customer writes, which does the CSRF check and holds its
-// own permission. So this pins that instead: exactly two forms, both
-// addressed to that endpoint, both carrying a token, each offered only to
-// staff who may do what it asks for.
+// own permission. So this pins that instead: exactly three forms (create,
+// correct, and the Owner's goodwill credit for the wallet), all addressed to
+// that endpoint, all carrying a token, each offered only to staff who may do
+// what it asks for.
 okv_test_eq(
-    2,
+    3,
     preg_match_all('/<form\b[^>]*\bmethod=["\']post["\'][^>]*>/i', $screen, $okvScreenForms),
-    'the customer screen carries exactly two forms: creating a customer and correcting one'
+    'the customer screen carries exactly three forms: creating a customer, correcting one, and giving wallet credit'
 );
 okv_test_eq(
-    2,
+    3,
     preg_match_all('/<form\b[^>]*\bmethod=["\']post["\'][^>]*\baction=["\']\/api\/v1\/customers\.php["\'][^>]*>/i', $screen),
     'every write on the customer screen is handed to the endpoint that owns it, never handled on the screen'
 );
 okv_test_ok(str_contains($screen, 'Csrf::field()'), 'the forms on the screen carry a CSRF token');
 okv_test_ok(str_contains($screen, "\$canCreate       = Rbac::can('customers.create')"), 'making a customer is offered only to staff who may create one');
 okv_test_ok(str_contains($screen, "\$canEdit         = Rbac::can('customers.edit')"), 'correcting a customer is offered only to staff who may edit one');
+okv_test_ok(str_contains($screen, "\$canGiveCredit   = Rbac::can('wallet.credit')"), 'giving wallet credit is offered only to staff who hold wallet.credit');
+okv_test_ok(str_contains($screen, '<?php if ($canGiveCredit): ?>'), 'and the form is drawn only inside that check');
 // The list markup (rows, empty sentence, page switcher) lives in one component
 // that the screen and the live search endpoint both render, so a typed filter
 // and a reload of the same URL cannot drift. The pagination pin moved with it.

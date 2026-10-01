@@ -27,6 +27,7 @@ final class OrderCancellation
     {
         $left = max(0, $amountSubunit);
         $paystack = [];
+        $wallet = [];
         $manual = 0;
 
         foreach ($transactions as $transaction) {
@@ -43,6 +44,13 @@ final class OrderCancellation
                     'transaction_id' => (int) $transaction['id'],
                     'amount_subunit'  => $amount,
                 ];
+            } elseif ((string) ($transaction['provider'] ?? '') === 'wallet') {
+                // Wallet money goes back to the wallet it came from, at once and
+                // with a credit note. It never needs a person to send it.
+                $wallet[] = [
+                    'transaction_id' => (int) $transaction['id'],
+                    'amount_subunit'  => $amount,
+                ];
             } else {
                 $manual += $amount;
             }
@@ -51,6 +59,7 @@ final class OrderCancellation
 
         return [
             'paystack'        => $paystack,
+            'wallet'          => $wallet,
             'manual_subunit'  => $manual,
             'unmatched_subunit' => $left,
         ];
@@ -319,7 +328,35 @@ final class OrderCancellation
             }
         }
 
-        $refundStatus = self::resultingRefundStatus($outcome, $plan, $refundResults);
+        // Money that was paid from the customer's wallet goes back to it. Each
+        // credit is keyed on the transaction, so a retry cannot pay it twice.
+        $walletBack   = 0;
+        $walletFailed = 0;
+        foreach ($plan['wallet'] as $back) {
+            try {
+                $pdo->beginTransaction();
+                Wallet::credit(
+                    (int) $order['user_id'],
+                    (int) $back['amount_subunit'],
+                    'cancellation',
+                    'Refund for cancelled order ' . (string) $order['order_number'],
+                    'order:' . $orderId . ':cancel:txn:' . (int) $back['transaction_id'],
+                    $orderId,
+                    $actorId
+                );
+                $pdo->commit();
+                $walletBack += (int) $back['amount_subunit'];
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                error_log('order cancellation wallet refund failed for order ' . $orderId . ': ' . $e->getMessage());
+                $walletFailed += (int) $back['amount_subunit'];
+            }
+        }
+        $plan['manual_subunit'] = (int) $plan['manual_subunit'] + $walletFailed;
+
+        $refundStatus = self::resultingRefundStatus($outcome, $plan, $refundResults, $walletBack > 0);
         Database::run(
             'UPDATE order_cancellations SET refund_status = :status WHERE id = :id',
             [':status' => $refundStatus, ':id' => $cancellationId]
@@ -333,6 +370,7 @@ final class OrderCancellation
             'refund_subunit'    => (int) $outcome['refund_subunit'],
             'forfeit_subunit'   => (int) $outcome['forfeit_subunit'],
             'forfeit_reason'    => (string) ($outcome['reason'] ?? ''),
+            'wallet_subunit'    => $walletBack,
             'manual_subunit'    => (int) $plan['manual_subunit'] + (int) $plan['unmatched_subunit'],
             // The HTTP caller announces terminal refund outcomes after every
             // database write above has finished. It removes this internal list
@@ -388,14 +426,16 @@ final class OrderCancellation
         );
     }
 
-    private static function resultingRefundStatus(array $outcome, array $plan, array $results): string
+    private static function resultingRefundStatus(array $outcome, array $plan, array $results, bool $walletCredited = false): string
     {
         if ((int) $outcome['refund_subunit'] < 1) {
             return 'not_required';
         }
         $manual = (int) $plan['manual_subunit'] + (int) $plan['unmatched_subunit'];
         $hasFailure = false;
-        $allProcessed = count($results) > 0;
+        // Wallet money is returned the moment the order is cancelled, so it counts
+        // as done. An order refunded only to the wallet has no gateway result.
+        $allProcessed = count($results) > 0 || $walletCredited;
         foreach ($results as $result) {
             if (empty($result['ok'])) {
                 $hasFailure = true;
@@ -421,7 +461,7 @@ final class OrderCancellation
             return 'Order cancelled. There was nothing to refund.';
         }
         if ($refundStatus === 'processed') {
-            return 'Order cancelled. Paystack has confirmed the refund.';
+            return 'Order cancelled. The refund is done.';
         }
         if (in_array($refundStatus, ['manual_required', 'pending_manual'], true)) {
             return 'Order cancelled. Money recorded by staff still needs to be returned to the customer.';

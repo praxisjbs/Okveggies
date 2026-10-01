@@ -144,21 +144,50 @@
     var submits = document.querySelectorAll('[data-pay-submit]');
     var form = document.getElementById('checkout-payment-form');
 
+    // The wallet box: only meaningful for a pay in full or a deposit order, and
+    // when it covers the whole amount the button says so instead of naming Paystack.
+    var walletBox = document.querySelector('[data-wallet-option]');
+    var walletTick = walletBox ? walletBox.querySelector('input[name="use_wallet"]') : null;
+    var walletHint = walletBox ? walletBox.querySelector('[data-wallet-hint]') : null;
+
+    // Returns 'all' when the wallet pays the whole amount, 'part' when it pays some, '' when unused.
+    function walletCover(option) {
+      if (!walletBox || !walletTick || !walletTick.checked) { return ''; }
+      var due = option === 'pay_in_full' ? +walletBox.dataset.total : (option === 'deposit' ? +walletBox.dataset.deposit : 0);
+      if (due < 1) { return ''; }
+      return +walletBox.dataset.wallet >= due ? 'all' : 'part';
+    }
+
     function paint() {
       var checked = options.querySelector('input[name="payment_option"]:checked');
-      var text = checked ? (PAY_LABELS[checked.value] || 'Pay now') : 'Pay now';
-      if (transferChosen()) { text = 'Place order'; }
+      var option = checked ? checked.value : '';
+      var text = checked ? (PAY_LABELS[option] || 'Pay now') : 'Pay now';
+      var transfer = transferChosen();
+      var cover = transfer ? '' : walletCover(option);
+      if (cover === 'all') { text = option === 'deposit' ? 'Pay deposit from wallet' : 'Pay from wallet'; }
+      if (transfer) { text = 'Place order'; }
+      if (walletBox) {
+        // Only a card payment of a full amount or a deposit can use the wallet.
+        var usable = isOnlineChoice(option) && !transfer;
+        walletBox.style.display = usable ? '' : 'none';
+        if (walletTick) { walletTick.disabled = !usable; }
+        if (walletHint) {
+          walletHint.textContent = cover === 'all'
+            ? 'Covers the whole amount, so there is no card payment.'
+            : 'Spent first. Anything left is paid on Paystack.';
+        }
+      }
       labels.forEach(function (label) { label.textContent = text; });
     }
 
-    // The whole form, not just the cards: the method radios change the label too.
+    // The whole form, not just the cards: the method radios and the wallet box change the label too.
     (form || options).addEventListener('change', paint);
     paint();
 
     if (form) {
       form.addEventListener('submit', function () {
         var waiting = document.querySelector('[data-payment-options] input[name="payment_option"]:checked');
-        var message = transferChosen()
+        var message = transferChosen() || (waiting && isOnlineChoice(waiting.value) && walletCover(waiting.value) === 'all')
           ? 'Placing your order'
           : (waiting && isOnlineChoice(waiting.value) ? 'Taking you to Paystack' : 'Placing your order');
         submits.forEach(function (button) {

@@ -118,6 +118,7 @@ require_once __DIR__ . '/classes/OrderReschedule.php';
 require_once __DIR__ . '/classes/OrderMoney.php';
 require_once __DIR__ . '/classes/SourcingGate.php';
 require_once __DIR__ . '/classes/PayMethods.php';
+require_once __DIR__ . '/classes/Wallet.php';
 require_once __DIR__ . '/classes/OrderLifecycle.php';
 require_once __DIR__ . '/classes/DeliveryManifest.php';
 require_once __DIR__ . '/classes/Notifications.php';

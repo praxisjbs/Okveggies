@@ -168,7 +168,7 @@ if (!function_exists('okv_document_letterhead')) {
           <h1 class="okv-doc-title"><?= okv_e((string) ($o['title'] ?? '')) ?></h1>
         </td>
         <td class="okv-doc-org">
-          <p class="okv-doc-label">Order number</p>
+          <p class="okv-doc-label"><?= okv_e((string) ($o['reference_label'] ?? 'Order number')) ?></p>
           <p class="okv-doc-ref"><?= okv_e($ref) ?></p>
           <p class="okv-doc-label okv-doc-gap">Issued</p>
           <p><?= okv_e($issued) ?></p>

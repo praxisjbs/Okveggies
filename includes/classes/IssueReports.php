@@ -15,7 +15,7 @@ final class IssueReports
     public const STATUSES = ['open', 'in_progress', 'resolved', 'declined'];
     public const RESOLUTION_TYPES = [
         'refund' => 'Refund',
-        'credit' => 'Account credit',
+        'credit' => 'Wallet credit',
         'replacement' => 'Replacement',
     ];
     public const RESOLUTION_NOTE_MIN = 10;
@@ -141,15 +141,14 @@ final class IssueReports
                     i.resolution_note, i.resolution_amount_subunit, i.resolved_at,
                     i.created_at, r.status AS refund_status,
                     i.replacement_order_id, ro.order_number AS replacement_order_number,
-                    CASE WHEN bc.id IS NOT NULL AND bc.credit_status = :approved THEN 1 ELSE 0 END AS credit_link_available
+                    cn.id AS credit_note_id, cn.credit_note_number
                FROM issue_reports i
           LEFT JOIN refunds r ON r.issue_report_id = i.id
           LEFT JOIN orders ro ON ro.id = i.replacement_order_id AND ro.user_id = :replacement_user
-          LEFT JOIN business_customers bc ON bc.user_id = i.user_id
+          LEFT JOIN credit_notes cn ON cn.wallet_entry_id = i.resolution_wallet_entry_id AND cn.user_id = i.user_id
               WHERE i.order_id = :order_id AND i.user_id = :user_id
            ORDER BY i.created_at DESC, i.id DESC',
             [
-                ':approved' => 'approved',
                 ':replacement_user' => $userId,
                 ':order_id' => $orderId,
                 ':user_id' => $userId,
@@ -184,7 +183,7 @@ final class IssueReports
             'in_progress' => 'Our team is handling this report now.',
             'resolved' => match ((string) ($report['resolution_type'] ?? '')) {
                 'refund' => 'Your refund has been raised. See its latest status below.',
-                'credit' => 'The account credit has been added.',
+                'credit' => 'The credit has been added to your wallet.',
                 'replacement' => 'Your replacement order has been arranged.',
                 default => 'Our team has completed this report.',
             },

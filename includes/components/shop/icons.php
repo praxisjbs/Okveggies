@@ -36,6 +36,8 @@ if (!function_exists('okv_icon')) {
             'calendar'     => '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="M9 14.5h2M13 14.5h2"/>',
             // Payment card.
             'card'         => '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M6.5 14.5h4"/>',
+            // The wallet: a fold-over purse with its clasp.
+            'wallet'       => '<path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H17a1 1 0 0 1 1 1v1.5"/><path d="M4 7.5V17a2 2 0 0 0 2 2h12a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H6.5A2.5 2.5 0 0 1 4 7.5Z"/><circle cx="15.5" cy="13.5" r="1"/>',
             // Bank transfer: a note changing hands across a counter.
             'banknote'     => '<rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6.5 12h.01M17.5 12h.01"/>',
             // USSD on a feature phone.

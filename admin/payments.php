@@ -733,7 +733,7 @@ require __DIR__ . '/../includes/components/admin/header.php';
                 </td>
                 <td><?= okv_e(date('j M Y', strtotime((string) $row['order_created_at']))) ?></td>
                 <td><?= okv_e(Money::format((int) ($row['amount_subunit'] ?? 0))) ?></td>
-                <td><?= okv_e($row['provider'] === 'manual' ? ($row['channel'] ?: 'manual') : 'Paystack') ?></td>
+                <td><?= okv_e($row['provider'] === 'manual' ? ($row['channel'] ?: 'manual') : ($row['provider'] === 'wallet' ? 'Wallet' : 'Paystack')) ?></td>
                 <td>
                   <span class="okv-badge <?= okv_e(okv_payment_badge((string) $row['status'])) ?>">
                     <?= okv_e(str_replace('_', ' ', (string) $row['status'])) ?>
