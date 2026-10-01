@@ -162,9 +162,9 @@ try {
     cah_eq(403, $status, 'and a direct note write from them is refused');
     cah_eq('Call after the market run.', (string) Database::one('SELECT admin_note FROM contact_messages WHERE id = :id', [':id' => $target])['admin_note'], 'the note they tried to overwrite is untouched');
 
-    // 21. The unanswered count is on the chrome staff always have open.
+    // 21. The unread count is on the chrome staff always have open. Only the first message was opened above, so 26 are still unread.
     [, $badgePage] = cah_req($base, $managerJar, 'GET', '/admin/');
-    cah_ok(preg_match('/new, unanswered/', (string) $badgePage) === 1, 'a Manager carries the unanswered count on every admin screen');
+    cah_ok(preg_match('/ unread<\/span>/', (string) $badgePage) === 1, 'a Manager carries the unread count on every admin screen');
 
     [$status] = cah_req($base, $managerJar, 'POST', '/api/v1/contact.php', [
         'action' => 'handle', 'message_id' => $target, 'expected_status' => 'new', 'okv_csrf' => $managerCsrf,

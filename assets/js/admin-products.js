@@ -33,16 +33,29 @@
     return (window.OKV && OKV.csrf) ? OKV.csrf : '';
   }
 
+  // A request that never answers must not leave a button disabled for good, so
+  // the call gives up after twenty seconds and the form says it could not reach
+  // the server. The save itself is idempotent, so trying again is safe.
+  var TIMEOUT_MS = 20000;
+
   function send(body) {
+    var controller = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, TIMEOUT_MS) : null;
+    function done() { if (timer) { clearTimeout(timer); } }
     return fetch(ENDPOINT, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' },
-      body: body
+      body: body,
+      signal: controller ? controller.signal : undefined
     }).then(function (res) {
+      done();
       return res.json().catch(function () { return {}; }).then(function (data) {
         return { ok: res.ok, data: data || {} };
       });
+    }, function (error) {
+      done();
+      throw error;
     });
   }
 

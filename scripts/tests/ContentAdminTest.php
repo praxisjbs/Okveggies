@@ -8,7 +8,11 @@ $endpoint = (string) file_get_contents($root . '/api/v1/content.php');
 $script = (string) file_get_contents($root . '/assets/js/admin-content.js');
 $nav = (string) file_get_contents($root . '/includes/config/nav.php');
 
-okv_test_eq(15, count(ContentPages::homeFields()), 'the admin can derive the fixed homepage field set from the service');
+okv_test_eq(count(ContentSlots::textLimits('home')), count(ContentPages::homeFields()), 'the admin can derive the homepage field set from the slot registry');
+foreach (['hero_eyebrow', 'hero_heading', 'hero_intro', 'primary_cta_label', 'primary_cta_path', 'secondary_cta_label', 'secondary_cta_path', 'promise_heading', 'promise_body',
+          'combos_eyebrow', 'combos_heading', 'categories_eyebrow', 'categories_heading', 'products_eyebrow', 'products_heading'] as $legacyKey) {
+    okv_test_ok(array_key_exists($legacyKey, ContentPages::homeFields()), "$legacyKey, a field the dashboard already stores, is still a homepage slot");
+}
 okv_test_ok(str_contains($page, 'ContentPages::listForAdmin()'), 'the editor lists pages through the shared service');
 okv_test_ok(str_contains($page, 'ContentPages::findForAdmin'), 'the shareable page selection loads through the shared service');
 okv_test_ok(str_contains($page, 'ContentPages::history'), 'the editor shows append-only content history');

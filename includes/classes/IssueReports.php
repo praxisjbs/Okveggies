@@ -10,6 +10,16 @@ final class IssueReports
     public const IP_LIMIT = 20;
     public const RATE_WINDOW = 3600;
     public const MAX_PHOTOS = 5;
+
+    /** "2 photos attached", "1 photo attached", "No photos attached". What was actually stored, in words. */
+    public static function photoCountLine(int $count): string
+    {
+        $count = max(0, $count);
+        if ($count === 0) {
+            return 'No photos attached.';
+        }
+        return $count . ($count === 1 ? ' photo' : ' photos') . ' attached.';
+    }
     public const PHOTO_MIME = ['image/jpeg', 'image/png', 'image/webp'];
     public const PER_PAGE = 25;
     public const STATUSES = ['open', 'in_progress', 'resolved', 'declined'];

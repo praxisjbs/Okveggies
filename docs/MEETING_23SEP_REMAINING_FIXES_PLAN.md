@@ -181,6 +181,25 @@ Decisions taken in PR2b that were not in the Q and A, and why:
    receipt is waiting**, because the amount the customer is about to pay is
    changing under them. It is allowed at Placed and Sourced, never once packed.
 
+## PR3: every word on every public page is editable, and three small fixes
+
+The Owner's rule, in their words: "every single page of the website, every content of every page must be fully editable. Forget about the seed. The copy that must stand is what the user edits in the Message and Content module." Scope, chosen in the Q and A: the homepage and all six information pages (Our Story, How It Works, FAQ, Terms, Privacy, Delivery Policy).
+
+Decisions taken while building it:
+
+1. **A slot is declared once and saved with the page.** `ContentSlots` is the registry: a key, a label, a kind (line, text, long Markdown, path, rows, image), a length limit and the standard wording. Values live in the JSON the Content module already stores for drafts and for the published page, so a slot is saved as a draft, previewed, published, audited and protected by the same optimistic lock as the body. No new table, and nothing is seeded.
+2. **The dashboard is the source of truth.** A page shows the published value of a slot. The standard wording appears only for a slot nobody has ever filled in, so a page can never render empty. The editor opens on exactly what the page says now, and clearing a box goes back to the standard wording. Because of that no slot is ever required to publish.
+3. **The hero reads the dashboard like everything else.** The dashboard still held the very first seed text, which is not what the client approved, so reading from it would have flipped the live hero back. Migration 070 replaces only values that are still exactly the original seed with the approved wording, in the published copy and the draft. Wording the Owner has already written is never touched. The standard wording in the registry is the approved wording too.
+4. **What the visitor sees does not change until the Owner changes it.** Every standard wording is the text the site showed before. A pixel comparison of 13 pages and sheets at 390px and 1440px against `main` found no difference.
+5. **Buttons.** A button is two slots, its words and where it goes. A destination is a site path, a #section, an https address, or the word `whatsapp` for the live chat link. Anything else (javascript:, data:, http:, //host, spaces, ..) is refused when saved, and one already in the database is shown as `/`.
+6. **Policy figures stay live.** Copy can carry the FAQ tokens, plus `{{make_it_right_photos}}`, so "within 7 days" follows the setting instead of going stale.
+7. **The founder portrait is a photograph slot**, uploaded through the same protected workflow as the page photograph, with its description and caption as slots. It sits under the heading "The person behind it", and follows the story if the Owner renames that heading, so it can never vanish.
+8. **A published page can now take a saved draft live.** The Publication panel only offered "Unpublish page" on a published page, so the only way to put an edit live was to take the page down first. It now says when the saved draft has changes the public does not have yet and offers "Publish saved draft", and the page list flags it.
+9. **Not in this module.** The header, the footer, the shop, combo, product, checkout, account and Pro screens, and lines driven by Settings (the business tagline, the sourcing line). Those are product screens or have their own editor, and the Owner chose the information pages.
+10. **The Content and Messages badge counted answered, not read.** It counted messages still "new", and a message only left "new" when someone pressed Mark handled, so reading never lowered it. Reading and answering are now recorded separately (`read_at`, `read_by`, migration 069). The badge counts messages nobody has opened, opening one lowers it on the same screen, and Mark all read clears the backlog. The status chip now says "Awaiting a reply" so it cannot be mistaken for unread.
+11. **A complaint now says how many photos were attached** ("2 photos attached.", "1 photo attached.", "No photos attached."), read back from what was stored.
+12. **Putting a product back in stock: no defect found.** Reproduced through the real admin screen. Only two code paths ever write availability and neither resets anything; the stored row, the public page and the add to basket state agree at every step. One real gap was fixed: the products screen's request had no time limit, so a stalled request left the button disabled with no message, which matches the Owner's own guess of a stall or network issue. It now gives up after twenty seconds.
+
 ## Test plan
 Unit tests for every pure rule (`OrderMoneyTest`, `SourcingGateTest`, additions to
 `CreditTest`, `PayMethodsTest`). Database suites on MySQL 8 for the locked paths

@@ -44,7 +44,7 @@ $OKV_ADMIN_NAV = [
             ['label' => 'Delivery',      'href' => '/admin/delivery.php',     'icon' => 'truck',       'permission' => 'delivery.view', 'keywords' => ['delivery', 'manifest', 'packing', 'zones', 'schedule'], 'shortcut' => ['g', 'l']],
             ['label' => 'Make It Right', 'href' => '/admin/make_it_right.php','icon' => 'heart',       'permission' => 'issues.view', 'keywords' => ['issues', 'reports', 'replacement', 'complaints']],
             // `count` names a counter the sidebar resolves once per render, so
-            // staff carry the number of unanswered messages on every screen.
+            // staff carry the number of unread messages on every screen.
             ['label' => 'Content and Messages', 'href' => '/admin/content.php', 'icon' => 'chat', 'permissions_any' => ['content.view', 'messages.view'], 'count' => 'messages.new', 'keywords' => ['content', 'pages', 'messages', 'contact', 'enquiries', 'inbox']],
         ],
     ],

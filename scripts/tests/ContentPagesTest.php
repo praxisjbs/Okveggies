@@ -112,14 +112,25 @@ $home = ContentPages::validateDraft('home', [
 ], true);
 okv_test_ok($home['ok'], 'the complete fixed homepage field set can be published');
 okv_test_ok(!array_key_exists('invented_field', $home['clean']['content_data']), 'unknown homepage keys are discarded');
-okv_test_eq(15, count($home['clean']['content_data']), 'only the fifteen approved homepage fields survive');
+okv_test_eq(count(ContentSlots::textLimits('home')), count($home['clean']['content_data']), 'only the registered homepage slots survive, the ones not sent stored blank so they use the standard wording');
+okv_test_eq('', $home['clean']['content_data']['start_shop_label'], 'a slot nobody filled in is stored blank, never as made up text');
 
-$badCta = $homeFields;
-$badCta['primary_cta_path'] = 'https://attacker.example/';
-$badHome = ContentPages::validateDraft('home', [
-    'title' => 'Fresh from farms we can name', 'body' => 'Copy', 'content_data' => $badCta,
-], true);
-okv_test_ok(isset($badHome['errors']['content_data.primary_cta_path']), 'homepage calls to action use the destination allowlist');
+foreach (['javascript:alert(1)', '//attacker.example/', 'http://attacker.example/', '/shop.php/../../etc', '/shop page', 'data:text/html,x'] as $badPath) {
+    $badCta = $homeFields;
+    $badCta['primary_cta_path'] = $badPath;
+    $badHome = ContentPages::validateDraft('home', [
+        'title' => 'Fresh from farms we can name', 'body' => 'Copy', 'content_data' => $badCta,
+    ], true);
+    okv_test_ok(isset($badHome['errors']['content_data.primary_cta_path']), "a button destination of '$badPath' is refused");
+}
+foreach (['/shop.php', '/account.php?mode=register', '#make-it-right', 'https://wa.me/2348000000000', 'whatsapp', ''] as $goodPath) {
+    $okCta = $homeFields;
+    $okCta['primary_cta_path'] = $goodPath;
+    $okHome = ContentPages::validateDraft('home', [
+        'title' => 'Fresh from farms we can name', 'body' => 'Copy', 'content_data' => $okCta,
+    ], true);
+    okv_test_ok(!isset($okHome['errors']['content_data.primary_cta_path']), "a button destination of '$goodPath' is accepted");
+}
 
 $snapshot = [
     'draft_title' => 'Our Story', 'draft_body' => "One\r\nTwo",

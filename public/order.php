@@ -629,7 +629,8 @@ $stepIcons = ['pending' => 'check', 'sourced' => 'leaf', 'packed' => 'basket', '
       </div>
 
       <?php if ($issueNotice === 'reported'): ?>
-        <p class="okv-note mt-4 bg-foliage-tint" role="status">We received your report for order <?= okv_e($order['order_number']) ?>.</p>
+        <?php // The count is read back from what was stored for the newest report, never from the address bar. ?>
+        <p class="okv-note mt-4 bg-foliage-tint" role="status" data-issue-confirmation>We received your report for order <?= okv_e($order['order_number']) ?>. <strong><?= okv_e(IssueReports::photoCountLine(count((array) ($issueHistory[0]['photos'] ?? [])))) ?></strong></p>
       <?php elseif ($issueNotice === 'already_open'): ?>
         <p class="okv-note mt-4 bg-clay-tint" role="status">We already have an open report for order <?= okv_e($order['order_number']) ?>.</p>
       <?php endif; ?>
@@ -644,6 +645,7 @@ $stepIcons = ['pending' => 'check', 'sourced' => 'leaf', 'packed' => 'basket', '
                 <span class="text-sm text-ink-60"><?= okv_e((string) $customerReport['status_label']) ?> · <?= okv_e(date('j M Y', strtotime((string) $customerReport['created_at']))) ?></span>
               </summary>
               <p class="mt-3 text-sm font-semibold text-ink"><?= okv_e((string) $customerReport['next_step']) ?></p>
+              <p class="mt-1 text-sm text-ink-60" data-issue-photo-count><?= okv_e(IssueReports::photoCountLine(count((array) ($customerReport['photos'] ?? [])))) ?></p>
               <p class="mt-2 whitespace-pre-line text-sm text-ink-60"><?= okv_e((string) $customerReport['description']) ?></p>
               <?php if (!empty($customerReport['photos'])): ?>
                 <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">

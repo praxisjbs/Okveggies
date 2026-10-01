@@ -40,7 +40,9 @@ okv_test_ok(str_contains($checkout, 'form="checkout-payment-form"'), 'F: the sti
 okv_test_ok(str_contains($checkout, 'data-sheet-open="fee-sheet"'), 'F: the fee explanation is a sheet, not a paragraph wall');
 okv_test_ok(str_contains($checkout, 'Cancellation::policyLine('), 'F: checkout still speaks the one cancellation sentence from Cancellation::policyLine');
 okv_test_ok(str_contains($page, "make_it_right_guidance.php"), 'F: How It Works and Delivery Policy can expose operational guidance');
-okv_test_ok(str_contains($guidance, 'IssueReports::reportingWindowDays()'), 'F: policy uses the managed reporting window');
+okv_test_ok(str_contains(ContentSlots::defaults('delivery-policy')['mir_line'], '{{make_it_right_window}}') && str_contains(ContentSlots::defaults('how-it-works')['mir_sheet_body'], '{{make_it_right_window}}'), 'F: the standard policy wording carries the reporting window as a token');
+okv_test_eq(IssueReports::reportingWindowDays() . ' days', ContentSlots::resolve('{{make_it_right_window}}'), 'F: policy uses the managed reporting window, whatever words the Owner writes around it');
+okv_test_eq((string) IssueReports::MAX_PHOTOS, ContentSlots::resolve('{{make_it_right_photos}}'), 'F: and the managed photo limit');
 foreach ([$product, $combo, $productCard] as $source) {
     okv_test_ok(str_contains($source, 'okv_sourced_note('), 'F: every product and combo buying page renders the shared sourcing line');
 }

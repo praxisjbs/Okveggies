@@ -14,8 +14,11 @@ okv_test_ok(str_contains($component, 'aria-level="2"') && str_contains($componen
 okv_test_ok(str_contains($component, 'Expand') && str_contains($component, 'Close'), 'expanded state has a text signal as well as colour');
 okv_test_ok(str_contains($component, 'min-h-[56px]'), 'every question summary exceeds the 44px touch target');
 okv_test_ok(str_contains($script, '.open = open') && !str_contains($script, 'innerHTML'), 'bulk controls use the native open property and never unsafe HTML');
-okv_test_ok(str_contains($page, 'There are no published questions just now.'), 'a published FAQ with no valid items has a useful empty state');
-okv_test_ok(substr_count($page, 'okv_support_whatsapp_url()') >= 2 && str_contains($page, '/contact.php'), 'FAQ offers both Contact and WhatsApp routes');
+okv_test_ok(str_contains($page, '$copy[\'empty_body\']') && ContentSlots::defaults('faq')['empty_body'] === 'There are no published questions just now.', 'a published FAQ with no valid items has a useful empty state, in words the Owner can change');
+okv_test_ok(str_contains($page, '$copy[\'help_contact_path\']') && str_contains($page, '$copy[\'help_chat_path\']'), 'FAQ offers a Contact and a chat route, both from the slots');
+okv_test_eq('/contact.php', ContentSlots::defaults('faq')['help_contact_path'], 'the standard Contact route is the contact page');
+okv_test_eq('whatsapp', ContentSlots::defaults('faq')['help_chat_path'], 'and the standard chat route is the live WhatsApp link');
+okv_test_eq(okv_support_whatsapp_url(), ContentSlots::href('whatsapp'), 'which resolves to the support WhatsApp address');
 okv_test_ok(str_contains($admin, 'FaqContent::tokenDefinitions()'), 'the admin editor documents its explicit operational tokens');
 okv_test_ok(str_contains($admin, 'cannot be published yet') && str_contains($admin, 'Published order'), 'the admin shows structure errors and stable source order');
 okv_test_ok(str_contains($migration, "body = 'Answers to the questions we hear most"), 'migration 050 targets only the exact shipped FAQ placeholder');

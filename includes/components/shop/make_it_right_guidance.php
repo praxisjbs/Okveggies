@@ -1,7 +1,9 @@
 <?php
 /**
- * Application-owned operational guidance, kept aligned with live settings.
- * One line on the page. The rest lives in a Learn sheet.
+ * The Make It Right panel on How It Works and Delivery Policy. One line on the
+ * page, the rest in a Learn sheet. Its words are slots the Owner edits in the
+ * Content module, and its figures (the reporting window, the photo limit) are
+ * tokens in those words, so they stay aligned with the live settings.
  */
 if (!defined('OKV_BOOTSTRAPPED')) {
     exit;
@@ -9,31 +11,30 @@ if (!defined('OKV_BOOTSTRAPPED')) {
 require_once __DIR__ . '/icons.php';
 require_once __DIR__ . '/help_sheet.php';
 
-$windowDays = (int) IssueReports::reportingWindowDays();
-$maxPhotos = (int) IssueReports::MAX_PHOTOS;
-$sheetBody = '<p>After dispatch or delivery, report a wrong, missing, damaged or late item from that order.</p>'
-    . '<p class="mt-3">Send it within ' . $windowDays . ' days. Add a description and up to ' . $maxPhotos . ' photos.</p>'
-    . '<p class="mt-3">We record a refund, credit, replacement, or a reason if we cannot approve it.</p>'
-    . '<p class="mt-3">The report stays on your signed-in order. It is never on the shareable trail.</p>';
+// The page that includes this panel has already loaded its slots into $copy.
+// Every word here is a slot the Owner edits; the reporting window and the photo
+// limit are tokens in those words, so they follow the settings.
+$mirOrdersLabel = (string) $copy['mir_orders_label'];
+$mirSigninLabel = (string) $copy['mir_signin_label'];
 ?>
 <section class="mt-10 border-t border-mist pt-8" id="make-it-right" tabindex="-1" aria-labelledby="make-it-right-policy-heading">
-  <p class="okv-eyebrow">Make It Right</p>
-  <h2 id="make-it-right-policy-heading" class="mt-2 scroll-mt-24 font-editorial text-okv-h6 text-ink md:text-okv-h5">If something is not right</h2>
-  <p class="mt-3 text-ink-60">Report it within <?= $windowDays ?> days from your order.</p>
+  <p class="okv-eyebrow"><?= okv_e($copy['mir_eyebrow']) ?></p>
+  <h2 id="make-it-right-policy-heading" class="mt-2 scroll-mt-24 font-editorial text-okv-h6 text-ink md:text-okv-h5"><?= okv_e($copy['mir_heading']) ?></h2>
+  <p class="mt-3 text-ink-60"><?= okv_e($copy['mir_line']) ?></p>
   <div class="mt-4 flex flex-wrap gap-3">
-    <button type="button" class="okv-btn-text min-h-[44px]" data-sheet-open="make-it-right-sheet" aria-haspopup="dialog"><?php okv_icon('info', 'h-4 w-4'); ?> Learn</button>
+    <button type="button" class="okv-btn-text min-h-[44px]" data-sheet-open="make-it-right-sheet" aria-haspopup="dialog"><?php okv_icon('info', 'h-4 w-4'); ?> <?= okv_e($copy['mir_learn_label']) ?></button>
     <?php if (Customer::isLoggedIn()): ?>
-      <a class="okv-btn-outline rounded-xl" href="/account.php"><?php okv_icon('user', 'h-4 w-4'); ?> Open your orders</a>
+      <a class="okv-btn-outline rounded-xl" href="/account.php"><?php okv_icon('user', 'h-4 w-4'); ?> <?= okv_e($mirOrdersLabel) ?></a>
     <?php else: ?>
       <!-- Sign in to report is a solid tomato button on purpose: it is the one
            moment the interface should look like a fire exit, not a footnote.
            The same fill as the hero CTA, which the brand allows. -->
-      <a class="okv-btn rounded-xl border border-tomato bg-tomato px-6 text-white hover:bg-tomato-hover active:bg-tomato-active" href="/account.php?mode=signin"><?php okv_icon('user', 'h-4 w-4'); ?> Sign in to report</a>
+      <a class="okv-btn rounded-xl border border-tomato bg-tomato px-6 text-white hover:bg-tomato-hover active:bg-tomato-active" href="/account.php?mode=signin"><?php okv_icon('user', 'h-4 w-4'); ?> <?= okv_e($mirSigninLabel) ?></a>
     <?php endif; ?>
   </div>
 </section>
-<?php okv_help_sheet('make-it-right-sheet', 'shield', 'If something is not right', $sheetBody, [
+<?php okv_help_sheet('make-it-right-sheet', 'shield', $copy['mir_heading'], ContentSlots::sheetHtml($copy['mir_sheet_body']), [
     Customer::isLoggedIn()
-        ? ['href' => '/account.php', 'label' => 'Open your orders']
-        : ['href' => '/account.php?mode=signin', 'label' => 'Sign in to report', 'style' => 'danger'],
+        ? ['href' => '/account.php', 'label' => $mirOrdersLabel]
+        : ['href' => '/account.php?mode=signin', 'label' => $mirSigninLabel, 'style' => 'danger'],
 ]); ?>

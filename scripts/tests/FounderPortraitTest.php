@@ -40,7 +40,8 @@ okv_test_ok(str_contains($withPortrait, 'loading="lazy" decoding="async"'), 'the
 okv_test_eq(1, substr_count($withPortrait, '<figure'), 'exactly one figure is added to the body');
 
 $noAnchor = okv_story_founder_portrait('<p>A body without the section heading.</p>', $portrait);
-okv_test_eq('<p>A body without the section heading.</p>', $noAnchor, 'a body without the heading is left untouched');
+okv_test_ok(str_starts_with($noAnchor, '<p>A body without the section heading.</p>') && str_contains($noAnchor, '<figure class="okv-founder'), 'a body without the heading keeps its words and the portrait follows it, so renaming the heading cannot make the portrait vanish');
+okv_test_eq(1, substr_count($noAnchor, '<figure'), 'and it is added once');
 
 $missingPhoto = $portrait;
 $missingPhoto['file'] = sys_get_temp_dir() . '/okv-portrait-that-was-never-uploaded.jpg';
@@ -49,6 +50,7 @@ okv_test_eq($story['html'], okv_story_founder_portrait($story['html'], $missingP
 $unreadable = $portrait;
 $unreadable['file'] = $portraitFile;
 $unreadable['anchor'] = 'a-heading-the-renderer-never-emits';
-okv_test_eq($story['html'], okv_story_founder_portrait($story['html'], $unreadable), 'an unknown anchor leaves the body untouched');
+$followed = okv_story_founder_portrait($story['html'], $unreadable);
+okv_test_ok(str_starts_with($followed, $story['html']) && strpos($followed, '<figure class="okv-founder') > strpos($followed, 'Kumbish Emmanuel Putleh.'), 'an unknown anchor puts the portrait after the body instead of dropping it');
 
 unlink($portraitFile);

@@ -220,6 +220,7 @@ final class ContactMessages
                 );
             }
             $messageId = (int) $pdo->lastInsertId();
+            self::markRead($messageId, $staffId);
             Audit::record(
                 'contact_messages.create',
                 'contact_message',
@@ -244,11 +245,66 @@ final class ContactMessages
         return self::SOURCES[$source] ?? 'the storefront';
     }
 
-    /** Unanswered messages, for the count staff carry on every admin screen. */
+    /**
+     * Whether this database has the read tracking columns (migration 069). The
+     * sidebar counts messages on every admin screen, so during the minutes
+     * between a deploy uploading the code and the migration running it has to
+     * keep working on the old schema. Cached for the request.
+     */
+    public static function hasReadTracking(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            $row = Database::one(
+                'SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :col',
+                [':table' => 'contact_messages', ':col' => 'read_at']
+            );
+            $has = $row !== null && (int) ($row['n'] ?? 0) > 0;
+        }
+        return $has;
+    }
+
+    /**
+     * Messages nobody has opened yet, for the badge staff carry on every admin
+     * screen. Reading and answering are separate: a message stays "new" until it
+     * is handled, but it stops counting here the first time a colleague opens it.
+     */
     public static function countNew(): int
     {
-        $row = Database::one("SELECT COUNT(*) AS n FROM contact_messages WHERE status = 'new'");
+        $row = Database::one(
+            self::hasReadTracking()
+                ? "SELECT COUNT(*) AS n FROM contact_messages WHERE status = 'new' AND read_at IS NULL"
+                : "SELECT COUNT(*) AS n FROM contact_messages WHERE status = 'new'"
+        );
         return (int) ($row['n'] ?? 0);
+    }
+
+    /**
+     * Record that a colleague has opened this message. Idempotent: only the first
+     * open is kept, so a second colleague or a refresh changes nothing. Returns
+     * whether this call is the one that marked it.
+     */
+    public static function markRead(int $messageId, int $userId): bool
+    {
+        if ($messageId < 1 || !self::hasReadTracking()) {
+            return false;
+        }
+        return Database::run(
+            'UPDATE contact_messages SET read_at = :now, read_by = :user WHERE id = :id AND read_at IS NULL',
+            [':now' => date('Y-m-d H:i:s'), ':user' => $userId > 0 ? $userId : null, ':id' => $messageId]
+        ) > 0;
+    }
+
+    /** Mark everything unread as read, for the first time round or after a busy day. Returns how many. */
+    public static function markAllRead(int $userId): int
+    {
+        if (!self::hasReadTracking()) {
+            return 0;
+        }
+        return Database::run(
+            'UPDATE contact_messages SET read_at = :now, read_by = :user WHERE read_at IS NULL',
+            [':now' => date('Y-m-d H:i:s'), ':user' => $userId > 0 ? $userId : null]
+        );
     }
 
     public static function clientIp(): ?string
@@ -276,6 +332,7 @@ final class ContactMessages
             [':table' => 'contact_messages', ':col' => 'is_staff_initiated']
         );
         $flagSelect = ($hasFlag !== null && (int) ($hasFlag['n'] ?? 0) > 0) ? ', m.is_staff_initiated' : ', 0 AS is_staff_initiated';
+        $flagSelect .= self::hasReadTracking() ? ', m.read_at' : ', NULL AS read_at';
         $sql = 'SELECT m.id, m.name, m.email, m.phone, m.subject, m.status, m.created_at,
                        m.handled_at, TRIM(CONCAT(COALESCE(u.first_name, \'\'), \' \', COALESCE(u.last_name, \'\'))) AS handled_by_name'
                        . $flagSelect . '
@@ -429,6 +486,9 @@ final class ContactMessages
                     ':id' => $messageId,
                 ]
             );
+            if ($handled) {
+                self::markRead($messageId, $actorId);
+            }
             Audit::record(
                 $handled ? 'contact_messages.handle' : 'contact_messages.reopen',
                 'contact_message',

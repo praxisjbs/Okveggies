@@ -135,3 +135,19 @@ foreach (['save_note', 'handle', 'reopen'] as $action) {
     okv_test_ok(str_contains($endpoint, "'$action'"), "$action is an explicit contact controller action");
 }
 okv_test_ok(!preg_match('/DELETE\s+FROM\s+contact_messages/i', $endpoint), 'the contact controller has no hard-delete action');
+
+// --- reading and answering are separate: the badge counts messages nobody has opened --------------
+$model = (string) file_get_contents($root . '/includes/classes/ContactMessages.php');
+okv_test_ok(str_contains($model, "status = 'new' AND read_at IS NULL"), 'the badge counts messages that are new and unopened, not every message still awaiting a reply');
+okv_test_ok(str_contains($model, 'public static function markRead') && str_contains($model, 'read_at IS NULL'), 'opening a message records the first read only');
+okv_test_ok(str_contains($model, 'public static function hasReadTracking'), 'the model checks the schema, so the sidebar keeps working between a deploy and its migration');
+okv_test_ok(substr_count($model, 'self::markRead(') >= 2, 'handling a message and starting a thread both count as having read it');
+$readMigration = (string) file_get_contents($root . '/migrations/069_contact_message_read_tracking.sql');
+okv_test_ok(!str_contains($readMigration, 'ADD COLUMN IF NOT EXISTS') && str_contains($readMigration, 'information_schema.COLUMNS'), 'the read tracking migration guards each column against information_schema');
+okv_test_ok(str_contains($readMigration, "AND `status` = 'handled'") && str_contains($readMigration, '`read_at` IS NULL'), 'and only backfills messages that were already handled, and only once');
+okv_test_ok(!str_contains($readMigration, "\u{2014}"), 'and has no em dash');
+$adminScreen = (string) file_get_contents($root . '/admin/content.php');
+okv_test_ok(str_contains($adminScreen, 'ContactMessages::markRead((int) $selected[\'id\']'), 'the messages screen marks the open message read before the sidebar counts');
+okv_test_ok(str_contains($adminScreen, "' unread)'"), 'the tab says how many are unread');
+$contactApi = (string) file_get_contents($root . '/api/v1/contact.php');
+okv_test_ok(preg_match("/'mark_all_read'.{0,400}Rbac::requirePermission\('messages\.view'\).{0,200}Csrf::validate\(\)/s", $contactApi) === 1, 'Mark all read needs the view permission and the CSRF token');
