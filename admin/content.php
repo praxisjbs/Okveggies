@@ -32,7 +32,7 @@ function okv_content_tabs(string $tab, int $newCount, bool $canMessages, bool $c
 {
     $tabs = [];
     if ($canMessages) {
-        $tabs['messages'] = 'Messages' . ($newCount > 0 ? ' (' . $newCount . ' new)' : '');
+        $tabs['messages'] = 'Messages' . ($newCount > 0 ? ' (' . $newCount . ' unread)' : '');
     }
     if ($canContent) {
         $tabs['page-copy'] = 'Page copy';
@@ -236,6 +236,16 @@ $page = min(max(1, (int) okv_input('page', 1)), $pages);
 $messages = ContactMessages::forStaff($search, $status, $from, $to, $page);
 $selectedId = (int) okv_input('message', $messages ? $messages[0]['id'] : 0);
 $selected = $selectedId > 0 ? ContactMessages::findForStaff($selectedId) : null;
+// Opening a message is reading it. The first colleague to open it marks it read,
+// before the sidebar counts, so the badge is already right on this very screen.
+if ($selected && $canMessages && ContactMessages::markRead((int) $selected['id'], (int) Rbac::userId())) {
+    foreach ($messages as &$listed) {
+        if ((int) $listed['id'] === (int) $selected['id']) {
+            $listed['read_at'] = date('Y-m-d H:i:s');
+        }
+    }
+    unset($listed);
+}
 $history = $selected ? ContactMessages::handlingHistory($selectedId) : [];
 $canHandle = Rbac::can('messages.handle');
 $hasFilters = $search !== '' || $status !== '' || $from !== '' || $to !== '';
@@ -252,6 +262,7 @@ $detailUrl = $selected ? $urlFor(['message' => (int) $selected['id']]) : $urlFor
 $noticeCode = trim((string) okv_input('notice', ''));
 $errorCode = trim((string) okv_input('error', ''));
 $notices = [
+    'all_read' => 'Every message is marked as read.',
     'note_saved' => 'The internal note has been saved.',
     'handled' => 'The message is marked handled.',
     'reopened' => 'The message is open again.',
@@ -344,7 +355,7 @@ okv_content_tabs($tab, ContactMessages::countNew(), $canMessages, $canContent);
       <label class="okv-label text-xs" for="message-status">Status</label>
       <select class="okv-input-sm min-h-[44px] rounded-xl" id="message-status" name="status">
         <option value="">All statuses</option>
-        <option value="new" <?= $status === 'new' ? 'selected' : '' ?>>New</option>
+        <option value="new" <?= $status === 'new' ? 'selected' : '' ?>>Awaiting a reply</option>
         <option value="handled" <?= $status === 'handled' ? 'selected' : '' ?>>Handled</option>
       </select>
     </div>
@@ -367,7 +378,15 @@ okv_content_tabs($tab, ContactMessages::countNew(), $canMessages, $canContent);
   <section class="okv-panel rounded-[20px] border border-ink-10 bg-white shadow-sm" aria-labelledby="message-list-heading">
     <div class="okv-panel-head rounded-t-[20px]">
       <h2 id="message-list-heading" class="okv-panel-title text-sm">Newest messages</h2>
-      <span class="rounded-full bg-mist px-2.5 py-1 text-xs text-ink-60"><?= (int) $total ?> total</span>
+      <span class="flex flex-wrap items-center gap-2">
+        <?php if (ContactMessages::countNew() > 0): ?>
+          <form action="/api/v1/contact.php" method="post" class="m-0">
+            <?= Csrf::field() ?><input type="hidden" name="action" value="mark_all_read"><input type="hidden" name="return_to" value="<?= okv_e($urlFor(['message' => null])) ?>">
+            <button type="submit" class="okv-btn-text min-h-[44px] px-2 text-xs">Mark all read</button>
+          </form>
+        <?php endif; ?>
+        <span class="rounded-full bg-mist px-2.5 py-1 text-xs text-ink-60"><?= (int) $total ?> total</span>
+      </span>
     </div>
     <?php if (!$messages): ?>
       <div class="flex flex-col items-center gap-3 p-8 text-center">
@@ -386,14 +405,15 @@ okv_content_tabs($tab, ContactMessages::countNew(), $canMessages, $canContent);
             $initial = mb_strtoupper(mb_substr(trim((string) $message['name']), 0, 1)) ?: '?';
             $isStaff = !empty($message['is_staff_initiated']);
             $statusChip = $message['status'] === 'new' ? 'bg-amber-100 text-amber-800' : 'bg-forest/10 text-forest';
+            $isUnread = empty($message['read_at']) && $message['status'] === 'new';
           ?>
           <li>
             <a href="<?= okv_e($messageUrl) ?>" class="flex gap-3 px-4 py-3 hover:bg-forest-tint/60 <?= (int) $message['id'] === $selectedId ? 'bg-forest-tint' : '' ?>" <?= (int) $message['id'] === $selectedId ? 'aria-current="page"' : '' ?>>
               <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-mist text-sm font-semibold text-ink" aria-hidden="true"><?= okv_e($initial) ?></span>
               <span class="min-w-0 flex-1">
                 <span class="flex items-start justify-between gap-2">
-                  <strong class="min-w-0 truncate text-[13px] font-medium text-ink"><?= okv_e($message['name']) ?></strong>
-                  <span class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-okv-micro font-medium <?= $statusChip ?>"><?= $message['status'] === 'new' ? 'New' : 'Handled' ?><?= $isStaff ? ' • Staff' : '' ?></span>
+                  <strong class="flex min-w-0 items-center gap-1.5 truncate text-[13px] <?= $isUnread ? 'font-bold' : 'font-medium' ?> text-ink"><?php if ($isUnread): ?><span class="inline-block h-2 w-2 shrink-0 rounded-full bg-tomato" aria-hidden="true"></span><span class="sr-only">Unread. </span><?php endif; ?><?= okv_e($message['name']) ?></strong>
+                  <span class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-okv-micro font-medium <?= $statusChip ?>"><?= $message['status'] === 'new' ? 'Awaiting a reply' : 'Handled' ?><?= $isStaff ? ' • Staff' : '' ?></span>
                 </span>
                 <span class="mt-1 block truncate text-[13px] text-ink-60"><?= okv_e(trim((string) ($message['subject'] ?? '')) ?: 'No subject') ?></span>
                 <span class="mt-1 flex flex-wrap justify-between gap-2 text-okv-micro text-ink-60">

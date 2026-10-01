@@ -51,6 +51,27 @@ function contact_admin_fail(array $result, int $status, string $returnTo): void
 }
 
 $action = okv_action();
+
+// Reading is a view side effect, so marking everything read needs only the view
+// permission. Everything else below needs messages.handle.
+if ($action === 'mark_all_read') {
+    if (!okv_is_post()) {
+        okv_error('Use POST for this action.', 405, 'method_not_allowed');
+    }
+    Rbac::requirePermission('messages.view');
+    if (!Csrf::validate()) {
+        okv_error('Your session expired. Reload the page and try again.', 419, 'csrf_expired');
+    }
+    $returnTo = okv_safe_path((string) okv_input('return_to', ''), '/admin/content.php');
+    try {
+        $marked = ContactMessages::markAllRead((int) Rbac::userId());
+    } catch (Throwable $e) {
+        error_log('contact admin mark_all_read failed: ' . $e->getMessage());
+        contact_admin_fail(['code' => 'failed', 'message' => 'We could not update the messages. Please try again.'], 500, $returnTo);
+    }
+    contact_admin_finish(['code' => 'all_read', 'marked' => $marked], $returnTo);
+}
+
 $adminActions = ['save_note', 'handle', 'reopen', 'staff_initiate', 'compose'];
 if (in_array($action, $adminActions, true)) {
     if (!okv_is_post()) {

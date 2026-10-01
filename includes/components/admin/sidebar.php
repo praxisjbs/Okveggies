@@ -103,7 +103,7 @@ if (Rbac::can('messages.view')) {
           <?php $count = (int) ($okv_sb_counts[$item['count'] ?? ''] ?? 0); ?>
           <?php if ($count > 0): ?>
             <span class="ml-auto inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-white px-2 py-0.5 font-mono text-okv-micro font-semibold leading-none text-forest">
-              <?= $count > 99 ? '99+' : $count ?><span class="sr-only"> new, unanswered</span>
+              <?= $count > 99 ? '99+' : $count ?><span class="sr-only"> unread</span>
             </span>
           <?php endif; ?>
         </a>
