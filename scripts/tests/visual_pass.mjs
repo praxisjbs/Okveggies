@@ -454,6 +454,130 @@ try {
       await inspect(adminPage, label, viewport);
     }
 
+    // ---- The admin menu, as a phone panel --------------------------------
+    // The Owner reported the menu on a phone scrolling away with the page: the
+    // aside was in the page flow above the sticky topbar. It is now a fixed
+    // full-screen panel on a phone, with the nav scrolling inside it and
+    // nothing scrolling out of it. These are the checks that would have caught
+    // the old markup.
+    await adminPage.goto(BASE + '/admin/', { waitUntil: 'networkidle' });
+    const nav = adminPage.locator('#okv-admin-sidebar');
+    const navToggle = adminPage.locator('[data-okv-nav-toggle]');
+
+    if (viewport.touch) {
+      report(!(await nav.isVisible()), `${viewport.name}: the admin menu starts closed`);
+      await adminPage.evaluate(() => window.scrollTo(0, 0));
+      await navToggle.click();
+      await adminPage.waitForTimeout(250);
+      report(await nav.isVisible(), `${viewport.name}: the hamburger opens the menu`);
+
+      const box = await nav.boundingBox();
+      const covered = box
+        && Math.round(box.x) === 0 && Math.round(box.y) === 0
+        && box.width >= viewport.width - 2 && box.height >= viewport.height - 2;
+      report(covered, `${viewport.name}: the open menu covers the viewport`,
+        `(${box && `${Math.round(box.width)}x${Math.round(box.height)} at ${Math.round(box.x)},${Math.round(box.y)}`})`);
+      report(await nav.evaluate((el) => getComputedStyle(el).position) === 'fixed',
+        `${viewport.name}: and it is fixed to the viewport, not in the page flow`);
+      report(await nav.getAttribute('aria-modal') === 'true',
+        `${viewport.name}: the open menu is a modal dialog`);
+
+      const locked = await adminPage.evaluate(() => [
+        getComputedStyle(document.documentElement).overflow,
+        getComputedStyle(document.body).overflow,
+      ]);
+      report(locked[0] === 'hidden' && locked[1] === 'hidden',
+        `${viewport.name}: the page behind it is locked`, `(${locked.join(', ')})`);
+
+      // A flick has to move the list, not the page, and must not carry on into
+      // the page when it reaches the end of the list.
+      await adminPage.mouse.move(viewport.width / 2, viewport.height * 0.7);
+      await adminPage.mouse.wheel(0, 500);
+      await adminPage.waitForTimeout(250);
+      const listTop = await adminPage.evaluate(
+        () => document.querySelector('[data-okv-nav-scroll]').scrollTop);
+      report(listTop > 0, `${viewport.name}: a flick scrolls the list inside the menu`,
+        `(scrollTop ${Math.round(listTop)})`);
+      for (let i = 0; i < 6; i++) { await adminPage.mouse.wheel(0, 900); await adminPage.waitForTimeout(80); }
+      report(await adminPage.evaluate(
+        () => document.querySelector('[data-okv-nav-scroll]').scrollTop
+          + document.querySelector('[data-okv-nav-scroll]').clientHeight
+          >= document.querySelector('[data-okv-nav-scroll]').scrollHeight - 2),
+        `${viewport.name}: the list scrolls to its own end`);
+      report(await adminPage.evaluate(() => window.scrollY) === 0,
+        `${viewport.name}: and the scroll never carries on into the page`);
+
+      const bar = await adminPage.evaluate(() => {
+        const rect = document.querySelector('#okv-admin-sidebar > div:last-child').getBoundingClientRect();
+        return { bottom: rect.bottom, height: rect.height };
+      });
+      report(bar.bottom >= viewport.height - 2 && bar.height > 0,
+        `${viewport.name}: the signed-in bar stays at the foot of the menu`, `(bottom ${Math.round(bar.bottom)})`);
+      const closeBox = await adminPage.locator('[data-okv-nav-close]').boundingBox();
+      report(closeBox && closeBox.width >= 44 && closeBox.height >= 44,
+        `${viewport.name}: the menu has its own 44px Close`,
+        `(${closeBox && `${closeBox.width}x${closeBox.height}`})`);
+
+      // Back closes it, the way a native drawer does, without stranding an
+      // entry: one Back from here is still one Back.
+      const historyBefore = await adminPage.evaluate(() => history.length);
+      await adminPage.goBack();
+      await adminPage.waitForTimeout(400);
+      report(!(await nav.isVisible()), `${viewport.name}: the phone Back button closes the menu`);
+      report(adminPage.url().replace(/\/$/, '') === BASE + '/admin',
+        `${viewport.name}: and Back does not leave the screen`, adminPage.url());
+      report(await adminPage.evaluate(() => history.length) === historyBefore,
+        `${viewport.name}: closing it leaves no extra history entry`);
+
+      // Escape closes and hands focus back to the hamburger.
+      await navToggle.click();
+      await adminPage.waitForTimeout(200);
+      await adminPage.keyboard.press('Escape');
+      await adminPage.waitForTimeout(250);
+      report(!(await nav.isVisible()), `${viewport.name}: Escape closes the menu`);
+      report(await adminPage.evaluate(
+        () => document.activeElement?.hasAttribute('data-okv-nav-toggle') === true),
+        `${viewport.name}: and focus goes back to the hamburger`);
+      const freed = await adminPage.evaluate(() => [
+        getComputedStyle(document.documentElement).overflow,
+        getComputedStyle(document.body).overflow,
+      ]);
+      report(freed[0] !== 'hidden' && freed[1] !== 'hidden',
+        `${viewport.name}: the page scrolls again once the menu is shut`, `(${freed.join(', ')})`);
+
+      // Choosing a destination spends the entry on the way out, so Back on the
+      // screen that arrives lands before the menu, not on it again.
+      await navToggle.click();
+      await adminPage.waitForTimeout(200);
+      await Promise.all([
+        adminPage.waitForURL(/payments\.php/, { timeout: 5000 }).catch(() => {}),
+        adminPage.locator('#okv-admin-sidebar a[href="/admin/payments.php"]').first().click(),
+      ]);
+      await adminPage.waitForTimeout(300);
+      report(/payments\.php/.test(adminPage.url()),
+        `${viewport.name}: a destination inside the menu is followed`, adminPage.url());
+      await adminPage.goBack();
+      await adminPage.waitForTimeout(400);
+      report(!/payments\.php/.test(adminPage.url()) && !(await nav.isVisible()),
+        `${viewport.name}: one Back from there lands before the menu, not on the menu again`,
+        adminPage.url());
+    } else {
+      report(await nav.isVisible(), `${viewport.name}: the sidebar is in view without touching anything`);
+      const box = await nav.boundingBox();
+      report(box && Math.round(box.width) === 256 && Math.round(box.x) === 0,
+        `${viewport.name}: it is the 256px column at the left edge`,
+        `(${box && `${Math.round(box.width)} at ${Math.round(box.x)}`})`);
+      report(await nav.evaluate((el) => getComputedStyle(el).position) === 'static',
+        `${viewport.name}: in the page flow, not a fixed panel`);
+      report(!(await navToggle.isVisible()), `${viewport.name}: no hamburger, and nothing to close`);
+      const free = await adminPage.evaluate(() => [
+        getComputedStyle(document.documentElement).overflow,
+        getComputedStyle(document.body).overflow,
+      ]);
+      report(free[0] !== 'hidden' && free[1] !== 'hidden',
+        `${viewport.name}: the desktop shell never locks the page`, `(${free.join(', ')})`);
+    }
+
     // The repayment picker: open the manage panel and drive the combobox.
     await adminPage.goto(BASE + '/admin/credit.php', { waitUntil: 'networkidle' });
     // Scope everything to the one panel we open: the table has a details per

@@ -294,6 +294,33 @@
            max-h-[92vh] overflow-y-auto animate-okv-rise;
   }
 
+  /* Admin sidebar. A column of the desktop shell from 768px up, and a
+     full-screen panel on a phone. The panel is fixed to the viewport, so it
+     covers the page rather than pushing it down; the nav list scrolls inside
+     it and the signed-in bar stays pinned to its foot. Nothing scrolls out of
+     the menu: the page behind is locked while it is open, and the list's own
+     overscroll keeps a flick at its end from handing the scroll to the page.
+     The mobile header's backdrop-blur would trap a fixed child in its 64px
+     bar, so this sits outside the topbar, beside the shell. */
+  .okv-admin-nav { @apply fixed inset-0 z-50 flex flex-col bg-forest text-white; }
+  /* The display:flex above would beat the plain hidden attribute, so make hidden win. */
+  .okv-admin-nav[hidden] { display: none; }
+  /* The signed-in bar at the foot of the panel clears the bottom safe area on a
+     notched phone, the way the mobile tab bar and the pay bar do. On a device
+     with no inset, and on the desktop sidebar, the inset is 0 and the bar keeps
+     its own 12px. */
+  .okv-admin-nav-foot { @apply pb-[max(0.75rem,env(safe-area-inset-bottom))]; }
+
+  @screen md {
+    /* The shell is desktop software: the sidebar is a column of it, and the
+       hidden attribute the phone panel uses to stay closed has no say here.
+       The base rule for that attribute is !important (it has to beat every
+       display utility a panel might carry), so the desktop sidebar says so
+       with the same weight. */
+    .okv-admin-nav { @apply static z-auto w-64 shrink-0 min-h-screen; }
+    .okv-admin-nav[hidden] { display: flex !important; }
+  }
+
   /* Skeleton shimmer for content that is loading. */
   .okv-skeleton { @apply bg-mist rounded-md animate-pulse; }
 
