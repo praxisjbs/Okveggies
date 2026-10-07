@@ -41,8 +41,8 @@ $resetDone = isset($_GET['reset']);
 </head>
 <body class="min-h-screen bg-forest flex items-center justify-center p-4">
   <div class="w-full max-w-sm bg-white rounded-lg shadow-okv-3 p-8 animate-okv-rise">
-    <!-- Sign in has room for the full seal to read, so it gets the seal rather
-         than the small lockup (bible 3.4 and the minimum sizes in 3.3). -->
+    <!-- The seal is the one logo at every size (Owner's decision of 7 October
+         2026), so sign in opens on it. -->
     <img src="<?= okv_e(okv_asset('/assets/img/brand/seal-320.png')) ?>" alt="OK Veggies"
          width="128" height="128" class="mx-auto h-32 w-32">
     <h1 class="text-center font-display font-extrabold text-2xl text-ink mt-4">Staff sign in</h1>

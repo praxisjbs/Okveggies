@@ -19,7 +19,7 @@
  * foot, rows are never split, the column headings repeat on every page, and
  * the footer carries the generated stamp and the page number. Text is set by
  * PriceListType from the same DejaVu faces the PDF uses, and the mark is
- * painted by PriceListMark from the approved lockup file.
+ * painted by PriceListMark from the approved seal.
  *
  * The archive is written to a private temp file that is created, read and
  * deleted inside one try/finally, and its bytes are returned, so no temporary
@@ -41,9 +41,9 @@ final class PriceListPng
     /** The zone the footer lives in, below the content. */
     public const FOOTER_ZONE = 46;
 
-    /** The mark is the full-colour lockup, printed at the PDF's 62mm width. */
-    public const MARK_W = 366;
-    public const MARK_W_SMALL = 236;
+    /** The mark is the approved seal, printed square at roughly 25mm. */
+    public const MARK_W = 150;
+    public const MARK_W_SMALL = 96;
 
     /** Type sizes in device pixels. */
     public const SIZE_TITLE = 40;
@@ -312,7 +312,7 @@ final class PriceListPng
         $right = self::PAGE_W - self::MARGIN;
 
         if ($first) {
-            $mark = PriceListMark::paint($root . PriceListMark::LOCKUP, self::MARK_W);
+            $mark = PriceListMark::seal(self::MARK_W);
             imagecopy($img, $mark, self::MARGIN, self::MARGIN - 6, 0, 0, imagesx($mark), imagesy($mark));
 
             $orgX = $right;
@@ -337,7 +337,7 @@ final class PriceListPng
             $ruleY = (int) ($titleY + self::SIZE_STAMP + 30);
             imagefilledrectangle($img, self::MARGIN, $ruleY, self::PAGE_W - self::MARGIN, $ruleY + 3, self::pack($palette['gold']));
         } else {
-            $mark = PriceListMark::paint($root . PriceListMark::LOCKUP, self::MARK_W_SMALL);
+            $mark = PriceListMark::seal(self::MARK_W_SMALL);
             imagecopy($img, $mark, self::MARGIN, self::MARGIN - 10, 0, 0, imagesx($mark), imagesy($mark));
             $markBottom = self::MARGIN - 10 + imagesy($mark);
             PriceListType::drawRight($img, 'sans', (string) $view['title'], self::PAGE_W - self::MARGIN, self::MARGIN + 8, self::SIZE_GROUP, $palette['forest']);

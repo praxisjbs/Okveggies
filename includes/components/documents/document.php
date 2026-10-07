@@ -19,10 +19,9 @@
  *   2. An order number is whatever OrderNumber issued and the order stored. A
  *      document never builds one and never invents one: no number means the
  *      document says so.
- *   3. The mark is the full-colour horizontal lockup, per the Owner's logo-
- *      harmony decision of 20 September 2026; the single-ink set stays in the
- *      brand assets for anyone who needs it. It prints correctly on a mono
- *      laser and on a colour one.
+ *   3. The mark is the approved seal, per the Owner's one-logo decision of
+ *      7 October 2026, which retired every derived mark: the seal is the
+ *      only logo, on screen and in print.
  *
  * The markup is plain blocks and tables, not flex or grid, because the same
  * markup goes through dompdf when M5 builds the real documents and dompdf reads
@@ -146,8 +145,8 @@ if (!function_exists('okv_document_letterhead')) {
     <table class="okv-doc-head">
       <tr>
         <td>
-          <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup.svg')) ?>"
-               alt="<?= okv_e($name) ?>" class="okv-doc-mark" width="260" height="68">
+          <img src="<?= okv_e(okv_asset('/assets/img/brand/seal-320.png')) ?>"
+               alt="<?= okv_e($name) ?>" class="okv-doc-mark" width="68" height="68">
         </td>
         <td class="okv-doc-org">
           <strong><?= okv_e($name) ?></strong><br>

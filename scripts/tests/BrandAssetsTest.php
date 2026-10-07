@@ -9,24 +9,21 @@
 
 $root = dirname(__DIR__, 2);
 
-// 1. Every derived brand asset exists on disk.
+// 1. Every brand asset exists on disk. Each one is the approved seal: the
+// Owner's one-logo decision of 7 October 2026 retired every derived mark.
 $assets = [
     'favicon.ico',
     'site.webmanifest',
-    'assets/img/brand/monogram.svg',
-    'assets/img/brand/monogram-white.svg',
-    'assets/img/brand/lockup.svg',
-    'assets/img/brand/lockup-white.svg',
-    'assets/img/brand/lockup-mono-green.svg',
-    'assets/img/brand/monogram-mono-green.svg',
-    'assets/img/brand/lockup-white-720.png',
-    'assets/img/brand/wordmark.svg',
     'assets/img/brand/seal-640.png',
     'assets/img/brand/seal-320.png',
+    'assets/img/brand/seal-160.png',
+    'assets/img/brand/seal-640.webp',
+    'assets/img/brand/seal-320.webp',
+    'assets/img/brand/seal-160.webp',
     'assets/img/brand/og-image.png',
-    'assets/img/brand/icons/favicon.svg',
     'assets/img/brand/icons/favicon-16.png',
     'assets/img/brand/icons/favicon-32.png',
+    'assets/img/brand/icons/favicon-48.png',
     'assets/img/brand/icons/apple-touch-icon.png',
     'assets/img/brand/icons/icon-192.png',
     'assets/img/brand/icons/icon-512.png',
@@ -91,17 +88,26 @@ foreach ([
     okv_test_ok(!str_contains((string) file_get_contents("$root/$rel"), $emDash), "no em dash in $rel");
 }
 
-// 6. The single-ink set (bible 3.7a) really is single ink.
-// One colour, line and fill only, no gradients and no photography: it has to
-// survive a mono laser printer and a fax-quality scan of an invoice.
-foreach (['assets/img/brand/lockup-mono-green.svg', 'assets/img/brand/monogram-mono-green.svg'] as $rel) {
-    $mark = (string) file_get_contents("$root/$rel");
-    okv_test_ok(str_contains($mark, '#0F5132'), "$rel is drawn in Forest Green");
-    okv_test_ok(!str_contains($mark, '#C9922B'), "$rel carries no gold, so it is one ink");
-    okv_test_ok(!str_contains($mark, '#C8321E'), "$rel carries no tomato, so it is one ink");
-    okv_test_ok(!str_contains($mark, '#3E8B4A'), "$rel carries no foliage, so it is one ink");
-    okv_test_ok(!str_contains($mark, 'data:image'), "$rel embeds no photography, per bible 3.8");
-    okv_test_ok(!str_contains($mark, 'Gradient'), "$rel has no gradient");
+// 6. The derived marks are retired and must never ship again.
+// The Owner's one-logo decision of 7 October 2026: his seal is the only logo,
+// at every size, on every surface. The flat monogram, the lockups and the
+// wordmark were variations of his logo, so they are gone from the tree and
+// this guard fails the build if one creeps back.
+foreach ([
+    'assets/img/brand/monogram.svg',
+    'assets/img/brand/monogram-white.svg',
+    'assets/img/brand/monogram-mono-green.svg',
+    'assets/img/brand/lockup.svg',
+    'assets/img/brand/lockup-white.svg',
+    'assets/img/brand/lockup-compact.svg',
+    'assets/img/brand/lockup-compact-white.svg',
+    'assets/img/brand/lockup-mono-green.svg',
+    'assets/img/brand/lockup-white-720.png',
+    'assets/img/brand/wordmark.svg',
+    'assets/img/brand/wordmark-white.svg',
+    'assets/img/brand/icons/favicon.svg',
+] as $rel) {
+    okv_test_ok(!is_file("$root/$rel"), "derived mark retired, must not ship: $rel");
 }
 
 // 7. Brand::* and tailwind.config.js are the same values.

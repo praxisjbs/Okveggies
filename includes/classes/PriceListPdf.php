@@ -549,7 +549,7 @@ final class PriceListPdf
     public static function html(array $view): string
     {
         $business = $view['business'];
-        $markPath = okv_e(PriceListMark::LOCKUP);
+        $markPath = okv_e(PriceListMark::SEAL);
         $name = okv_e($business['name']);
         $tagline = okv_e($business['tagline']);
         $email = okv_e($business['email']);
@@ -629,7 +629,7 @@ final class PriceListPdf
   @page { margin: 14mm 14mm 20mm 14mm; }
   body { font-family: "DejaVu Sans"; font-size: 9pt; color: {$ink}; }
   .head { width: 100%; margin-bottom: 2mm; }
-  .mark { width: 62mm; }
+  .mark { width: 24mm; }
   .org { font-size: 8pt; text-align: right; color: {$muted}; line-height: 1.55; }
   .org strong { color: {$forest}; font-size: 10pt; }
   h1 { font-size: 19pt; color: {$forest}; margin: 4mm 0 1mm 0; }

@@ -82,7 +82,7 @@ if (Rbac::can('messages.view')) {
        class="hidden md:flex md:flex-col md:w-64 md:shrink-0 bg-forest text-white md:min-h-screen">
   <div class="flex items-center gap-2 px-5 h-16 border-b border-white/10">
     <a href="/admin/" class="inline-flex items-center rounded-md" aria-label="OK Veggies admin, home">
-      <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup-white.svg')) ?>" alt="OK Veggies" width="168" height="44" class="h-11 w-auto">
+      <img src="<?= okv_e(okv_asset('/assets/img/brand/seal-320.png')) ?>" alt="OK Veggies" width="44" height="44" class="h-11 w-11">
     </a>
   </div>
 

@@ -72,8 +72,9 @@ okv_test_ok(!str_contains($escaped, 'O"Brien'), 'the regions setting is escaped 
 okv_test_ok(str_contains($escaped, '&quot;') || str_contains($escaped, '&#039;'), 'the escaped sourcing line keeps the punctuation');
 
 // ---------------------------------------------------------------------------
-// 2. The seal component. CLAUDE.md reserves the photographic seal for 120px
-//    and up; below that the lockup is the mark, so a smaller ask is lifted.
+// 2. The seal component. The Owner's one-logo decision of 7 October 2026
+//    makes the seal the only logo at every size, so an ask is honoured at
+//    the size requested, served from the nearest generated source.
 // ---------------------------------------------------------------------------
 ob_start();
 okv_seal(120, 'mx-auto', 'The OK Veggies seal');
@@ -86,7 +87,8 @@ okv_test_ok(!str_contains($seal, 'aria-hidden'), 'a seal with alt text is not hi
 ob_start();
 okv_seal(40, '', 'Seal');
 $tiny = (string) ob_get_clean();
-okv_test_ok(str_contains($tiny, 'width="120" height="120"'), 'a request under 120px is lifted to the brand minimum');
+okv_test_ok(str_contains($tiny, 'width="40" height="40"'), 'a 40px ask is honoured: the one logo goes to every size');
+okv_test_ok(str_contains($tiny, 'seal-160.png'), 'a small seal is served from the 160px source, crisp at 2x');
 
 ob_start();
 okv_seal(240, '', '');
@@ -108,9 +110,13 @@ okv_test_ok(
 okv_test_ok(str_contains($index, 'okv_seal(120'), 'the home hero carries the seal at the brand minimum size');
 
 $footer = $read('includes/components/shop/footer.php');
-okv_test_ok(str_contains($footer, 'lockup-white.svg'), 'the footer carries the white lockup, not a text wordmark');
+okv_test_ok(!str_contains($footer, 'lockup'), 'the footer carries no derived lockup: the seal is the only logo');
 okv_test_ok(str_contains($footer, 'bg-forest'), 'the footer sits on the forest ground');
-okv_test_ok(str_contains($footer, 'okv_seal('), 'the footer closes on the seal');
+okv_test_ok(str_contains($footer, 'okv_seal('), 'the footer opens and closes on the seal');
+
+$header = $read('includes/components/shop/header.php');
+okv_test_ok(str_contains($header, 'okv_seal('), 'the storefront header carries the seal, the one logo');
+okv_test_ok(!str_contains($header, 'lockup'), 'the header carries no derived lockup');
 okv_test_ok(!str_contains($footer, 'hover:text-gold'), 'a footer link never turns gold: gold fails contrast on forest at body size');
 
 $comboCard = $read('includes/components/shop/combo_card.php');
@@ -136,7 +142,8 @@ foreach ([
     'public/auth/password_reset.php',
 ] as $rel) {
     okv_test_ok(!preg_match('/\btext-gold\b/', $read($rel)), "no bare gold text on white in $rel");
-    okv_test_ok(str_contains($read($rel), 'okv_seal(') || str_contains($read($rel), 'lockup'), "$rel carries a real brand mark");
+    okv_test_ok(str_contains($read($rel), 'okv_seal('), "$rel carries the seal");
+    okv_test_ok(!str_contains($read($rel), 'lockup'), "$rel carries no derived lockup");
 }
 
 // ---------------------------------------------------------------------------

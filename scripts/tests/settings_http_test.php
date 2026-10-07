@@ -295,7 +295,7 @@ $preview = (string) (json_decode($body, true)['preview'] ?? '');
 t_eq(200, $code, 'an Owner can preview a template');
 t_ok(str_contains($preview, 'OKV26014'), 'the preview fills the tokens with sample values');
 t_ok(!str_contains($preview, '{{'), 'the preview leaves no placeholder on screen');
-t_ok(str_contains($preview, 'lockup-white-720.png'), 'the preview shows the real branded letterhead');
+t_ok(str_contains($preview, 'seal-320.png'), 'the preview shows the real branded letterhead');
 
 [$code] = req($jarOwner, $base . '/api/v1/settings.php', [
     'action' => 'save_template', 'template_key' => 'order_packed',

@@ -7,10 +7,11 @@
  *
  * The seal is the photographic mark from docs/brand/logo/ok-veggies-seal.jpg,
  * generated into assets/img/brand/ with a transparent surround so it sits on
- * white, forest or butter cream without a box around it. CLAUDE.md reserves it
- * for places it can read at 120px or more: the hero, the footer, the auth
- * screens and print. Tight headers use the horizontal lockup instead, which is
- * why there is no small-size branch here.
+ * white, forest or butter cream without a box around it. By the Owner's
+ * one-logo decision of 7 October 2026 the seal is the only logo, at every
+ * size, on every surface: hero, header, footer, admin, Pro, auth, print,
+ * favicon and app icons. There are no derived marks and no minimum size; a
+ * small ask is served from the nearest generated source so it stays crisp.
  * -----------------------------------------------------------------------------
  */
 
@@ -25,13 +26,13 @@ if (!function_exists('okv_seal')) {
      */
     function okv_seal(int $size = 120, string $class = '', string $alt = 'OK Veggies seal'): void
     {
-        // 120px is the floor CLAUDE.md sets for the photographic seal. Below
-        // that the ring's lettering stops reading and the lockup is the mark
-        // to use, so a smaller request is lifted rather than honoured.
-        $size = max(120, $size);
-        // Serve roughly twice the rendered size so the stamp stays crisp on a
+        // The seal is the one logo at every size (Owner's decision of 7
+        // October 2026), so a small ask is honoured, only floored at 16px so
+        // a stray zero can never request a nothing.
+        $size = max(16, $size);
+        // Serve roughly twice the rendered size so the seal stays crisp on a
         // phone's 2x screen without pulling the 640px file for a small mark.
-        $stem = $size <= 160 ? 'seal-320' : 'seal-640';
+        $stem = $size <= 80 ? 'seal-160' : ($size <= 200 ? 'seal-320' : 'seal-640');
         $png = $stem . '.png';
         $webp = $stem . '.webp';
         $decorative = trim($alt) === '';

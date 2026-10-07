@@ -59,12 +59,11 @@ okv_test_eq('₦5,820.00', $rows[3]['amount'], 'the deposit is shown as it was t
 $rows = okv_document_totals_rows(1690000, 0, 1690000);
 okv_test_eq('₦0.00', $rows[3]['amount'], 'a settled order shows a zero balance, not an empty one');
 
-// 5. The letterhead carries the full-colour horizontal lockup. The Owner's
-// "logo harmony" decision of 20 September 2026 moved documents from the
-// single-ink mark to lockup.svg; the single-ink set stays in the brand assets
-// for the uses that still need one-colour reproduction.
+// 5. The letterhead carries the approved seal. The Owner's one-logo decision
+// of 7 October 2026 retired the derived lockups: the seal is the only logo,
+// on screen and in print, superseding the earlier "logo harmony" decision.
 $component = (string) file_get_contents($root . '/includes/components/documents/document.php');
-okv_test_ok(str_contains($component, 'lockup.svg'), 'the letterhead carries the full-colour horizontal lockup');
-okv_test_ok(!str_contains($component, 'seal-640.png'), 'the letterhead does not put the photographic seal on a printed page');
+okv_test_ok(str_contains($component, 'seal-320.png'), 'the letterhead carries the approved seal');
+okv_test_ok(!str_contains($component, 'lockup'), 'the letterhead carries no derived lockup');
 okv_test_ok(str_contains($component, 'okv_head_meta'), 'a document page still emits the brand head partial');
 okv_test_ok(!str_contains($component, "\u{2014}"), 'no em dash in the document component');
