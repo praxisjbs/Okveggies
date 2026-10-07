@@ -363,43 +363,37 @@ for ($x = 0; $x < 90; $x++) {
 }
 okv_test_eq($plainInk, $combInk, 'n plus combining tilde paints exactly what the precomposed ñ paints');
 
-// 13. The mark: painted from the approved file, faithful and strict.
-$mark = PriceListMark::paint($root . PriceListMark::LOCKUP, 366);
+// 13. The mark: the approved seal, resampled square from the shipped raster.
+// The Owner's one-logo decision of 7 October 2026 retired the derived lockup
+// and the strict SVG painter that reproduced it; documents print the seal.
+$mark = PriceListMark::seal(366);
 okv_test_eq(366, imagesx($mark), 'the mark paints at the width asked of it');
-okv_test_eq(97, imagesy($mark), 'the mark keeps the lockup aspect from its viewBox');
-$markBytes = function () use ($root): string {
-    $m = PriceListMark::paint($root . PriceListMark::LOCKUP, 366);
+okv_test_eq(366, imagesy($mark), 'the seal is square, so the height follows the width');
+$markBytes = function (): string {
+    $m = PriceListMark::seal(366);
     ob_start();
     imagepng($m);
     return (string) ob_get_clean();
 };
 okv_test_eq($markBytes(), $markBytes(), 'the mark paints byte-identically every time');
 $markImg = $markBytes();
-$markGround = imagecreatetruecolor(366, 97);
+$markGround = imagecreatetruecolor(366, 366);
 imagefill($markGround, 0, 0, 0xFFFFFF);
-imagecopy($markGround, imagecreatefromstring($markImg), 0, 0, 0, 0, 366, 97);
+imagecopy($markGround, imagecreatefromstring($markImg), 0, 0, 0, 0, 366, 366);
 $inkPixels = 0;
 for ($mx = 0; $mx < 366; $mx += 2) {
-    for ($my = 0; $my < 97; $my += 2) {
+    for ($my = 0; $my < 366; $my += 2) {
         if (imagecolorat($markGround, $mx, $my) !== 0xFFFFFF) {
             $inkPixels++;
         }
     }
 }
-okv_test_ok($inkPixels > 800, 'the mark paints real ink, seal and wordmark together (' . $inkPixels . ' sampled pixels)');
-okv_test_ok(imagecolorat($markGround, 45, 8) !== 0xFFFFFF, 'the seal\'s green ring is where the lockup puts it');
-okv_test_ok(imagesx($mark) === 366 && imagesy($mark) === 97, 'the mark is not distorted to fit');
+okv_test_ok($inkPixels > 800, 'the mark paints real ink: ring, produce and lettering together (' . $inkPixels . ' sampled pixels)');
+okv_test_ok(imagecolorat($markGround, 183, 8) !== 0xFFFFFF, 'the seal\'s green ring is at the top of the square mark');
+okv_test_ok(imagesx($mark) === 366 && imagesy($mark) === 366, 'the mark is not distorted to fit');
 
-$badSvg = tempnam(sys_get_temp_dir(), 'okv-mark-') . '.svg';
-file_put_contents($badSvg, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="0" y="0" width="10" height="10"/></svg>');
-$threw = false;
-try {
-    PriceListMark::paint($badSvg, 100);
-} catch (RuntimeException $e) {
-    $threw = str_contains($e->getMessage(), 'element this painter does not know');
-}
-okv_test_ok($threw, 'a brand file this painter cannot reproduce fails loudly, never wrongly');
-@unlink($badSvg);
+$floored = PriceListMark::seal(4);
+okv_test_eq(16, imagesx($floored), 'a stray small ask is floored at 16px, never a nothing');
 
 // 14. Dynamic business settings: nothing about the shop is baked in.
 $renamed = PriceList::fromRows($okv_rows(), [
@@ -432,5 +426,5 @@ foreach (PriceList::COLUMNS as $column) {
     okv_test_ok(str_contains($html, '>' . $column . '<'), 'the PDF header carries the column: ' . $column);
 }
 okv_test_ok(str_contains($html, '>' . okv_e($okv_business['name']) . '</strong>'), 'the PDF letterhead carries the business name');
-okv_test_ok(str_contains($html, 'lockup.svg'), 'the PDF carries the approved lockup');
+okv_test_ok(str_contains($html, 'seal-640.png'), 'the PDF carries the approved seal');
 okv_test_ok(str_contains($html, 'Generated Thursday 24th September 2026 at 13:30'), 'the PDF carries the generated stamp');

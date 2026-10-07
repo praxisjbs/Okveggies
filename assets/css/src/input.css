@@ -642,7 +642,7 @@
   }
   .okv-doc-head { width: 100%; border-collapse: collapse; }
   .okv-doc-head td { vertical-align: top; padding: 0; }
-  .okv-doc-mark { width: 260px; height: auto; }
+  .okv-doc-mark { width: 68px; height: 68px; }
   .okv-doc-org { text-align: right; font-size: 12px; line-height: 1.7; color: theme('colors.ink.60'); }
   .okv-doc-org strong { color: theme('colors.ink.DEFAULT'); }
   .okv-doc-rule { height: 2px; background: theme('colors.forest.DEFAULT'); margin: 20px 0 24px; }

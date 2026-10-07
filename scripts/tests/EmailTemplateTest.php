@@ -20,9 +20,9 @@ if (!defined('APP_URL')) {
 $html = Mail::brandedHtml('Payment received for OKV26001', "Hi Ada, your payment reached us.\n\nThank you.");
 okv_test_ok(str_starts_with($html, '<!doctype html>'), 'the email is a complete HTML document');
 okv_test_ok(str_contains($html, Brand::FOREST), 'the header band is Forest Green from the token');
-okv_test_ok(str_contains($html, 'lockup-white-720.png'), 'the letterhead carries the raster lockup, not an SVG an email client would drop');
+okv_test_ok(str_contains($html, 'seal-320.png'), 'the letterhead carries the seal raster, the one logo, not an SVG an email client would drop');
 okv_test_ok(str_contains($html, 'alt="OK Veggies"'), 'the mark has alt text for a client with images switched off');
-okv_test_ok(str_contains($html, 'https://okveggies.test/assets/img/brand/lockup-white-720.png'), 'the mark is an absolute URL, because an email has no site to be relative to');
+okv_test_ok(str_contains($html, 'https://okveggies.test/assets/img/brand/seal-320.png'), 'the mark is an absolute URL, because an email has no site to be relative to');
 okv_test_ok(str_contains($html, Brand::FONT_SANS), 'the email sets the brand sans with real fallbacks');
 okv_test_ok(!str_contains($html, 'bg-forest'), 'no stylesheet class in an email, only inline styles');
 

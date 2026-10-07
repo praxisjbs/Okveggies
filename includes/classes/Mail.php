@@ -308,8 +308,8 @@ final class Mail
             . 'font-family:' . Brand::FONT_SANS . '">'
             // Letterhead.
             . '<tr><td style="background:' . Brand::FOREST . ';padding:24px" align="center">'
-            . '<img src="' . $e($base . '/assets/img/brand/lockup-white-720.png') . '" width="240" '
-            . 'alt="' . $e($name) . '" style="display:block;width:240px;max-width:100%;height:auto;border:0;'
+            . '<img src="' . $e($base . '/assets/img/brand/seal-320.png') . '" width="120" '
+            . 'alt="' . $e($name) . '" style="display:block;width:120px;max-width:100%;height:auto;border:0;'
             . 'color:' . Brand::WHITE . ';font-size:20px;font-weight:800">'
             . '</td></tr>'
             // Body.

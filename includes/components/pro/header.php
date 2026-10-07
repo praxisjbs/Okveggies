@@ -3,7 +3,8 @@
  * includes/components/pro/header.php
  * -----------------------------------------------------------------------------
  * OK Veggies. Opens a Pro Portal document: the head, the brand bar carrying the
- * horizontal lockup, the portal navigation and the page head. A page sets
+ * seal (the one logo, per the Owner's decision of 7 October 2026), the portal
+ * navigation and the page head. A page sets
  * $okv_pro_title (and optionally $okv_pro_note and $okv_pro_active) before
  * including this, then includes footer.php to close.
  *
@@ -16,6 +17,7 @@ if (!defined('OKV_BOOTSTRAPPED')) {
     exit;
 }
 require_once __DIR__ . '/nav.php';
+require_once __DIR__ . '/../shop/brand.php';
 
 $okv_pro_title  = $okv_pro_title ?? 'Pro Portal';
 $okv_pro_note   = $okv_pro_note ?? '';
@@ -39,8 +41,7 @@ $okv_pro_home   = $okv_pro_active === '/pro/';
   <header class="bg-white border-b border-mist">
     <div class="okv-container flex h-16 items-center justify-between gap-4">
       <a href="/pro/" class="inline-flex items-center gap-3 rounded-md" aria-label="OK Veggies Pro, home">
-        <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup.svg')) ?>" alt="OK Veggies, Fresh Picks" width="183" height="48" class="hidden h-12 w-auto sm:block">
-        <img src="<?= okv_e(okv_asset('/assets/img/brand/seal-320.png')) ?>" alt="OK Veggies" width="44" height="44" class="h-11 w-11 sm:hidden">
+        <?php okv_seal(48, 'h-11 w-11 sm:h-12 sm:w-12', 'OK Veggies, Fresh Picks'); ?>
         <span class="okv-eyebrow text-forest">Pro</span>
       </a>
       <div class="flex items-center gap-2">

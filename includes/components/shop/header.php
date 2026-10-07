@@ -2,6 +2,7 @@
 /** Shared storefront navigation for desktop and mobile. */
 require_once __DIR__ . '/mini_cart.php';
 require_once __DIR__ . '/icons.php';
+require_once __DIR__ . '/brand.php';
 
 if (!function_exists('okv_shop_header')) {
     function okv_shop_header(string $active = ''): void
@@ -25,13 +26,9 @@ if (!function_exists('okv_shop_header')) {
         <header class="sticky top-0 z-30 border-b border-mist bg-white/95 backdrop-blur">
           <div class="okv-container flex h-16 items-center justify-between gap-4">
             <a href="/" class="inline-flex min-h-[44px] items-center rounded-md" aria-label="OK Veggies, home">
-              <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup.svg')) ?>" alt="OK Veggies, Fresh Picks" width="183" height="48" class="hidden h-12 w-auto sm:block">
-              <!--
-                The narrow header takes the compact lockup, not the seal shrunk
-                to 44px: below 120px the seal's ring lettering stops reading,
-                and the house rules reserve tight chrome for the lockup.
-              -->
-              <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup-compact.svg')) ?>" alt="OK Veggies, Fresh Picks" width="172" height="36" class="h-9 w-auto sm:hidden">
+              <!-- The Owner's one-logo decision of 7 October 2026: the seal is
+                   the only logo, in the tight header as everywhere else. -->
+              <?php okv_seal(48, 'h-11 w-11 sm:h-12 sm:w-12', 'OK Veggies, Fresh Picks'); ?>
             </a>
             <nav class="hidden items-center gap-6 text-sm font-semibold text-ink md:flex" aria-label="Main navigation">
               <?php foreach ($links as $key => [$url, $label]): ?>

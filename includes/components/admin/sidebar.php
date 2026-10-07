@@ -85,7 +85,7 @@ if (Rbac::can('messages.view')) {
        hidden>
   <div class="flex h-16 flex-none items-center gap-2 border-b border-white/10 px-5">
     <a href="/admin/" class="inline-flex items-center rounded-md" aria-label="OK Veggies admin, home">
-      <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup-white.svg')) ?>" alt="OK Veggies" width="168" height="44" class="h-11 w-auto">
+      <img src="<?= okv_e(okv_asset('/assets/img/brand/seal-320.png')) ?>" alt="OK Veggies" width="44" height="44" class="h-11 w-11">
     </a>
     <!--
       On a phone the panel covers the whole screen, so the hamburger that

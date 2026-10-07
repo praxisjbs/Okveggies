@@ -13,8 +13,8 @@
  * Every amount is read from the order snapshot written at checkout, never from
  * today's prices, so reprinting an old invoice shows the figures the customer
  * was actually given. Money goes through Money, the order number is whatever
- * OrderNumber issued, and the mark is the full-colour lockup, per the Owner's
- * logo-harmony decision of 20 September 2026.
+ * OrderNumber issued, and the mark is the approved seal, per the Owner's
+ * one-logo decision of 7 October 2026.
  * -----------------------------------------------------------------------------
  */
 require_once __DIR__ . '/../../includes/bootstrap.php';

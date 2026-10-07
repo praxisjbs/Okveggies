@@ -113,7 +113,7 @@ $csrf = Csrf::token();
         <span aria-hidden="true">&larr;</span> Shop
       </a>
       <a href="/" class="inline-flex items-center rounded-md" aria-label="OK Veggies, home">
-        <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup.svg')) ?>" alt="OK Veggies, Fresh Picks" width="152" height="40" class="h-10 w-auto">
+        <?php okv_seal(40, '', 'OK Veggies, Fresh Picks'); ?>
       </a>
       <form action="/api/v1/auth.php" method="POST" class="m-0">
         <?= Csrf::field() ?>

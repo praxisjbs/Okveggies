@@ -2,10 +2,11 @@
 /**
  * includes/components/shop/footer.php
  * -----------------------------------------------------------------------------
- * OK Veggies. The storefront footer, and one of the two places on the site
- * where the full photographic seal has room to read (CLAUDE.md, bible 3.3).
- * Forest ground with the white horizontal lockup, the tagline, the sourcing
- * line, the content and legal columns, then the seal as the closing stamp.
+ * OK Veggies. The storefront footer. Forest ground with the seal, the
+ * tagline, the sourcing line, the content and legal columns, then the seal
+ * again as the closing stamp. The Owner's one-logo decision of 7 October
+ * 2026 retired the white horizontal mark: the seal is the only logo, on
+ * forest as on white.
  *
  * White on forest is 9.36:1. Harvest Gold on forest is 3.40:1, which fails at
  * body-text size, so a link never turns gold: it stays white and gold does the
@@ -63,8 +64,7 @@ if (!function_exists('okv_shop_footer')) {
         <footer class="okv-shop-footer mb-14 bg-forest text-white md:mb-0">
           <div class="okv-container grid gap-10 py-12 md:grid-cols-12 md:gap-8 md:py-16">
             <div class="md:col-span-5">
-              <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup-white.svg')) ?>"
-                   alt="<?= okv_e($name) ?>, Fresh Picks" width="229" height="60" class="h-14 w-auto">
+              <?php okv_seal(96, '', $name . ', Fresh Picks'); ?>
               <p class="mt-5 max-w-sm text-okv-body text-white/75"><?= okv_e($tagline) ?></p>
               <?php okv_sourced_note($sourceRegions, $sourceDay, 'mt-4 text-white/75'); ?>
             </div>

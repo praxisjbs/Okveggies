@@ -57,7 +57,6 @@ if (!function_exists('okv_head_meta')) {
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="msapplication-TileColor" content="#0F5132">
   <link rel="icon" href="/favicon.ico" sizes="any">
-  <link rel="icon" type="image/svg+xml" href="<?= okv_e(okv_asset('/assets/img/brand/icons/favicon.svg')) ?>">
   <link rel="icon" type="image/png" sizes="32x32" href="<?= okv_e(okv_asset('/assets/img/brand/icons/favicon-32.png')) ?>">
   <link rel="icon" type="image/png" sizes="16x16" href="<?= okv_e(okv_asset('/assets/img/brand/icons/favicon-16.png')) ?>">
   <link rel="apple-touch-icon" sizes="180x180" href="<?= okv_e(okv_asset('/assets/img/brand/icons/apple-touch-icon.png')) ?>">

@@ -10,9 +10,11 @@
 #   3. Gold is never a solid button fill (bg-gold with text on top).
 #   4. No arbitrary colour: no Tailwind [#hex] and no inline style hex.
 #   5. An outline button never carries white text on its own white fill.
-#   6. The brand assets exist (logo, favicon set, manifest, fonts, the
-#      single-ink set and the raster mark for email). Documents carry the
-#      full-colour lockup since the Owner's "logo harmony" decision.
+#   6. The brand assets exist (the seal at every generated size, the seal-tile
+#      favicon and app icon set, the manifest, the fonts, the social card),
+#      and the retired derived marks (monogram, lockups, wordmark) do not
+#      ship: the Owner's one-logo decision of 7 October 2026 makes the seal
+#      the only logo, everywhere.
 #   7. Every page that loads the stylesheet also emits the brand head partial,
 #      so a new page can never ship without a favicon and the fonts.
 #   8. The compiled stylesheet is current with the brand.
@@ -85,19 +87,26 @@ fi
 
 echo "[brand] 6. brand assets present"
 ASSETS="favicon.ico site.webmanifest
-  assets/img/brand/monogram.svg assets/img/brand/monogram-white.svg
-  assets/img/brand/lockup.svg assets/img/brand/lockup-white.svg
-  assets/img/brand/lockup-mono-green.svg assets/img/brand/monogram-mono-green.svg
-  assets/img/brand/lockup-white-720.png
-  assets/img/brand/wordmark.svg assets/img/brand/seal-640.png assets/img/brand/og-image.png
-  assets/img/brand/icons/favicon.svg assets/img/brand/icons/favicon-32.png
+  assets/img/brand/seal-640.png assets/img/brand/seal-320.png assets/img/brand/seal-160.png
+  assets/img/brand/seal-640.webp assets/img/brand/seal-320.webp assets/img/brand/seal-160.webp
+  assets/img/brand/og-image.png
+  assets/img/brand/icons/favicon-16.png assets/img/brand/icons/favicon-32.png assets/img/brand/icons/favicon-48.png
   assets/img/brand/icons/apple-touch-icon.png assets/img/brand/icons/icon-192.png
   assets/img/brand/icons/icon-512.png assets/img/brand/icons/icon-maskable-512.png
   assets/fonts/hanken-grotesk-latin.woff2 assets/fonts/hanken-grotesk-latin-ext.woff2
   assets/fonts/dm-serif-display-latin.woff2 assets/fonts/jetbrains-mono-latin.woff2"
 missing=0
 for a in $ASSETS; do [ -f "$a" ] || { note "missing brand asset: $a"; missing=1; }; done
-[ "$missing" -eq 0 ] && okay "all brand assets present"
+# The Owner's one-logo decision of 7 October 2026: the seal is the only logo.
+# A derived mark reappearing in the tree is a regression, so it fails here.
+DERIVED="assets/img/brand/monogram.svg assets/img/brand/monogram-white.svg
+  assets/img/brand/monogram-mono-green.svg assets/img/brand/lockup.svg
+  assets/img/brand/lockup-white.svg assets/img/brand/lockup-compact.svg
+  assets/img/brand/lockup-compact-white.svg assets/img/brand/lockup-mono-green.svg
+  assets/img/brand/lockup-white-720.png assets/img/brand/wordmark.svg
+  assets/img/brand/wordmark-white.svg assets/img/brand/icons/favicon.svg"
+for a in $DERIVED; do [ -e "$a" ] && { note "derived mark must not ship (one logo everywhere): $a"; missing=1; }; done
+[ "$missing" -eq 0 ] && okay "all brand assets present, no derived mark ships"
 
 echo "[brand] 7. every page carries the brand head partial"
 offenders=0
