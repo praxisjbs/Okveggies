@@ -34,6 +34,7 @@ if (!function_exists('okv_admin_nav_icon')) {
             'key'       => '<circle cx="8" cy="12" r="3.5"/><path d="M11.5 12H21"/><path d="M18 12v3"/><path d="M15 12v2"/>',
             'user'      => '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1.2-3.2 3.8-4.8 7-4.8s5.8 1.6 7 4.8"/>',
             'logout'    => '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="m15 8 4 4-4 4"/><path d="M19 12H9"/>',
+            'close'     => '<path d="m6 6 12 12"/><path d="m18 6-12 12"/>',
         ];
         $inner = $paths[$name] ?? '<rect x="5" y="5" width="14" height="14" rx="2"/>';
         return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" '
@@ -79,14 +80,29 @@ if (Rbac::can('messages.view')) {
 }
 ?>
 <aside id="okv-admin-sidebar"
-       class="hidden md:flex md:flex-col md:w-64 md:shrink-0 bg-forest text-white md:min-h-screen">
-  <div class="flex items-center gap-2 px-5 h-16 border-b border-white/10">
+       class="okv-admin-nav"
+       aria-label="Admin menu"
+       hidden>
+  <div class="flex h-16 flex-none items-center gap-2 border-b border-white/10 px-5">
     <a href="/admin/" class="inline-flex items-center rounded-md" aria-label="OK Veggies admin, home">
       <img src="<?= okv_e(okv_asset('/assets/img/brand/lockup-white.svg')) ?>" alt="OK Veggies" width="168" height="44" class="h-11 w-auto">
     </a>
+    <!--
+      On a phone the panel covers the whole screen, so the hamburger that
+      opened it is underneath. The panel carries its own Close (assets/js/
+      admin-nav.js wires it), and there is nothing to close from 768px up,
+      where the sidebar is simply a column of the shell.
+    -->
+    <button type="button" data-okv-nav-close
+            class="ml-auto inline-flex h-11 w-11 flex-none items-center justify-center rounded-md border border-white/25 text-white/85 transition-colors duration-botanical hover:bg-white/10 hover:text-white md:hidden"
+            aria-label="Close the menu"><?= okv_admin_nav_icon('close') ?></button>
   </div>
 
-  <nav class="flex-1 overflow-y-auto py-4" aria-label="Admin">
+  <!--
+    The one scroll region in the panel. overscroll-contain keeps a flick at
+    either end of the list from handing the scroll to the page underneath.
+  -->
+  <nav class="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4" aria-label="Admin" data-okv-nav-scroll>
     <?php foreach ($OKV_ADMIN_NAV as $group):
         $visible = array_filter($group['items'], static fn($it) => okv_admin_nav_item_allowed($it, static fn(string $permission): bool => Rbac::can($permission)));
         if (!$visible) { continue; }
@@ -113,13 +129,14 @@ if (Rbac::can('messages.view')) {
 
   <!--
     The signed-in bar, pinned to the bottom of the sidebar: the nav above it
-    scrolls inside the aside, so the bar stays put while a long screen scrolls.
-    Avatar, full name and role on the left; Your account and Sign out as icon
-    buttons on the right, because a colleague on a phone-sized screen should
-    see buttons, not deep-link text. Sign out keeps the POST form and its CSRF
-    field; the icon is the target, not the text.
+    scrolls inside the aside, so the bar stays put while a long screen scrolls,
+    and on a phone it stays at the foot of the panel while the nav scrolls
+    under it. Avatar, full name and role on the left; Your account and Sign out
+    as icon buttons on the right, because a colleague on a phone-sized screen
+    should see buttons, not deep-link text. Sign out keeps the POST form and
+    its CSRF field; the icon is the target, not the text.
   -->
-  <div class="border-t border-white/10 bg-white/5 px-4 py-3">
+  <div class="okv-admin-nav-foot flex-none border-t border-white/10 bg-white/5 px-4 pt-3">
     <div class="flex items-center gap-3">
       <span class="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-white/15 font-mono text-sm font-semibold text-white" aria-hidden="true"><?= okv_e($okv_sb_initials) ?></span>
       <div class="min-w-0 flex-1">
