@@ -48,7 +48,7 @@ require_once __DIR__ . '/../../config/nav.php';
     <div class="flex-1 min-w-0 flex flex-col">
       <header class="sticky top-0 z-10 bg-white border-b border-mist">
         <div class="flex items-center gap-3 h-16 px-4 md:px-8">
-          <button type="button" data-okv-nav-toggle aria-controls="okv-admin-sidebar" aria-expanded="false"
+          <button type="button" data-okv-nav-toggle aria-controls="okv-admin-sidebar" aria-haspopup="dialog" aria-expanded="false"
                   class="md:hidden inline-flex items-center justify-center w-11 h-11 -ml-2 rounded-md text-ink hover:bg-forest-tint">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
             <span class="sr-only">Open the menu</span>

@@ -22,6 +22,11 @@ if (!defined('OKV_BOOTSTRAPPED')) {
   <script src="<?= okv_e(okv_asset('/assets/js/admin-shortcuts.js')) ?>" defer></script>
   <script src="<?= okv_e(okv_asset('/assets/js/admin-notifications.js')) ?>" defer></script>
   <?php
+  // The sidebar as a phone panel: opens the fixed panel, locks the page behind
+  // it, keeps Back closing the menu, and leaves the desktop sidebar alone.
+  ?>
+  <script src="<?= okv_e(okv_asset('/assets/js/admin-nav.js')) ?>" defer></script>
+  <?php
   // One script, or several. A screen that reuses a shared module (the customer
   // picker, say) alongside its own needs both, and naming them in an array
   // beats copying the shared one into every page that wants it.
@@ -30,17 +35,5 @@ if (!defined('OKV_BOOTSTRAPPED')) {
   ?>
   <script src="<?= okv_e(okv_asset((string) $okv_admin_script_src)) ?>" defer></script>
   <?php endforeach; ?>
-  <script>
-  (function () {
-    var toggle = document.querySelector('[data-okv-nav-toggle]');
-    var side = document.getElementById('okv-admin-sidebar');
-    if (toggle && side) {
-      toggle.addEventListener('click', function () {
-        var hidden = side.classList.toggle('hidden');
-        toggle.setAttribute('aria-expanded', String(!hidden));
-      });
-    }
-  })();
-  </script>
 </body>
 </html>
