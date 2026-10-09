@@ -144,6 +144,8 @@ require_once __DIR__ . '/classes/Customers.php';
 // account that order may need before it can exist.
 require_once __DIR__ . '/classes/StaffCustomers.php';
 require_once __DIR__ . '/classes/ManualOrder.php';
+// Expense module. Money out, recorded against an enforced category.
+require_once __DIR__ . '/classes/Expenses.php';
 
 // 7. Warm the RBAC cache from the session (no DB hit unless a user is loaded).
 Rbac::init();

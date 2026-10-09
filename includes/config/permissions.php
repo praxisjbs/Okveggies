@@ -85,6 +85,10 @@ $OKV_PERMISSIONS = [
         'credit.grant'                 => 'Grant credit to a business',
         'credit.limit.set'             => 'Set a credit limit',
     ],
+    'expenses' => [
+        'expenses.view'                => 'See the expense list and totals',
+        'expenses.manage'              => 'Record an expense and void one',
+    ],
     'delivery' => [
         'delivery.view'                => 'View delivery planning',
         'delivery.manifest.view'       => 'View and print the day manifest',
