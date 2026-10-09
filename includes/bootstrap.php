@@ -146,6 +146,8 @@ require_once __DIR__ . '/classes/StaffCustomers.php';
 require_once __DIR__ . '/classes/ManualOrder.php';
 // Expense module. Money out, recorded against an enforced category.
 require_once __DIR__ . '/classes/Expenses.php';
+// Reporting. Revenue against expenses, profit, and the dashboard figures.
+require_once __DIR__ . '/classes/FinancialReport.php';
 
 // 7. Warm the RBAC cache from the session (no DB hit unless a user is loaded).
 Rbac::init();

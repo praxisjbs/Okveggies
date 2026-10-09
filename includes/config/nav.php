@@ -18,6 +18,7 @@ $OKV_ADMIN_NAV = [
         'heading' => 'Overview',
         'items' => [
             ['label' => 'Dashboard', 'href' => '/admin/',                 'icon' => 'home',           'permission' => 'dashboard.view', 'keywords' => ['overview', 'home', 'today', 'analytics'], 'shortcut' => ['g', 'd']],
+            ['label' => 'Reports',   'href' => '/admin/reports.php',      'icon' => 'chart',          'permission' => 'reports.view', 'keywords' => ['reports', 'report', 'profit', 'revenue', 'expenses', 'charts', 'financial', 'p&l', 'margin']],
         ],
     ],
     [

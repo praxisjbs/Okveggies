@@ -102,6 +102,7 @@ require_once $appRoot . '/includes/classes/Customer.php';
 require_once $appRoot . '/includes/classes/StaffCustomers.php';
 require_once $appRoot . '/includes/classes/ManualOrder.php';
 require_once $appRoot . '/includes/classes/Expenses.php';
+require_once $appRoot . '/includes/classes/FinancialReport.php';
 require_once $appRoot . '/includes/functions/helpers.php';
 require_once $appRoot . '/includes/functions/pro_access.php';
 

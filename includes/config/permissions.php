@@ -89,6 +89,9 @@ $OKV_PERMISSIONS = [
         'expenses.view'                => 'See the expense list and totals',
         'expenses.manage'              => 'Record an expense and void one',
     ],
+    'reports' => [
+        'reports.view'                 => 'See the financial dashboard',
+    ],
     'delivery' => [
         'delivery.view'                => 'View delivery planning',
         'delivery.manifest.view'       => 'View and print the day manifest',
