@@ -1,0 +1,3945 @@
+{
+ "reconciliation": {
+  "sales_total_subunit": 922754573,
+  "outstanding_subunit": 124004000,
+  "invoice_count": 69,
+  "expenses_total_subunit": 825872589,
+  "sales_by_month": {
+   "2026-09": 716148073,
+   "2026-10": 206606500
+  }
+ },
+ "customers": [
+  {
+   "business": "VSP Lounge",
+   "branches": [
+    "Ikeja"
+   ],
+   "legacy_names": [
+    "VSP Lounge"
+   ]
+  },
+  {
+   "business": "Citysubs",
+   "branches": [
+    "Lekki",
+    "Yaba"
+   ],
+   "legacy_names": [
+    "Citysubs Yaba",
+    "Citysubs Lekki"
+   ]
+  },
+  {
+   "business": "Nostalgia",
+   "branches": [
+    "Lekki"
+   ],
+   "legacy_names": [
+    "Nostalgia"
+   ]
+  },
+  {
+   "business": "Renee Supermarket",
+   "branches": [
+    "Lekki"
+   ],
+   "legacy_names": [
+    "Renee Supermarket"
+   ]
+  },
+  {
+   "business": "King of Fruits",
+   "branches": [
+    "Lekki"
+   ],
+   "legacy_names": [
+    "King of Fruits"
+   ]
+  },
+  {
+   "business": "Alhaji Sabo",
+   "branches": [
+    "Lekki"
+   ],
+   "legacy_names": [
+    "Alhaji Sabo"
+   ]
+  },
+  {
+   "business": "Ms. Memunat",
+   "branches": [],
+   "legacy_names": [
+    "Ms. Memunat"
+   ]
+  }
+ ],
+ "product_aliases": {
+  "Okro": {
+   "match": "Okro"
+  },
+  "Rodo": {
+   "match": "Rodo"
+  },
+  "Red bell pepper": {
+   "match": "Red bell Pepper"
+  },
+  "Fresh tomatoes": {
+   "match": "Fresh Tomatoes"
+  },
+  "Yello bell pepper": {
+   "match": "Yellow bell Pepper"
+  },
+  "Green bell pepper": {
+   "match": "Green bell pepper"
+  },
+  "Parsley": {
+   "create": "Parsley"
+  },
+  "Plantain": {
+   "create": "Plantain"
+  },
+  "Irish potatoes": {
+   "match": "Irish Potatoes"
+  },
+  "Sweet potatoes": {
+   "create": "Sweet potatoes"
+  },
+  "Carrot": {
+   "create": "Carrot"
+  },
+  "Onion": {
+   "match": "Onion"
+  },
+  "White cabbage": {
+   "match": "White Cabbage"
+  },
+  "Pineapple": {
+   "create": "Pineapple"
+  },
+  "Lime": {
+   "create": "Lime"
+  },
+  "Basil": {
+   "create": "Basil"
+  },
+  "Ginger": {
+   "match": "Ginger"
+  },
+  "Mint leaf": {
+   "match": "Mint leaf"
+  },
+  "Spring onion": {
+   "match": "Spring Onion"
+  },
+  "Celery": {
+   "match": "Celery"
+  },
+  "Marrow": {
+   "match": "Marrow"
+  },
+  "Banana": {
+   "create": "Banana"
+  },
+  "Green beans": {
+   "create": "Green beans"
+  },
+  "Watermelon": {
+   "create": "Watermelon"
+  },
+  "Pomo": {
+   "create": "Pomo"
+  },
+  "Stock fish": {
+   "create": "Stock fish"
+  },
+  "Lemon grass": {
+   "create": "Lemon grass"
+  },
+  "Yam": {
+   "match": "Yam"
+  },
+  "Fresh Thyme": {
+   "match": "Fresh Thyme"
+  },
+  "Coloured Cabbage": {
+   "create": "Coloured Cabbage"
+  },
+  "Cucumber": {
+   "create": "Cucumber"
+  },
+  "Eforiro": {
+   "create": "Eforiro"
+  },
+  "Cauliflower": {
+   "create": "Cauliflower"
+  },
+  "Fresh Tomatoes": {
+   "match": "Fresh Tomatoes"
+  },
+  "Coriander": {
+   "create": "Coriander"
+  },
+  "purple cabbage": {
+   "match": "Purple Cabbage"
+  },
+  "Fresh rosemary": {
+   "create": "Fresh rosemary"
+  },
+  "Lettuce": {
+   "match": "Lettuce"
+  },
+  "Tatashe": {
+   "match": "Tatashe"
+  },
+  "Shombo": {
+   "match": "Shombo"
+  },
+  "Garlic": {
+   "match": "Garlic"
+  },
+  "Locust beans": {
+   "create": "Locust beans"
+  },
+  "Avocado": {
+   "create": "Avocado"
+  },
+  "Yellow bell pepper": {
+   "match": "Yellow bell Pepper"
+  },
+  "Brocoli": {
+   "create": "Brocoli"
+  },
+  "Sweet Corn": {
+   "match": "Sweet Corn"
+  },
+  "yam": {
+   "match": "Yam"
+  },
+  "Rosemary": {
+   "create": "Rosemary"
+  }
+ },
+ "invoices": [
+  {
+   "invoice": "INV550/601",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-01",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rodo",
+     "qty": 9.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 50.0,
+     "price_subunit": 240000,
+     "amount_subunit": 12000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yello bell pepper",
+     "qty": 5.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 5.0,
+     "price_subunit": 400000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 4.0,
+     "price_subunit": 80000,
+     "amount_subunit": 320000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 6.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Irish potatoes",
+     "qty": 5.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 10.0,
+     "price_subunit": 100000,
+     "amount_subunit": 1000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 7.0,
+     "price_subunit": 200000,
+     "amount_subunit": 1400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 20.0,
+     "price_subunit": 150000,
+     "amount_subunit": 3000000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 5.0,
+     "price_subunit": 200000,
+     "amount_subunit": 1000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pineapple",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Lime",
+     "qty": 2.0,
+     "price_subunit": 75000,
+     "amount_subunit": 150000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 3.0,
+     "price_subunit": 100000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 2.0,
+     "price_subunit": 750000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Mint leaf",
+     "qty": 1.0,
+     "price_subunit": 110000,
+     "amount_subunit": 110000,
+     "is_delivery": false
+    },
+    {
+     "product": "Spring onion",
+     "qty": 3.0,
+     "price_subunit": 110000,
+     "amount_subunit": 330000,
+     "is_delivery": false
+    },
+    {
+     "product": "Celery",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 1.0,
+     "price_subunit": 225000,
+     "amount_subunit": 225000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green beans",
+     "qty": 2.0,
+     "price_subunit": 230000,
+     "amount_subunit": 460000,
+     "is_delivery": false
+    },
+    {
+     "product": "Watermelon",
+     "qty": 1.0,
+     "price_subunit": 250000,
+     "amount_subunit": 250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 450000,
+     "amount_subunit": 450000,
+     "is_delivery": true
+    }
+   ],
+   "total_subunit": 38295000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV602",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-01",
+   "lines": [
+    {
+     "product": "Pomo",
+     "qty": 30.0,
+     "price_subunit": 25000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Stock fish",
+     "qty": 27.0,
+     "price_subunit": 45000,
+     "amount_subunit": 1215000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 10.0,
+     "price_subunit": 150000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 3465000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV603",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-01",
+   "lines": [
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 500000,
+     "amount_subunit": 5000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Lemon grass",
+     "qty": 1.0,
+     "price_subunit": 200000,
+     "amount_subunit": 200000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 9200000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV604/605",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-04",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rodo",
+     "qty": 10.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 59.0,
+     "price_subunit": 240000,
+     "amount_subunit": 14160000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yello bell pepper",
+     "qty": 4.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 4.0,
+     "price_subunit": 400000,
+     "amount_subunit": 1600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 3.0,
+     "price_subunit": 80000,
+     "amount_subunit": 240000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 6.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 10.0,
+     "price_subunit": 100000,
+     "amount_subunit": 1000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yam",
+     "qty": 15.0,
+     "price_subunit": 310000,
+     "amount_subunit": 4650000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh Thyme",
+     "qty": 7.0,
+     "price_subunit": 110000,
+     "amount_subunit": 770000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 7.0,
+     "price_subunit": 200000,
+     "amount_subunit": 1400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 20.0,
+     "price_subunit": 150000,
+     "amount_subunit": 3000000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 5.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Coloured Cabbage",
+     "qty": 3.0,
+     "price_subunit": 350000,
+     "amount_subunit": 1050000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cucumber",
+     "qty": 2.0,
+     "price_subunit": 50000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pineapple",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 3.0,
+     "price_subunit": 100000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 1.0,
+     "price_subunit": 750000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Mint leaf",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Spring onion",
+     "qty": 2.0,
+     "price_subunit": 110000,
+     "amount_subunit": 220000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Eforiro",
+     "qty": 6.0,
+     "price_subunit": 100000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 2.0,
+     "price_subunit": 200000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green beans",
+     "qty": 1.0,
+     "price_subunit": 250000,
+     "amount_subunit": 250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Watermelon",
+     "qty": 1.0,
+     "price_subunit": 250000,
+     "amount_subunit": 250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cauliflower",
+     "qty": 3.0,
+     "price_subunit": 500000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": true
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 4.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3120000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 45480000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV606",
+   "customer": "Nostalgia",
+   "location": "Lekki",
+   "date": "2026-09-04",
+   "lines": [
+    {
+     "product": "Red bell pepper",
+     "qty": 5.5,
+     "price_subunit": 800000,
+     "amount_subunit": 4400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 5.2,
+     "price_subunit": 500000,
+     "amount_subunit": 2600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yello bell pepper",
+     "qty": 5.45,
+     "price_subunit": 800000,
+     "amount_subunit": 4360000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 11360000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV608",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-04",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 270000,
+     "amount_subunit": 2700000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2700000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV607",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-04",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 270000,
+     "amount_subunit": 2700000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2700000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV609",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-05",
+   "lines": [
+    {
+     "product": "Carrot",
+     "qty": 3.0,
+     "price_subunit": 200000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 500000,
+     "amount_subunit": 5000000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 5600000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV610",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-06",
+   "lines": [
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 500000,
+     "amount_subunit": 5000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 9000000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV611",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-06",
+   "lines": [
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 4000000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV612",
+   "customer": "Nostalgia",
+   "location": "Lekki",
+   "date": "2026-09-07",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 32.8,
+     "price_subunit": 240000,
+     "amount_subunit": 7872000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 5.2,
+     "price_subunit": 500000,
+     "amount_subunit": 2600000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 10472000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV613",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-07",
+   "lines": [
+    {
+     "product": "Fresh Tomatoes",
+     "qty": 10.0,
+     "price_subunit": 260000,
+     "amount_subunit": 2600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Coriander",
+     "qty": 1.0,
+     "price_subunit": 110000,
+     "amount_subunit": 110000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh Thyme",
+     "qty": 1.0,
+     "price_subunit": 110000,
+     "amount_subunit": 110000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 1.0,
+     "price_subunit": 250000,
+     "amount_subunit": 250000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh rosemary",
+     "qty": 1.0,
+     "price_subunit": 220000,
+     "amount_subunit": 220000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 3690000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV614",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-07",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 260000,
+     "amount_subunit": 2600000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 1.0,
+     "price_subunit": 250000,
+     "amount_subunit": 250000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 3150000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV620",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-08",
+   "lines": [
+    {
+     "product": "Lettuce",
+     "qty": 5.0,
+     "price_subunit": 220000,
+     "amount_subunit": 1100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 3.0,
+     "price_subunit": 200000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 1700000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV618",
+   "customer": "Nostalgia",
+   "location": "Lekki",
+   "date": "2026-09-08",
+   "lines": [
+    {
+     "product": "Red bell pepper",
+     "qty": 5.2,
+     "price_subunit": 800000,
+     "amount_subunit": 4160000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yello bell pepper",
+     "qty": 5.35,
+     "price_subunit": 800000,
+     "amount_subunit": 4280000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 8440000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV617",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-08",
+   "lines": [
+    {
+     "product": "Rodo",
+     "qty": 11.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pomo",
+     "qty": 30.0,
+     "price_subunit": 25000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 30.0,
+     "price_subunit": 235000,
+     "amount_subunit": 7050000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 10550000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV615/616",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-08",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 50.0,
+     "price_subunit": 235000,
+     "amount_subunit": 11750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rodo",
+     "qty": 11.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yello bell pepper",
+     "qty": 5.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 4.0,
+     "price_subunit": 400000,
+     "amount_subunit": 1600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 5.0,
+     "price_subunit": 80000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 4.0,
+     "price_subunit": 150000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 6.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 10.0,
+     "price_subunit": 100000,
+     "amount_subunit": 1000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh Thyme",
+     "qty": 5.0,
+     "price_subunit": 110000,
+     "amount_subunit": 550000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 7.0,
+     "price_subunit": 200000,
+     "amount_subunit": 1400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 9.0,
+     "price_subunit": 150000,
+     "amount_subunit": 1350000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 10.0,
+     "price_subunit": 280000,
+     "amount_subunit": 2800000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cucumber",
+     "qty": 3.0,
+     "price_subunit": 50000,
+     "amount_subunit": 150000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pineapple",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Tatashe",
+     "qty": 3.0,
+     "price_subunit": 280000,
+     "amount_subunit": 840000,
+     "is_delivery": false
+    },
+    {
+     "product": "Shombo",
+     "qty": 3.0,
+     "price_subunit": 250000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 5.0,
+     "price_subunit": 100000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 2.0,
+     "price_subunit": 650000,
+     "amount_subunit": 1300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Mint leaf",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Spring onion",
+     "qty": 5.0,
+     "price_subunit": 120000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Garlic",
+     "qty": 3.0,
+     "price_subunit": 430000,
+     "amount_subunit": 1290000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green beans",
+     "qty": 3.0,
+     "price_subunit": 230000,
+     "amount_subunit": 690000,
+     "is_delivery": false
+    },
+    {
+     "product": "Locust beans",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": true
+    },
+    {
+     "product": "Lime",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 41970000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV622",
+   "customer": "Alhaji Sabo",
+   "location": "Lekki",
+   "date": "2026-09-08",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 40.4,
+     "price_subunit": 220000,
+     "amount_subunit": 8888000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 8888000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV623",
+   "customer": "King of Fruits",
+   "location": "Lekki",
+   "date": "2026-09-10",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 25.0,
+     "price_subunit": 220000,
+     "amount_subunit": 5500000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 5500000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV624",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-10",
+   "lines": [
+    {
+     "product": "Red bell pepper",
+     "qty": 4.9,
+     "price_subunit": 780000,
+     "amount_subunit": 3822000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 500000,
+     "amount_subunit": 5000000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 1.0,
+     "price_subunit": 250000,
+     "amount_subunit": 250000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 1.0,
+     "price_subunit": 350000,
+     "amount_subunit": 350000,
+     "is_delivery": false
+    },
+    {
+     "product": "Lettuce",
+     "qty": 3.0,
+     "price_subunit": 220000,
+     "amount_subunit": 660000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 10082000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV625",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-10",
+   "lines": [
+    {
+     "product": "White cabbage",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 2.0,
+     "price_subunit": 350000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    },
+    {
+     "product": "Mint leaf",
+     "qty": 2.0,
+     "price_subunit": 100000,
+     "amount_subunit": 200000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 1400000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV626",
+   "customer": "King of Fruits",
+   "location": "Lekki",
+   "date": "2026-09-10",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 25.0,
+     "price_subunit": 220000,
+     "amount_subunit": 5500000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 5500000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV628/629",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-11",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 80.0,
+     "price_subunit": 240000,
+     "amount_subunit": 19200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rodo",
+     "qty": 10.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yello bell pepper",
+     "qty": 5.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 5.0,
+     "price_subunit": 400000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 8.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 11.0,
+     "price_subunit": 100000,
+     "amount_subunit": 1100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yam",
+     "qty": 10.0,
+     "price_subunit": 300000,
+     "amount_subunit": 3000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 5.0,
+     "price_subunit": 200000,
+     "amount_subunit": 1000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 16.0,
+     "price_subunit": 160000,
+     "amount_subunit": 2560000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 10.0,
+     "price_subunit": 260000,
+     "amount_subunit": 2600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pineapple",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 3.0,
+     "price_subunit": 100000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 2.0,
+     "price_subunit": 750000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green beans",
+     "qty": 3.0,
+     "price_subunit": 250000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": true
+    }
+   ],
+   "total_subunit": 47860000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV629",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-11",
+   "lines": [
+    {
+     "product": "Onion",
+     "qty": 5.0,
+     "price_subunit": 160000,
+     "amount_subunit": 800000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cucumber",
+     "qty": 5.0,
+     "price_subunit": 80000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 260000,
+     "amount_subunit": 2600000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 3800000,
+   "status": "Fully Paid",
+   "balance_subunit": 1200000
+  },
+  {
+   "invoice": "INV631",
+   "customer": "Alhaji Sabo",
+   "location": "Lekki",
+   "date": "2026-09-11",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 37.9,
+     "price_subunit": 220000,
+     "amount_subunit": 8338000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 4.9,
+     "price_subunit": 550000,
+     "amount_subunit": 2695000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 11033000,
+   "status": "Partially Paid",
+   "balance_subunit": 2000000
+  },
+  {
+   "invoice": "INV632",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-12",
+   "lines": [
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 500000,
+     "amount_subunit": 5000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 4.7,
+     "price_subunit": 800000,
+     "amount_subunit": 3760000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 8760000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV633",
+   "customer": "Nostalgia",
+   "location": "Lekki",
+   "date": "2026-09-14",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 44.6,
+     "price_subunit": 240000,
+     "amount_subunit": 10704000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 5.3,
+     "price_subunit": 500000,
+     "amount_subunit": 2650000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 13354000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INVX",
+   "customer": "Ms. Memunat",
+   "location": "Lekki",
+   "date": "2026-09-14",
+   "lines": [
+    {
+     "product": "Yam",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 500000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV634/635",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-15",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 60.0,
+     "price_subunit": 240000,
+     "amount_subunit": 14400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yello bell pepper",
+     "qty": 5.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 5.0,
+     "price_subunit": 400000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 3.0,
+     "price_subunit": 80000,
+     "amount_subunit": 240000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 6.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Irish potatoes",
+     "qty": 5.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yam",
+     "qty": 10.0,
+     "price_subunit": 300000,
+     "amount_subunit": 3000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 10.0,
+     "price_subunit": 200000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 30.0,
+     "price_subunit": 170000,
+     "amount_subunit": 5100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 4.0,
+     "price_subunit": 100000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 2.0,
+     "price_subunit": 750000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Mint leaf",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Celery",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Eforiro",
+     "qty": 6.0,
+     "price_subunit": 100000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": true
+    },
+    {
+     "product": "Onion",
+     "qty": 10.0,
+     "price_subunit": 170000,
+     "amount_subunit": 1700000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 42740000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV636",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-15",
+   "lines": [
+    {
+     "product": "Avocado",
+     "qty": 1.0,
+     "price_subunit": 1400000,
+     "amount_subunit": 1400000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 1.0,
+     "price_subunit": 350000,
+     "amount_subunit": 350000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 1.0,
+     "price_subunit": 260000,
+     "amount_subunit": 260000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2010000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV638",
+   "customer": "Renee Supermarket",
+   "location": "Lekki",
+   "date": "2026-09-15",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 89.7,
+     "price_subunit": 230000,
+     "amount_subunit": 20631000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 20631000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV637",
+   "customer": "Nostalgia",
+   "location": "Lekki",
+   "date": "2026-09-15",
+   "lines": [
+    {
+     "product": "Red bell pepper",
+     "qty": 5.15,
+     "price_subunit": 800000,
+     "amount_subunit": 4120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yello bell pepper",
+     "qty": 5.15,
+     "price_subunit": 800000,
+     "amount_subunit": 4120000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 8240000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV639/640",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-18",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rodo",
+     "qty": 10.0,
+     "price_subunit": 240000,
+     "amount_subunit": 2400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 3.0,
+     "price_subunit": 780000,
+     "amount_subunit": 2340000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 55.2,
+     "price_subunit": 230000,
+     "amount_subunit": 12696000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yello bell pepper",
+     "qty": 4.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 1.0,
+     "price_subunit": 400000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 2.0,
+     "price_subunit": 80000,
+     "amount_subunit": 160000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 6.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 10.0,
+     "price_subunit": 100000,
+     "amount_subunit": 1000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yam",
+     "qty": 10.0,
+     "price_subunit": 300000,
+     "amount_subunit": 3000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh Thyme",
+     "qty": 4.0,
+     "price_subunit": 120000,
+     "amount_subunit": 480000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 7.0,
+     "price_subunit": 200000,
+     "amount_subunit": 1400000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 8.0,
+     "price_subunit": 270000,
+     "amount_subunit": 2160000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cucumber",
+     "qty": 4.0,
+     "price_subunit": 40000,
+     "amount_subunit": 160000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pineapple",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Tatashe",
+     "qty": 3.0,
+     "price_subunit": 350000,
+     "amount_subunit": 1050000,
+     "is_delivery": false
+    },
+    {
+     "product": "Shombo",
+     "qty": 3.0,
+     "price_subunit": 250000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Lime",
+     "qty": 1.0,
+     "price_subunit": 250000,
+     "amount_subunit": 250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 1.0,
+     "price_subunit": 750000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Mint leaf",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Spring onion",
+     "qty": 3.0,
+     "price_subunit": 110000,
+     "amount_subunit": 330000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cauliflower",
+     "qty": 3.0,
+     "price_subunit": 500000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green beans",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": true
+    }
+   ],
+   "total_subunit": 37846000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV641",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-18",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 260000,
+     "amount_subunit": 2600000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 2.0,
+     "price_subunit": 350000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 1.0,
+     "price_subunit": 750000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 500000,
+     "amount_subunit": 5000000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 13550000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV643",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-18",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 260000,
+     "amount_subunit": 2600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 500000,
+     "amount_subunit": 5000000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 11600000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV644",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-21",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2500000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 1.0,
+     "price_subunit": 350000,
+     "amount_subunit": 350000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 1.0,
+     "price_subunit": 270000,
+     "amount_subunit": 270000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 480000,
+     "amount_subunit": 4800000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 11920000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV645",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-21",
+   "lines": [
+    {
+     "product": "purple cabbage",
+     "qty": 2.0,
+     "price_subunit": 350000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 2.0,
+     "price_subunit": 270000,
+     "amount_subunit": 540000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh Thyme",
+     "qty": 1.0,
+     "price_subunit": 110000,
+     "amount_subunit": 110000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 480000,
+     "amount_subunit": 4800000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 10150000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV646",
+   "customer": "Nostalgia",
+   "location": "Lekki",
+   "date": "2026-09-21",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 31.7,
+     "price_subunit": 230000,
+     "amount_subunit": 7291000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.1,
+     "price_subunit": 800000,
+     "amount_subunit": 4080000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yellow bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 5.3,
+     "price_subunit": 500000,
+     "amount_subunit": 2650000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 18021000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV647/INV648",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-22",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 4.0,
+     "price_subunit": 150000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rodo",
+     "qty": 20.0,
+     "price_subunit": 200000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 124.0,
+     "price_subunit": 230000,
+     "amount_subunit": 28520000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yellow bell pepper",
+     "qty": 2.0,
+     "price_subunit": 780000,
+     "amount_subunit": 1560000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 4.0,
+     "price_subunit": 400000,
+     "amount_subunit": 1600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 5.0,
+     "price_subunit": 80000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 6.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 10.0,
+     "price_subunit": 100000,
+     "amount_subunit": 1000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yam",
+     "qty": 10.0,
+     "price_subunit": 300000,
+     "amount_subunit": 3000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 3.0,
+     "price_subunit": 200000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 31.0,
+     "price_subunit": 170000,
+     "amount_subunit": 5270000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 10.0,
+     "price_subunit": 260000,
+     "amount_subunit": 2600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cucumber",
+     "qty": 3.0,
+     "price_subunit": 40000,
+     "amount_subunit": 120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pineapple",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Tatashe",
+     "qty": 3.0,
+     "price_subunit": 300000,
+     "amount_subunit": 900000,
+     "is_delivery": false
+    },
+    {
+     "product": "Shombo",
+     "qty": 3.0,
+     "price_subunit": 250000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 5.0,
+     "price_subunit": 100000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 2.0,
+     "price_subunit": 750000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Spring onion",
+     "qty": 4.0,
+     "price_subunit": 110000,
+     "amount_subunit": 440000,
+     "is_delivery": false
+    },
+    {
+     "product": "Celery",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Garlic",
+     "qty": 3.0,
+     "price_subunit": 430000,
+     "amount_subunit": 1290000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cauliflower",
+     "qty": 3.0,
+     "price_subunit": 500000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green beans",
+     "qty": 3.0,
+     "price_subunit": 250000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Brocoli",
+     "qty": 3.0,
+     "price_subunit": 780000,
+     "amount_subunit": 2340000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": true
+    }
+   ],
+   "total_subunit": 66440000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV649",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-22",
+   "lines": [
+    {
+     "product": "Pomo",
+     "qty": 30.0,
+     "price_subunit": 50000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 8.0,
+     "price_subunit": 170000,
+     "amount_subunit": 1360000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2860000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV650",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-22",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2500000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2500000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV562/INV563",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-25",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 33.0,
+     "price_subunit": 230000,
+     "amount_subunit": 7590000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 4.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yellow bell pepper",
+     "qty": 4.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 4.0,
+     "price_subunit": 400000,
+     "amount_subunit": 1600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 3.0,
+     "price_subunit": 80000,
+     "amount_subunit": 240000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 9.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 10.0,
+     "price_subunit": 100000,
+     "amount_subunit": 1000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 7.0,
+     "price_subunit": 200000,
+     "amount_subunit": 1400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 11.0,
+     "price_subunit": 170000,
+     "amount_subunit": 1870000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 5.0,
+     "price_subunit": 260000,
+     "amount_subunit": 1300000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 2.0,
+     "price_subunit": 350000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 3.0,
+     "price_subunit": 100000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Spring onion",
+     "qty": 3.0,
+     "price_subunit": 110000,
+     "amount_subunit": 330000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cauliflower",
+     "qty": 3.0,
+     "price_subunit": 500000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Brocoli",
+     "qty": 1.0,
+     "price_subunit": 780000,
+     "amount_subunit": 780000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": true
+    },
+    {
+     "product": "Eforiro",
+     "qty": 4.0,
+     "price_subunit": 100000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 29050000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV564",
+   "customer": "Renee Supermarket",
+   "location": "Lekki",
+   "date": "2026-09-25",
+   "lines": [
+    {
+     "product": "Sweet Corn",
+     "qty": 38.5,
+     "price_subunit": 200000,
+     "amount_subunit": 7700000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 7700000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV565",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-25",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Lettuce",
+     "qty": 4.0,
+     "price_subunit": 200000,
+     "amount_subunit": 800000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 3300000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV566",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-25",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2500000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2500000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV567",
+   "customer": "King of Fruits",
+   "location": "Lekki",
+   "date": "2026-09-25",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 20.85,
+     "price_subunit": 191850,
+     "amount_subunit": 4000073,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 4000073,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV568",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-26",
+   "lines": [
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 480000,
+     "amount_subunit": 4800000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 1.0,
+     "price_subunit": 200000,
+     "amount_subunit": 200000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 9300000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV569",
+   "customer": "Nostalgia",
+   "location": "Lekki",
+   "date": "2026-09-28",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 39.0,
+     "price_subunit": 230000,
+     "amount_subunit": 8970000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 4.7,
+     "price_subunit": 800000,
+     "amount_subunit": 3760000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yellow bell pepper",
+     "qty": 3.9,
+     "price_subunit": 800000,
+     "amount_subunit": 3120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 4.0,
+     "price_subunit": 500000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 17850000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV570",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-09-28",
+   "lines": [
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 480000,
+     "amount_subunit": 4800000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 2.0,
+     "price_subunit": 270000,
+     "amount_subunit": 540000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 2.0,
+     "price_subunit": 350000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 10040000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV571",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-09-28",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2500000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2500000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV572/573",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-29",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 4.0,
+     "price_subunit": 150000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 4.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 63.6,
+     "price_subunit": 220000,
+     "amount_subunit": 13992000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yellow bell pepper",
+     "qty": 4.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 3.2,
+     "price_subunit": 400000,
+     "amount_subunit": 1280000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 4.0,
+     "price_subunit": 80000,
+     "amount_subunit": 320000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 6.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 9.0,
+     "price_subunit": 100000,
+     "amount_subunit": 900000,
+     "is_delivery": false
+    },
+    {
+     "product": "yam",
+     "qty": 5.0,
+     "price_subunit": 300000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh Thyme",
+     "qty": 6.0,
+     "price_subunit": 110000,
+     "amount_subunit": 660000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 5.0,
+     "price_subunit": 200000,
+     "amount_subunit": 1000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 29.7,
+     "price_subunit": 170000,
+     "amount_subunit": 5049000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 2.0,
+     "price_subunit": 350000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cucumber",
+     "qty": 5.0,
+     "price_subunit": 40000,
+     "amount_subunit": 200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Lime",
+     "qty": 1.0,
+     "price_subunit": 200000,
+     "amount_subunit": 200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 4.0,
+     "price_subunit": 80000,
+     "amount_subunit": 320000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 2.0,
+     "price_subunit": 600000,
+     "amount_subunit": 1200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Mint leaf",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Spring onion",
+     "qty": 5.0,
+     "price_subunit": 110000,
+     "amount_subunit": 550000,
+     "is_delivery": false
+    },
+    {
+     "product": "Celery",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Garlic",
+     "qty": 2.0,
+     "price_subunit": 400000,
+     "amount_subunit": 800000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 2.0,
+     "price_subunit": 200000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green beans",
+     "qty": 2.0,
+     "price_subunit": 250000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 450000,
+     "amount_subunit": 450000,
+     "is_delivery": true
+    },
+    {
+     "product": "Rodo",
+     "qty": 10.0,
+     "price_subunit": 150000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 5.0,
+     "price_subunit": 300000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 42011000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV574",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-09-29",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 42.0,
+     "price_subunit": 220000,
+     "amount_subunit": 9240000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rodo",
+     "qty": 8.0,
+     "price_subunit": 150000,
+     "amount_subunit": 1200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pomo",
+     "qty": 20.0,
+     "price_subunit": 25000,
+     "amount_subunit": 500000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 10940000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV575",
+   "customer": "Renee Supermarket",
+   "location": "Hakeem Dickson",
+   "date": "2026-10-01",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 60.0,
+     "price_subunit": 180000,
+     "amount_subunit": 10800000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 10800000,
+   "status": "",
+   "balance_subunit": 10800000
+  },
+  {
+   "invoice": "INV581",
+   "customer": "Renee Supermarket",
+   "location": "Lekki",
+   "date": "2026-10-02",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 95.0,
+     "price_subunit": 180000,
+     "amount_subunit": 17100000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 17100000,
+   "status": "",
+   "balance_subunit": 17100000
+  },
+  {
+   "invoice": "INV579",
+   "customer": "Nostalgia",
+   "location": "Lekki",
+   "date": "2026-10-02",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 30.7,
+     "price_subunit": 210000,
+     "amount_subunit": 6447000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 3.0,
+     "price_subunit": 500000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yellow bell pepper",
+     "qty": 3.0,
+     "price_subunit": 800000,
+     "amount_subunit": 2400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 2.7,
+     "price_subunit": 800000,
+     "amount_subunit": 2160000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 12507000,
+   "status": "",
+   "balance_subunit": 12507000
+  },
+  {
+   "invoice": "INV578",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-10-02",
+   "lines": [
+    {
+     "product": "Ginger",
+     "qty": 1.0,
+     "price_subunit": 600000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 9.7,
+     "price_subunit": 170000,
+     "amount_subunit": 1649000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2249000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV576/571",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-10-02",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 1.0,
+     "price_subunit": 150000,
+     "amount_subunit": 150000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rodo",
+     "qty": 9.85,
+     "price_subunit": 150000,
+     "amount_subunit": 1477500,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 3.2,
+     "price_subunit": 780000,
+     "amount_subunit": 2496000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 65.6,
+     "price_subunit": 210000,
+     "amount_subunit": 13776000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yellow bell pepper",
+     "qty": 3.2,
+     "price_subunit": 780000,
+     "amount_subunit": 2496000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 4.2,
+     "price_subunit": 400000,
+     "amount_subunit": 1680000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 3.0,
+     "price_subunit": 80000,
+     "amount_subunit": 240000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 8.0,
+     "price_subunit": 250000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 9.6,
+     "price_subunit": 100000,
+     "amount_subunit": 960000,
+     "is_delivery": false
+    },
+    {
+     "product": "yam",
+     "qty": 5.0,
+     "price_subunit": 300000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh Thyme",
+     "qty": 4.0,
+     "price_subunit": 110000,
+     "amount_subunit": 440000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 10.0,
+     "price_subunit": 200000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 5.0,
+     "price_subunit": 400000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cucumber",
+     "qty": 4.0,
+     "price_subunit": 40000,
+     "amount_subunit": 160000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pineapple",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 4.0,
+     "price_subunit": 100000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Ginger",
+     "qty": 1.0,
+     "price_subunit": 600000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Mint leaf",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Spring onion",
+     "qty": 3.0,
+     "price_subunit": 110000,
+     "amount_subunit": 330000,
+     "is_delivery": false
+    },
+    {
+     "product": "Celery",
+     "qty": 2.0,
+     "price_subunit": 100000,
+     "amount_subunit": 200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 1.0,
+     "price_subunit": 150000,
+     "amount_subunit": 150000,
+     "is_delivery": false
+    },
+    {
+     "product": "Cauliflower",
+     "qty": 3.2,
+     "price_subunit": 500000,
+     "amount_subunit": 1600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 2.0,
+     "price_subunit": 220000,
+     "amount_subunit": 440000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green beans",
+     "qty": 1.0,
+     "price_subunit": 250000,
+     "amount_subunit": 250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Brocoli",
+     "qty": 3.1,
+     "price_subunit": 780000,
+     "amount_subunit": 2418000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": true
+    }
+   ],
+   "total_subunit": 38463500,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV583",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-10-02",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 220000,
+     "amount_subunit": 2200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Lettuce",
+     "qty": 3.0,
+     "price_subunit": 220000,
+     "amount_subunit": 660000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2860000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV582",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-10-02",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 15.0,
+     "price_subunit": 220000,
+     "amount_subunit": 3300000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 3300000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV584",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-10-03",
+   "lines": [
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 480000,
+     "amount_subunit": 4800000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 8800000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV588",
+   "customer": "Citysubs Lekki",
+   "location": "Lekki",
+   "date": "2026-10-05",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 220000,
+     "amount_subunit": 2200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 480000,
+     "amount_subunit": 4800000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh Thyme",
+     "qty": 1.0,
+     "price_subunit": 110000,
+     "amount_subunit": 110000,
+     "is_delivery": false
+    },
+    {
+     "product": "Coriander",
+     "qty": 1.0,
+     "price_subunit": 120000,
+     "amount_subunit": 120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rosemary",
+     "qty": 1.0,
+     "price_subunit": 120000,
+     "amount_subunit": 120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Avocado",
+     "qty": 7.0,
+     "price_subunit": 100000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 2.0,
+     "price_subunit": 390000,
+     "amount_subunit": 780000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 2.0,
+     "price_subunit": 350000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 13630000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV587",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-10-05",
+   "lines": [
+    {
+     "product": "White cabbage",
+     "qty": 2.0,
+     "price_subunit": 390000,
+     "amount_subunit": 780000,
+     "is_delivery": false
+    },
+    {
+     "product": "purple cabbage",
+     "qty": 2.0,
+     "price_subunit": 350000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 10.0,
+     "price_subunit": 480000,
+     "amount_subunit": 4800000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.0,
+     "price_subunit": 800000,
+     "amount_subunit": 4000000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 10280000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV585",
+   "customer": "Nostalgia",
+   "location": "Lekki",
+   "date": "2026-10-05",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 33.0,
+     "price_subunit": 220000,
+     "amount_subunit": 7260000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 4.0,
+     "price_subunit": 800000,
+     "amount_subunit": 3200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yellow bell pepper",
+     "qty": 4.0,
+     "price_subunit": 800000,
+     "amount_subunit": 3200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 4.0,
+     "price_subunit": 500000,
+     "amount_subunit": 2000000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 15660000,
+   "status": "",
+   "balance_subunit": 15660000
+  },
+  {
+   "invoice": "INV589/590",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-10-06",
+   "lines": [
+    {
+     "product": "Okro",
+     "qty": 5.0,
+     "price_subunit": 150000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Fresh tomatoes",
+     "qty": 47.1,
+     "price_subunit": 200000,
+     "amount_subunit": 9420000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rodo",
+     "qty": 8.7,
+     "price_subunit": 150000,
+     "amount_subunit": 1305000,
+     "is_delivery": false
+    },
+    {
+     "product": "Red bell pepper",
+     "qty": 5.1,
+     "price_subunit": 780000,
+     "amount_subunit": 3978000,
+     "is_delivery": false
+    },
+    {
+     "product": "Yellow bell pepper",
+     "qty": 4.0,
+     "price_subunit": 780000,
+     "amount_subunit": 3120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green bell pepper",
+     "qty": 4.0,
+     "price_subunit": 400000,
+     "amount_subunit": 1600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 5.0,
+     "price_subunit": 80000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Marrow",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Plantain",
+     "qty": 6.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Irish potatoes",
+     "qty": 5.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Sweet potatoes",
+     "qty": 11.0,
+     "price_subunit": 80000,
+     "amount_subunit": 880000,
+     "is_delivery": false
+    },
+    {
+     "product": "Carrot",
+     "qty": 5.0,
+     "price_subunit": 250000,
+     "amount_subunit": 1250000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 25.8,
+     "price_subunit": 200000,
+     "amount_subunit": 5160000,
+     "is_delivery": false
+    },
+    {
+     "product": "White cabbage",
+     "qty": 10.0,
+     "price_subunit": 350000,
+     "amount_subunit": 3500000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pineapple",
+     "qty": 3.0,
+     "price_subunit": 150000,
+     "amount_subunit": 450000,
+     "is_delivery": false
+    },
+    {
+     "product": "Tatashe",
+     "qty": 4.0,
+     "price_subunit": 200000,
+     "amount_subunit": 800000,
+     "is_delivery": false
+    },
+    {
+     "product": "Shombo",
+     "qty": 3.0,
+     "price_subunit": 200000,
+     "amount_subunit": 600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Lime",
+     "qty": 2.0,
+     "price_subunit": 100000,
+     "amount_subunit": 200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Basil",
+     "qty": 5.0,
+     "price_subunit": 80000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Spring onion",
+     "qty": 4.0,
+     "price_subunit": 110000,
+     "amount_subunit": 440000,
+     "is_delivery": false
+    },
+    {
+     "product": "Garlic",
+     "qty": 3.0,
+     "price_subunit": 400000,
+     "amount_subunit": 1200000,
+     "is_delivery": false
+    },
+    {
+     "product": "Locust beans",
+     "qty": 2.0,
+     "price_subunit": 150000,
+     "amount_subunit": 300000,
+     "is_delivery": false
+    },
+    {
+     "product": "Banana",
+     "qty": 2.0,
+     "price_subunit": 200000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Green beans",
+     "qty": 3.0,
+     "price_subunit": 250000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    },
+    {
+     "product": "Brocoli",
+     "qty": 3.1,
+     "price_subunit": 780000,
+     "amount_subunit": 2418000,
+     "is_delivery": false
+    },
+    {
+     "product": "Delivery fee",
+     "qty": 1.0,
+     "price_subunit": 300000,
+     "amount_subunit": 300000,
+     "is_delivery": true
+    }
+   ],
+   "total_subunit": 42821000,
+   "status": "",
+   "balance_subunit": 42821000
+  },
+  {
+   "invoice": "INV591",
+   "customer": "VSP Lounge",
+   "location": "Ikeja",
+   "date": "2026-10-06",
+   "lines": [
+    {
+     "product": "Stock fish",
+     "qty": 21.0,
+     "price_subunit": 40000,
+     "amount_subunit": 840000,
+     "is_delivery": false
+    },
+    {
+     "product": "Pomo",
+     "qty": 30.0,
+     "price_subunit": 25000,
+     "amount_subunit": 750000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 1590000,
+   "status": "",
+   "balance_subunit": 1590000
+  },
+  {
+   "invoice": "INV593",
+   "customer": "Renee Supermarket",
+   "location": "Lekki",
+   "date": "2026-10-06",
+   "lines": [
+    {
+     "product": "Sweet potatoes",
+     "qty": 49.0,
+     "price_subunit": 200000,
+     "amount_subunit": 9800000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 9800000,
+   "status": "",
+   "balance_subunit": 9800000
+  },
+  {
+   "invoice": "INV594",
+   "customer": "Renee Supermarket",
+   "location": "Hakeem Dickson",
+   "date": "2026-10-06",
+   "lines": [
+    {
+     "product": "Sweet potatoes",
+     "qty": 55.4,
+     "price_subunit": 190000,
+     "amount_subunit": 10526000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 10526000,
+   "status": "",
+   "balance_subunit": 10526000
+  },
+  {
+   "invoice": "INV592",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-10-06",
+   "lines": [
+    {
+     "product": "Fresh tomatoes",
+     "qty": 10.0,
+     "price_subunit": 220000,
+     "amount_subunit": 2200000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 2200000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  },
+  {
+   "invoice": "INV595",
+   "customer": "Citysubs Yaba",
+   "location": "Yaba",
+   "date": "2026-10-07",
+   "lines": [
+    {
+     "product": "Ginger",
+     "qty": 1.0,
+     "price_subunit": 700000,
+     "amount_subunit": 700000,
+     "is_delivery": false
+    },
+    {
+     "product": "Garlic",
+     "qty": 1.0,
+     "price_subunit": 400000,
+     "amount_subunit": 400000,
+     "is_delivery": false
+    },
+    {
+     "product": "Rosemary",
+     "qty": 1.0,
+     "price_subunit": 120000,
+     "amount_subunit": 120000,
+     "is_delivery": false
+    },
+    {
+     "product": "Parsley",
+     "qty": 1.0,
+     "price_subunit": 100000,
+     "amount_subunit": 100000,
+     "is_delivery": false
+    },
+    {
+     "product": "Onion",
+     "qty": 8.0,
+     "price_subunit": 200000,
+     "amount_subunit": 1600000,
+     "is_delivery": false
+    },
+    {
+     "product": "Lettuce",
+     "qty": 5.0,
+     "price_subunit": 220000,
+     "amount_subunit": 1100000,
+     "is_delivery": false
+    }
+   ],
+   "total_subunit": 4020000,
+   "status": "Fully Paid",
+   "balance_subunit": 0
+  }
+ ]
+}
