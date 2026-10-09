@@ -294,6 +294,49 @@
            max-h-[92vh] overflow-y-auto animate-okv-rise;
   }
 
+  /*
+   * Expense module. Money out, logged on a phone in a few taps: a big
+   * amount-first field, a strip of coloured category pills, and an info button
+   * that hides the explanation so the screen stays mostly icons and figures.
+   */
+  .okv-amount-field {
+    @apply flex items-center gap-2 rounded-lg border border-mist bg-forest-tint/40 px-4 py-3
+           transition-colors focus-within:border-forest;
+  }
+  .okv-amount-naira { @apply font-mono text-2xl font-semibold text-ink-40; }
+  .okv-amount-input {
+    @apply w-full border-0 bg-transparent p-0 font-mono text-3xl font-bold text-ink
+           placeholder:text-ink-40 focus:ring-0;
+  }
+  /* A selectable category pill. The tint is its own colour (set in markup), the
+     chosen one gains a forest ring and a tick, so colour is never the only
+     signal. The gold focus ring rides the hidden radio and is never suppressed. */
+  .okv-cat-pill {
+    @apply relative flex min-h-[44px] cursor-pointer select-none items-center justify-center gap-1.5
+           rounded-full px-3.5 text-sm font-medium ring-1 ring-inset ring-transparent
+           transition duration-botanical ease-botanical;
+  }
+  .okv-cat-pill:has(input:focus-visible) {
+    outline: 2.5px solid theme('colors.gold.DEFAULT');
+    outline-offset: 2px;
+  }
+  .okv-cat-pill:has(input:checked) { @apply ring-2 ring-forest; }
+  .okv-cat-tick {
+    @apply flex h-4 w-4 flex-none items-center justify-center rounded-full bg-forest text-white
+           opacity-0 transition-opacity duration-botanical;
+  }
+  .okv-cat-pill:has(input:checked) .okv-cat-tick { @apply opacity-100; }
+  /* The info button and the line it reveals. */
+  .okv-info-btn {
+    @apply inline-flex h-6 w-6 flex-none items-center justify-center rounded-full border border-mist
+           text-ink-40 transition-colors hover:border-forest hover:text-forest;
+  }
+  .okv-info-text { @apply mt-1 rounded-md bg-forest-tint/60 px-3 py-2 text-xs text-ink-60; }
+  /* A money tile in the expense KPI strip. */
+  .okv-stat-tile { @apply rounded-lg bg-white p-3 shadow-okv-1; }
+  .okv-stat-value { @apply font-mono text-lg font-bold leading-tight text-ink sm:text-xl; }
+  .okv-stat-label { @apply mt-0.5 text-okv-micro font-medium uppercase tracking-wide text-ink-40; }
+
   /* Admin sidebar. A column of the desktop shell from 768px up, and a
      full-screen panel on a phone. The panel is fixed to the viewport, so it
      covers the page rather than pushing it down; the nav list scrolls inside
