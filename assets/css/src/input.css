@@ -337,6 +337,23 @@
   .okv-stat-value { @apply font-mono text-lg font-bold leading-tight text-ink sm:text-xl; }
   .okv-stat-label { @apply mt-0.5 text-okv-micro font-medium uppercase tracking-wide text-ink-40; }
 
+  /*
+   * Reporting dashboard. The chart palette is published as CSS variables drawn
+   * from the brand tokens, so admin-reports.js never carries a hex and the
+   * brand guard stays clean. A chart box holds a fixed height for the canvas.
+   */
+  :root {
+    --okv-c-forest:  theme('colors.forest.DEFAULT');
+    --okv-c-foliage: theme('colors.foliage.DEFAULT');
+    --okv-c-gold:    theme('colors.gold.DEFAULT');
+    --okv-c-tomato:  theme('colors.tomato.DEFAULT');
+    --okv-c-clay:    theme('colors.clay.DEFAULT');
+    --okv-c-ink:     theme('colors.ink.DEFAULT');
+    --okv-c-mist:    theme('colors.mist');
+  }
+  .okv-chart-box { @apply relative w-full; height: 15rem; }
+  .okv-legend-dot { @apply inline-block h-3 w-3 flex-none rounded-full; }
+
   /* Admin sidebar. A column of the desktop shell from 768px up, and a
      full-screen panel on a phone. The panel is fixed to the viewport, so it
      covers the page rather than pushing it down; the nav list scrolls inside
