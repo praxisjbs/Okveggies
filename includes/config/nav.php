@@ -36,6 +36,7 @@ $OKV_ADMIN_NAV = [
             ['label' => 'Customers',     'href' => '/admin/customers.php',    'icon' => 'users',       'permission' => 'customers.view', 'keywords' => ['customer', 'household', 'business', 'addresses'], 'shortcut' => ['g', 'c']],
             ['label' => 'Payments',      'href' => '/admin/payments.php',     'icon' => 'card',        'permission' => 'payments.view', 'keywords' => ['payment', 'pay', 'paystack', 'transactions', 'refunds', 'reconciliation'], 'shortcut' => ['g', 'm']],
             ['label' => 'Credit',        'href' => '/admin/credit.php',       'icon' => 'scale',       'permission' => 'credit.view', 'keywords' => ['credit', 'applications', 'limits', 'outstanding', 'ageing', 'repayment']],
+            ['label' => 'Expenses',      'href' => '/admin/expenses.php',     'icon' => 'receipt',     'permission' => 'expenses.view', 'keywords' => ['expense', 'expenses', 'spend', 'cost', 'supplier', 'purchases', 'money out', 'outgoings']],
         ],
     ],
     [

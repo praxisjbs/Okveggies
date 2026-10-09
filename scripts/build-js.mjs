@@ -33,6 +33,7 @@ const sources = [
   'assets/js/admin-kitchen-runs.js',
   'assets/js/admin-live-search.js',
   'assets/js/admin-credit.js',
+  'assets/js/admin-expenses.js',
   'assets/js/support-widget.js',
   'assets/js/faq.js',
   'assets/js/notifications.js',

@@ -25,6 +25,7 @@ if (!function_exists('okv_admin_nav_icon')) {
             'tag'       => '<path d="M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8-8-8Z"/><circle cx="8.5" cy="8.5" r="1.5"/>',
             'users'     => '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M17 15c2 0 4 2 4 5"/>',
             'card'      => '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
+            'receipt'   => '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
             'scale'     => '<path d="M12 4v16M6 20h12"/><path d="m6 8 6-2 6 2"/><path d="M4 13 6 8l2 5a2 2 0 0 1-4 0Z"/><path d="M16 13l2-5 2 5a2 2 0 0 1-4 0Z"/>',
             'truck'     => '<path d="M3 7h11v8H3z"/><path d="M14 10h4l3 3v2h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
             'heart'     => '<path d="M12 20s-7-4.5-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.5-7 9-7 9Z"/>',
