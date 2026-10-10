@@ -700,6 +700,7 @@
   .okv-note { @apply rounded-md text-sm px-4 py-3; }
   .okv-note-ok { @apply okv-note bg-foliage-tint text-forest; }
   .okv-note-bad { @apply okv-note bg-tomato-tint text-tomato; }
+  .okv-note-muted { @apply okv-note bg-mist text-ink-60; }
 }
 
 /* ---------------------------------------------------------------------------

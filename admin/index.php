@@ -192,6 +192,7 @@ if ($canAnalytics && $canOrders) {
             'status' => $rows === [] ? 'empty' : 'ready',
             'rows' => $rows,
             'uncategorised_subunit' => (int) $share['uncategorised_subunit'],
+            'uncategorised_breakdown' => $share['uncategorised_breakdown'] ?? [],
             'unallocated_refund_subunit' => (int) $share['unallocated_refund_subunit'],
         ];
         if ($rows !== []) {
@@ -201,7 +202,8 @@ if ($canAnalytics && $canOrders) {
         error_log('admin dashboard category share: ' . $e->getMessage());
         $categoryChart = [
             'status' => 'error', 'rows' => [],
-            'uncategorised_subunit' => 0, 'unallocated_refund_subunit' => 0,
+            'uncategorised_subunit' => 0, 'uncategorised_breakdown' => [],
+            'unallocated_refund_subunit' => 0,
         ];
     }
 }
@@ -400,7 +402,17 @@ require __DIR__ . '/../includes/components/admin/header.php';
                   </details>
                 <?php endif; ?>
                 <?php if ($categoryChart['uncategorised_subunit'] > 0): ?>
-                  <p class="okv-note-bad mt-4"><?= okv_e(Money::format($categoryChart['uncategorised_subunit'])) ?> in manual or retired-product lines could not be assigned to a category and is excluded from the percentages.</p>
+                  <div class="okv-note-muted mt-4">
+                    <p class="font-medium">Left out of the split, no produce category:</p>
+                    <ul class="mt-2 space-y-1">
+                      <?php foreach ($categoryChart['uncategorised_breakdown'] as $excluded): ?>
+                        <li class="flex items-center justify-between gap-4">
+                          <span><?= okv_e($excluded['label']) ?></span>
+                          <span class="font-mono tabular-nums"><?= okv_e(Money::format((int) $excluded['amount_subunit'])) ?></span>
+                        </li>
+                      <?php endforeach; ?>
+                    </ul>
+                  </div>
                 <?php endif; ?>
                 <?php if ($categoryChart['unallocated_refund_subunit'] > 0): ?>
                   <p class="okv-note-bad mt-4"><?= okv_e(Money::format($categoryChart['unallocated_refund_subunit'])) ?> in completed refunds exceeds eligible line value and is excluded from this chart.</p>
