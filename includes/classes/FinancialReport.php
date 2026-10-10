@@ -259,8 +259,8 @@ final class FinancialReport
     {
         $limit = max(1, min(20, $limit));
         return Database::all(
-            "SELECT COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), 'Customer') AS customer,
-                    SUM(o.order_total_subunit) AS amount_subunit, COUNT(*) AS orders
+            "SELECT COALESCE(NULLIF(TRIM(CONCAT(COALESCE(MAX(u.first_name), ''), ' ', COALESCE(MAX(u.last_name), ''))), ''), 'Customer') AS customer,
+                    SUM(o.order_total_subunit) AS amount_subunit, COUNT(*) AS order_count
                FROM orders o
                LEFT JOIN users u ON u.id = o.user_id
               WHERE o.order_status <> 'cancelled'
@@ -281,7 +281,7 @@ final class FinancialReport
     {
         $limit = max(1, min(20, $limit));
         return Database::all(
-            "SELECT oi.item_name AS label, SUM(oi.line_total_subunit) AS amount_subunit, COUNT(*) AS lines
+            "SELECT oi.item_name AS label, SUM(oi.line_total_subunit) AS amount_subunit, COUNT(*) AS line_count
                FROM order_items oi
                JOIN orders o ON o.id = oi.order_id
               WHERE o.order_status <> 'cancelled'
