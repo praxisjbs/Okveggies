@@ -293,6 +293,16 @@
     @apply bg-white w-full sm:max-w-md rounded-t-sheet sm:rounded-sheet shadow-okv-3 p-6
            max-h-[92vh] overflow-y-auto animate-okv-rise;
   }
+  /* The order detail as a sheet, for narrow screens (admin/orders.php). Managed
+     by admin-orders.js on its own, not by the shared okv.js sheet binder, so it
+     uses its own backdrop class. A roomier panel than okv-sheet because a whole
+     order is dense; the body it holds carries its own padding, so this adds none. */
+  .okv-order-backdrop { @apply fixed inset-0 z-50 flex items-end justify-center bg-ink/40 backdrop-blur-sm sm:items-center sm:p-4; }
+  .okv-order-backdrop[hidden] { display: none; }
+  .okv-order-sheet {
+    @apply bg-white w-full sm:max-w-2xl rounded-t-sheet sm:rounded-sheet shadow-okv-3 p-0
+           max-h-[92vh] overflow-y-auto animate-okv-rise;
+  }
 
   /*
    * Expense module. Money out, logged on a phone in a few taps: a big

@@ -41,6 +41,7 @@ const sources = [
   'assets/js/admin-customer-picker.js',
   'assets/js/admin-customers.js',
   'assets/js/admin-order-new.js',
+  'assets/js/admin-orders.js',
   'assets/js/admin-run-new.js',
   'assets/js/zone-picker.js',
 ].filter(existsSync);

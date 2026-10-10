@@ -1,6 +1,7 @@
 <?php
 /** Staff order list and cancellation detail. */
 require_once __DIR__ . '/../includes/bootstrap.php';
+require_once __DIR__ . '/../includes/components/pagination.php';
 Rbac::requirePermission('orders.view');
 
 $statusFilter = trim((string) okv_input('filter_status', ''));
@@ -36,6 +37,20 @@ if ($customerFilter !== '') {
     $params[':customer_email']     = $like;
     $params[':customer_account']   = $like;
 }
+// Page the list 50 at a time. The count runs the same filters as the list, so
+// the page switcher and the "Showing" line can never disagree with what the
+// page actually holds.
+$perPage = 50;
+$totalOrders = (int) (Database::one(
+    'SELECT COUNT(*) AS matched
+       FROM orders o
+       LEFT JOIN order_addresses a ON a.order_id = o.id
+       LEFT JOIN users u ON u.id = o.user_id
+      ' . ($where ? 'WHERE ' . implode(' AND ', $where) : ''),
+    $params
+)['matched'] ?? 0);
+$pageCount = max(1, (int) ceil($totalOrders / $perPage));
+$page = min(max(1, (int) okv_input('page', 1)), $pageCount);
 $orders = Database::all(
     'SELECT o.id, o.order_number, o.order_status, o.payment_status, o.order_total_subunit,
             o.preferred_delivery_date, o.created_at, a.recipient_name
@@ -43,7 +58,7 @@ $orders = Database::all(
        LEFT JOIN order_addresses a ON a.order_id = o.id
        LEFT JOIN users u ON u.id = o.user_id
       ' . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . '
-      ORDER BY o.id DESC LIMIT 50',
+      ORDER BY o.id DESC' . okv_limit_clause($page, $perPage),
     $params
 );
 $selectedId = (int) okv_input('order', $orders ? $orders[0]['id'] : 0);
@@ -182,8 +197,24 @@ $flag = (string) okv_input('cancellation', '');
 $rescheduleFlag = (string) okv_input('reschedule', '');
 $statusFlag = (string) okv_input('status', '');
 
+// Every list link and page switch keeps the filters in play, so a search or a
+// stage stays put while pages turn or an order is opened.
+$orderFilterQuery = array_filter([
+    'filter_status'   => $statusFilter,
+    'filter_date'     => $dateFilter,
+    'filter_created'  => $createdFilter,
+    'filter_customer' => $customerFilter,
+], static fn ($v): bool => $v !== '');
+$ordersPageUrl   = static fn (int $n): string => '/admin/orders.php?' . http_build_query($orderFilterQuery + ['page' => $n]);
+$orderDetailUrl  = static fn (int $id): string => '/admin/orders.php?' . http_build_query($orderFilterQuery + ['page' => $page, 'order' => $id]);
+$filtersActive   = $statusFilter !== '' || $dateFilter !== '' || $createdFilter !== '' || $customerFilter !== '';
+
 $okv_admin_title = 'Orders';
 $okv_admin_note  = 'Every order, what was paid, the delivery day it is on, and the trail the customer follows.';
+// On a narrow screen the detail opens in a sheet rather than stacking below the
+// list. Desktop keeps the two-column layout; with JavaScript off, ?order= loads
+// the full page as before.
+$okv_admin_script = '/assets/js/admin-orders.js';
 // Static markup, authored here rather than built from request or database data,
 // as the header component requires. The gate is UX only: api/v1/orders.php
 // re-checks orders.create on the server.
@@ -229,19 +260,30 @@ require __DIR__ . '/../includes/components/admin/header.php';
       : 'The order stage has been updated. The customer has been told.')) ?></p>
 <?php endif; ?>
 
-<form method="get" class="mb-5 grid gap-3 rounded-md border border-mist bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
-  <div><label class="okv-label" for="filter-status">Stage</label><select class="okv-input mt-1" id="filter-status" name="filter_status"><option value="">All stages</option><?php foreach ($validStatuses as $status): ?><option value="<?= okv_e($status) ?>" <?= $statusFilter === $status ? 'selected' : '' ?>><?= okv_e(ucfirst($status)) ?></option><?php endforeach; ?></select></div>
-  <div><label class="okv-label" for="filter-date">Delivery date</label><input class="okv-input mt-1" id="filter-date" type="date" name="filter_date" value="<?= okv_e($dateFilter) ?>"></div>
-  <div><label class="okv-label" for="filter-created">Order placed</label><input class="okv-input mt-1" id="filter-created" type="date" name="filter_created" value="<?= okv_e($createdFilter) ?>"></div>
-  <div><label class="okv-label" for="filter-customer">Customer or order</label><input class="okv-input mt-1" id="filter-customer" name="filter_customer" value="<?= okv_e($customerFilter) ?>"></div>
-  <button class="okv-btn min-h-[44px] self-end justify-center">Filter orders</button>
-</form>
+<details class="group mb-5 rounded-md border border-mist bg-white" <?= $filtersActive ? 'open' : '' ?>>
+  <summary class="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 rounded-md px-4 py-3 text-sm font-semibold text-forest">
+    <span class="flex items-center gap-2">
+      Filters
+      <?php if ($filtersActive): ?><span class="okv-badge okv-badge-available">On</span><?php endif; ?>
+    </span>
+    <svg class="h-4 w-4 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path d="M5 8l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  </summary>
+  <form method="get" class="grid gap-3 border-t border-mist p-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div><label class="okv-label" for="filter-status">Stage</label><select class="okv-input mt-1" id="filter-status" name="filter_status"><option value="">All stages</option><?php foreach ($validStatuses as $status): ?><option value="<?= okv_e($status) ?>" <?= $statusFilter === $status ? 'selected' : '' ?>><?= okv_e(ucfirst($status)) ?></option><?php endforeach; ?></select></div>
+    <div><label class="okv-label" for="filter-date">Delivery date</label><input class="okv-input mt-1" id="filter-date" type="date" name="filter_date" value="<?= okv_e($dateFilter) ?>"></div>
+    <div><label class="okv-label" for="filter-created">Order placed</label><input class="okv-input mt-1" id="filter-created" type="date" name="filter_created" value="<?= okv_e($createdFilter) ?>"></div>
+    <div><label class="okv-label" for="filter-customer">Customer or order</label><input class="okv-input mt-1" id="filter-customer" name="filter_customer" value="<?= okv_e($customerFilter) ?>"></div>
+    <button class="okv-btn min-h-[44px] self-end justify-center">Filter orders</button>
+  </form>
+</details>
 
 <div class="grid gap-5 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.4fr)]">
   <section class="okv-panel" aria-labelledby="orders-list-heading">
     <div class="okv-panel-head">
       <h2 id="orders-list-heading" class="okv-panel-title">Latest orders</h2>
-      <span class="text-xs text-ink-60">Last 50</span>
+      <span class="text-xs text-ink-60"><?= okv_e(okv_page_summary($page, $totalOrders, $perPage, 'order')) ?></span>
     </div>
     <?php if (!$orders): ?>
       <p class="p-5 text-sm text-ink-60">No orders have been placed yet.</p>
@@ -249,7 +291,8 @@ require __DIR__ . '/../includes/components/admin/header.php';
       <ul class="divide-y divide-mist">
         <?php foreach ($orders as $order): ?>
           <li>
-            <a href="/admin/orders.php?order=<?= (int) $order['id'] ?>"
+            <a href="<?= okv_e($orderDetailUrl((int) $order['id'])) ?>"
+               data-order-link
                class="block min-h-[44px] px-4 py-3 hover:bg-forest-tint <?= (int) $order['id'] === $selectedId ? 'bg-forest-tint' : '' ?>"
                <?= (int) $order['id'] === $selectedId ? 'aria-current="page"' : '' ?>>
               <span class="flex items-center justify-between gap-3">
@@ -264,10 +307,13 @@ require __DIR__ . '/../includes/components/admin/header.php';
           </li>
         <?php endforeach; ?>
       </ul>
+      <div class="px-4 pb-4">
+        <?php okv_pagination($page, $pageCount, $ordersPageUrl, 'Order pages'); ?>
+      </div>
     <?php endif; ?>
   </section>
 
-  <section class="okv-panel min-w-0" aria-labelledby="order-detail-heading">
+  <section class="okv-panel min-w-0" aria-labelledby="order-detail-heading" data-order-detail>
     <?php if (!$selected): ?>
       <p class="p-5 text-sm text-ink-60">Choose an order to see its details.</p>
     <?php else: ?>
@@ -728,6 +774,20 @@ require __DIR__ . '/../includes/components/admin/header.php';
         <?php endif; ?>
       </div>
     <?php endif; ?>
+  </section>
+</div>
+
+<!-- The order detail as a sheet, for narrow screens only. admin-orders.js moves
+     the server-rendered detail in here (or fetches the tapped order) and opens
+     it, so the list no longer scrolls away under a long order. Desktop never
+     opens this; it keeps the two-column layout above. -->
+<div class="okv-order-backdrop xl:hidden" id="order-sheet" hidden>
+  <section class="okv-order-sheet" aria-labelledby="order-sheet-title" tabindex="-1" data-order-panel>
+    <div class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-mist bg-white px-4 py-2">
+      <h2 id="order-sheet-title" class="okv-panel-title text-base">Order details</h2>
+      <button type="button" class="okv-btn-text min-h-[44px] px-2" data-order-close>Close</button>
+    </div>
+    <div id="order-sheet-body"></div>
   </section>
 </div>
 <?php
