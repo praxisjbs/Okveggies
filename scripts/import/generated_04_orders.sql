@@ -108,7 +108,7 @@ INSERT INTO order_items (order_id,item_type,product_id,item_name,sku,unit_name,q
 (@oid,'product',(SELECT id FROM products WHERE name='Mint leaf' ORDER BY id LIMIT 1),'Mint leaf','WHL-MINT-LEAF','unit',1.0,100000,100000,'2026-09-04 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Spring Onion' ORDER BY id LIMIT 1),'Spring Onion','WHL-SPRING-ONION','unit',2.0,110000,220000,'2026-09-04 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Marrow' ORDER BY id LIMIT 1),'Marrow','WHL-MARROW','unit',3.0,150000,450000,'2026-09-04 12:00:00'),
-(@oid,'product',(SELECT id FROM products WHERE name='Eforiro' ORDER BY id LIMIT 1),'Eforiro','WHL-EFORIRO','unit',6.0,100000,600000,'2026-09-04 12:00:00'),
+(@oid,'product',(SELECT id FROM products WHERE name='Eforiro (Shoko)' ORDER BY id LIMIT 1),'Eforiro (Shoko)','WHL-EFORIRO-SHOKO','unit',6.0,100000,600000,'2026-09-04 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Banana' ORDER BY id LIMIT 1),'Banana','WHL-BANANA','unit',2.0,200000,400000,'2026-09-04 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Green beans' ORDER BY id LIMIT 1),'Green beans','WHL-GREEN-BEANS','unit',1.0,250000,250000,'2026-09-04 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Watermelon' ORDER BY id LIMIT 1),'Watermelon','WHL-WATERMELON','unit',1.0,250000,250000,'2026-09-04 12:00:00'),
@@ -253,7 +253,7 @@ INSERT INTO order_items (order_id,item_type,product_id,item_name,sku,unit_name,q
 (@oid,'product',(SELECT id FROM products WHERE name='Fresh Thyme' ORDER BY id LIMIT 1),'Fresh Thyme','WHL-FRESH-THYME','unit',1.0,110000,110000,'2026-09-07 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='White Cabbage' ORDER BY id LIMIT 1),'White Cabbage','WHL-WHITE-CABBAGE','unit',1.0,250000,250000,'2026-09-07 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Purple Cabbage' ORDER BY id LIMIT 1),'Purple Cabbage','WHL-PURPLE-CABBAGE','unit',1.0,300000,300000,'2026-09-07 12:00:00'),
-(@oid,'product',(SELECT id FROM products WHERE name='Fresh rosemary' ORDER BY id LIMIT 1),'Fresh rosemary','WHL-FRESH-ROSEMARY','unit',1.0,220000,220000,'2026-09-07 12:00:00');
+(@oid,'product',(SELECT id FROM products WHERE name='Rosemary' ORDER BY id LIMIT 1),'Rosemary','WHL-ROSEMARY','unit',1.0,220000,220000,'2026-09-07 12:00:00');
 INSERT INTO order_status_history (order_id,old_status,new_status,source,note,created_at)
 VALUES (@oid,NULL,'delivered','import','Legacy September-October import','2026-09-07 12:00:00');
 INSERT INTO payments (payment_number,user_id,order_id,provider,payment_type,expected_amount_subunit,paid_amount_subunit,currency,status,confirmed_at,created_at)
@@ -602,7 +602,7 @@ INSERT INTO order_items (order_id,item_type,product_id,item_name,sku,unit_name,q
 (@oid,'product',(SELECT id FROM products WHERE name='Mint leaf' ORDER BY id LIMIT 1),'Mint leaf','WHL-MINT-LEAF','unit',1.0,100000,100000,'2026-09-15 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Celery' ORDER BY id LIMIT 1),'Celery','WHL-CELERY','unit',1.0,100000,100000,'2026-09-15 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Marrow' ORDER BY id LIMIT 1),'Marrow','WHL-MARROW','unit',3.0,150000,450000,'2026-09-15 12:00:00'),
-(@oid,'product',(SELECT id FROM products WHERE name='Eforiro' ORDER BY id LIMIT 1),'Eforiro','WHL-EFORIRO','unit',6.0,100000,600000,'2026-09-15 12:00:00'),
+(@oid,'product',(SELECT id FROM products WHERE name='Eforiro (Shoko)' ORDER BY id LIMIT 1),'Eforiro (Shoko)','WHL-EFORIRO-SHOKO','unit',6.0,100000,600000,'2026-09-15 12:00:00'),
 (@oid,'product',NULL,'Delivery fee','DELIVERY-FEE','service',1.0,300000,300000,'2026-09-15 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Onion' ORDER BY id LIMIT 1),'Onion','WHL-ONION','unit',10.0,170000,1700000,'2026-09-15 12:00:00');
 INSERT INTO order_status_history (order_id,old_status,new_status,source,note,created_at)
@@ -906,7 +906,7 @@ INSERT INTO order_items (order_id,item_type,product_id,item_name,sku,unit_name,q
 (@oid,'product',(SELECT id FROM products WHERE name='Banana' ORDER BY id LIMIT 1),'Banana','WHL-BANANA','unit',2.0,250000,500000,'2026-09-25 12:00:00'),
 (@oid,'product',(SELECT id FROM products WHERE name='Brocoli' ORDER BY id LIMIT 1),'Brocoli','WHL-BROCOLI','unit',1.0,780000,780000,'2026-09-25 12:00:00'),
 (@oid,'product',NULL,'Delivery fee','DELIVERY-FEE','service',1.0,300000,300000,'2026-09-25 12:00:00'),
-(@oid,'product',(SELECT id FROM products WHERE name='Eforiro' ORDER BY id LIMIT 1),'Eforiro','WHL-EFORIRO','unit',4.0,100000,400000,'2026-09-25 12:00:00');
+(@oid,'product',(SELECT id FROM products WHERE name='Eforiro (Shoko)' ORDER BY id LIMIT 1),'Eforiro (Shoko)','WHL-EFORIRO-SHOKO','unit',4.0,100000,400000,'2026-09-25 12:00:00');
 INSERT INTO order_status_history (order_id,old_status,new_status,source,note,created_at)
 VALUES (@oid,NULL,'delivered','import','Legacy September-October import','2026-09-25 12:00:00');
 INSERT INTO payments (payment_number,user_id,order_id,provider,payment_type,expected_amount_subunit,paid_amount_subunit,currency,status,confirmed_at,created_at)
