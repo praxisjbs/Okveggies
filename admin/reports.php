@@ -17,10 +17,20 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 Rbac::requirePermission('reports.view');
 
 $period = FinancialReport::normalisePeriod(okv_input('period', FinancialReport::DEFAULT_PERIOD));
-$data   = FinancialReport::dashboard($period);
+
+// A picked date range. Default to the last 30 days when Custom is chosen without dates.
+$from = (string) okv_input('from', '');
+$to   = (string) okv_input('to', '');
+if ($period === 'custom') {
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) { $from = (new DateTimeImmutable('-29 days'))->format('Y-m-d'); }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $to))   { $to   = (new DateTimeImmutable('today'))->format('Y-m-d'); }
+}
+
+$data   = FinancialReport::dashboard($period, null, $period === 'custom' ? $from : null, $period === 'custom' ? $to : null);
 $kpi    = $data['kpi'];
 
 $periodLabels = ['7' => '7 days', '30' => '30 days', '90' => '90 days', 'month' => 'This month'];
+$today        = date('Y-m-d');
 
 /** The brand-token CSS variable for a category colour. No hex reaches the markup. */
 if (!function_exists('okv_report_dot_var')) {
@@ -55,15 +65,35 @@ require __DIR__ . '/../includes/components/admin/header.php';
 ?>
 
 <!-- Period presets -->
-<div class="mb-4 flex items-center gap-2 overflow-x-auto pb-1" role="group" aria-label="Period">
+<div class="mb-3 flex items-center gap-2 overflow-x-auto pb-1" role="group" aria-label="Period">
   <?php foreach ($periodLabels as $value => $label): ?>
     <a href="?period=<?= okv_e($value) ?>" class="okv-filter-chip <?= $period === $value ? 'okv-filter-chip-active' : '' ?>"><?= okv_e($label) ?></a>
   <?php endforeach; ?>
+  <a href="?period=custom&from=<?= okv_e($from ?: $today) ?>&to=<?= okv_e($to ?: $today) ?>"
+     class="okv-filter-chip <?= $period === 'custom' ? 'okv-filter-chip-active' : '' ?>">Custom</a>
   <button type="button" class="okv-info-btn ml-1" aria-expanded="false" aria-controls="report-info" data-info-toggle>
     <?= okv_report_icon('info') ?><span class="sr-only">What these figures mean</span>
   </button>
 </div>
-<p id="report-info" class="okv-info-text mb-4" hidden>Revenue is cash confirmed through the app for the period. Expenses are what you logged. Profit is revenue minus expenses. Outstanding is money customers still owe across all live orders.</p>
+<p id="report-info" class="okv-info-text mb-3" hidden>Revenue is cash confirmed through the app for the period. Expenses are what you logged. Profit is revenue minus expenses. Outstanding is money customers still owe across all live orders.</p>
+
+<?php if ($period === 'custom'): ?>
+<!-- Date range picker, shown only when Custom is active. -->
+<form method="get" class="mb-3 flex flex-wrap items-end gap-2">
+  <input type="hidden" name="period" value="custom">
+  <div>
+    <label class="okv-label" for="rep-from">From</label>
+    <input id="rep-from" type="date" name="from" value="<?= okv_e($from) ?>" max="<?= okv_e($today) ?>" class="okv-input-sm">
+  </div>
+  <div>
+    <label class="okv-label" for="rep-to">To</label>
+    <input id="rep-to" type="date" name="to" value="<?= okv_e($to) ?>" max="<?= okv_e($today) ?>" class="okv-input-sm">
+  </div>
+  <button type="submit" class="okv-btn-sm">Apply</button>
+</form>
+<?php endif; ?>
+
+<p class="mb-4 text-okv-micro font-medium text-ink-40">Showing <span class="text-ink-60"><?= okv_e($data['label']) ?></span></p>
 
 <!-- KPI tiles -->
 <section class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Headline figures">

@@ -54,3 +54,15 @@ $bMonth = FinancialReport::periodBounds('month', $now);
 okv_test_eq('2026-10-01', $bMonth['start_date'], 'this month starts on the first');
 okv_test_eq('2026-10-10', $bMonth['end_date_exclusive'], 'this month ends at tomorrow midnight exclusive');
 okv_test_eq('October 2026', $bMonth['label'], 'this month is labelled by its name');
+
+// ---- Custom period -----------------------------------------------------------
+okv_test_eq('custom', FinancialReport::normalisePeriod('custom'), 'custom is a valid period');
+$bCustom = FinancialReport::periodBounds('custom', $now, '2026-09-01', '2026-09-30');
+okv_test_eq('custom', $bCustom['period'], 'a valid custom range stays custom');
+okv_test_eq('2026-09-01', $bCustom['start_date'], 'the custom range starts on the from date');
+okv_test_eq('2026-10-01', $bCustom['end_date_exclusive'], 'the custom range ends the day after the to date');
+okv_test_eq('1 Sep 2026 to 30 Sep 2026', $bCustom['label'], 'the custom range is labelled by its dates');
+$bReversed = FinancialReport::periodBounds('custom', $now, '2026-09-30', '2026-09-01');
+okv_test_eq('2026-09-01', $bReversed['start_date'], 'a reversed custom range is put the right way round');
+$bBad = FinancialReport::periodBounds('custom', $now, 'not-a-date', '');
+okv_test_eq('30', $bBad['period'], 'a custom range with no valid dates falls back to 30 days');
