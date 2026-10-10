@@ -551,6 +551,9 @@ final class AdminDashboard
 
     private static function orderAnalytics(array $bounds): array
     {
+        // Category is the line's snapshot (true when the order was written). When
+        // that is missing, as on bulk-imported history, fall back to the product's
+        // current category so legacy orders still count toward the share.
         $lines = Database::all(
             'SELECT oi.id, oi.order_id, oi.item_type, oi.product_id, oi.combo_package_id,
                     oi.item_name, oi.unit_name, oi.quantity, oi.line_total_subunit, oi.created_at,
@@ -561,7 +564,8 @@ final class AdminDashboard
                     ) AS is_kitchen_run
                FROM order_items oi
                JOIN orders o ON o.id = oi.order_id
-               LEFT JOIN product_categories pc ON pc.id = oi.snapshot_category_id
+               LEFT JOIN products p ON p.id = oi.product_id
+               LEFT JOIN product_categories pc ON pc.id = COALESCE(oi.snapshot_category_id, p.category_id)
               WHERE o.created_at >= :start_at
                 AND o.created_at < :end_at
                 AND o.order_status <> :cancelled
