@@ -81,6 +81,7 @@ final class AdminDashboard
             if (isset($wanted['order_share'])) {
                 $result['order_share'] = $analytics['order_share'];
                 $result['uncategorised_subunit'] = $analytics['uncategorised_subunit'];
+                $result['uncategorised_breakdown'] = $analytics['uncategorised_breakdown'];
             }
             if ($analytics['unallocated_refund_subunit'] > 0) {
                 $result['integrity']['unallocated_refund_subunit'] = $analytics['unallocated_refund_subunit'];
@@ -244,6 +245,7 @@ final class AdminDashboard
         return [
             'rows' => $analytics['order_share'],
             'uncategorised_subunit' => $analytics['uncategorised_subunit'],
+            'uncategorised_breakdown' => $analytics['uncategorised_breakdown'],
             'unallocated_refund_subunit' => $analytics['unallocated_refund_subunit'],
         ];
     }
@@ -387,6 +389,7 @@ final class AdminDashboard
         $top = [];
         $categoryTotals = [];
         $uncategorised = 0;
+        $uncategorisedByLabel = [];
         $unallocated = 0;
 
         foreach ($orders as $orderId => $orderLines) {
@@ -419,6 +422,8 @@ final class AdminDashboard
                 $category = self::lineCategory($line);
                 if ($category === null) {
                     $uncategorised += $net;
+                    $label = trim((string) ($line['item_name'] ?? '')) ?: 'Other lines';
+                    $uncategorisedByLabel[$label] = ($uncategorisedByLabel[$label] ?? 0) + $net;
                 } else {
                     $categoryTotals[$category] = ($categoryTotals[$category] ?? 0) + $net;
                 }
@@ -450,8 +455,42 @@ final class AdminDashboard
             'top_products' => array_slice($topRows, 0, self::TOP_LIMIT),
             'order_share' => self::categoryShares($categoryTotals),
             'uncategorised_subunit' => $uncategorised,
+            'uncategorised_breakdown' => self::rankUncategorised($uncategorisedByLabel),
             'unallocated_refund_subunit' => $unallocated,
         ];
+    }
+
+    /**
+     * Name the lines that fall outside the five produce groups, largest first,
+     * so the dashboard can say what was left out (a delivery charge, a retired
+     * product) instead of a vague "manual or retired-product lines". A long tail
+     * is folded into one "Other lines" row to keep the note short.
+     */
+    private static function rankUncategorised(array $byLabel): array
+    {
+        $rows = [];
+        foreach ($byLabel as $label => $amount) {
+            if ((int) $amount < 1) {
+                continue;
+            }
+            $rows[] = ['label' => (string) $label, 'amount_subunit' => (int) $amount];
+        }
+        usort($rows, static function (array $a, array $b): int {
+            return $b['amount_subunit'] <=> $a['amount_subunit']
+                ?: strcasecmp($a['label'], $b['label']);
+        });
+
+        $limit = 6;
+        if (count($rows) <= $limit) {
+            return $rows;
+        }
+        $head = array_slice($rows, 0, $limit - 1);
+        $tail = array_slice($rows, $limit - 1);
+        $head[] = [
+            'label' => 'Other lines',
+            'amount_subunit' => (int) array_sum(array_column($tail, 'amount_subunit')),
+        ];
+        return $head;
     }
 
     /** Convert positive category totals into exact integer basis points. */

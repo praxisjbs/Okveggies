@@ -152,4 +152,9 @@ okv_test_eq('2.000', $topByKey['product:7:kg']['quantity'], 'same-unit product q
 okv_test_eq(9997, $topByKey['product:7:kg']['amount_subunit'], 'processed refunds reduce the attributed line value exactly');
 okv_test_eq('kitchen_run', $topByKey['kitchen-run:fresh tomatoes:kg']['kind'], 'a converted Kitchen Run remains its own sellable kind');
 okv_test_eq(2000, $analytics['uncategorised_subunit'], 'an unlinked manual line is reported as uncategorised');
+okv_test_eq(
+    [['label' => 'Market item', 'amount_subunit' => 2000]],
+    $analytics['uncategorised_breakdown'],
+    'the uncategorised total is broken down by the line name so the dashboard can say what it is'
+);
 okv_test_eq(10000, array_sum(array_column($analytics['order_share'], 'share_basis_points')), 'aggregated category shares total exactly 10000 basis points');
