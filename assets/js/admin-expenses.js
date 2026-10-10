@@ -120,12 +120,8 @@
       if (box) { box.textContent = message; box.hidden = false; }
     }
 
-    backdrop.addEventListener('click', function (event) {
-      if (event.target === backdrop) { close(); }
-    });
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && !backdrop.hidden) { close(); }
-    });
+    // No outside-tap or Escape close: the form shuts only on Close or a saved
+    // expense, so nothing being typed is ever lost.
     Array.prototype.forEach.call(backdrop.querySelectorAll('[data-expense-close]'), function (b) {
       b.addEventListener('click', close);
     });
@@ -180,19 +176,33 @@
 
   // ---- Build a row for an expense just recorded -----------------------------
   function buildRow(info) {
-    var li = el('li', 'okv-card flex items-center gap-3');
+    var li = el('li', 'okv-card flex items-center gap-2');
     li.setAttribute('data-expense-row', '');
     li.dataset.id = String(info.id);
     li.dataset.amount = String(info.amountSubunit);
     li.dataset.kind = info.kind;
+    li.dataset.amountDisplay = info.amountDisplay || '';
+    li.dataset.category = info.categoryName || '';
+    li.dataset.colour = info.colour || 'ink';
+    li.dataset.supplier = info.supplier || '';
+    li.dataset.note = info.note || '';
+    li.dataset.date = info.dateFull || '';
+    li.dataset.qty = info.qty || '';
+    li.dataset.unitDisplay = info.unitDisplay || '';
+
+    var open = el('button', 'flex min-w-0 flex-1 items-center gap-3 text-left');
+    open.type = 'button';
+    open.setAttribute('data-expense-open', '');
+    open.setAttribute('aria-haspopup', 'dialog');
 
     var badge = el('span', 'okv-badge ' + (PILL[info.colour] || PILL.ink) + ' flex-none', info.categoryName);
-
-    var mid = el('div', 'min-w-0 flex-1');
-    mid.appendChild(el('p', 'truncate font-medium text-ink', info.primary));
-    mid.appendChild(el('p', 'font-mono text-okv-micro text-ink-40', info.dateLabel));
-
+    var mid = el('span', 'min-w-0 flex-1');
+    mid.appendChild(el('span', 'block truncate font-medium text-ink', info.primary));
+    mid.appendChild(el('span', 'block font-mono text-okv-micro text-ink-40', info.dateLabel));
     var amount = el('span', 'font-mono font-bold text-ink', info.amountDisplay);
+    open.appendChild(badge);
+    open.appendChild(mid);
+    open.appendChild(amount);
 
     var voidBtn = el('button', 'okv-info-btn border-tomato/40 text-tomato hover:border-tomato hover:text-tomato');
     voidBtn.type = 'button';
@@ -201,9 +211,7 @@
     voidBtn.setAttribute('aria-label', 'Void this expense');
     voidBtn.appendChild(svgTrash());
 
-    li.appendChild(badge);
-    li.appendChild(mid);
-    li.appendChild(amount);
+    li.appendChild(open);
     li.appendChild(voidBtn);
     return li;
   }
@@ -212,6 +220,90 @@
     var d = value ? new Date(value + 'T00:00:00') : new Date();
     if (isNaN(d.getTime())) { d = new Date(); }
     return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  function dateFullFrom(value) {
+    var d = value ? new Date(value + 'T00:00:00') : new Date();
+    if (isNaN(d.getTime())) { d = new Date(); }
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function nairaDisplay(value) {
+    var n = parseFloat(String(value).replace(/[^0-9.]/g, ''));
+    return isFinite(n) ? money(Math.round(n * 100)) : '';
+  }
+
+  // ---- Expense detail modal (tap a card to open) ----------------------------
+  function detailController() {
+    var backdrop = document.querySelector('[data-expense-detail]');
+    if (!backdrop) { return null; }
+    var currentId = null;
+
+    function set(key, value) {
+      var node = backdrop.querySelector('[data-detail="' + key + '"]');
+      if (node) { node.textContent = value; }
+    }
+    function showRow(name, on) {
+      var node = backdrop.querySelector('[data-detail-row="' + name + '"]');
+      if (node) { node.hidden = !on; }
+    }
+
+    function open(li) {
+      currentId = li.dataset.id;
+      set('amount', li.dataset.amountDisplay || '');
+      var cat = backdrop.querySelector('[data-detail="category"]');
+      if (cat) {
+        cat.textContent = li.dataset.category || '';
+        cat.className = 'okv-badge ' + (PILL[li.dataset.colour] || PILL.ink);
+      }
+      set('supplier', li.dataset.supplier ? li.dataset.supplier : 'Not set');
+      set('date', li.dataset.date || '');
+      showRow('qty', !!li.dataset.qty); if (li.dataset.qty) { set('qty', li.dataset.qty); }
+      showRow('unit', !!li.dataset.unitDisplay); if (li.dataset.unitDisplay) { set('unit', li.dataset.unitDisplay); }
+      showRow('note', !!li.dataset.note); if (li.dataset.note) { set('note', li.dataset.note); }
+      backdrop.hidden = false;
+      document.documentElement.classList.add('overflow-hidden');
+    }
+    function close() {
+      backdrop.hidden = true;
+      document.documentElement.classList.remove('overflow-hidden');
+      currentId = null;
+    }
+
+    backdrop.addEventListener('click', function (event) { if (event.target === backdrop) { close(); } });
+    Array.prototype.forEach.call(backdrop.querySelectorAll('[data-expense-detail-close]'), function (b) {
+      b.addEventListener('click', close);
+    });
+
+    var voidBtn = backdrop.querySelector('[data-expense-detail-void]');
+    if (voidBtn) {
+      voidBtn.addEventListener('click', function () {
+        if (!currentId) { return; }
+        voidBtn.disabled = true;
+        post({ action: 'void', id: currentId, reason: '' }).then(function (result) {
+          voidBtn.disabled = false;
+          if (!result.ok || !result.data || result.data.status !== 'ok') { return; }
+          var li = document.querySelector('[data-expense-row][data-id="' + currentId + '"]');
+          if (li) {
+            bumpKpi(-Number(li.dataset.amount || 0), li.dataset.kind || 'operating');
+            li.remove();
+          }
+          close();
+        }).catch(function () { voidBtn.disabled = false; });
+      });
+    }
+
+    return { open: open, close: close };
+  }
+
+  function bindOpenDetail(detail) {
+    if (!detail) { return; }
+    document.addEventListener('click', function (event) {
+      var btn = event.target.closest ? event.target.closest('[data-expense-open]') : null;
+      if (!btn) { return; }
+      var li = btn.closest('[data-expense-row]');
+      if (li) { detail.open(li); }
+    });
   }
 
   // ---- The KPI strip --------------------------------------------------------
@@ -251,13 +343,14 @@
       var keepOpen = another;
       another = false;
 
-      var chosen = form.querySelector('input[name="category_slug"]:checked');
-      if (!chosen) { sheet.error('Choose a category for this expense.'); return; }
+      var select = form.querySelector('[name="category_slug"]');
+      var chosen = (select && select.options) ? select.options[select.selectedIndex] : null;
+      if (!select || !select.value) { sheet.error('Choose a category for this expense.'); return; }
 
       var params = {
         action: 'create',
         amount: (form.querySelector('[name="amount"]') || {}).value || '',
-        category_slug: chosen.value,
+        category_slug: select.value,
         supplier_name: (form.querySelector('[name="supplier_name"]') || {}).value || '',
         spent_on: (form.querySelector('[name="spent_on"]') || {}).value || '',
         quantity: (form.querySelector('[name="quantity"]') || {}).value || '',
@@ -275,15 +368,22 @@
         }
         var note = params.description.trim();
         var supplier = params.supplier_name.trim();
+        var cat = chosen || {};
+        var catData = cat.dataset || {};
         var info = {
           id: result.data.id,
           amountSubunit: Number(result.data.amount_subunit),
           amountDisplay: result.data.amount_display,
-          kind: chosen.dataset.kind || 'operating',
-          colour: chosen.dataset.colour || 'ink',
-          categoryName: chosen.dataset.name || chosen.value,
-          primary: supplier || note || (chosen.dataset.name || chosen.value),
-          dateLabel: dateLabelFrom(params.spent_on)
+          kind: catData.kind || 'operating',
+          colour: catData.colour || 'ink',
+          categoryName: catData.name || select.value,
+          primary: supplier || note || (catData.name || select.value),
+          dateLabel: dateLabelFrom(params.spent_on),
+          dateFull: dateFullFrom(params.spent_on),
+          supplier: supplier,
+          note: note,
+          qty: (params.quantity || '').trim(),
+          unitDisplay: params.unit_cost ? nairaDisplay(params.unit_cost) : ''
         };
         addRowToList(info);
         bumpKpi(info.amountSubunit, info.kind);
@@ -301,16 +401,12 @@
     });
   }
 
-  function resetForm(form, keepCategory) {
+  function resetForm(form) {
     ['amount', 'quantity', 'unit_cost', 'description'].forEach(function (name) {
       var field = form.querySelector('[name="' + name + '"]');
       if (field) { field.value = ''; }
     });
-    // The supplier and the date are smart defaults: keep them for the next one.
-    if (!keepCategory) {
-      var checked = form.querySelector('input[name="category_slug"]:checked');
-      if (checked) { checked.checked = false; }
-    }
+    // Supplier, date and the chosen category are smart defaults: kept for the next one.
   }
 
   function addRowToList(info) {
@@ -387,6 +483,7 @@
       bindCreate(sheet);
     }
     bindVoid();
+    bindOpenDetail(detailController());
   }
 
   if (document.readyState === 'loading') {

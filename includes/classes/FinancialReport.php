@@ -24,8 +24,8 @@ final class FinancialReport
     public const DEFAULT_PERIOD = '30';
     public const TREND_MONTHS   = 6;
 
-    /** The periods the dashboard offers. '7','30','90' are day windows; 'month' is this calendar month. */
-    public const PERIODS = ['7', '30', '90', 'month'];
+    /** The periods the dashboard offers. '7','30','90' are day windows; 'month' is this calendar month; 'custom' is a picked date range. */
+    public const PERIODS = ['7', '30', '90', 'month', 'custom'];
 
     // ---- Pure helpers (no database; the unit tests exercise these) -----------
 
@@ -80,8 +80,22 @@ final class FinancialReport
     /** Validate a requested period, falling back to the default. */
     public static function normalisePeriod($period): string
     {
-        $period = is_string($period) ? $period : (string) $period;
+        if (!is_string($period)) {
+            if (!is_scalar($period)) { return self::DEFAULT_PERIOD; }
+            $period = (string) $period;
+        }
         return in_array($period, self::PERIODS, true) ? $period : self::DEFAULT_PERIOD;
+    }
+
+    /** Parse a Y-m-d string into a date, or null if it is not a real calendar date. */
+    private static function parseDate(?string $date): ?DateTimeImmutable
+    {
+        $date = (string) $date;
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return null;
+        }
+        $d = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        return ($d !== false && $d->format('Y-m-d') === $date) ? $d : null;
     }
 
     /**
@@ -89,17 +103,30 @@ final class FinancialReport
      * strings. '7','30','90' end at tomorrow's midnight and reach back that many
      * days including today; 'month' covers the current calendar month.
      */
-    public static function periodBounds($period, ?DateTimeImmutable $now = null): array
+    public static function periodBounds($period, ?DateTimeImmutable $now = null, ?string $from = null, ?string $to = null): array
     {
         $period   = self::normalisePeriod($period);
         $localNow = $now ?? new DateTimeImmutable('now');
         $today    = $localNow->setTime(0, 0, 0);
         $end      = $today->modify('+1 day');
 
+        if ($period === 'custom') {
+            $f = self::parseDate($from);
+            $t = self::parseDate($to);
+            if ($f !== null && $t !== null) {
+                if ($t < $f) { [$f, $t] = [$t, $f]; }      // tolerate a reversed range
+                $start = $f->setTime(0, 0, 0);
+                $end   = $t->setTime(0, 0, 0)->modify('+1 day');
+                $label = $f->format('j M Y') . ' to ' . $t->format('j M Y');
+            } else {
+                $period = self::DEFAULT_PERIOD;             // no valid dates: behave like 30 days
+            }
+        }
+
         if ($period === 'month') {
             $start = $today->modify('first day of this month');
             $label = $start->format('F Y');
-        } else {
+        } elseif ($period !== 'custom') {
             $days  = (int) $period;
             $start = $today->modify('-' . ($days - 1) . ' days');
             $label = 'Last ' . $days . ' days';
@@ -245,6 +272,28 @@ final class FinancialReport
         );
     }
 
+    /**
+     * Top catalogue products by sales value between two datetimes. Bound-based so
+     * it works for any period, the custom range included; delivery and other
+     * non-catalogue lines (no product_id) are left out.
+     */
+    public static function topProductsBetween(string $start, string $end, int $limit = 5): array
+    {
+        $limit = max(1, min(20, $limit));
+        return Database::all(
+            "SELECT oi.item_name AS label, SUM(oi.line_total_subunit) AS amount_subunit, COUNT(*) AS lines
+               FROM order_items oi
+               JOIN orders o ON o.id = oi.order_id
+              WHERE o.order_status <> 'cancelled'
+                AND oi.product_id IS NOT NULL
+                AND o.created_at >= :start AND o.created_at < :end
+              GROUP BY oi.item_name
+              ORDER BY amount_subunit DESC
+              LIMIT " . $limit,
+            [':start' => $start, ':end' => $end]
+        );
+    }
+
     // ---- The assembled dashboard ---------------------------------------------
 
     /**
@@ -252,9 +301,9 @@ final class FinancialReport
      * and the tables are ready to print server-side; the series and the category
      * breakdown feed the charts. Pass a frozen $now in tests.
      */
-    public static function dashboard($period = self::DEFAULT_PERIOD, ?DateTimeImmutable $now = null): array
+    public static function dashboard($period = self::DEFAULT_PERIOD, ?DateTimeImmutable $now = null, ?string $from = null, ?string $to = null): array
     {
-        $bounds = self::periodBounds($period, $now);
+        $bounds = self::periodBounds($period, $now, $from, $to);
 
         $revenue = self::revenueBetween($bounds['start'], $bounds['end']);
         $expenseRows = self::expenseRowsBetween($bounds['start_date'], $bounds['end_date_exclusive']);
@@ -305,7 +354,7 @@ final class FinancialReport
             'category_breakdown' => $categoryBreakdown,
             'top_suppliers'      => self::topSuppliersBetween($bounds['start_date'], $bounds['end_date_exclusive']),
             'top_customers'      => self::topCustomersBetween($bounds['start'], $bounds['end']),
-            'top_products'       => AdminDashboard::topProducts($period === 'month' ? 30 : (int) $period, $now),
+            'top_products'       => self::topProductsBetween($bounds['start'], $bounds['end']),
         ];
     }
 }

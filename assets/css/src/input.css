@@ -354,6 +354,28 @@
   .okv-chart-box { @apply relative w-full; height: 15rem; }
   .okv-legend-dot { @apply inline-block h-3 w-3 flex-none rounded-full; }
 
+  /* The hero spend tile: one big figure with the split beneath, so long naira
+     amounts never collide the way a three-across row did. */
+  .okv-hero-tile { @apply rounded-xl bg-white p-4 shadow-okv-1; }
+  .okv-hero-value { @apply font-mono text-3xl font-extrabold leading-tight text-ink; }
+
+  /* The record-expense form. Full screen on a phone, a centred dialog on a
+     laptop. The body scrolls between a pinned header and footer, so the save
+     buttons stay reachable with the keyboard up. It never closes on an outside
+     tap (wired in admin-expenses.js), so nothing being typed is lost. */
+  .okv-formscreen-backdrop { @apply fixed inset-0 z-50 bg-white sm:flex sm:items-center sm:justify-center sm:bg-ink/40 sm:p-4; }
+  .okv-formscreen-backdrop[hidden] { display: none; }
+  .okv-formscreen {
+    @apply flex h-full w-full flex-col overflow-hidden bg-white
+           sm:h-auto sm:max-h-[92vh] sm:max-w-md sm:rounded-sheet sm:shadow-okv-3;
+  }
+  .okv-formscreen-head { @apply flex flex-none items-center justify-between gap-3 border-b border-mist px-4 py-3; }
+  .okv-formscreen-body { @apply min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4; }
+  .okv-formscreen-foot {
+    @apply flex flex-none gap-2 border-t border-mist bg-white px-4 py-3
+           pb-[max(0.75rem,env(safe-area-inset-bottom))];
+  }
+
   /* Admin sidebar. A column of the desktop shell from 768px up, and a
      full-screen panel on a phone. The panel is fixed to the viewport, so it
      covers the page rather than pushing it down; the nav list scrolls inside
